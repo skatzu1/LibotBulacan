@@ -1,4 +1,4 @@
-import { View, Text, StyleSheet, TouchableOpacity } from "react-native";
+import { View, Text, StyleSheet, TouchableOpacity, Image } from "react-native";
 
 export default function WelcomePage2({ navigation }) {
   return (
@@ -6,11 +6,16 @@ export default function WelcomePage2({ navigation }) {
       <View style={styles.titleContainer}>
         <Text style={styles.title}>Welcome</Text>
         <Text style={styles.subtitle}>
-          we're glad that you are here
-        </Text>
+          we're glad that you are here</Text>
       </View>
 
-      <View style={styles.card}></View>
+      <View style={styles.card}>
+       <Image
+          source={require("../assets/welcome.png")}
+          style={styles.image}
+
+        />
+      </View>
 
       <View style={styles.buttonContainer}>
         <TouchableOpacity
@@ -31,6 +36,11 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     padding: 20,
+  },
+  image: {
+    width: 300,
+    height: 300,
+    resizeMode: "contain",
   },
   card: {
     width: "100%",
@@ -57,8 +67,8 @@ const styles = StyleSheet.create({
   },
   button: {
     backgroundColor: "#6b4b45",
-    paddingVertical: 12,
-    paddingHorizontal: 40,
+    paddingVertical: 15,
+    paddingHorizontal: 60,
     borderRadius: 12,
   },
   buttonText: {
