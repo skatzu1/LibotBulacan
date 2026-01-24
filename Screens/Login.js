@@ -2,7 +2,7 @@ import { View, StyleSheet, TouchableOpacity, TextInput, Text } from "react-nativ
 import { useState } from "react";
 import CheckBox, { Checkbox } from "expo-checkbox";
 
-export default function Login() {
+export default function Login({ navigation }) {
   const [isChecked, setChecked] = useState(false);
   const handleForgotPassword = () => { alert("nigga"); }
   const [PasswordVisible, setPasswordVisible] = useState(false);
@@ -40,7 +40,7 @@ export default function Login() {
       </View>
 
       <View style={styles.buttonContainer}>
-        <TouchableOpacity style={styles.button}>
+        <TouchableOpacity style={styles.loginButton} onPress={() => navigation.navigate("Home")}>
           <Text style={styles.buttonText}>Login</Text>
         </TouchableOpacity>
       </View>
@@ -89,7 +89,7 @@ const styles = StyleSheet.create({
       width: "100%",
       alignItems: "center",
     },
-    button: {
+    loginButton: {
       backgroundColor: "#6b4b45",
       padding: 15,
       borderRadius: 10,

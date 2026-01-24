@@ -1,9 +1,13 @@
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
+import 'react-native-gesture-handler';
+import 'react-native-reanimated';
+
 
 import WelcomePage from "./Screens/WelcomePage";
 import WelcomePage2 from "./Screens/WelcomePage2";
 import Login from "./Screens/Login";
+import Home from "./Screens/Home";
 
 const Stack = createNativeStackNavigator();
 
@@ -21,6 +25,10 @@ export default function App() {
         />
         <Stack.Screen name="Login" 
         component={Login} 
+        options={{headerShown: false}}
+        />
+        <Stack.Screen name="Home" 
+        component={Home} 
         options={{headerShown: false}}
         />
       </Stack.Navigator>
