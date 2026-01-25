@@ -13,19 +13,12 @@ import { useNavigation } from "@react-navigation/native";
 import { Feather } from "@expo/vector-icons";
 import Carousel from "react-native-reanimated-carousel";
 import { createMaterialTopTabNavigator } from "@react-navigation/material-top-tabs";
+import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 
 const { width } = Dimensions.get("window");
 const Drawer = createDrawerNavigator();
 const TopTab = createMaterialTopTabNavigator();
-
-/* ----------------------------- Another Tab ----------------------------- */
-function AnotherTab() {
-  return (
-    <View style={styles.tabScreen}>
-      <Text style={styles.subtitle}>Another Tab Content</Text>
-    </View>
-  );
-}
+const BottomTab = createBottomTabNavigator();
 
 /* ----------------------------- Home Screen ------------------------------ */
 function HomeScreen() {
@@ -52,6 +45,7 @@ function HomeScreen() {
             tabBarStyle: { backgroundColor: "#f7cfc9" },
             tabBarActiveTintColor: "#000",
             tabBarInactiveTintColor: "#888",
+            tabBarPressColor : "#000",
           }}
         >
           <TopTab.Screen
@@ -138,8 +132,17 @@ function HomeTab() {
   );
 }
 
+/* ----------------------------- Another Tab ----------------------------- */
+function AnotherTab() {
+  return (
+    <View style={styles.tabScreen}>
+      <Text style={styles.subtitle}>Another Tab Content</Text>
+    </View>
+  );
+}
+
 /* ------------------------------ Drawer ---------------------------------- */
-export default function Home() {
+export default function HomeDrawer() {
   return (
     <Drawer.Navigator
       screenOptions={{
@@ -179,13 +182,15 @@ const styles = StyleSheet.create({
     backgroundColor: "#f7cfc9",
     paddingTop: 50,
   },
-
+/* ------------------------- Another Tab Styles --------------------------- */
   tabScreen: {
     flex: 1,
     backgroundColor: "#f7cfc9",
     alignItems: "center",
     justifyContent: "flex-start",
   },
+/* ------------------------- Another Tab Styles --------------------------- */
+
 
   header: {
     width: "90%",
