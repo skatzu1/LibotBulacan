@@ -9,6 +9,7 @@ import WelcomePage from "./Screens/WelcomePage";
 import WelcomePage2 from "./Screens/WelcomePage2";
 import Login from "./Screens/Login";
 import Home from "./Screens/Home";
+import Lists from "./Screens/Lists";
 
 const Stack = createNativeStackNavigator();
 
@@ -30,6 +31,10 @@ export default function App() {
         />
         <Stack.Screen name="Home" 
         component={Home} 
+        options={{headerShown: false}}
+        />
+        <Stack.Screen name="Lists" 
+        component={Lists} 
         options={{headerShown: false}}
         />
       </Stack.Navigator>

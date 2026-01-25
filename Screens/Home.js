@@ -8,29 +8,76 @@ import {
   Dimensions,
   Image,
 } from "react-native";
+
 import { createDrawerNavigator } from "@react-navigation/drawer";
+import { createMaterialTopTabNavigator } from "@react-navigation/material-top-tabs";
+import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { useNavigation } from "@react-navigation/native";
 import { Feather } from "@expo/vector-icons";
 import Carousel from "react-native-reanimated-carousel";
-import { createMaterialTopTabNavigator } from "@react-navigation/material-top-tabs";
-import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
+
+import Lists from "./Lists";
 
 const { width } = Dimensions.get("window");
+
 const Drawer = createDrawerNavigator();
 const TopTab = createMaterialTopTabNavigator();
 const BottomTab = createBottomTabNavigator();
 
-/* ----------------------------- Home Screen ------------------------------ */
-function HomeScreen() {
+/* -------------------------------------------------------------------------- */
+/*                                TOP TABS                                    */
+/* -------------------------------------------------------------------------- */
+function HomeTopTabs() {
+  return (
+    <TopTab.Navigator
+      screenOptions={{
+        tabBarStyle: { backgroundColor: "#f7cfc9" },
+        tabBarActiveTintColor: "#000",
+        tabBarInactiveTintColor: "#888",
+      }}
+    >
+      <TopTab.Screen name="Home" component={HomeContent} />
+      <TopTab.Screen name="Another" component={AnotherTab} />
+    </TopTab.Navigator>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/*                               BOTTOM TABS                                  */
+/* -------------------------------------------------------------------------- */
+function HomeBottomTabs() {
+  return (
+    <BottomTab.Navigator screenOptions={{ headerShown: false }}>
+      <BottomTab.Screen name="Home" component={HomeTab} />
+      <BottomTab.Screen name="Lists" component={Lists} />
+    </BottomTab.Navigator>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/*                     ANOTHER TAB (Contents of Top Tabs )                    */
+/* -------------------------------------------------------------------------- */
+function AnotherTab() {
+  return (
+    <View style={styles.tabScreen}>
+      <Text style={styles.subtitle}>Another Tab Content</Text>
+    </View>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/*                               HOME SCREEN                                  */
+/* -------------------------------------------------------------------------- */
+function HomeTab() {
   const navigation = useNavigation();
 
   return (
     <View style={styles.screen}>
+      {/* HEADER */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.toggleDrawer()}>
-          <Feather name="menu" size={28} color="#000" />
+          <Feather name="menu" size={28} />
         </TouchableOpacity>
-
         <Text style={styles.headerTitle}>Home</Text>
         <View style={{ width: 28 }} />
       </View>
@@ -39,87 +86,63 @@ function HomeScreen() {
         <Text style={styles.subtitle}>Explore and Have fun!</Text>
       </View>
 
-      <View style={styles.tabContainer}>
-        <TopTab.Navigator
-          screenOptions={{
-            tabBarStyle: { backgroundColor: "#f7cfc9" },
-            tabBarActiveTintColor: "#000",
-            tabBarInactiveTintColor: "#888",
-            tabBarPressColor : "#000",
-          }}
-        >
-          <TopTab.Screen
-            name="HomeTab"
-            component={HomeTab}
-            options={{ title: "Home" }}
-          />
-          <TopTab.Screen
-            name="AnotherTab"
-            component={AnotherTab}
-            options={{ title: "Another" }}
-          />
-        </TopTab.Navigator>
-      </View>
+      {/* TOP TABS */}
+      <HomeTopTabs />
     </View>
   );
 }
 
-/* ------------------------------ Home Tab -------------------------------- */
-function HomeTab() {
+/* -------------------------------------------------------------------------- */
+/*                              HOME CONTENT                                  */
+/* -------------------------------------------------------------------------- */
+function HomeContent() {
   const sliderData = [
     {
       id: "1",
       image:
-        "https://images.unsplash.com/photo-1549924231-f129b911e442?auto=format&fit=crop&w=800&q=80",
+        "https://images.unsplash.com/photo-1549924231-f129b911e442",
       title: "Slide 1",
     },
     {
       id: "2",
       image:
-        "https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=800&q=80",
+        "https://images.unsplash.com/photo-1506744038136-46273834b3fb",
       title: "Slide 2",
     },
     {
       id: "3",
       image:
-        "https://images.unsplash.com/photo-1500534623283-312aade485b7?auto=format&fit=crop&w=800&q=80",
+        "https://images.unsplash.com/photo-1500534623283-312aade485b7",
       title: "Slide 3",
     },
   ];
 
   return (
     <View style={styles.tabScreen}>
-      {/* Carousel */}
-      <View style={styles.carouselWrapper}>
-        <Carousel
-          width={width}
-          height={220}
-          data={sliderData}
-          loop
-          autoPlay
-          mode="parallax"
-          autoPlayInterval={3000}
-          renderItem={({ item }) => (
-            <View style={styles.card}>
-              <Image source={{ uri: item.image }} style={styles.image} />
-              <View style={styles.captionWrapper}>
-                <Text style={styles.caption}>{item.title}</Text>
-              </View>
+      <Carousel
+        width={width}
+        height={220}
+        data={sliderData}
+        loop
+        mode="parallax"
+        autoPlay
+        autoPlayInterval={3000}
+        renderItem={({ item }) => (
+          <View style={styles.card}>
+            <Image source={{ uri: item.image }} style={styles.image} />
+            <View style={styles.captionWrapper}>
+              <Text style={styles.caption}>{item.title}</Text>
             </View>
-          )}
-        />
-      </View>
+          </View>
+        )}
+      />
 
-      {/* Top Places Header */}
       <View style={styles.sectionHeader}>
         <Text style={styles.subtitle}>Top Places</Text>
-        <TouchableOpacity>
-          <Text style={styles.seeAll}>See All</Text>
-        </TouchableOpacity>
+        <Text style={styles.seeAll}>See All</Text>
       </View>
 
-      {/* Top Place Card (snapped left) */}
-      <TouchableOpacity activeOpacity={0.8} style={styles.topPlacesContainer}>
+      <TouchableOpacity style={styles.topPlacesContainer}>
         <Image
           source={{
             uri: "https://upload.wikimedia.org/wikipedia/commons/6/6b/Philippine_Arena_exterior.jpg",
@@ -132,30 +155,21 @@ function HomeTab() {
   );
 }
 
-/* ----------------------------- Another Tab ----------------------------- */
-function AnotherTab() {
-  return (
-    <View style={styles.tabScreen}>
-      <Text style={styles.subtitle}>Another Tab Content</Text>
-    </View>
-  );
-}
-
-/* ------------------------------ Drawer ---------------------------------- */
+/* -------------------------------------------------------------------------- */
+/*                               DRAWER NAV                                   */
+/* -------------------------------------------------------------------------- */
 export default function HomeDrawer() {
   return (
-    <Drawer.Navigator
-      screenOptions={{
-        headerShown: false,
-        drawerStyle: { backgroundColor: "#f7cfc9" },
-      }}
-    >
-      <Drawer.Screen name="Main" component={HomeScreen} />
+    <Drawer.Navigator screenOptions={{ headerShown: false }}>
+      <Drawer.Screen name="Main" component={HomeBottomTabs} />
       <Drawer.Screen name="Profile" component={ProfileScreen} />
     </Drawer.Navigator>
   );
 }
 
+/* -------------------------------------------------------------------------- */
+/*                               PROFILE                                      */
+/* -------------------------------------------------------------------------- */
 function ProfileScreen() {
   const navigation = useNavigation();
 
@@ -163,17 +177,16 @@ function ProfileScreen() {
     <View style={styles.screen}>
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.toggleDrawer()}>
-          <Feather name="menu" size={28} color="#000" />
+          <Feather name="menu" size={28} />
         </TouchableOpacity>
-
         <Text style={styles.headerTitle}>Profile</Text>
         <View style={{ width: 28 }} />
       </View>
-
       <Text style={styles.subtitle}>Your Profile</Text>
     </View>
   );
 }
+
 
 /* ------------------------------ Styles ---------------------------------- */
 const styles = StyleSheet.create({
