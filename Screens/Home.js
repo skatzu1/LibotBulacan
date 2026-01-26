@@ -45,11 +45,102 @@ function HomeTopTabs() {
 /* -------------------------------------------------------------------------- */
 /*                               BOTTOM TABS                                  */
 /* -------------------------------------------------------------------------- */
+function CustomTabBar({ state, descriptors, navigation }) {
+  return (
+    <View style={styles.customTabBarContainer}>
+      <View style={styles.customTabBar}>
+        {state.routes.map((route, index) => {
+          const { options } = descriptors[route.key];
+          const label =
+            options.tabBarLabel !== undefined
+              ? options.tabBarLabel
+              : options.title !== undefined
+              ? options.title
+              : route.name;
+
+          const isFocused = state.index === index;
+
+          const onPress = () => {
+            const event = navigation.emit({
+              type: 'tabPress',
+              target: route.key,
+              canPreventDefault: true,
+            });
+
+            if (!isFocused && !event.defaultPrevented) {
+              navigation.navigate(route.name);
+            }
+          };
+
+          const onLongPress = () => {
+            navigation.emit({
+              type: 'tabLongPress',
+              target: route.key,
+            });
+          };
+
+          return (
+            <TouchableOpacity
+              key={route.key}
+              accessibilityRole="button"
+              accessibilityState={isFocused ? { selected: true } : {}}
+              accessibilityLabel={options.tabBarAccessibilityLabel}
+              testID={options.tabBarTestID}
+              onPress={onPress}
+              onLongPress={onLongPress}
+              style={styles.tabItem}
+            >
+              {options.tabBarIcon &&
+                options.tabBarIcon({
+                  focused: isFocused,
+                  color: isFocused ? "#8b4440" : "#ffffff",
+                  size: 22,
+                })}
+              <Text
+                style={[
+                  styles.tabLabel,
+                  { color: isFocused ? "#8b4440" : "#ffffff" },
+                ]}
+              >
+                {label}
+              </Text>
+            </TouchableOpacity>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
 function HomeBottomTabs() {
   return (
-    <BottomTab.Navigator screenOptions={{ headerShown: false }}>
-      <BottomTab.Screen name="Home" component={HomeTab} />
-      <BottomTab.Screen name="Lists" component={Lists} />
+    <BottomTab.Navigator
+      tabBar={(props) => <CustomTabBar {...props} />}
+      screenOptions={{
+        headerShown: false,
+      }}
+    >
+      <BottomTab.Screen
+        name="Home"
+        component={HomeTab}
+        options={{
+          tabBarLabel: "Home",
+          tabBarIcon: ({ color, size }) => (
+            <Feather name="home" size={22} color={color} />
+          ),
+        }}
+      />
+
+      <BottomTab.Screen
+        name="Lists"
+        component={Lists}
+        options={{
+          tabBarLabel: "Lists",
+          tabBarIcon: ({ color, size }) => (
+            <Feather name="list" size={22} color={color} />
+          ),
+        }}
+      />
     </BottomTab.Navigator>
   );
 }
@@ -160,7 +251,14 @@ function HomeContent() {
 /* -------------------------------------------------------------------------- */
 export default function HomeDrawer() {
   return (
-    <Drawer.Navigator screenOptions={{ headerShown: false }}>
+    <Drawer.Navigator 
+      screenOptions={{ 
+        headerShown: false,
+        drawerStyle: {
+          backgroundColor: "#dbbcb7",
+        },
+      }}
+    >
       <Drawer.Screen name="Main" component={HomeBottomTabs} />
       <Drawer.Screen name="Profile" component={ProfileScreen} />
     </Drawer.Navigator>
@@ -187,7 +285,6 @@ function ProfileScreen() {
   );
 }
 
-
 /* ------------------------------ Styles ---------------------------------- */
 const styles = StyleSheet.create({
   screen: {
@@ -195,15 +292,14 @@ const styles = StyleSheet.create({
     backgroundColor: "#f7cfc9",
     paddingTop: 50,
   },
-/* ------------------------- Another Tab Styles --------------------------- */
+  /* ------------------------- Another Tab Styles --------------------------- */
   tabScreen: {
     flex: 1,
     backgroundColor: "#f7cfc9",
     alignItems: "center",
     justifyContent: "flex-start",
   },
-/* ------------------------- Another Tab Styles --------------------------- */
-
+  /* ------------------------- Another Tab Styles --------------------------- */
 
   header: {
     width: "90%",
@@ -228,7 +324,7 @@ const styles = StyleSheet.create({
     width: "100%",
     alignItems: "center",
     marginBottom: 10,
-},
+  },
 
   tabContainer: {
     flex: 1,
@@ -318,5 +414,42 @@ const styles = StyleSheet.create({
   placeTitle: {
     color: "#fff",
     fontWeight: "600",
+  },
+
+
+
+  // Custom Tab Bar Styles
+  customTabBarContainer: {
+    position: "absolute",
+    bottom: 100,
+    left: 0,
+    right: 0,
+    alignItems: "center",
+  },
+  customTabBar: {
+    flexDirection: "row",
+    height: 60,
+    borderRadius: 35,
+    backgroundColor: "rgba(165, 111, 111, 0.85)",
+    paddingHorizontal: 20,
+    alignItems: "center",
+    justifyContent: "space-around",
+    width: 250,
+    // Shadow (iOS)
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+    // Shadow (Android)
+    elevation: 10,
+  },
+  tabItem: {
+    alignItems: "center",
+    justifyContent: "center",
+    flex: 1,
+  },
+  tabLabel: {
+    fontSize: 12,
+    marginTop: 4,
   },
 });
