@@ -43,7 +43,7 @@ function HomeTopTabs() {
 }
 
 /* -------------------------------------------------------------------------- */
-/*                               BOTTOM TABS                                  */
+/*                            BOTTOM TABS STYLE                               */
 /* -------------------------------------------------------------------------- */
 function CustomTabBar({ state, descriptors, navigation }) {
   return (
@@ -111,6 +111,10 @@ function CustomTabBar({ state, descriptors, navigation }) {
     </View>
   );
 }
+
+/* -------------------------------------------------------------------------- */
+/*                         BOTTOM TABS FUNCTION                               */
+/* -------------------------------------------------------------------------- */
 
 function HomeBottomTabs() {
   return (
