@@ -1,11 +1,58 @@
-import { View, StyleSheet, TouchableOpacity, TextInput, Text } from "react-native";
+import { View, StyleSheet, TouchableOpacity, TextInput, Text, Alert, ActivityIndicator } from "react-native";
 import { useState } from "react";
-import CheckBox, { Checkbox } from "expo-checkbox";
+import CheckBox from "expo-checkbox";
+import { useAuth } from "../context/AuthContext"; 
 
 export default function Login({ navigation }) {
   const [isChecked, setChecked] = useState(false);
-  const handleForgotPassword = () => { alert("nigga"); }
-  const [PasswordVisible, setPasswordVisible] = useState(false);
+  const [passwordVisible, setPasswordVisible] = useState(false);
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [isLoading, setIsLoading] = useState(false);
+  
+  const { login } = useAuth();
+
+  const handleForgotPassword = () => { 
+    alert("Password reset feature coming soon!"); 
+  };
+
+  const handleLogin = async () => {
+    // Validation
+    if (!email || !password) {
+      Alert.alert("Error", "Please fill in all fields");
+      return;
+    }
+
+    // Basic email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(email)) {
+      Alert.alert("Error", "Please enter a valid email address");
+      return;
+    }
+
+    setIsLoading(true);
+    
+    try {
+      const result = await login(email, password);
+      
+      if (!result.success) {
+        // Show error message from backend
+        Alert.alert(
+          "Login Failed", 
+          result.message || "Invalid credentials. Please check your email and password."
+        );
+      }
+      // If successful, the AuthContext will handle navigation automatically
+    } catch (error) {
+      Alert.alert(
+        "Error", 
+        "Unable to connect to server. Please check your internet connection."
+      );
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   return (
     <View style={styles.screen}>
       <View style={styles.titleContainer}>
@@ -16,22 +63,43 @@ export default function Login({ navigation }) {
       </View>
 
       <View style={styles.inputContainer}>
-        <TextInput style={styles.input} placeholder="Username" />
-        <TextInput style={styles.input} placeholder="Password" 
-        secureTextEntry={PasswordVisible} />
+        <TextInput 
+          style={styles.input} 
+          placeholder="Email" 
+          placeholderTextColor="#808080" 
+          value={email}
+          onChangeText={setEmail}
+          autoCapitalize="none"
+          keyboardType="email-address"
+          editable={!isLoading}
+        />
+        <TextInput 
+          style={styles.input} 
+          placeholder="Password" 
+          placeholderTextColor="#808080" 
+          secureTextEntry={!passwordVisible}
+          value={password}
+          onChangeText={setPassword}
+          editable={!isLoading}
+        />
       </View>
 
       <View style={styles.showhideContainer}>
-        <TouchableOpacity onPress={() => setPasswordVisible(!PasswordVisible)}>
-          <Text style={styles.eyeButton}>{PasswordVisible ? "Show" : "Hide"} Password</Text>
+        <TouchableOpacity onPress={() => setPasswordVisible(!passwordVisible)}>
+          <Text style={styles.eyeButton}>
+            {passwordVisible ? "Hide" : "Show"} Password
+          </Text>
         </TouchableOpacity>
       </View>
 
       <View style={styles.checkboxContainer}>
         <View style={styles.rememberRow}>
-          <CheckBox value={isChecked} onValueChange={setChecked}
-          color={isChecked ? "#f7cfc9" : "#ffffff"}
-          marginLeft={25}/>
+          <CheckBox 
+            value={isChecked} 
+            onValueChange={setChecked}
+            color={isChecked ? "#6b4b45" : undefined}
+            style={styles.checkbox}
+          />
           <Text style={styles.rememberMe}>Remember me</Text>
         </View>
         <TouchableOpacity onPress={handleForgotPassword}>
@@ -40,8 +108,24 @@ export default function Login({ navigation }) {
       </View>
 
       <View style={styles.buttonContainer}>
-        <TouchableOpacity style={styles.loginButton} onPress={() => navigation.navigate("Home")}>
-          <Text style={styles.buttonText}>Login</Text>
+        <TouchableOpacity 
+          style={[styles.loginButton, isLoading && styles.loginButtonDisabled]} 
+          onPress={handleLogin}
+          disabled={isLoading}
+        >
+          {isLoading ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <Text style={styles.buttonText}>Login</Text>
+          )}
+        </TouchableOpacity>
+      </View>
+
+      {/* Optional: Add a sign up link */}
+      <View style={styles.signupContainer}>
+        <Text style={styles.signupText}>Don't have an account? </Text>
+        <TouchableOpacity onPress={() => navigation.navigate("Register")}>
+          <Text style={styles.signupLink}>Sign Up</Text>
         </TouchableOpacity>
       </View>
 
@@ -96,6 +180,9 @@ const styles = StyleSheet.create({
       alignItems: "center",
       width: "80%",
     },
+    loginButtonDisabled: {
+      backgroundColor: "#999",
+    },
     buttonText: {
       color: "#fff",
       fontWeight: "700",
@@ -112,6 +199,9 @@ const styles = StyleSheet.create({
       flexDirection: "row",
       alignItems: "center",
     },
+    checkbox: {
+      marginLeft: 25,
+    },
     rememberMe: {
       marginLeft: 8,
       fontSize: 16,
@@ -123,5 +213,24 @@ const styles = StyleSheet.create({
     showhideContainer: {
       marginLeft: 25,
       marginBottom: 15,
-    }
+    },
+    eyeButton: {
+      fontSize: 14,
+      color: "#6b4b45",
+      fontWeight: "600",
+    },
+    signupContainer: {
+      flexDirection: "row",
+      justifyContent: "center",
+      marginTop: 20,
+    },
+    signupText: {
+      fontSize: 14,
+      color: "#444",
+    },
+    signupLink: {
+      fontSize: 14,
+      color: "#6b4b45",
+      fontWeight: "700",
+    },
 });
