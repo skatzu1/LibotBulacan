@@ -204,12 +204,15 @@ function HomeContent() {
   const [spots, setSpots] = useState([]);
   const API_URL = "http://192.168.3.103:5000"
 
-  const sliderData = spots.slice(0, 3).map(({ _id, image, name }, index) => ({
-    id: _id || String(index),
-    image: image,
-    title: name,
-    spot: { _id, image, name }
-  }));
+  // Add check here - only slice if spots is an array with items
+  const sliderData = (spots && spots.length > 0) 
+    ? spots.slice(0, 3).map(({ _id, image, name }, index) => ({
+        id: _id || String(index),
+        image: image,
+        title: name,
+        spot: { _id, image, name }
+      }))
+    : [];
 
   useEffect(() => {
     fetch(`${API_URL}/api/spots`)
@@ -247,7 +250,8 @@ function HomeContent() {
       <Text style={styles.seeAll}>See All</Text>
     </View>
 
-    {spots.slice(0, 3).map((spot) => (
+    {/* Add check here too */}
+    {spots && spots.length > 0 && spots.slice(0, 3).map((spot) => (
       <TouchableOpacity 
         key={spot._id}
         style={styles.topPlacesContainer}
