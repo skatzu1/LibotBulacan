@@ -204,7 +204,6 @@ function HomeContent() {
   const [spots, setSpots] = useState([]);
   const API_URL = "http://192.168.3.103:5000"
 
-  // Add check here - only slice if spots is an array with items
   const sliderData = (spots && spots.length > 0) 
     ? spots.slice(0, 3).map(({ _id, image, name }, index) => ({
         id: _id || String(index),
