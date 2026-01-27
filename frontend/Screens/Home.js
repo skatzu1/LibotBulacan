@@ -169,7 +169,7 @@ function HomeTab() {
   const [spots, setSpots] = useState([]);
 
   useEffect(() => {
-    fetch("Linkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk")
+    fetch("http://192.168.3.103:5000/api/spots")
       .then((res) => res.json())
       .then((data) => setSpots(data))
       .catch((error) => console.error("Error fetching spots:", error));
@@ -202,6 +202,7 @@ function HomeTab() {
 function HomeContent() {
   const navigation = useNavigation();
   const [spots, setSpots] = useState([]);
+  const API_URL = "http://192.168.3.103:5000"
 
   const sliderData = spots.slice(0, 3).map(({ _id, image, name }, index) => ({
     id: _id || String(index),
@@ -211,7 +212,7 @@ function HomeContent() {
   }));
 
   useEffect(() => {
-    fetch("Linkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk")
+    fetch(`${API_URL}/api/spots`)
       .then((res) => res.json())
       .then((data) => setSpots(data))
       .catch((error) => console.error("Error fetching spots:", error));
