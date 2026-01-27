@@ -29,6 +29,7 @@
     "express": "^5.2.1",
     "mongodb": "^7.0.0",
     "mongoose": "^9.1.5",
+    "nodemon": "^3.1.11",
     "react": "19.1.0",
     "react-dom": "19.1.0",
     "react-native": "0.81.5",
@@ -46,5 +47,17 @@
   "private": true,
   "devDependencies": {
     "babel-preset-expo": "^54.0.10"
-  }
+  },
+  "description": "��#\u0000 \u0000a\u0000n\u0000o\u0000 \u0000n\u0000a\u0000",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/skatzu1/LibotBulacan.git"
+  },
+  "keywords": [],
+  "author": "",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/skatzu1/LibotBulacan/issues"
+  },
+  "homepage": "https://github.com/skatzu1/LibotBulacan#readme"
 }
