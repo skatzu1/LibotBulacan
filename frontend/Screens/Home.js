@@ -15,6 +15,7 @@ import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { useNavigation } from "@react-navigation/native";
 import { Feather } from "@expo/vector-icons";
 import Carousel from "react-native-reanimated-carousel";
+import { useEffect, useState } from "react";
 
 import Lists from "./Lists";
 
@@ -165,6 +166,14 @@ function AnotherTab() {
 /* -------------------------------------------------------------------------- */
 function HomeTab() {
   const navigation = useNavigation();
+  const [spots, setSpots] = useState([]);
+
+  useEffect(() => {
+    fetch("Linkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk")
+      .then((res) => res.json())
+      .then((data) => setSpots(data))
+      .catch((error) => console.error("Error fetching spots:", error));
+  }, []);
 
   return (
     <View style={styles.screen}>

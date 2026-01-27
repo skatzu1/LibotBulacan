@@ -10,6 +10,7 @@ import WelcomePage2 from "./frontend/Screens/WelcomePage2";
 import Login from "./frontend/Screens/Login";
 import Home from "./frontend/Screens/Home";
 import Lists from "./frontend/Screens/Lists";
+import InformationScreen from "./frontend/Screens/InformationScreen";
 
 const Stack = createNativeStackNavigator();
 
@@ -37,7 +38,32 @@ export default function App() {
         component={Lists} 
         options={{headerShown: false}}
         />
+        <Stack.Screen name="InformationScreen" 
+        component={InformationScreen} 
+        options={{headerShown: false}}
+        />
       </Stack.Navigator>
     </NavigationContainer>
   );
 }
+
+// Database //
+/* import { useEffect, useState } from "react";
+import { View, Text } from "react-native";
+
+export default function App() {
+  const [data, setData] = useState(null);
+
+  useEffect(() => {
+    fetch("http://YOUR_LOCAL_IP:3000/api/test")
+      .then(res => res.json())
+      .then(json => setData(json.message))
+      .catch(err => console.error(err));
+  }, []);
+
+  return (
+    <View style={{ flex: 1, justifyContent: "center", alignItems: "center" }}>
+      <Text>{data || "Loading..."}</Text>
+    </View>
+  );
+} */
