@@ -1,16 +1,16 @@
+import 'react-native-gesture-handler';
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
-import 'react-native-gesture-handler';
 import 'react-native-reanimated';
 
 
 
-import WelcomePage from "./frontend/Screens/WelcomePage";
-import WelcomePage2 from "./frontend/Screens/WelcomePage2";
-import Login from "./frontend/Screens/Login";
-import Home from "./frontend/Screens/Home";
-import Lists from "./frontend/Screens/Lists";
-import InformationScreen from "./frontend/Screens/InformationScreen";
+import WelcomePage from "./Screens/WelcomePage";
+import WelcomePage2 from "./Screens/WelcomePage2";
+import Login from "./Screens/Login";
+import Home from "./Screens/Home";
+import Lists from "./Screens/Lists";
+import InformationScreen from "./Screens/InformationScreen";
 
 const Stack = createNativeStackNavigator();
 

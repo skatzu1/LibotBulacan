@@ -4,26 +4,24 @@
     "slug": "Libot",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./frontend/assets/logo.png",
+    "icon": "./assets/logo.png",
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
-
     "ios": {
       "supportsTablet": true
     },
-
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./frontend/assets/adaptive-icon.png",
+        "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true
     },
-
     "web": {
-      "favicon": "./frontend/assets/favicon.png"
+      "favicon": "./assets/favicon.png"
     },
-
-    "plugins": []
+    "plugins": [
+      "expo-font"
+    ]
   }
 }
