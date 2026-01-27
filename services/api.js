@@ -1,21 +1,56 @@
 import axios from 'axios';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const API_URL = 'http://192.168.100.1:5000/api/users'; // or your computer's IP if testing on a device
+const API_URL = process.env.EXPO_PUBLIC_API_URL || 'https://libotbackend.onrender.com';
 
-export const getUsers = async () => {
-  try {
-    const res = await axios.get(API_URL);
-    return res.data;
-  } catch (err) {
-    console.error(err);
+const api = axios.create({
+  baseURL: API_URL,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
+
+// Add token to requests automatically
+api.interceptors.request.use(
+  async (config) => {
+    const token = await AsyncStorage.getItem('userToken');
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
+    }
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
+  }
+);
+
+export const authAPI = {
+  login: async (email, password) => {
+    try {
+      const response = await api.post('/api/auth/login', { email, password });
+      return response.data;
+    } catch (error) {
+      throw error.response?.data || { message: 'Network error' };
+    }
+  },
+
+  register: async (email, password, name) => {
+    try {
+      const response = await api.post('/api/auth/register', { email, password, name });
+      return response.data;
+    } catch (error) {
+      throw error.response?.data || { message: 'Network error' };
+    }
+  },
+
+  verifyToken: async () => {
+    try {
+      const response = await api.get('/api/auth/verify');
+      return response.data;
+    } catch (error) {
+      throw error.response?.data || { message: 'Network error' };
+    }
   }
 };
 
-export const createUser = async (user) => {
-  try {
-    const res = await axios.post(API_URL, user);
-    return res.data;
-  } catch (err) {
-    console.error(err);
-  }
-};
+export default api;

@@ -7,15 +7,17 @@ import {
   TouchableOpacity,
   Dimensions,
   Image,
+  Alert,
 } from "react-native";
 
 import { createDrawerNavigator } from "@react-navigation/drawer";
 import { createMaterialTopTabNavigator } from "@react-navigation/material-top-tabs";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import { Feather } from "@expo/vector-icons";
 import Carousel from "react-native-reanimated-carousel";
 import { useEffect, useState } from "react";
+import { useAuth } from "../context/AuthContext";
 
 import Lists from "./Lists";
 
@@ -37,7 +39,7 @@ function HomeTopTabs() {
         tabBarInactiveTintColor: "#888",
       }}
     >
-      <TopTab.Screen name="Home" component={HomeContent} />
+      <TopTab.Screen name="HomeTab" component={HomeContent} />
       <TopTab.Screen name="Another" component={AnotherTab} />
     </TopTab.Navigator>
   );
@@ -116,7 +118,6 @@ function CustomTabBar({ state, descriptors, navigation }) {
 /* -------------------------------------------------------------------------- */
 /*                         BOTTOM TABS FUNCTION                               */
 /* -------------------------------------------------------------------------- */
-
 function HomeBottomTabs() {
   return (
     <BottomTab.Navigator
@@ -126,7 +127,7 @@ function HomeBottomTabs() {
       }}
     >
       <BottomTab.Screen
-        name="Home"
+        name="HomeScreen"
         component={HomeTab}
         options={{
           tabBarLabel: "Home",
@@ -135,7 +136,6 @@ function HomeBottomTabs() {
           ),
         }}
       />
-
       <BottomTab.Screen
         name="Lists"
         component={Lists}
@@ -169,7 +169,7 @@ function HomeTab() {
   const [spots, setSpots] = useState([]);
 
   useEffect(() => {
-    fetch("http://192.168.3.103:5000/api/spots")
+    fetch("https://libotbackend.onrender.com")
       .then((res) => res.json())
       .then((data) => setSpots(data))
       .catch((error) => console.error("Error fetching spots:", error));
@@ -202,7 +202,7 @@ function HomeTab() {
 function HomeContent() {
   const navigation = useNavigation();
   const [spots, setSpots] = useState([]);
-  const API_URL = "http://192.168.3.103:5000"
+  const API_URL = "https://libotbackend.onrender.com"
 
   const sliderData = (spots && spots.length > 0) 
     ? spots.slice(0, 3).map(({ _id, image, name }, index) => ({
@@ -249,7 +249,6 @@ function HomeContent() {
       <Text style={styles.seeAll}>See All</Text>
     </View>
 
-    {/* Add check here too */}
     {spots && spots.length > 0 && spots.slice(0, 3).map((spot) => (
       <TouchableOpacity 
         key={spot._id}
@@ -282,6 +281,7 @@ export default function HomeDrawer() {
     >
       <Drawer.Screen name="Main" component={HomeBottomTabs} />
       <Drawer.Screen name="Profile" component={ProfileScreen} />
+      <Drawer.Screen name="Logout" component={LogoutScreen} />
     </Drawer.Navigator>
   );
 }
@@ -291,6 +291,7 @@ export default function HomeDrawer() {
 /* -------------------------------------------------------------------------- */
 function ProfileScreen() {
   const navigation = useNavigation();
+  const { user } = useAuth();
 
   return (
     <View style={styles.screen}>
@@ -301,7 +302,62 @@ function ProfileScreen() {
         <Text style={styles.headerTitle}>Profile</Text>
         <View style={{ width: 28 }} />
       </View>
-      <Text style={styles.subtitle}>Your Profile</Text>
+      
+      <View style={styles.profileContainer}>
+        <Text style={styles.subtitle}>Your Profile</Text>
+        
+        {/* Display user info */}
+        {user && (
+          <View style={styles.userInfo}>
+            <Text style={styles.infoText}>Name: {user.name}</Text>
+            <Text style={styles.infoText}>Email: {user.email}</Text>
+          </View>
+        )}
+      </View>
+    </View>
+  );
+}
+
+/* -------------------------------------------------------------------------- */
+/*                               LOGOUT SCREEN                                */
+/* -------------------------------------------------------------------------- */
+function LogoutScreen() {
+  const { logout } = useAuth();
+  const navigation = useNavigation();
+
+  useFocusEffect(
+    React.useCallback(() => {
+      Alert.alert(
+        "Logout",
+        "Are you sure you want to logout?",
+        [
+          {
+            text: "Cancel",
+            onPress: () => navigation.navigate("Main"),
+            style: "cancel",
+          },
+          {
+            text: "Logout",
+            onPress: async () => {
+              await logout();
+            },
+            style: "destructive",
+          },
+        ]
+      );
+    }, [])
+  );
+
+  return (
+    <View
+      style={{
+        flex: 1,
+        justifyContent: "center",
+        alignItems: "center",
+        backgroundColor: "#f7cfc9",
+      }}
+    >
+      <Text>Logging out...</Text>
     </View>
   );
 }
@@ -418,6 +474,7 @@ const styles = StyleSheet.create({
     height: 80,
     alignSelf: "flex-start",
     marginLeft: "5%",
+    marginBottom: 10,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.2,
@@ -437,7 +494,22 @@ const styles = StyleSheet.create({
     fontWeight: "600",
   },
 
+  // Profile styles
+  profileContainer: {
+    padding: 20,
+  },
 
+  userInfo: {
+    marginTop: 20,
+    backgroundColor: "#fff",
+    padding: 20,
+    borderRadius: 10,
+  },
+
+  infoText: {
+    fontSize: 16,
+    marginBottom: 10,
+  },
 
   // Custom Tab Bar Styles
   customTabBarContainer: {
@@ -456,12 +528,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "space-around",
     width: 250,
-    // Shadow (iOS)
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.15,
     shadowRadius: 12,
-    // Shadow (Android)
     elevation: 10,
   },
   tabItem: {
