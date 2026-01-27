@@ -200,62 +200,66 @@ function HomeTab() {
 /*                              HOME CONTENT                                  */
 /* -------------------------------------------------------------------------- */
 function HomeContent() {
-  const sliderData = [
-    {
-      id: "1",
-      image:
-        "https://images.unsplash.com/photo-1549924231-f129b911e442",
-      title: "Slide 1",
-    },
-    {
-      id: "2",
-      image:
-        "https://images.unsplash.com/photo-1506744038136-46273834b3fb",
-      title: "Slide 2",
-    },
-    {
-      id: "3",
-      image:
-        "https://images.unsplash.com/photo-1500534623283-312aade485b7",
-      title: "Slide 3",
-    },
-  ];
+  const navigation = useNavigation();
+  const [spots, setSpots] = useState([]);
+
+  const sliderData = spots.slice(0, 3).map(({ _id, image, name }, index) => ({
+    id: _id || String(index),
+    image: image,
+    title: name,
+    spot: { _id, image, name }
+  }));
+
+  useEffect(() => {
+    fetch("Linkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk")
+      .then((res) => res.json())
+      .then((data) => setSpots(data))
+      .catch((error) => console.error("Error fetching spots:", error));
+  }, []);
 
   return (
-    <View style={styles.tabScreen}>
-      <Carousel
-        width={width}
-        height={220}
-        data={sliderData}
-        loop
-        mode="parallax"
-        autoPlay
-        autoPlayInterval={3000}
-        renderItem={({ item }) => (
+  <View style={styles.tabScreen}>
+    <Carousel
+      width={width}
+      height={220}
+      data={sliderData}
+      loop
+      mode="parallax"
+      autoPlay
+      autoPlayInterval={3000}
+      renderItem={({ item }) => (
+        <TouchableOpacity 
+          onPress={() => navigation.navigate('Information', { spot: item.spot })}
+        >
           <View style={styles.card}>
             <Image source={{ uri: item.image }} style={styles.image} />
             <View style={styles.captionWrapper}>
               <Text style={styles.caption}>{item.title}</Text>
             </View>
           </View>
-        )}
-      />
+        </TouchableOpacity>
+      )}
+    />
 
-      <View style={styles.sectionHeader}>
-        <Text style={styles.subtitle}>Top Places</Text>
-        <Text style={styles.seeAll}>See All</Text>
-      </View>
+    <View style={styles.sectionHeader}>
+      <Text style={styles.subtitle}>Top Places</Text>
+      <Text style={styles.seeAll}>See All</Text>
+    </View>
 
-      <TouchableOpacity style={styles.topPlacesContainer}>
+    {spots.slice(0, 3).map((spot) => (
+      <TouchableOpacity 
+        key={spot._id}
+        style={styles.topPlacesContainer}
+        onPress={() => navigation.navigate('Information', { spot })}
+      >
         <Image
-          source={{
-            uri: "https://upload.wikimedia.org/wikipedia/commons/6/6b/Philippine_Arena_exterior.jpg",
-          }}
+          source={{ uri: spot.image }}
           style={styles.placeImage}
         />
-        <Text style={styles.placeTitle}>Philippine Arena</Text>
+        <Text style={styles.placeTitle}>{spot.name}</Text>
       </TouchableOpacity>
-    </View>
+    ))}
+  </View>
   );
 }
 
