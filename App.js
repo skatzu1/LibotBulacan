@@ -5,11 +5,11 @@ import 'react-native-reanimated';
 
 
 
-import WelcomePage from "./Screens/WelcomePage";
-import WelcomePage2 from "./Screens/WelcomePage2";
-import Login from "./Screens/Login";
-import Home from "./Screens/Home";
-import Lists from "./Screens/Lists";
+import WelcomePage from "./frontend/Screens/WelcomePage";
+import WelcomePage2 from "./frontend/Screens/WelcomePage2";
+import Login from "./frontend/Screens/Login";
+import Home from "./frontend/Screens/Home";
+import Lists from "./frontend/Screens/Lists";
 
 const Stack = createNativeStackNavigator();
 
