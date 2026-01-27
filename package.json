@@ -4,6 +4,7 @@
   "description": "��#\u0000 \u0000a\u0000n\u0000o\u0000 \u0000n\u0000a\u0000",
   "main": "node_modules/expo/AppEntry.js",
   "dependencies": {
+    "@react-native-async-storage/async-storage": "2.2.0",
     "@react-navigation/bottom-tabs": "^7.10.1",
     "@react-navigation/drawer": "^7.7.13",
     "@react-navigation/material-top-tabs": "^7.4.13",
@@ -471,6 +472,10 @@
     "yocto-queue": "^0.1.0"
   },
   "scripts": {
+    "start": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "web": "expo start --web",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
   "repository": {
