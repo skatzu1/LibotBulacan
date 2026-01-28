@@ -13,6 +13,7 @@ import Register from "./Screens/Register";
 import Home from "./Screens/Home";
 import Lists from "./Screens/Lists";
 import InformationScreen from "./Screens/InformationScreen";
+import Categories from './Screens/Categories';
 
 const Stack = createNativeStackNavigator();
 
@@ -47,6 +48,11 @@ function AppNavigator() {
               component={InformationScreen} 
               options={{ headerShown: false }}
             />
+            <Stack.Screen 
+              name="Categories"
+              component={Categories}
+              options={{ headerShown: false}}
+            />
           </>
         ) : (
           <>
@@ -69,6 +75,11 @@ function AppNavigator() {
               name="Register" 
               component={Register} 
               options={{ headerShown: false }}
+            />
+            <Stack.Screen 
+              name="Home" 
+              component={Home} 
+              options={{ headerShown: false, gestureEnabled: false }}
             />
           </>
         )}

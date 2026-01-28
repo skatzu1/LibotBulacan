@@ -20,6 +20,7 @@ import { useEffect, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 
 import Lists from "./Lists";
+import Categories from "./Categories";
 
 const { width } = Dimensions.get("window");
 
@@ -137,10 +138,10 @@ function HomeBottomTabs() {
         }}
       />
       <BottomTab.Screen
-        name="Lists"
-        component={Lists}
+        name="Categories"
+        component={Categories}
         options={{
-          tabBarLabel: "Lists",
+          tabBarLabel: "Categories",
           tabBarIcon: ({ color, size }) => (
             <Feather name="list" size={22} color={color} />
           ),
