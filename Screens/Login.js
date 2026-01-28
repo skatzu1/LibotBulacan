@@ -129,6 +129,15 @@ export default function Login({ navigation }) {
         </TouchableOpacity>
       </View>
 
+      <View style={styles.devButtonContainer}>
+        <TouchableOpacity 
+          style={styles.devButton}
+          onPress={() => navigation.navigate("Home")}
+        >
+          <Text style={styles.devButtonText}>Dev: Skip to Home</Text>
+        </TouchableOpacity>
+      </View>
+
     </View>
   );
 }
@@ -232,5 +241,23 @@ const styles = StyleSheet.create({
       fontSize: 14,
       color: "#6b4b45",
       fontWeight: "700",
+    },
+    devButtonContainer: {
+      alignItems: "center",
+      marginTop: 15,
+    },
+    devButton: {
+      backgroundColor: "#999",
+      padding: 10,
+      borderRadius: 8,
+      width: "60%",
+      alignItems: "center",
+      borderWidth: 1,
+      borderColor: "#666",
+    },
+    devButtonText: {
+      color: "#fff",
+      fontWeight: "600",
+      fontSize: 12,
     },
 });
