@@ -184,7 +184,7 @@ function HomeTab() {
           <Feather name="menu" size={28} />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Home</Text>
-        <View style={{ width: 28 }} />
+        <Text>asd</Text>
       </View>
 
       <View style={styles.centeredText}>
