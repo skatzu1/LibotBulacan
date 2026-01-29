@@ -77,6 +77,11 @@ function AppNavigator() {
               options={{ headerShown: false }}
             />
             <Stack.Screen 
+              name="InformationScreen" 
+              component={InformationScreen} 
+              options={{ headerShown: false }}
+            />
+            <Stack.Screen 
               name="Home" 
               component={Home} 
               options={{ headerShown: false, gestureEnabled: false }}
