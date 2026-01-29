@@ -233,7 +233,7 @@ function HomeContent() {
       autoPlayInterval={3000}
       renderItem={({ item }) => (
         <TouchableOpacity 
-          onPress={() => navigation.navigate('Information', { spot: item.spot })}
+          onPress={() => navigation.navigate('InformationScreen', { spot: item.spot })}
         >
           <View style={styles.card}>
             <Image source={{ uri: item.image }} style={styles.image} />
