@@ -254,7 +254,7 @@ function HomeContent() {
       <TouchableOpacity 
         key={spot._id}
         style={styles.topPlacesContainer}
-        onPress={() => navigation.navigate('Information', { spot })}
+        onPress={() => navigation.navigate('InformationScreen', { spot })}
       >
         <Image
           source={{ uri: spot.image }}
