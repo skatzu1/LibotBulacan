@@ -1,7 +1,8 @@
 import React from 'react'
-import { View, Text} from 'react-native'
+import { View, Text, Image} from 'react-native'
 
-export default function InformationScreen({ route }) {
+
+export default function InformationScreen({ route, navigation }) {
   const { spot } = route.params;
 
   return (
