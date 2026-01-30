@@ -8,6 +8,7 @@ import {
   Dimensions,
   Image,
   Alert,
+  ScrollView,
 } from "react-native";
 
 import { createDrawerNavigator } from "@react-navigation/drawer";
@@ -21,6 +22,7 @@ import { useAuth } from "../context/AuthContext";
 
 import Lists from "./Lists";
 import Categories from "./Categories";
+import ProfileScreen from "./Profilescreen";
 
 const { width } = Dimensions.get("window");
 
@@ -35,13 +37,17 @@ function HomeTopTabs() {
   return (
     <TopTab.Navigator
       screenOptions={{
-        tabBarStyle: { backgroundColor: "#f7cfc9" },
+        tabBarStyle: { backgroundColor: "#f7cfc9", elevation: 0, shadowOpacity: 0 },
         tabBarActiveTintColor: "#000",
         tabBarInactiveTintColor: "#888",
+        tabBarIndicatorStyle: { backgroundColor: "#8b4440", height: 3 },
+        tabBarLabelStyle: { fontSize: 14, fontWeight: "600", textTransform: "none" },
       }}
     >
-      <TopTab.Screen name="HomeTab" component={HomeContent} />
-      <TopTab.Screen name="Another" component={AnotherTab} />
+      <TopTab.Screen name="All" component={HomeContent} options={{ tabBarLabel: "All" }} />
+      <TopTab.Screen name="Popular" component={PopularTab} options={{ tabBarLabel: "Popular" }} />
+      <TopTab.Screen name="Nearby" component={NearbyTab} options={{ tabBarLabel: "Nearby" }} />
+      <TopTab.Screen name="Recommended" component={RecommendedTab} options={{ tabBarLabel: "Recommended" }} />
     </TopTab.Navigator>
   );
 }
@@ -98,16 +104,8 @@ function CustomTabBar({ state, descriptors, navigation }) {
                 options.tabBarIcon({
                   focused: isFocused,
                   color: isFocused ? "#8b4440" : "#ffffff",
-                  size: 22,
+                  size: 24,
                 })}
-              <Text
-                style={[
-                  styles.tabLabel,
-                  { color: isFocused ? "#8b4440" : "#ffffff" },
-                ]}
-              >
-                {label}
-              </Text>
             </TouchableOpacity>
           );
         })}
@@ -133,7 +131,27 @@ function HomeBottomTabs() {
         options={{
           tabBarLabel: "Home",
           tabBarIcon: ({ color, size }) => (
-            <Feather name="home" size={22} color={color} />
+            <Feather name="home" size={24} color={color} />
+          ),
+        }}
+      />
+      <BottomTab.Screen
+        name="Lists"
+        component={Lists}
+        options={{
+          tabBarLabel: "Lists",
+          tabBarIcon: ({ color, size }) => (
+            <Feather name="list" size={24} color={color} />
+          ),
+        }}
+      />
+      <BottomTab.Screen
+        name="Bookmark"
+        component={BookmarkTab}
+        options={{
+          tabBarLabel: "Bookmark",
+          tabBarIcon: ({ color, size }) => (
+            <Feather name="bookmark" size={24} color={color} />
           ),
         }}
       />
@@ -143,7 +161,7 @@ function HomeBottomTabs() {
         options={{
           tabBarLabel: "Categories",
           tabBarIcon: ({ color, size }) => (
-            <Feather name="list" size={22} color={color} />
+            <Feather name="grid" size={24} color={color} />
           ),
         }}
       />
@@ -152,12 +170,47 @@ function HomeBottomTabs() {
 }
 
 /* -------------------------------------------------------------------------- */
-/*                     ANOTHER TAB (Contents of Top Tabs )                    */
+/*                     OTHER TABS (Contents of Top Tabs )                     */
 /* -------------------------------------------------------------------------- */
-function AnotherTab() {
+function PopularTab() {
   return (
     <View style={styles.tabScreen}>
-      <Text style={styles.subtitle}>Another Tab Content</Text>
+      <Text style={styles.emptyText}>Popular places coming soon...</Text>
+    </View>
+  );
+}
+
+function NearbyTab() {
+  return (
+    <View style={styles.tabScreen}>
+      <Text style={styles.emptyText}>Nearby places coming soon...</Text>
+    </View>
+  );
+}
+
+function RecommendedTab() {
+  return (
+    <View style={styles.tabScreen}>
+      <Text style={styles.emptyText}>Recommended places coming soon...</Text>
+    </View>
+  );
+}
+
+function BookmarkTab() {
+  const navigation = useNavigation();
+  
+  return (
+    <View style={styles.screen}>
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => navigation.toggleDrawer()}>
+          <Feather name="menu" size={28} />
+        </TouchableOpacity>
+        <Text style={styles.headerTitle}>Bookmarks</Text>
+        <View style={{ width: 28 }} />
+      </View>
+      <View style={styles.tabScreen}>
+        <Text style={styles.emptyText}>Your bookmarks will appear here</Text>
+      </View>
     </View>
   );
 }
@@ -167,28 +220,29 @@ function AnotherTab() {
 /* -------------------------------------------------------------------------- */
 function HomeTab() {
   const navigation = useNavigation();
-  const [spots, setSpots] = useState([]);
-
-  useEffect(() => {
-    fetch("https://libotbackend.onrender.com")
-      .then((res) => res.json())
-      .then((data) => setSpots(data))
-      .catch((error) => console.error("Error fetching spots:", error));
-  }, []);
+  const { user } = useAuth();
 
   return (
     <View style={styles.screen}>
       {/* HEADER */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.toggleDrawer()}>
-          <Feather name="menu" size={28} />
+          <Feather name="menu" size={28} color="#4a4a4a" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Home</Text>
-        <Text>asd</Text>
+        <Image 
+          source={require('../assets/logo.png')} 
+          style={styles.logo}
+          resizeMode="contain"
+        />
+        <TouchableOpacity onPress={() => navigation.navigate('Profile')}>
+          <View style={styles.profileIcon}>
+            <Feather name="user" size={20} color="#fff" />
+          </View>
+        </TouchableOpacity>
       </View>
 
       <View style={styles.centeredText}>
-        <Text style={styles.subtitle}>Explore and Have fun!</Text>
+        <Text style={styles.subtitle}>Home</Text>
       </View>
 
       {/* TOP TABS */}
@@ -203,67 +257,131 @@ function HomeTab() {
 function HomeContent() {
   const navigation = useNavigation();
   const [spots, setSpots] = useState([]);
-  const API_URL = "https://libotbackend.onrender.com"
+  const [loading, setLoading] = useState(true);
 
   const sliderData = (spots && spots.length > 0) 
-    ? spots.slice(0, 3).map(({ _id, image, name, description}, index) => ({
+    ? spots.slice(0, 3).map(({ _id, image, name, description, location, rating }, index) => ({
         id: _id || String(index),
         image: image,
         title: name,
-        spot: { _id, image, name, description }
+        location: location,
+        rating: rating || 4.8,
+        spot: { _id, image, name, description, location, rating }
       }))
     : [];
 
   useEffect(() => {
-    fetch(`${API_URL}/api/spots`)
+    setLoading(true);
+    fetch("https://libotbackend.onrender.com/api/spots")
       .then((res) => res.json())
-      .then((data) => setSpots(data))
-      .catch((error) => console.error("Error fetching spots:", error));
+      .then((data) => {
+        console.log("Fetched data:", data);
+        setSpots(data);
+        setLoading(false);
+      })
+      .catch((error) => {
+        console.error("Error fetching spots:", error);
+        setLoading(false);
+      });
   }, []);
 
   return (
-  <View style={styles.tabScreen}>
-    <Carousel
-      width={width}
-      height={220}
-      data={sliderData}
-      loop
-      mode="parallax"
-      autoPlay
-      autoPlayInterval={3000}
-      renderItem={({ item }) => (
-        <TouchableOpacity 
-          onPress={() => navigation.navigate('InformationScreen', { spot: item.spot })}
-        >
-          <View style={styles.card}>
-            <Image source={{ uri: item.image }} style={styles.image} />
-            <View style={styles.captionWrapper}>
-              <Text style={styles.caption}>{item.title}</Text>
-            </View>
+    <ScrollView style={styles.tabScreen} showsVerticalScrollIndicator={false}>
+      {/* CAROUSEL */}
+      <View style={styles.carouselContainer}>
+        {loading ? (
+          <View style={styles.loadingContainer}>
+            <Text style={styles.loadingText}>Loading spots...</Text>
           </View>
+        ) : sliderData.length > 0 ? (
+          <Carousel
+            width={width * 0.9}
+            height={250}
+            data={sliderData}
+            loop
+            autoPlay
+            autoPlayInterval={4000}
+            scrollAnimationDuration={1000}
+            renderItem={({ item }) => (
+              <TouchableOpacity 
+                onPress={() => navigation.navigate('InformationScreen', { spot: item.spot })}
+                style={styles.carouselCard}
+              >
+                <Image 
+                  source={{ 
+                    uri: item.image,
+                    cache: 'force-cache'
+                  }} 
+                  style={styles.carouselImage}
+                  resizeMode="cover"
+                />
+                <View style={styles.carouselOverlay}>
+                  <Text style={styles.carouselTitle}>{item.title}</Text>
+                  <View style={styles.carouselLocationContainer}>
+                    <Feather name="map-pin" size={12} color="#fff" />
+                    <Text style={styles.carouselLocation}>{item.location || "Philippines"}</Text>
+                  </View>
+                  <View style={styles.carouselRating}>
+                    <Feather name="star" size={12} color="#FFD700" />
+                    <Text style={styles.carouselRatingText}>{item.rating}</Text>
+                  </View>
+                </View>
+              </TouchableOpacity>
+            )}
+          />
+        ) : (
+          <View style={styles.loadingContainer}>
+            <Text style={styles.loadingText}>No spots available</Text>
+          </View>
+        )}
+      </View>
+
+      {/* TOP PLACES SECTION */}
+      <View style={styles.sectionHeader}>
+        <Text style={styles.sectionTitle}>Top Places visited this week</Text>
+        <TouchableOpacity>
+          <Text style={styles.viewAll}>View All</Text>
         </TouchableOpacity>
+      </View>
+
+      {!loading && spots && spots.length > 0 ? (
+        spots.slice(0, 3).map((spot) => (
+          <TouchableOpacity 
+            key={spot._id}
+            style={styles.topPlaceCard}
+            onPress={() => navigation.navigate('InformationScreen', { spot })}
+          >
+            <Image
+              source={{ 
+                uri: spot.image,
+                cache: 'force-cache'
+              }}
+              style={styles.topPlaceImage}
+              resizeMode="cover"
+            />
+            <View style={styles.topPlaceInfo}>
+              <Text style={styles.topPlaceTitle}>{spot.name}</Text>
+              <View style={styles.topPlaceLocationContainer}>
+                <Feather name="map-pin" size={12} color="#FFD700" />
+                <Text style={styles.topPlaceLocation}>{spot.location || "Santa Maria"}</Text>
+              </View>
+              <View style={styles.topPlaceRating}>
+                <Feather name="star" size={12} color="#FFD700" />
+                <Text style={styles.topPlaceRatingText}>{spot.rating || "4.8"}</Text>
+              </View>
+            </View>
+          </TouchableOpacity>
+        ))
+      ) : (
+        !loading && (
+          <View style={styles.loadingContainer}>
+            <Text style={styles.loadingText}>No places to display</Text>
+          </View>
+        )
       )}
-    />
 
-    <View style={styles.sectionHeader}>
-      <Text style={styles.subtitle}>Top Places</Text>
-      <Text style={styles.seeAll}>See All</Text>
-    </View>
-
-    {spots && spots.length > 0 && spots.slice(0, 3).map((spot) => (
-      <TouchableOpacity 
-        key={spot._id}
-        style={styles.topPlacesContainer}
-        onPress={() => navigation.navigate('InformationScreen', { spot })}
-      >
-        <Image
-          source={{ uri: spot.image }}
-          style={styles.placeImage}
-        />
-        <Text style={styles.placeTitle}>{spot.name}</Text>
-      </TouchableOpacity>
-    ))}
-  </View>
+      <View style={{ height: 150 }} />
+    </ScrollView>
   );
 }
 
@@ -284,38 +402,6 @@ export default function HomeDrawer() {
       <Drawer.Screen name="Profile" component={ProfileScreen} />
       <Drawer.Screen name="Logout" component={LogoutScreen} />
     </Drawer.Navigator>
-  );
-}
-
-/* -------------------------------------------------------------------------- */
-/*                               PROFILE                                      */
-/* -------------------------------------------------------------------------- */
-function ProfileScreen() {
-  const navigation = useNavigation();
-  const { user } = useAuth();
-
-  return (
-    <View style={styles.screen}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.toggleDrawer()}>
-          <Feather name="menu" size={28} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Profile</Text>
-        <View style={{ width: 28 }} />
-      </View>
-      
-      <View style={styles.profileContainer}>
-        <Text style={styles.subtitle}>Your Profile</Text>
-        
-        {/* Display user info */}
-        {user && (
-          <View style={styles.userInfo}>
-            <Text style={styles.infoText}>Name: {user.name}</Text>
-            <Text style={styles.infoText}>Email: {user.email}</Text>
-          </View>
-        )}
-      </View>
-    </View>
   );
 }
 
@@ -370,14 +456,11 @@ const styles = StyleSheet.create({
     backgroundColor: "#f7cfc9",
     paddingTop: 50,
   },
-  /* ------------------------- Another Tab Styles --------------------------- */
+  
   tabScreen: {
     flex: 1,
     backgroundColor: "#f7cfc9",
-    alignItems: "center",
-    justifyContent: "flex-start",
   },
-  /* ------------------------- Another Tab Styles --------------------------- */
 
   header: {
     width: "90%",
@@ -388,160 +471,235 @@ const styles = StyleSheet.create({
     alignSelf: "center",
   },
 
-  headerTitle: {
-    fontSize: 22,
-    fontWeight: "200",
+  logo: {
+    width: 50,
+    height: 50,
+  },
+
+  profileIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#4a4a4a",
+    justifyContent: "center",
+    alignItems: "center",
   },
 
   subtitle: {
-    fontSize: 18,
-    fontWeight: "400",
+    fontSize: 20,
+    fontWeight: "600",
+    color: "#4a4a4a",
   },
 
   centeredText: {
     width: "100%",
     alignItems: "center",
-    marginBottom: 10,
-  },
-
-  tabContainer: {
-    flex: 1,
-    width: "100%",
-    marginTop: 20,
-  },
-
-  carouselWrapper: {
-    width: "100%",
-    height: 220,
     marginBottom: 20,
-    alignItems: "center",
-    paddingHorizontal: 16,
   },
 
-  card: {
+  // Carousel styles
+  carouselContainer: {
     width: "100%",
-    height: "100%",
-    borderRadius: 15,
+    alignItems: "center",
+    marginTop: 10,
+    marginBottom: 20,
+    height: 250,
+  },
+
+  carouselCard: {
+    flex: 1,
+    borderRadius: 20,
     overflow: "hidden",
+    marginHorizontal: 10,
     backgroundColor: "#fff",
-    justifyContent: "flex-end",
     shadowColor: "#000",
-    shadowOpacity: 0.25,
-    shadowRadius: 5,
-    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.2,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 },
     elevation: 5,
   },
 
-  image: {
+  carouselImage: {
     width: "100%",
     height: "100%",
+    backgroundColor: "#e0e0e0",
   },
 
-  captionWrapper: {
+  carouselOverlay: {
     position: "absolute",
-    bottom: 10,
-    left: 10,
+    bottom: 0,
+    left: 0,
+    right: 0,
+    padding: 15,
+    backgroundColor: "rgba(0,0,0,0.4)",
   },
 
-  caption: {
+  carouselTitle: {
     color: "#fff",
+    fontSize: 18,
     fontWeight: "700",
-    backgroundColor: "rgba(0,0,0,0.5)",
+    marginBottom: 5,
+  },
+
+  carouselLocationContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 5,
+  },
+
+  carouselLocation: {
+    color: "#fff",
+    fontSize: 12,
+    marginLeft: 5,
+  },
+
+  carouselRating: {
+    flexDirection: "row",
+    alignItems: "center",
+    position: "absolute",
+    top: 15,
+    right: 15,
+    backgroundColor: "rgba(255,255,255,0.9)",
     paddingHorizontal: 8,
     paddingVertical: 4,
-    borderRadius: 5,
+    borderRadius: 12,
   },
 
+  carouselRatingText: {
+    color: "#4a4a4a",
+    fontSize: 12,
+    fontWeight: "700",
+    marginLeft: 4,
+  },
+
+  // Section header
   sectionHeader: {
     width: "90%",
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 12,
+    marginBottom: 15,
+    alignSelf: "center",
   },
 
-  seeAll: {
-    color: "#000",
-    fontWeight: "500",
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#4a4a4a",
   },
 
-  topPlacesContainer: {
+  viewAll: {
+    color: "#8b4440",
+    fontWeight: "600",
+    fontSize: 14,
+  },
+
+  // Top places card
+  topPlaceCard: {
     flexDirection: "row",
-    alignItems: "center",
     backgroundColor: "#8f7f7f",
-    borderRadius: 14,
-    padding: 10,
-    width: "70%",
-    height: 80,
-    alignSelf: "flex-start",
-    marginLeft: "5%",
-    marginBottom: 10,
+    borderRadius: 16,
+    padding: 12,
+    width: "90%",
+    alignSelf: "center",
+    marginBottom: 15,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.2,
-    shadowRadius: 4,
+    shadowRadius: 5,
     elevation: 5,
   },
 
-  placeImage: {
-    width: 60,
-    height: 60,
-    borderRadius: 10,
-    marginRight: 10,
+  topPlaceImage: {
+    width: 80,
+    height: 80,
+    borderRadius: 12,
+    marginRight: 15,
   },
 
-  placeTitle: {
+  topPlaceInfo: {
+    flex: 1,
+    justifyContent: "center",
+  },
+
+  topPlaceTitle: {
     color: "#fff",
-    fontWeight: "600",
-  },
-
-  // Profile styles
-  profileContainer: {
-    padding: 20,
-  },
-
-  userInfo: {
-    marginTop: 20,
-    backgroundColor: "#fff",
-    padding: 20,
-    borderRadius: 10,
-  },
-
-  infoText: {
     fontSize: 16,
-    marginBottom: 10,
+    fontWeight: "700",
+    marginBottom: 8,
+  },
+
+  topPlaceLocationContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 5,
+  },
+
+  topPlaceLocation: {
+    color: "#FFD700",
+    fontSize: 12,
+    marginLeft: 5,
+  },
+
+  topPlaceRating: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+
+  topPlaceRatingText: {
+    color: "#fff",
+    fontSize: 12,
+    fontWeight: "600",
+    marginLeft: 5,
   },
 
   // Custom Tab Bar Styles
   customTabBarContainer: {
     position: "absolute",
-    bottom: 100,
+    bottom: 30,
     left: 0,
     right: 0,
     alignItems: "center",
   },
+  
   customTabBar: {
     flexDirection: "row",
-    height: 60,
+    height: 70,
     borderRadius: 35,
-    backgroundColor: "rgba(165, 111, 111, 0.85)",
+    backgroundColor: "#5a4a4a",
     paddingHorizontal: 20,
     alignItems: "center",
     justifyContent: "space-around",
-    width: 250,
+    width: width * 0.85,
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
+    shadowOpacity: 0.3,
+    shadowRadius: 15,
     elevation: 10,
   },
+  
   tabItem: {
     alignItems: "center",
     justifyContent: "center",
     flex: 1,
   },
-  tabLabel: {
-    fontSize: 12,
-    marginTop: 4,
+
+  emptyText: {
+    fontSize: 16,
+    color: "#888",
+    textAlign: "center",
+    marginTop: 50,
+  },
+
+  loadingContainer: {
+    height: 200,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+
+  loadingText: {
+    fontSize: 16,
+    color: "#888",
+    textAlign: "center",
   },
 });
