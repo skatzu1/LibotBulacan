@@ -206,11 +206,11 @@ function HomeContent() {
   const API_URL = "https://libotbackend.onrender.com"
 
   const sliderData = (spots && spots.length > 0) 
-    ? spots.slice(0, 3).map(({ _id, image, name }, index) => ({
+    ? spots.slice(0, 3).map(({ _id, image, name, description}, index) => ({
         id: _id || String(index),
         image: image,
         title: name,
-        spot: { _id, image, name }
+        spot: { _id, image, name, description }
       }))
     : [];
 
