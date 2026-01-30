@@ -1,7 +1,7 @@
 import axios from 'axios';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-const API_URL = process.env.EXPO_PUBLIC_API_URL || 'https://libotbackend.onrender.com';
+const API_URL = API_URL || 'https://libotbackend.onrender.com';
 
 const api = axios.create({
   baseURL: API_URL,
@@ -50,7 +50,7 @@ export const authAPI = {
     } catch (error) {
       throw error.response?.data || { message: 'Network error' };
     }
-  }
+  },
 };
 
 export default api;
