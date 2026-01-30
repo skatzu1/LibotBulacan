@@ -14,6 +14,7 @@ import Home from "./Screens/Home";
 import Lists from "./Screens/Lists";
 import InformationScreen from "./Screens/InformationScreen";
 import Categories from './Screens/Categories';
+import ARScreen from './Screens/ARScreen';
 
 const Stack = createNativeStackNavigator();
 
@@ -53,6 +54,12 @@ function AppNavigator() {
               component={Categories}
               options={{ headerShown: false}}
             />
+            {/* ADD THIS LINE */}
+            <Stack.Screen
+              name="ar"
+              component={ARScreen}
+              options={{ headerShown: false }}
+            />
           </>
         ) : (
           <>
@@ -85,6 +92,11 @@ function AppNavigator() {
               name="Home" 
               component={Home} 
               options={{ headerShown: false, gestureEnabled: false }}
+            />
+            <Stack.Screen
+              name="ar"
+              component={ARScreen}
+              options={{ headerShown: false }}
             />
           </>
         )}
