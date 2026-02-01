@@ -110,12 +110,6 @@ export default function InformationScreen({ route, navigation }) {
           )}
         </View>
 
-        {/* Bottom padding to account for fixed buttons */}
-        <View style={{ height: 120 }} />
-      </ScrollView>
-
-      {/* FIXED BOTTOM SECTION */}
-      <View style={styles.fixedBottomContainer}>
         {/* BOTTOM BUTTONS */}
         <View style={styles.buttonContainer}>
           <TouchableOpacity
@@ -131,13 +125,18 @@ export default function InformationScreen({ route, navigation }) {
           >
             <Text style={styles.buttonText}>Track</Text>
           </TouchableOpacity>
+
+          <TouchableOpacity
+            style={styles.reviewsButton}
+            onPress={() => navigation.navigate("Reviews", { spot })}
+          >
+            <Text style={styles.buttonText}>Reviews</Text>
+          </TouchableOpacity>
         </View>
 
-        {/* BOTTOM ARROW */}
-        <View style={styles.arrowContainer}>
-          <Feather name="chevron-up" size={32} color="#fff" />
-        </View>
-      </View>
+        {/* Bottom padding */}
+        <View style={{ height: 40 }} />
+      </ScrollView>
     </View>
   );
 }
@@ -256,20 +255,7 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     marginBottom: 15,
-    gap: 15,
-    paddingHorizontal: 20,
-  },
-
-  fixedBottomContainer: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    backgroundColor: "#5a4a4a",
-    paddingTop: 15,
-    paddingBottom: 20,
-    borderTopLeftRadius: 30,
-    borderTopRightRadius: 30,
+    gap: 10,
   },
 
   arButton: {
@@ -290,14 +276,18 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
 
+  reviewsButton: {
+    flex: 1,
+    backgroundColor: "#4a3a3a",
+    paddingVertical: 15,
+    borderRadius: 25,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+
   buttonText: {
     color: "#fff",
     fontSize: 16,
     fontWeight: "700",
-  },
-
-  arrowContainer: {
-    alignItems: "center",
-    marginBottom: 5,
   },
 });
