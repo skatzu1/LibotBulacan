@@ -54,7 +54,6 @@ function AppNavigator() {
               component={Categories}
               options={{ headerShown: false}}
             />
-            {/* ADD THIS LINE */}
             <Stack.Screen
               name="ar"
               component={ARScreen}

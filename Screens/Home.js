@@ -31,28 +31,6 @@ const TopTab = createMaterialTopTabNavigator();
 const BottomTab = createBottomTabNavigator();
 
 /* -------------------------------------------------------------------------- */
-/*                                TOP TABS                                    */
-/* -------------------------------------------------------------------------- */
-function HomeTopTabs() {
-  return (
-    <TopTab.Navigator
-      screenOptions={{
-        tabBarStyle: { backgroundColor: "#f7cfc9", elevation: 0, shadowOpacity: 0 },
-        tabBarActiveTintColor: "#000",
-        tabBarInactiveTintColor: "#888",
-        tabBarIndicatorStyle: { backgroundColor: "#8b4440", height: 3 },
-        tabBarLabelStyle: { fontSize: 14, fontWeight: "600", textTransform: "none" },
-      }}
-    >
-      <TopTab.Screen name="All" component={HomeContent} options={{ tabBarLabel: "All" }} />
-      <TopTab.Screen name="Popular" component={PopularTab} options={{ tabBarLabel: "Popular" }} />
-      <TopTab.Screen name="Nearby" component={NearbyTab} options={{ tabBarLabel: "Nearby" }} />
-      <TopTab.Screen name="Recommended" component={RecommendedTab} options={{ tabBarLabel: "Recommended" }} />
-    </TopTab.Navigator>
-  );
-}
-
-/* -------------------------------------------------------------------------- */
 /*                            BOTTOM TABS STYLE                               */
 /* -------------------------------------------------------------------------- */
 function CustomTabBar({ state, descriptors, navigation }) {
@@ -172,29 +150,6 @@ function HomeBottomTabs() {
 /* -------------------------------------------------------------------------- */
 /*                     OTHER TABS (Contents of Top Tabs )                     */
 /* -------------------------------------------------------------------------- */
-function PopularTab() {
-  return (
-    <View style={styles.tabScreen}>
-      <Text style={styles.emptyText}>Popular places coming soon...</Text>
-    </View>
-  );
-}
-
-function NearbyTab() {
-  return (
-    <View style={styles.tabScreen}>
-      <Text style={styles.emptyText}>Nearby places coming soon...</Text>
-    </View>
-  );
-}
-
-function RecommendedTab() {
-  return (
-    <View style={styles.tabScreen}>
-      <Text style={styles.emptyText}>Recommended places coming soon...</Text>
-    </View>
-  );
-}
 
 function BookmarkTab() {
   const navigation = useNavigation();
@@ -241,12 +196,8 @@ function HomeTab() {
         </TouchableOpacity>
       </View>
 
-      <View style={styles.centeredText}>
-        <Text style={styles.subtitle}>Home</Text>
-      </View>
-
-      {/* TOP TABS */}
-      <HomeTopTabs />
+      {/* Add the HomeContent component here */}
+      <HomeContent />
     </View>
   );
 }
@@ -288,6 +239,9 @@ function HomeContent() {
   return (
     <ScrollView style={styles.tabScreen} showsVerticalScrollIndicator={false}>
       {/* CAROUSEL */}
+      <View style={styles.recommendedTextContainer}>
+        <Text style={styles.recommendedText}>Recommended</Text>
+      </View>
       <View style={styles.carouselContainer}>
         {loading ? (
           <View style={styles.loadingContainer}>
@@ -295,11 +249,12 @@ function HomeContent() {
           </View>
         ) : sliderData.length > 0 ? (
           <Carousel
-            width={width * 0.9}
+            width={width}
             height={250}
             data={sliderData}
             loop
             autoPlay
+            mode="parallax"
             autoPlayInterval={4000}
             scrollAnimationDuration={1000}
             renderItem={({ item }) => (
@@ -497,11 +452,22 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
 
+  recommendedTextContainer: {
+    marginTop: 15,
+    width: "90%",
+    alignSelf: "center",
+  },
+
+  recommendedText: {
+    fontSize: 16,
+    fontWeight: "600",
+    color: "#4a4a4a",
+  },
+
   // Carousel styles
   carouselContainer: {
     width: "100%",
     alignItems: "center",
-    marginTop: 10,
     marginBottom: 20,
     height: 250,
   },

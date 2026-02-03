@@ -1,24 +1,51 @@
 {
   "expo": {
-    "assetBundlePatterns": [
-      "assets/**/*"
-    ],
     "name": "Libot",
     "slug": "libot",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/logo.png",
-    "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
+    "userInterfaceStyle": "automatic",
+    "assetBundlePatterns": [
+      "assets/**/*"
+    ],
+    "bundler": {
+      "metro": {
+        "assetExts": ["glb", "gltf", "bin"]
+      }
+    },
+    "plugins": [
+      "expo-router",
+      "expo-font",
+      "expo-asset",
+      [
+        "@reactvision/react-viro",
+        {
+          "android": {
+            "xRMode": ["AR"]
+          },
+          "ios": {
+            "cameraUsagePermission": "Libot uses the camera for AR experiences.",
+            "microphoneUsagePermission": "Libot uses your microphone for AR experiences.",
+            "photosPermission": "Libot would like to read photos for AR.",
+            "savephotosPermission": "Libot would like to save photos during AR."
+          }
+        }
+      ]
+    ],
     "ios": {
       "supportsTablet": true,
       "infoPlist": {
-        "NSCameraUsageDescription": "Libot uses the camera to show augmented reality tourism content."
+        "NSCameraUsageDescription": "Libot uses the camera to show augmented reality tourism content.",
+        "NSLocationWhenInUseUsageDescription": "Find AR objects nearby at tourist locations"
       }
     },
     "android": {
       "permissions": [
-        "CAMERA"
+        "CAMERA",
+        "ACCESS_FINE_LOCATION",
+        "ACCESS_COARSE_LOCATION"
       ],
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
@@ -30,10 +57,6 @@
     "web": {
       "favicon": "./assets/favicon.png"
     },
-    "plugins": [
-      "expo-font",
-      "expo-asset"
-    ],
     "extra": {
       "eas": {
         "projectId": "8f2cc8dd-553e-49c8-a0c4-cfe299f6489f"
