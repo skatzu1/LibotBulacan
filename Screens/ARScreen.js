@@ -1,94 +1,151 @@
-import React, { useEffect } from "react";
-import { View, StyleSheet, TouchableOpacity, Text } from "react-native";
-import { CameraView, useCameraPermissions } from "expo-camera";
+import React, { useState, Component } from "react";
+import { StyleSheet, Text, View, TouchableOpacity } from "react-native";
+import {
+  ViroARSceneNavigator,
+  ViroARScene,
+  Viro3DObject,
+  ViroNode,
+  ViroAmbientLight,
+  ViroSpotLight,
+  ViroTrackingStateConstants,
+  ViroARPlane,
+} from "@reactvision/react-viro";
 
-export default function ARScreen({ route }) {
-  const { spot } = route.params;
-  const [permission, requestPermission] = useCameraPermissions();
+/* =========================================================
+   AR SCENE (what the camera sees)
+========================================================= */
+class ARScene extends Component {
+  state = {
+    trackingStatus: "Initializing AR...",
+    modelPlaced: false,
+  };
 
-  useEffect(() => {
-    if (!permission?.granted) {
-      requestPermission();
+  onTrackingUpdated = (state) => {
+    if (state === ViroTrackingStateConstants.TRACKING_NORMAL) {
+      this.setState({ trackingStatus: "Move your phone to detect a surface..." });
+    } else if (state === ViroTrackingStateConstants.TRACKING_LIMITED) {
+      this.setState({ trackingStatus: "Tracking limited — move slowly..." });
+    } else {
+      this.setState({ trackingStatus: "Tracking lost..." });
     }
-  }, []);
+  };
 
-  if (!permission) {
+  render() {
     return (
-      <View style={styles.container}>
-        <Text style={styles.text}>Loading...</Text>
-      </View>
+      <ViroARScene onTrackingUpdated={this.onTrackingUpdated}>
+        <ViroAmbientLight color="#ffffff" intensity={200} />
+
+        <ViroSpotLight
+          innerAngle={5}
+          outerAngle={90}
+          direction={[0, -1, -0.2]}
+          position={[0, 3, 1]}
+          color="#ffffff"
+          intensity={500}
+        />
+
+        <ViroARPlane alignment="Horizontal">
+          <ViroNode scale={[0.3, 0.3, 0.3]} dragType="FixedToWorld">
+            <Viro3DObject
+              source={require("../assets/models/question_mark.glb")}
+              type="GLB"
+            />
+          </ViroNode>
+        </ViroARPlane>
+      </ViroARScene>
     );
   }
+}
 
-  if (!permission.granted) {
-    return (
-      <View style={styles.container}>
-        <Text style={styles.text}>Camera permission required</Text>
-        <TouchableOpacity style={styles.button} onPress={requestPermission}>
-          <Text style={styles.buttonText}>Grant Permission</Text>
-        </TouchableOpacity>
-      </View>
-    );
-  }
+/* =========================================================
+   MAIN SCREEN
+========================================================= */
+export default function ARScreen({ navigation }) {  // ← Add navigation prop
+  const [showInstructions, setShowInstructions] = useState(true);
 
   return (
     <View style={styles.container}>
-      <CameraView 
-        style={styles.camera}
-        facing="back"
-      >
-        <View style={styles.overlay}>
+      <ViroARSceneNavigator
+        style={styles.arNavigator}
+        initialScene={{ scene: ARScene }}
+      />
+
+      {showInstructions && (
+        <View style={styles.hintOverlay}>
+          <Text style={styles.hintText}>
+            Point at a flat surface to place the object
+          </Text>
           <TouchableOpacity 
-            style={styles.arButton}
-            onPress={() => {}}
+            style={styles.dismissButton}
+            onPress={() => setShowInstructions(false)}
           >
-            <Text style={styles.buttonText}>Scan</Text>
+            <Text style={styles.dismissText}>Got it</Text>
           </TouchableOpacity>
         </View>
-      </CameraView>
+      )}
+
+      {/* Back button */}
+      <TouchableOpacity
+        style={styles.backButton}
+        onPress={() => navigation.goBack()}
+      >
+        <Text style={styles.backButtonText}>←</Text>
+      </TouchableOpacity>
     </View>
   );
 }
 
+/* =========================================================
+   STYLES
+========================================================= */
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: 'black',
-    justifyContent: 'center',
-    alignItems: 'center',
   },
-  camera: {
+  arNavigator: {
     flex: 1,
-    width: '100%',
   },
-  text: {
-    color: 'white',
+  hintOverlay: {
+    position: "absolute",
+    top: 60,
+    width: "100%",
+    alignItems: "center",
+  },
+  hintText: {
+    color: "white",
     fontSize: 16,
-    textAlign: 'center',
-  },
-  overlay: {
-    flex: 1,
-    backgroundColor: 'transparent',
-    justifyContent: 'flex-end',
-    alignItems: 'center',
-    padding: 20,
-  },
-  button: {
-    backgroundColor: '#007AFF',
-    padding: 15,
+    fontWeight: "bold",
+    backgroundColor: "rgba(0,0,0,0.6)",
+    paddingHorizontal: 20,
+    paddingVertical: 10,
     borderRadius: 10,
-    marginTop: 20,
   },
-  arButton: {
-    backgroundColor: '#f7cfc9',
-    padding: 15,
-    borderRadius: 10,
-    marginBottom: 40,
-    paddingHorizontal: 50,
+  dismissButton: {
+  marginTop: 10,
+  backgroundColor: "rgba(107,75,69,0.9)",
+  paddingHorizontal: 20,
+  paddingVertical: 10,
+  borderRadius: 20,
   },
-  buttonText: {
-    color: 'white',
-    fontSize: 16,
-    fontWeight: 'bold',
+  dismissText: {
+    color: "white",
+    fontSize: 14,
+    fontWeight: "600",
   },
+  backButton: {
+    position: "absolute",
+    top: 50,
+    left: 20,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: "rgba(0,0,0,0.6)",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  backButtonText: {
+    color: "white",
+    fontSize: 28,
+    fontWeight: "bold",
+  }
 });
