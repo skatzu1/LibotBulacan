@@ -18,7 +18,7 @@ export default function ProfileScreen() {
   const menuItems = [
     {
       id: 1,
-      icon: "map",
+      icon: "user-x",
       title: "Deactivate",
       onPress: () => console.log("Deactivate pressed"),
     },
@@ -32,10 +32,10 @@ export default function ProfileScreen() {
       id: 3,
       icon: "settings",
       title: "Settings",
-      onPress: () => console.log("Settings pressed"),
+      onPress: () => navigation.navigate("Settings"),
     },
     {
-      id: 4,
+      id: 4, 
       icon: "award",
       title: "Badges",
       onPress: () => console.log("Badges pressed"),
@@ -44,22 +44,22 @@ export default function ProfileScreen() {
 
   return (
     <View style={styles.container}>
-      {/* HEADER */}
-      <View style={styles.header}>
-        <TouchableOpacity 
-          onPress={() => navigation.goBack()}
-          style={styles.backButton}
-        >
-          <Feather name="chevron-left" size={28} color="#4a4a4a" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Profile</Text>
-        <View style={{ width: 28 }} />
-      </View>
-
       <ScrollView 
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
+        {/* HEADER */}
+        <View style={styles.header}>
+          <TouchableOpacity 
+            onPress={() => navigation.goBack()}
+            style={styles.backButton}
+          >
+            <Feather name="chevron-left" size={24} color="#8a7a7a" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Profile</Text>
+          <View style={{ width: 24 }} />
+        </View>
+
         {/* PROFILE PHOTO */}
         <View style={styles.profilePhotoContainer}>
           <View style={styles.profilePhotoWrapper}>
@@ -70,19 +70,19 @@ export default function ProfileScreen() {
               />
             ) : (
               <View style={styles.profilePhotoPlaceholder}>
-                <Feather name="user" size={50} color="#fff" />
+                <Feather name="user" size={40} color="#fff" />
               </View>
             )}
           </View>
         </View>
 
         {/* EMAIL */}
-        <Text style={styles.email}>{user?.email || "user@email.com"}</Text>
+        <Text style={styles.email}>{user?.email || "libertybluiscan@gmail.com"}</Text>
 
         {/* TRAVEL TRIPS CARD */}
         <View style={styles.tripsCard}>
           <Text style={styles.tripsLabel}>Travel Trips</Text>
-          <Text style={styles.tripsCount}>{user?.trips || "0"}</Text>
+          <Text style={styles.tripsCount}>{user?.trips || "9"}</Text>
         </View>
 
         {/* MENU ITEMS */}
@@ -96,11 +96,11 @@ export default function ProfileScreen() {
             >
               <View style={styles.menuLeft}>
                 <View style={styles.iconContainer}>
-                  <Feather name={item.icon} size={20} color="#6a5a5a" />
+                  <Feather name={item.icon} size={18} color="#7a6a6a" />
                 </View>
                 <Text style={styles.menuText}>{item.title}</Text>
               </View>
-              <Feather name="chevron-right" size={20} color="#999" />
+              <Feather name="chevron-right" size={18} color="#8a7a7a" />
             </TouchableOpacity>
           ))}
         </View>
@@ -115,19 +115,18 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#f5c4c1",
-    paddingTop: 50,
   },
 
   scrollContent: {
     paddingHorizontal: 20,
+    paddingTop: 50,
   },
 
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingHorizontal: 20,
-    marginBottom: 30,
+    marginBottom: 25,
   },
 
   backButton: {
@@ -138,29 +137,24 @@ const styles = StyleSheet.create({
   },
 
   headerTitle: {
-    fontSize: 20,
+    fontSize: 18,
     fontWeight: "600",
     color: "#4a4a4a",
   },
 
   profilePhotoContainer: {
     alignItems: "center",
-    marginBottom: 15,
+    marginBottom: 12,
   },
 
   profilePhotoWrapper: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
+    width: 100,
+    height: 100,
+    borderRadius: 50,
     overflow: "hidden",
     backgroundColor: "#4a4a4a",
     justifyContent: "center",
     alignItems: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 5,
   },
 
   profilePhoto: {
@@ -178,34 +172,32 @@ const styles = StyleSheet.create({
   },
 
   email: {
-    fontSize: 14,
+    fontSize: 13,
     color: "#6a5a5a",
     textAlign: "center",
-    marginBottom: 25,
+    marginBottom: 20,
   },
 
   tripsCard: {
     backgroundColor: "#fff",
-    borderRadius: 15,
-    padding: 20,
+    borderRadius: 12,
+    paddingVertical: 18,
+    paddingHorizontal: 20,
     alignItems: "center",
-    marginBottom: 30,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 5,
-    elevation: 3,
+    marginBottom: 25,
+    alignSelf: "center",
+    minWidth: 140,
   },
 
   tripsLabel: {
-    fontSize: 16,
-    color: "#4a4a4a",
+    fontSize: 14,
+    color: "#5a4a4a",
     fontWeight: "500",
-    marginBottom: 10,
+    marginBottom: 6,
   },
 
   tripsCount: {
-    fontSize: 32,
+    fontSize: 28,
     color: "#4a4a4a",
     fontWeight: "700",
   },
@@ -219,14 +211,10 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     backgroundColor: "#f5d4d1",
-    borderRadius: 12,
-    padding: 15,
-    marginBottom: 12,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 3,
-    elevation: 2,
+    borderRadius: 10,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
+    marginBottom: 10,
   },
 
   menuLeft: {
@@ -235,17 +223,17 @@ const styles = StyleSheet.create({
   },
 
   iconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "#e8c4c1",
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "#e8bfbc",
     justifyContent: "center",
     alignItems: "center",
-    marginRight: 15,
+    marginRight: 12,
   },
 
   menuText: {
-    fontSize: 16,
+    fontSize: 15,
     color: "#4a4a4a",
     fontWeight: "500",
   },

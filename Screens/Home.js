@@ -19,10 +19,13 @@ import { Feather } from "@expo/vector-icons";
 import Carousel from "react-native-reanimated-carousel";
 import { useEffect, useState } from "react";
 import { useAuth } from "../context/AuthContext";
+import { useReviews } from "../context/ReviewContext";
 
-import Lists from "./Lists";
+import Bookmark from "./Bookmark";
+import Leaderboard from "./Leaderboard";
 import Categories from "./Categories";
 import ProfileScreen from "./Profilescreen";
+import Reviews from "./Reviews";
 
 const { width } = Dimensions.get("window");
 
@@ -114,18 +117,18 @@ function HomeBottomTabs() {
         }}
       />
       <BottomTab.Screen
-        name="Lists"
-        component={Lists}
+        name="Categories"
+        component={Categories}
         options={{
-          tabBarLabel: "Lists",
+          tabBarLabel: "Categories",
           tabBarIcon: ({ color, size }) => (
-            <Feather name="list" size={24} color={color} />
+            <Feather name="grid" size={24} color={color} />
           ),
         }}
       />
       <BottomTab.Screen
         name="Bookmark"
-        component={BookmarkTab}
+        component={Bookmark}
         options={{
           tabBarLabel: "Bookmark",
           tabBarIcon: ({ color, size }) => (
@@ -134,12 +137,12 @@ function HomeBottomTabs() {
         }}
       />
       <BottomTab.Screen
-        name="Categories"
-        component={Categories}
+        name="Leaderboard"
+        component={Leaderboard}
         options={{
-          tabBarLabel: "Categories",
+          tabBarLabel: "Leaderboard",
           tabBarIcon: ({ color, size }) => (
-            <Feather name="grid" size={24} color={color} />
+            <Feather name="award" size={24} color={color} />
           ),
         }}
       />
@@ -150,25 +153,6 @@ function HomeBottomTabs() {
 /* -------------------------------------------------------------------------- */
 /*                     OTHER TABS (Contents of Top Tabs )                     */
 /* -------------------------------------------------------------------------- */
-
-function BookmarkTab() {
-  const navigation = useNavigation();
-  
-  return (
-    <View style={styles.screen}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.toggleDrawer()}>
-          <Feather name="menu" size={28} />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Bookmarks</Text>
-        <View style={{ width: 28 }} />
-      </View>
-      <View style={styles.tabScreen}>
-        <Text style={styles.emptyText}>Your bookmarks will appear here</Text>
-      </View>
-    </View>
-  );
-}
 
 /* -------------------------------------------------------------------------- */
 /*                               HOME SCREEN                                  */
@@ -207,18 +191,35 @@ function HomeTab() {
 /* -------------------------------------------------------------------------- */
 function HomeContent() {
   const navigation = useNavigation();
+  const { getAverageRating, getReviewCount } = useReviews();
   const [spots, setSpots] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  // Get rating for a spot - show 0 if no reviews exist
+  const getSpotRating = (spot) => {
+    const reviewCount = getReviewCount(spot._id);
+    if (reviewCount > 0) {
+      return getAverageRating(spot._id);
+    }
+    return 0; // Return 0 if no reviews exist
+  };
+
   const sliderData = (spots && spots.length > 0) 
-    ? spots.slice(0, 3).map(({ _id, image, name, description, location, rating }, index) => ({
-        id: _id || String(index),
-        image: image,
-        title: name,
-        location: location,
-        rating: rating || 4.8,
-        spot: { _id, image, name, description, location, rating }
-      }))
+    ? spots.slice(0, 3).map(({ _id, image, name, description, location, rating }, index) => {
+        const reviewRating = getAverageRating(_id);
+        const reviewCount = getReviewCount(_id);
+        const displayRating = reviewCount > 0 ? reviewRating : 0;
+        
+        return {
+          id: _id || String(index),
+          image: image,
+          title: name,
+          location: location,
+          rating: displayRating,
+          reviewCount: reviewCount,
+          spot: { _id, image, name, description, location, rating }
+        };
+      })
     : [];
 
   useEffect(() => {
@@ -278,7 +279,12 @@ function HomeContent() {
                   </View>
                   <View style={styles.carouselRating}>
                     <Feather name="star" size={12} color="#FFD700" />
-                    <Text style={styles.carouselRatingText}>{item.rating}</Text>
+                    <Text style={styles.carouselRatingText}>
+                      {item.rating}
+                      {item.reviewCount > 0 && (
+                        <Text style={styles.reviewCountText}> ({item.reviewCount})</Text>
+                      )}
+                    </Text>
                   </View>
                 </View>
               </TouchableOpacity>
@@ -300,33 +306,43 @@ function HomeContent() {
       </View>
 
       {!loading && spots && spots.length > 0 ? (
-        spots.slice(0, 3).map((spot) => (
-          <TouchableOpacity 
-            key={spot._id}
-            style={styles.topPlaceCard}
-            onPress={() => navigation.navigate('InformationScreen', { spot })}
-          >
-            <Image
-              source={{ 
-                uri: spot.image,
-                cache: 'force-cache'
-              }}
-              style={styles.topPlaceImage}
-              resizeMode="cover"
-            />
-            <View style={styles.topPlaceInfo}>
-              <Text style={styles.topPlaceTitle}>{spot.name}</Text>
-              <View style={styles.topPlaceLocationContainer}>
-                <Feather name="map-pin" size={12} color="#FFD700" />
-                <Text style={styles.topPlaceLocation}>{spot.location || "Santa Maria"}</Text>
+        spots.slice(0, 3).map((spot) => {
+          const displayRating = getSpotRating(spot);
+          const reviewCount = getReviewCount(spot._id);
+          
+          return (
+            <TouchableOpacity 
+              key={spot._id}
+              style={styles.topPlaceCard}
+              onPress={() => navigation.navigate('InformationScreen', { spot })}
+            >
+              <Image
+                source={{ 
+                  uri: spot.image,
+                  cache: 'force-cache'
+                }}
+                style={styles.topPlaceImage}
+                resizeMode="cover"
+              />
+              <View style={styles.topPlaceInfo}>
+                <Text style={styles.topPlaceTitle}>{spot.name}</Text>
+                <View style={styles.topPlaceLocationContainer}>
+                  <Feather name="map-pin" size={12} color="#FFD700" />
+                  <Text style={styles.topPlaceLocation}>{spot.location || "Santa Maria"}</Text>
+                </View>
+                <View style={styles.topPlaceRating}>
+                  <Feather name="star" size={12} color="#FFD700" />
+                  <Text style={styles.topPlaceRatingText}>
+                    {displayRating}
+                    {reviewCount > 0 && (
+                      <Text style={styles.reviewCountInCard}> ({reviewCount} {reviewCount === 1 ? 'review' : 'reviews'})</Text>
+                    )}
+                  </Text>
+                </View>
               </View>
-              <View style={styles.topPlaceRating}>
-                <Feather name="star" size={12} color="#FFD700" />
-                <Text style={styles.topPlaceRatingText}>{spot.rating || "4.8"}</Text>
-              </View>
-            </View>
-          </TouchableOpacity>
-        ))
+            </TouchableOpacity>
+          );
+        })
       ) : (
         !loading && (
           <View style={styles.loadingContainer}>
@@ -353,7 +369,7 @@ export default function HomeDrawer() {
         },
       }}
     >
-      <Drawer.Screen name="Main" component={HomeBottomTabs} />
+      <Drawer.Screen name="Home" component={HomeBottomTabs} />
       <Drawer.Screen name="Profile" component={ProfileScreen} />
       <Drawer.Screen name="Logout" component={LogoutScreen} />
     </Drawer.Navigator>
@@ -373,34 +389,25 @@ function LogoutScreen() {
         "Logout",
         "Are you sure you want to logout?",
         [
-          {
-            text: "Cancel",
-            onPress: () => navigation.navigate("Main"),
-            style: "cancel",
-          },
-          {
-            text: "Logout",
-            onPress: async () => {
-              await logout();
-            },
-            style: "destructive",
+                {
+                  text: "Cancel",
+                  style: "cancel"
+                },
+                {
+                  text: "Log Out",
+                  onPress: async () => {
+                    try {
+                      await logout();
+                      navigation.replace('Login');
+                    } catch (error) {
+                      Alert.alert("Error", "Failed to log out. Please try again.");
+                    }
+                  },
+                  style: "destructive"
           },
         ]
       );
     }, [])
-  );
-
-  return (
-    <View
-      style={{
-        flex: 1,
-        justifyContent: "center",
-        alignItems: "center",
-        backgroundColor: "#f7cfc9",
-      }}
-    >
-      <Text>Logging out...</Text>
-    </View>
   );
 }
 
@@ -538,6 +545,11 @@ const styles = StyleSheet.create({
     marginLeft: 4,
   },
 
+  reviewCountText: {
+    fontSize: 10,
+    fontWeight: "400",
+  },
+
   // Section header
   sectionHeader: {
     width: "90%",
@@ -617,6 +629,12 @@ const styles = StyleSheet.create({
     fontSize: 12,
     fontWeight: "600",
     marginLeft: 5,
+  },
+
+  reviewCountInCard: {
+    fontSize: 10,
+    fontWeight: "400",
+    color: "#FFD700",
   },
 
   // Custom Tab Bar Styles
