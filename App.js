@@ -65,7 +65,6 @@ function AppNavigator() {
                 component={Bookmark}
                 options={{ headerShown: false}}
               />
-            
               <Stack.Screen
                 name="ar"
                 component={ARScreen}
@@ -94,43 +93,6 @@ function AppNavigator() {
             </>
           ) : (
             <>
-            <Stack.Screen 
-<<<<<<< HEAD
-              name="Home" 
-              component={Home} 
-              options={{ headerShown: false, gestureEnabled: false }}
-            />
-            <Stack.Screen 
-              name="Lists" 
-              component={Lists} 
-              options={{ headerShown: false }}
-            />
-            <Stack.Screen 
-              name="InformationScreen" 
-              component={InformationScreen} 
-              options={{ headerShown: false }}
-            />
-            <Stack.Screen 
-              name="Categories"
-              component={Categories}
-              options={{ headerShown: false}}
-            />
-=======
-                name="Reviews"
-                component={Reviews}
-                options={{ headerShown: false}}
-              />
->>>>>>> 7fb6b2b47fbf84698b101f1bb4e1b6791ccedc1a
-            <Stack.Screen
-                name="Settings"
-                component={Settings}
-                options={{ headerShown: false }}
-              />
-              <Stack.Screen 
-                name="Lists" 
-                component={Lists} 
-                options={{ headerShown: false }}
-            />
               <Stack.Screen 
                 name="WelcomePage" 
                 component={WelcomePage} 
@@ -152,14 +114,34 @@ function AppNavigator() {
                 options={{ headerShown: false }}
               />
               <Stack.Screen 
+                name="Home" 
+                component={Home} 
+                options={{ headerShown: false, gestureEnabled: false }}
+              />
+              <Stack.Screen 
+                name="Lists" 
+                component={Lists} 
+                options={{ headerShown: false }}
+              />
+              <Stack.Screen 
                 name="InformationScreen" 
                 component={InformationScreen} 
                 options={{ headerShown: false }}
               />
               <Stack.Screen 
-                name="Home" 
-                component={Home} 
-                options={{ headerShown: false, gestureEnabled: false }}
+                name="Categories"
+                component={Categories}
+                options={{ headerShown: false}}
+              />
+              <Stack.Screen 
+                name="Reviews"
+                component={Reviews}
+                options={{ headerShown: false}}
+              />
+              <Stack.Screen
+                name="Settings"
+                component={Settings}
+                options={{ headerShown: false }}
               />
               <Stack.Screen
                 name="ar"
