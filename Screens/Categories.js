@@ -1,6 +1,8 @@
-import { View, Text, TouchableOpacity, Image, StyleSheet, ScrollView } from 'react-native';
+import { View, Text, TouchableOpacity, Image, StyleSheet, ScrollView, Dimensions } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { Feather } from "@expo/vector-icons";
+
+const { width } = Dimensions.get('window');
 
 export default function Categories(){
     const navigation = useNavigation();
@@ -9,23 +11,27 @@ export default function Categories(){
     const categories = [
         { 
             _id: 1, 
-            name: 'Culture & Traditions', 
-            image: 'https://images.unsplash.com/photo-1555881770-68ab362c0ce6?w=400'
+            name: 'Religious', 
+            image: 'https://images.unsplash.com/photo-1555881770-68ab362c0ce6?w=400',
+            icon: 'users'
         },
         { 
             _id: 2, 
-            name: 'History & Religious Heritage', 
-            image: 'https://images.unsplash.com/photo-1609137144813-7d9921338f24?w=400'
+            name: 'Historical', 
+            image: 'https://images.unsplash.com/photo-1609137144813-7d9921338f24?w=400',
+            icon: 'book'
         },
         { 
             _id: 3, 
-            name: 'Nature & Landscapes', 
-            image: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=400'
+            name: 'Nature', 
+            image: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=400',
+            icon: 'globe'
         },
         { 
             _id: 4, 
-            name: 'People & Achievements', 
-            image: 'https://images.unsplash.com/photo-1511632765486-a01980e01a18?w=400'
+            name: 'Festivals', 
+            image: 'https://images.unsplash.com/photo-1511632765486-a01980e01a18?w=400',
+            icon: 'award'
         },
     ];
     
@@ -35,17 +41,13 @@ export default function Categories(){
             <View style={styles.header}>
                 <TouchableOpacity 
                     onPress={() => navigation.goBack()}
-                    style={styles.headerButton}
+                    style={styles.backButton}
                 >
-                    <Feather name="arrow-left" size={24} color="#4a4a4a" />
+                    <Feather name="chevron-left" size={28} color="#4a4a4a" />
                 </TouchableOpacity>
                 
                 <View style={styles.headerCenter}>
-                    <Image 
-                        source={require('../assets/logo.png')} 
-                        style={styles.logo}
-                        resizeMode="contain"
-                    />
+                    <Text style={styles.headerTitle}>Explore</Text>
                 </View>
                 
                 <TouchableOpacity 
@@ -61,37 +63,58 @@ export default function Categories(){
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={styles.scrollContent}
             >
-                {/* TITLE */}
-                <View style={styles.titleContainer}>
-                    <Text style={styles.categoryTitle}>category</Text>
+                {/* SUBTITLE */}
+                <View style={styles.subtitleContainer}>
+                    <Text style={styles.subtitle}>Discover Categories</Text>
+                    <Text style={styles.description}>
+                        Choose a category to explore amazing destinations
+                    </Text>
                 </View>
 
                 {/* GRID */}
                 <View style={styles.gridContainer}>
-                    {categories.map((category) => (
+                    {categories.map((category, index) => (
                         <TouchableOpacity 
                             key={category._id || category.id}
-                            style={styles.categoryCard}
+                            style={[
+                                styles.categoryCard,
+                                { marginTop: index % 2 !== 0 ? 20 : 0 }
+                            ]}
                             onPress={() => {
                                 console.log(`Pressed ${category.name}`);
-                                // Navigate to category details or filter spots by category
-                                // navigation.navigate('CategoryDetails', { category });
+                                navigation.navigate('Lists', { category: category.name });
                             }}
-                            activeOpacity={0.8}
+                            activeOpacity={0.85}
                         >
                             <Image 
                                 source={{ uri: category.image }} 
                                 style={styles.categoryImage}
                                 resizeMode="cover"
                             />
-                            <View style={styles.categoryOverlay}>
-                                <Text style={styles.categoryText}>{category.name}</Text>
+                            
+                            {/* Gradient Overlay */}
+                            <View style={styles.gradientOverlay}>
+                                <View style={styles.overlayContent}>
+                                    <View style={styles.iconContainer}>
+                                        <Feather 
+                                            name={category.icon} 
+                                            size={28} 
+                                            color="#fff" 
+                                        />
+                                    </View>
+                                    <Text style={styles.categoryText}>
+                                        {category.name}
+                                    </Text>
+                                    <View style={styles.arrowContainer}>
+                                        <Feather name="arrow-right" size={18} color="#fff" />
+                                    </View>
+                                </View>
                             </View>
                         </TouchableOpacity>
                     ))}
                 </View>
 
-                <View style={{ height: 100 }} />
+                <View style={{ height: 120 }} />
             </ScrollView>
         </View>
     )
@@ -110,31 +133,21 @@ const styles = StyleSheet.create({
 
     scrollContent: {
         paddingHorizontal: 20,
-        alignItems: "center",
     },
 
     header: {
         flexDirection: "row",
         justifyContent: "space-between",
         alignItems: "center",
-        marginBottom: 25,
+        marginBottom: 20,
         paddingHorizontal: 20,
     },
 
-    headerButton: {
-        width: 36,
-        height: 36,
+    backButton: {
+        width: 40,
+        height: 40,
         justifyContent: "center",
-        alignItems: "center",
-    },
-
-    profileIcon: {
-        width: 44,
-        height: 44,
-        borderRadius: 22,
-        backgroundColor: "#3a3a3a",
-        justifyContent: "center",
-        alignItems: "center",
+        alignItems: "flex-start",
     },
 
     headerCenter: {
@@ -143,71 +156,114 @@ const styles = StyleSheet.create({
         justifyContent: "center",
     },
 
-    logo: {
+    headerTitle: {
+        fontSize: 20,
+        fontWeight: "700",
+        color: "#4a4a4a",
+    },
+
+    profileIcon: {
         width: 40,
         height: 40,
-    },
-
-    titleContainer: {
-        marginBottom: 20,
-        paddingHorizontal: 5,
+        borderRadius: 20,
+        backgroundColor: "#4a4a4a",
+        justifyContent: "center",
         alignItems: "center",
-        width: "100%",
     },
 
-    categoryTitle: {
-        fontSize: 32,
+    subtitleContainer: {
+        marginBottom: 30,
+        alignItems: "center",
+    },
+
+    subtitle: {
+        fontSize: 26,
         fontWeight: "700",
-        color: "#333",
+        color: "#2a2a2a",
+        marginBottom: 8,
         textAlign: "center",
+    },
+
+    description: {
+        fontSize: 14,
+        color: "#6a5a5a",
+        textAlign: "center",
+        paddingHorizontal: 20,
+        lineHeight: 20,
     },
 
     gridContainer: {
         flexDirection: "row",
         flexWrap: "wrap",
         justifyContent: "space-between",
-        paddingHorizontal: 5,
-        alignSelf: "center",
         width: "100%",
-        maxWidth: 400,
     },
 
     categoryCard: {
         width: "48%",
-        aspectRatio: 0.95,
-        marginBottom: 12,
-        borderRadius: 25,
+        height: 220,
+        marginBottom: 20,
+        borderRadius: 20,
         overflow: "hidden",
         backgroundColor: "#fff",
         shadowColor: "#000",
-        shadowOffset: { width: 0, height: 3 },
-        shadowOpacity: 0.12,
-        shadowRadius: 6,
-        elevation: 4,
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.15,
+        shadowRadius: 12,
+        elevation: 8,
     },
 
     categoryImage: {
         width: "100%",
         height: "100%",
-        resizeMode: "cover",
+        position: "absolute",
     },
 
-    categoryOverlay: {
+    gradientOverlay: {
         position: "absolute",
         bottom: 0,
         left: 0,
         right: 0,
-        backgroundColor: "rgba(255,255,255,0.95)",
-        paddingVertical: 8,
-        paddingHorizontal: 8,
+        top: 0,
+        backgroundColor: "rgba(0,0,0,0.4)",
+        justifyContent: "flex-end",
+        padding: 15,
+    },
+
+    overlayContent: {
         alignItems: "center",
     },
 
+    iconContainer: {
+        width: 56,
+        height: 56,
+        borderRadius: 28,
+        backgroundColor: "rgba(255,255,255,0.2)",
+        justifyContent: "center",
+        alignItems: "center",
+        marginBottom: 12,
+        borderWidth: 2,
+        borderColor: "rgba(255,255,255,0.3)",
+    },
+
     categoryText: {
-        fontSize: 11,
-        fontWeight: "600",
-        color: "#333",
+        fontSize: 14,
+        fontWeight: "700",
+        color: "#fff",
         textAlign: "center",
-        lineHeight: 14,
+        lineHeight: 18,
+        marginBottom: 8,
+        textShadowColor: 'rgba(0, 0, 0, 0.3)',
+        textShadowOffset: { width: 0, height: 1 },
+        textShadowRadius: 3,
+    },
+
+    arrowContainer: {
+        width: 32,
+        height: 32,
+        borderRadius: 16,
+        backgroundColor: "rgba(255,255,255,0.25)",
+        justifyContent: "center",
+        alignItems: "center",
     },
 });
