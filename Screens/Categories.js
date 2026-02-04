@@ -7,29 +7,33 @@ const { width } = Dimensions.get('window');
 export default function Categories(){
     const navigation = useNavigation();
     
-    // Static categories - no database fetching
+    // Categories matching YOUR database exactly
     const categories = [
         { 
             _id: 1, 
             name: 'Religious', 
+            backendCategory: 'Religious', // Matches your DB
             image: 'https://images.unsplash.com/photo-1555881770-68ab362c0ce6?w=400',
             icon: 'users'
         },
         { 
             _id: 2, 
             name: 'Historical', 
+            backendCategory: 'Historical', // For future historical spots
             image: 'https://images.unsplash.com/photo-1609137144813-7d9921338f24?w=400',
             icon: 'book'
         },
         { 
             _id: 3, 
             name: 'Nature', 
+            backendCategory: 'Nature', // Matches your DB
             image: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=400',
             icon: 'globe'
         },
         { 
             _id: 4, 
             name: 'Festivals', 
+            backendCategory: 'Festivals', // For future festival spots
             image: 'https://images.unsplash.com/photo-1511632765486-a01980e01a18?w=400',
             icon: 'award'
         },
@@ -75,14 +79,17 @@ export default function Categories(){
                 <View style={styles.gridContainer}>
                     {categories.map((category, index) => (
                         <TouchableOpacity 
-                            key={category._id || category.id}
+                            key={category._id}
                             style={[
                                 styles.categoryCard,
                                 { marginTop: index % 2 !== 0 ? 20 : 0 }
                             ]}
                             onPress={() => {
-                                console.log(`Pressed ${category.name}`);
-                                navigation.navigate('Lists', { category: category.name });
+                                console.log(`Pressed ${category.name} -> Backend category: ${category.backendCategory}`);
+                                navigation.navigate('Lists', { 
+                                    category: category.backendCategory,
+                                    displayName: category.name 
+                                });
                             }}
                             activeOpacity={0.85}
                         >
