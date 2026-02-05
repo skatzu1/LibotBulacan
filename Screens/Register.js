@@ -120,9 +120,6 @@ export default function Register({ navigation }) {
           secureTextEntry={!passwordVisible}
           value={password}
           onChangeText={setPassword}
-          autoCapitalize="none"
-          autoCorrect={false}
-          textContentType="newPassword"
           editable={!isLoading}
         />
 
@@ -141,9 +138,6 @@ export default function Register({ navigation }) {
           secureTextEntry={!confirmPasswordVisible}
           value={confirmPassword}
           onChangeText={setConfirmPassword}
-          autoCapitalize="none"
-          autoCorrect={false}
-          textContentType="newPassword"
           editable={!isLoading}
         />
 
@@ -231,7 +225,6 @@ const styles = StyleSheet.create({
     borderRadius: 10,
     marginBottom: 10,
     width: "100%",
-    color: "#000",
   },
   showhideContainer: {
     marginLeft: 25,
