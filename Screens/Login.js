@@ -80,6 +80,9 @@ export default function Login({ navigation }) {
           secureTextEntry={!passwordVisible}
           value={password}
           onChangeText={setPassword}
+          autoCapitalize="none"
+          autoCorrect={false}
+          textContentType="password"
           editable={!isLoading}
         />
       </View>
@@ -177,6 +180,7 @@ const styles = StyleSheet.create({
       borderRadius: 10,
       marginBottom: 10,
       width: "100%",
+      color: "#000",
     },
     buttonContainer: {
       width: "100%",
