@@ -3,6 +3,7 @@
     "name": "Libot",
     "slug": "libot",
     "version": "1.0.0",
+    "scheme": "libot",
     "orientation": "portrait",
     "icon": "./assets/logo.png",
     "newArchEnabled": true,
@@ -12,7 +13,11 @@
     ],
     "bundler": {
       "metro": {
-        "assetExts": ["glb", "gltf", "bin"]
+        "assetExts": [
+          "glb",
+          "gltf",
+          "bin"
+        ]
       }
     },
     "plugins": [
@@ -23,7 +28,9 @@
         "@reactvision/react-viro",
         {
           "android": {
-            "xRMode": ["AR"]
+            "xRMode": [
+              "AR"
+            ]
           },
           "ios": {
             "cameraUsagePermission": "Libot uses the camera for AR experiences.",
@@ -32,7 +39,9 @@
             "savephotosPermission": "Libot would like to save photos during AR."
           }
         }
-      ]
+      ],
+      "expo-secure-store",
+      "expo-web-browser"
     ],
     "ios": {
       "supportsTablet": true,
