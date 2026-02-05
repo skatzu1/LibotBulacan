@@ -152,7 +152,11 @@ class ARScene extends Component {
   };
 
   render() {
-    const { arPositions, collectedObjects, onCollect } = this.props;
+  const {
+    arPositions = [],
+    collectedObjects = [],
+    onCollect = () => {},
+  } = this.props.sceneNavigator?.viroAppProps || {};
 
     return (
       <ViroARScene onTrackingUpdated={this.onTrackingUpdated}>
