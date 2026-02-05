@@ -152,7 +152,11 @@ class ARScene extends Component {
   };
 
   render() {
-    const { arPositions, collectedObjects, onCollect } = this.props;
+  const {
+    arPositions = [],
+    collectedObjects = [],
+    onCollect = () => {},
+  } = this.props.sceneNavigator?.viroAppProps || {};
 
     return (
       <ViroARScene onTrackingUpdated={this.onTrackingUpdated}>
@@ -228,6 +232,14 @@ export default function ARScreen({ navigation }) {
         description: "Hidden treasure near the plaza",
         collectRadius: 10,
       },
+      {
+        id: 3,
+        name: "etits",
+        latitude: 14.842185253551245,
+        longitude: 121.04589108833301,
+        description: "bahay ko",
+        collectRadius: 10,
+      }
       // Add more objects here
     ],
     []
