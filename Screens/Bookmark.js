@@ -1,74 +1,23 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Image } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { Feather } from '@expo/vector-icons';
+import { useBookmark } from '../context/BookmarkContext';
 
 export default function Bookmark() {
   const navigation = useNavigation();
+  const { getBookmarkedSpots, toggleBookmark } = useBookmark();
+  
+  const bookmarkedSpots = getBookmarkedSpots();
 
-  // Sample bookmarked destinations
-  const [bookmarks, setBookmarks] = useState([
-    {
-      id: 1,
-      name: "Biak na bato",
-      image: "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=800",
-      location: "San Miguel, Bulacan",
-      isBookmarked: true
-    },
-    {
-      id: 2,
-      name: "Ocean View",
-      image: "https://images.unsplash.com/photo-1439066615861-d1af74d74000?w=800",
-      location: "Palawan",
-      isBookmarked: true
-    },
-    {
-      id: 3,
-      name: "Tourist Destination",
-      image: "https://images.unsplash.com/photo-1523712999610-f77fbcfc3843?w=800",
-      location: "El Nido",
-      isBookmarked: true
-    },
-    {
-      id: 4,
-      name: "Kapurpurawan Rock",
-      image: "https://images.unsplash.com/photo-1551882547-ff40c63fe5fa?w=800",
-      location: "Ilocos Norte",
-      isBookmarked: true
-    },
-    {
-      id: 5,
-      name: "Enchanting Falls",
-      image: "https://images.unsplash.com/photo-1511576661531-b34d7da5d0bb?w=800",
-      location: "Bulacan",
-      isBookmarked: true
-    },
-    {
-      id: 6,
-      name: "Bitbit Ripple",
-      image: "https://images.unsplash.com/photo-1505142468610-359e7d316be0?w=800",
-      location: "Nueva Ecija",
-      isBookmarked: true
-    },
-    {
-      id: 7,
-      name: "100Ks Baawan",
-      image: "https://images.unsplash.com/photo-1559827260-dc66d52bef19?w=800",
-      location: "Pangasinan",
-      isBookmarked: true
-    },
-  ]);
-
-  const toggleBookmark = (id) => {
-    setBookmarks(bookmarks.map(item => 
-      item.id === id ? { ...item, isBookmarked: !item.isBookmarked } : item
-    ));
+  const handleToggleBookmark = (spot) => {
+    toggleBookmark(spot);
   };
 
   const BookmarkCard = ({ item }) => (
     <TouchableOpacity 
       style={styles.card}
-      onPress={() => navigation.navigate('InformationScreen', { destination: item })}
+      onPress={() => navigation.navigate('InformationScreen', { spot: item })}
       activeOpacity={0.8}
     >
       <Image 
@@ -78,14 +27,14 @@ export default function Bookmark() {
       />
       <TouchableOpacity 
         style={styles.bookmarkButton}
-        onPress={() => toggleBookmark(item.id)}
+        onPress={() => handleToggleBookmark(item)}
         activeOpacity={0.8}
       >
         <Feather 
           name="bookmark" 
           size={20} 
-          color={item.isBookmarked ? "#f4c542" : "#fff"} 
-          fill={item.isBookmarked ? "#f4c542" : "transparent"}
+          color="#f4c542"
+          fill="#f4c542"
         />
       </TouchableOpacity>
       <View style={styles.cardContent}>
@@ -121,7 +70,7 @@ export default function Bookmark() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
-        {bookmarks.filter(item => item.isBookmarked).length === 0 ? (
+        {bookmarkedSpots.length === 0 ? (
           <View style={styles.emptyContainer}>
             <Feather name="bookmark" size={64} color="#ccc" />
             <Text style={styles.emptyText}>No bookmarks yet</Text>
@@ -131,11 +80,9 @@ export default function Bookmark() {
           </View>
         ) : (
           <View style={styles.cardsContainer}>
-            {bookmarks
-              .filter(item => item.isBookmarked)
-              .map((item) => (
-                <BookmarkCard key={item.id} item={item} />
-              ))}
+            {bookmarkedSpots.map((item) => (
+              <BookmarkCard key={item._id || item.id} item={item} />
+            ))}
           </View>
         )}
 
