@@ -157,7 +157,7 @@ class ARScene extends Component {
     collectedObjects = [],
     onCollect = () => {},
   } = this.props.sceneNavigator?.viroAppProps || {};
-
+  
     return (
       <ViroARScene onTrackingUpdated={this.onTrackingUpdated}>
         <ViroAmbientLight color="#ffffff" intensity={300} />
