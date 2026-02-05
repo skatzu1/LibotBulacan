@@ -78,6 +78,39 @@ function gpsToARPosition(userLat, userLon, userHeading, objLat, objLon) {
 }
 
 /* =========================================================
+   UTILITY: CALCULATE BEARING TO OBJECT
+========================================================= */
+function getBearingToObject(userLat, userLon, objLat, objLon) {
+  const φ1 = (userLat * Math.PI) / 180;
+  const φ2 = (objLat * Math.PI) / 180;
+  const Δλ = ((objLon - userLon) * Math.PI) / 180;
+  
+  const y = Math.sin(Δλ) * Math.cos(φ2);
+  const x = Math.cos(φ1) * Math.sin(φ2) -
+            Math.sin(φ1) * Math.cos(φ2) * Math.cos(Δλ);
+  
+  let bearing = Math.atan2(y, x) * (180 / Math.PI);
+  bearing = (bearing + 360) % 360; // Normalize to 0-360
+  
+  return bearing;
+}
+
+/* =========================================================
+   UTILITY: CHECK IF CAMERA IS FACING OBJECT
+========================================================= */
+function isFacingObject(userHeading, objectBearing, threshold = 30) {
+  // Calculate the difference between user heading and object bearing
+  let diff = Math.abs(userHeading - objectBearing);
+  
+  // Handle wraparound (e.g., 350° vs 10°)
+  if (diff > 180) {
+    diff = 360 - diff;
+  }
+  
+  return diff <= threshold;
+}
+
+/* =========================================================
    COLLECTION ANIMATION
 ========================================================= */
 function CollectionAnimation({ visible }) {
@@ -124,6 +157,7 @@ class ARScene extends Component {
   state = {
     trackingStatus: "Initializing AR...",
     rotation: 0,
+    hasFoundPlane: false,
   };
 
   componentDidMount() {
@@ -152,7 +186,7 @@ class ARScene extends Component {
   };
 
   render() {
-    const { arPositions = [], collectedObjects = [], onCollect } = this.props;
+    const { arPositions = [], collectedObjects = [] } = this.props;
 
     return (
       <ViroARScene onTrackingUpdated={this.onTrackingUpdated}>
@@ -177,10 +211,10 @@ class ARScene extends Component {
           return (
             <ViroNode
               key={obj.id}
-              position={[obj.x, 0, obj.z]}
-              scale={[0.3, 0.3, 0.3]}
+              position={[obj.x, -1.5, obj.z]}
+              scale={[0.5, 0.5, 0.5]}
               rotation={[0, this.state.rotation * (180 / Math.PI), 0]}
-              onClick={() => onCollect(obj.id)}
+              transformBehaviors={["billboardY"]}
             >
               <Viro3DObject
                 source={require("../assets/models/question_mark.glb")}
@@ -208,6 +242,7 @@ export default function ARScreen({ navigation }) {
   const [locationPermission, setLocationPermission] = useState(false);
   const [collectedObjects, setCollectedObjects] = useState([]);
   const [showCollection, setShowCollection] = useState(false);
+  const [targetObject, setTargetObject] = useState(null); // Object user is looking at
 
   /* ---------------- Example Data nigga ---------------- */
   const arObjects = useMemo(
@@ -255,10 +290,21 @@ export default function ARScreen({ navigation }) {
           obj.longitude
         );
 
+        const bearing = getBearingToObject(
+          location.latitude,
+          location.longitude,
+          obj.latitude,
+          obj.longitude
+        );
+
+        const facing = isFacingObject(heading, bearing, 30); // 30° threshold
+
         return {
           ...obj,
           ...position,
           distance,
+          bearing,
+          facing,
           inRange: distance <= obj.collectRadius,
         };
       });
@@ -271,6 +317,18 @@ export default function ARScreen({ navigation }) {
 
   const currentObject = collectibleObjects[0] ?? null;
 
+  /* ---------------- TARGET OBJECT (in range AND facing) ---------------- */
+  const targetableObject = useMemo(() => {
+    // Find objects that are both in range AND user is facing them
+    const targets = arPositions.filter((obj) => obj.inRange && obj.facing);
+    return targets[0] ?? null; // Return the first one (closest)
+  }, [arPositions]);
+
+  // Update target object state
+  useEffect(() => {
+    setTargetObject(targetableObject);
+  }, [targetableObject]);
+
   /* ---------------- NEAREST DISTANCE ---------------- */
   const nearestDistance = useMemo(() => {
     if (arPositions.length === 0) return null;
@@ -282,6 +340,7 @@ export default function ARScreen({ navigation }) {
   useEffect(() => {
     let locationSubscription = null;
     let headingSubscription = null;
+    let lastHeading = 0;
 
     (async () => {
       const { status } = await Location.requestForegroundPermissionsAsync();
@@ -290,16 +349,16 @@ export default function ARScreen({ navigation }) {
 
         // Get initial location
         const currentLocation = await Location.getCurrentPositionAsync({
-          accuracy: Location.Accuracy.High,
+          accuracy: Location.Accuracy.BestForNavigation,
         });
         setLocation(currentLocation.coords);
 
-        // Watch location
+        // Watch location with high accuracy
         locationSubscription = await Location.watchPositionAsync(
           {
-            accuracy: Location.Accuracy.High,
-            distanceInterval: 1,
-            timeInterval: 1000,
+            accuracy: Location.Accuracy.BestForNavigation,
+            distanceInterval: 0.5, // Update every 0.5 meters
+            timeInterval: 500, // Update every 500ms
           },
           (loc) => {
             console.log("Location updated:", loc.coords);
@@ -307,9 +366,16 @@ export default function ARScreen({ navigation }) {
           }
         );
 
-        // Watch heading (compass)
+        // Watch heading (compass) with smoothing
         headingSubscription = await Location.watchHeadingAsync((headingData) => {
-          setHeading(headingData.trueHeading || headingData.magHeading);
+          const newHeading = headingData.trueHeading ?? headingData.magHeading;
+          
+          // Smooth heading changes to prevent jitter
+          // Only update if change is significant (> 2 degrees)
+          if (Math.abs(newHeading - lastHeading) > 2) {
+            setHeading(newHeading);
+            lastHeading = newHeading;
+          }
         });
       }
     })();
@@ -321,18 +387,13 @@ export default function ARScreen({ navigation }) {
   }, []);
 
   /* ---------------- COLLECT ---------------- */
-  const handleCollect = (objectId) => {
-    const obj = arObjects.find((o) => o.id === objectId);
+  const handleCollect = () => {
+    if (!targetObject) return;
+
+    const obj = arObjects.find((o) => o.id === targetObject.id);
     if (!obj) return;
 
-    // Check if in range
-    const objPosition = arPositions.find((p) => p.id === objectId);
-    if (!objPosition || !objPosition.inRange) {
-      Alert.alert("Too Far!", "Get closer to collect this object");
-      return;
-    }
-
-    setCollectedObjects((prev) => [...prev, objectId]);
+    setCollectedObjects((prev) => [...prev, targetObject.id]);
     setShowCollection(true);
 
     Alert.alert(
@@ -367,9 +428,9 @@ export default function ARScreen({ navigation }) {
         viroAppProps={{
           arPositions,
           collectedObjects,
-          onCollect: handleCollect,
         }}
         autofocus={true}
+        worldAlignment="GravityAndHeading"
       />
 
       {/* Instructions overlay */}
@@ -377,7 +438,7 @@ export default function ARScreen({ navigation }) {
         <View style={styles.hintOverlay}>
           <Text style={styles.hintText}>
             {currentObject
-              ? `${currentObject.name} nearby!\nLook around and tap the 3D object to collect`
+              ? `${currentObject.name} nearby!\nPoint your camera at the object to collect it`
               : "Move around to find hidden AR objects"}
           </Text>
           <TouchableOpacity
@@ -392,6 +453,19 @@ export default function ARScreen({ navigation }) {
       {/* Collection animation */}
       <CollectionAnimation visible={showCollection} />
 
+      {/* COLLECT BUTTON - Shows when facing an object in range */}
+      {targetObject && (
+        <View style={styles.collectButtonContainer}>
+          <TouchableOpacity 
+            style={styles.collectButton}
+            onPress={handleCollect}
+          >
+            <Text style={styles.collectButtonText}>COLLECT</Text>
+            <Text style={styles.collectButtonSubtext}>{targetObject.name}</Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
       {/* Bottom info bar */}
       <View style={styles.bottomOverlay}>
         {currentObject ? (
@@ -400,7 +474,9 @@ export default function ARScreen({ navigation }) {
               📍 {currentObject.name} - {currentObject.distance.toFixed(1)}m away
             </Text>
             <Text style={styles.objectHint}>
-              Look around and tap the object!
+              {currentObject.facing 
+                ? "✓ Camera aligned - Ready to collect!" 
+                : "Point your camera at the object"}
             </Text>
           </View>
         ) : (
@@ -447,6 +523,23 @@ export default function ARScreen({ navigation }) {
           <Text style={styles.debugText}>
             Visible: {arPositions.length}
           </Text>
+          {targetObject && (
+            <>
+              <Text style={styles.debugText}>---Target---</Text>
+              <Text style={styles.debugText}>
+                X: {targetObject.x.toFixed(1)}
+              </Text>
+              <Text style={styles.debugText}>
+                Z: {targetObject.z.toFixed(1)}
+              </Text>
+              <Text style={styles.debugText}>
+                Bearing: {targetObject.bearing.toFixed(0)}°
+              </Text>
+              <Text style={styles.debugText}>
+                Facing: {targetObject.facing ? "YES" : "NO"}
+              </Text>
+            </>
+          )}
         </View>
       )}
     </View>
@@ -560,6 +653,38 @@ const styles = StyleSheet.create({
     color: "white",
     fontSize: 22,
     fontWeight: "bold",
+  },
+  collectButtonContainer: {
+    position: "absolute",
+    bottom: 120,
+    alignSelf: "center",
+    zIndex: 100,
+  },
+  collectButton: {
+    backgroundColor: "#4CAF50",
+    paddingHorizontal: 40,
+    paddingVertical: 20,
+    borderRadius: 50,
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 5,
+    elevation: 8,
+    borderWidth: 3,
+    borderColor: "#fff",
+  },
+  collectButtonText: {
+    color: "white",
+    fontSize: 24,
+    fontWeight: "bold",
+    letterSpacing: 2,
+  },
+  collectButtonSubtext: {
+    color: "white",
+    fontSize: 14,
+    marginTop: 4,
+    opacity: 0.9,
   },
   debugInfo: {
     position: "absolute",
