@@ -9,12 +9,34 @@ import {
   Dimensions 
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
+import { useBookmark } from "../context/BookmarkContext";
 
 const { width } = Dimensions.get("window");
 
 export default function InformationScreen({ route, navigation }) {
   const { spot } = route.params;
   const [activeTab, setActiveTab] = useState("Information");
+  const { isBookmarked, toggleBookmark } = useBookmark();
+
+  console.log('InformationScreen - Spot data:', {
+    name: spot.name,
+    id: spot.id,
+    _id: spot._id,
+    allKeys: Object.keys(spot)
+  });
+
+  const spotIsBookmarked = isBookmarked(spot._id || spot.id);
+
+  const handleBookmarkPress = () => {
+    console.log('=== BOOKMARK BUTTON PRESSED ===');
+    console.log('Spot being bookmarked:', {
+      name: spot.name,
+      id: spot.id,
+      _id: spot._id,
+      spotIsBookmarked: spotIsBookmarked
+    });
+    toggleBookmark(spot);
+  };
 
   return (
     <View style={styles.container}>
@@ -27,8 +49,16 @@ export default function InformationScreen({ route, navigation }) {
           <Feather name="chevron-left" size={28} color="#4a4a4a" />
         </TouchableOpacity>
         
-        <TouchableOpacity style={styles.bookmarkButton}>
-          <Feather name="bookmark" size={24} color="#4a4a4a" />
+        <TouchableOpacity 
+          style={styles.bookmarkButton}
+          onPress={handleBookmarkPress}
+        >
+          <Feather 
+            name="bookmark" 
+            size={24} 
+            color={spotIsBookmarked ? "#f4c542" : "#4a4a4a"}
+            fill={spotIsBookmarked ? "#f4c542" : "transparent"}
+          />
         </TouchableOpacity>
       </View>
 
