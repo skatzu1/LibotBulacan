@@ -186,7 +186,10 @@ class ARScene extends Component {
   };
 
   render() {
-    const { arPositions = [], collectedObjects = [] } = this.props;
+    const {
+      arPositions = [],
+      collectedObjects = [],
+    } = this.props.sceneNavigator?.viroAppProps || {};
 
     return (
       <ViroARScene onTrackingUpdated={this.onTrackingUpdated}>
@@ -198,7 +201,7 @@ class ARScene extends Component {
           direction={[0, -1, -0.2]}
           position={[0, 3, 1]}
           color="#ffffff"
-          intensity={500}
+          intensity={800}
         />
 
         {/* AR objects will only display according to their uhh pag nasa loob ng data ng lugar kinginamo */}
@@ -206,7 +209,7 @@ class ARScene extends Component {
 
           if (collectedObjects.includes(obj.id)) return null;
 /*-------------------Dito palitan distance (Distance between you and the object bago mag render)----------------------------*/
-          if (obj.distance > 100) return null;
+          if (obj.distance > 20) return null;
 
           return (
             <ViroNode
@@ -266,8 +269,8 @@ export default function ARScreen({ navigation }) {
       {
         id: 3,
         name: "Wild Jeff",
-        latitude: 14.842102,
-        longitude: 121.045885,
+        latitude: 14.842125,
+        longitude: 121.045882,
         description: "Hidden treasure of STI",
         collectRadius: 10,
       },
