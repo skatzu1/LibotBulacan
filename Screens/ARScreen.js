@@ -263,6 +263,14 @@ export default function ARScreen({ navigation }) {
         description: "Hidden treasure near the plaza",
         collectRadius: 10,
       },
+      {
+        id: 3,
+        name: "Wild Jeff",
+        latitude: 14.842102,
+        longitude: 121.045885,
+        description: "Hidden treasure of STI",
+        collectRadius: 10,
+      },
       // Add more objects here
     ],
     []
