@@ -1,123 +1,162 @@
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Image } from 'react-native';
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Image, ActivityIndicator } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { Feather } from '@expo/vector-icons';
+
+// 🔥 CHANGE THIS TO YOUR RENDER BACKEND URL
+const API_URL = 'https://libotbackend.onrender.com';
 
 export default function Lists() {
   const navigation = useNavigation();
   const route = useRoute();
   
-  // Get category from navigation params (default to "Culture & Traditions")
-  const category = route.params?.category || "Culture & Traditions";
+  // Get category from navigation params
+  const category = route.params?.category || "Religious";
+  const displayName = route.params?.displayName || category;
+  
+  const [destinations, setDestinations] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [usingFallback, setUsingFallback] = useState(false);
 
-  // Sample data for different categories matching your Categories.js
-  const destinationsData = {
-    "Culture & Traditions": [
+  // Fallback data if backend is unavailable
+  const fallbackData = {
+    "Religious": [
       {
-        id: 1,
-        name: "Kabayan",
-        image: "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=800",
-        description: "Mummy Caves"
-      },
-      {
-        id: 2,
-        name: "Sagada",
-        image: "https://images.unsplash.com/photo-1439066615861-d1af74d74000?w=800",
-        description: "Hanging Coffins"
-      },
-      {
-        id: 3,
-        name: "Banaue",
-        image: "https://images.unsplash.com/photo-1523712999610-f77fbcfc3843?w=800",
-        description: "Rice Terraces"
-      },
-      {
-        id: 4,
-        name: "Vigan",
-        image: "https://images.unsplash.com/photo-1551882547-ff40c63fe5fa?w=800",
-        description: "Calle Crisologo"
-      },
-      {
-        id: 5,
-        name: "Pasuquin",
-        image: "https://images.unsplash.com/photo-1511576661531-b34d7da5d0bb?w=800",
-        description: "Salt Making"
-      },
-      {
-        id: 6,
-        name: "Baler",
-        image: "https://images.unsplash.com/photo-1505142468610-359e7d316be0?w=800",
-        description: "Surfing Beach"
-      },
-    ],
-    "History & Religious Heritage": [
-      {
-        id: 1,
-        name: "Paoay Church",
+        id: '1',
+        name: "Barasoain Church",
         image: "https://images.unsplash.com/photo-1548013146-72479768bada?w=800",
-        description: "UNESCO World Heritage"
+        description: "Our Lady of Mount Carmel Parish",
+        visitingHours: "6am to 6pm",
+        entranceFee: "Free"
       },
       {
-        id: 2,
-        name: "Vigan Cathedral",
+        id: '2',
+        name: "Paoay Church",
         image: "https://images.unsplash.com/photo-1609137144813-7d9921338f24?w=800",
-        description: "St. Paul Cathedral"
-      },
-      {
-        id: 3,
-        name: "Bantay Bell Tower",
-        image: "https://images.unsplash.com/photo-1564415315949-7a0c4c73aaf7?w=800",
-        description: "Historic Landmark"
+        description: "UNESCO World Heritage",
+        visitingHours: "8am to 5pm",
+        entranceFee: "₱50"
       },
     ],
-    "Nature & Landscapes": [
+    "Nature": [
       {
-        id: 1,
-        name: "100 Islands",
-        image: "https://images.unsplash.com/photo-1559827260-dc66d52bef19?w=800",
-        description: "Island Hopping"
+        id: '1',
+        name: "Biak-na-Bato National Park",
+        image: "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=800",
+        description: "Historical and natural site in Bulacan",
+        visitingHours: "7am to 5pm",
+        entranceFee: "₱100"
       },
       {
-        id: 2,
-        name: "Pagudpud Beach",
-        image: "https://images.unsplash.com/photo-1507525428034-b723cf961d3e?w=800",
-        description: "White Sand Beach"
-      },
-      {
-        id: 3,
+        id: '2',
         name: "Mount Pulag",
         image: "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=800",
-        description: "Sea of Clouds"
-      },
-      {
-        id: 4,
-        name: "Tangadan Falls",
-        image: "https://images.unsplash.com/photo-1432405972618-c60b0225b8f9?w=800",
-        description: "Natural Waterfall"
+        description: "Sea of Clouds",
+        visitingHours: "5am to 7pm",
+        entranceFee: "₱500"
       },
     ],
-    "People & Achievements": [
+    "Historical": [
       {
-        id: 1,
-        name: "Crisologo Museum",
-        image: "https://images.unsplash.com/photo-1566127992631-137a642a90f4?w=800",
-        description: "Local Heroes"
+        id: '1',
+        name: "Vigan Heritage",
+        image: "https://images.unsplash.com/photo-1551882547-ff40c63fe5fa?w=800",
+        description: "Spanish colonial city",
+        visitingHours: "24/7",
+        entranceFee: "Free"
       },
+    ],
+    "Festivals": [
       {
-        id: 2,
-        name: "Baguio Museum",
-        image: "https://images.unsplash.com/photo-1574610720241-5addc1679a49?w=800",
-        description: "Cultural Heritage"
+        id: '1',
+        name: "Pahiyas Festival",
+        image: "https://images.unsplash.com/photo-1511632765486-a01980e01a18?w=800",
+        description: "Harvest festival celebration",
+        visitingHours: "All day during festival",
+        entranceFee: "Free"
       },
     ],
   };
 
-  const destinations = destinationsData[category] || destinationsData["Culture & Traditions"];
+  useEffect(() => {
+    loadDestinations();
+  }, [category]);
+
+  const loadDestinations = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      setUsingFallback(false);
+      
+      console.log(`📍 Fetching spots for category: ${category}`);
+      console.log(`🌐 API URL: ${API_URL}/api/spots/category/${category}`);
+      
+      // Try to fetch from backend
+      const response = await fetch(
+        `${API_URL}/api/spots/category/${encodeURIComponent(category)}`,
+        {
+          method: 'GET',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+      
+      console.log(`📡 Response status: ${response.status}`);
+      
+      if (!response.ok) {
+        throw new Error(`Backend returned ${response.status}`);
+      }
+      
+      const data = await response.json();
+      console.log(`✅ Received ${data.length} spots from backend`);
+      console.log('📦 Data:', JSON.stringify(data, null, 2));
+      
+      if (data.length > 0) {
+        // Transform backend data to match InformationScreen's expected format
+        const transformedData = data.map(spot => ({
+          id: spot._id,
+          name: spot.name,
+          image: spot.image,
+          description: spot.description,
+          coordinates: spot.coordinates,
+          category: spot.category,
+          visitingHours: spot.visitingHours || "6am to 10pm",
+          entranceFee: spot.entranceFee || "Free",
+          history: spot.history || "Historical information coming soon...",
+          recommendations: spot.recommendations || "Recommendations coming soon..."
+        }));
+        
+        setDestinations(transformedData);
+      } else {
+        // No data from backend, use fallback
+        console.log('⚠️ No spots found in backend, using fallback data');
+        setDestinations(fallbackData[category] || []);
+        setUsingFallback(true);
+      }
+      
+    } catch (error) {
+      console.error('❌ Error loading destinations:', error);
+      console.log('🔄 Using fallback data');
+      
+      // Use fallback data on error
+      setDestinations(fallbackData[category] || []);
+      setError('Using offline data');
+      setUsingFallback(true);
+      
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const DestinationCard = ({ item }) => (
     <TouchableOpacity 
       style={styles.card}
-      onPress={() => navigation.navigate('InformationScreen', { destination: item })}
+      onPress={() => {
+        console.log('Navigating to InformationScreen with spot:', item.name);
+        navigation.navigate('InformationScreen', { spot: item });
+      }}
       activeOpacity={0.8}
     >
       <Image 
@@ -135,6 +174,15 @@ export default function Lists() {
     </TouchableOpacity>
   );
 
+  if (loading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#4a4a4a" />
+        <Text style={styles.loadingText}>Loading destinations...</Text>
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
       {/* HEADER */}
@@ -145,7 +193,7 @@ export default function Lists() {
         >
           <Feather name="chevron-left" size={24} color="#4a4a4a" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>{category}</Text>
+        <Text style={styles.headerTitle}>{displayName}</Text>
         <TouchableOpacity style={styles.searchButton}>
           <Feather name="search" size={22} color="#4a4a4a" />
         </TouchableOpacity>
@@ -158,16 +206,30 @@ export default function Lists() {
         {/* CATEGORY INFO */}
         <View style={styles.infoContainer}>
           <Text style={styles.infoText}>
-            {destinations.length} destinations found
+            {destinations.length} destination{destinations.length !== 1 ? 's' : ''} found
           </Text>
+          {usingFallback && (
+            <View style={styles.offlineBadge}>
+              <Feather name="wifi-off" size={12} color="#e67e22" />
+              <Text style={styles.offlineText}>Offline Mode</Text>
+            </View>
+          )}
         </View>
 
         {/* DESTINATION CARDS */}
-        <View style={styles.cardsContainer}>
-          {destinations.map((item) => (
-            <DestinationCard key={item.id} item={item} />
-          ))}
-        </View>
+        {destinations.length > 0 ? (
+          <View style={styles.cardsContainer}>
+            {destinations.map((item) => (
+              <DestinationCard key={item.id} item={item} />
+            ))}
+          </View>
+        ) : (
+          <View style={styles.emptyContainer}>
+            <Feather name="map" size={64} color="#ccc" />
+            <Text style={styles.emptyText}>No destinations found</Text>
+            <Text style={styles.emptySubtext}>Try selecting a different category</Text>
+          </View>
+        )}
 
         <View style={{ height: 30 }} />
       </ScrollView>
@@ -180,6 +242,20 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#f5c4c1',
     paddingTop: 50,
+  },
+
+  loadingContainer: {
+    flex: 1,
+    backgroundColor: '#f5c4c1',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+
+  loadingText: {
+    marginTop: 15,
+    fontSize: 16,
+    color: '#4a4a4a',
+    fontWeight: '500',
   },
 
   header: {
@@ -219,12 +295,31 @@ const styles = StyleSheet.create({
 
   infoContainer: {
     marginBottom: 15,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
   },
 
   infoText: {
     fontSize: 14,
     color: '#6a5a5a',
     fontWeight: '500',
+  },
+
+  offlineBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff3cd',
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
+    gap: 5,
+  },
+
+  offlineText: {
+    fontSize: 12,
+    color: '#e67e22',
+    fontWeight: '600',
   },
 
   cardsContainer: {
@@ -268,5 +363,24 @@ const styles = StyleSheet.create({
   locationText: {
     fontSize: 14,
     color: '#6a5a5a',
+  },
+
+  emptyContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 60,
+  },
+
+  emptyText: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#888',
+    marginTop: 15,
+  },
+
+  emptySubtext: {
+    fontSize: 14,
+    color: '#999',
+    marginTop: 5,
   },
 });
