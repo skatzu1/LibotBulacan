@@ -210,7 +210,7 @@ class ARScene extends Component {
           if (collectedObjects.includes(obj.id)) return null;
 /*-------------------Dito palitan distance (Distance between you and the object bago mag render)----------------------------*/
           if (obj.distance > 20) return null;
-
+// ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
           return (
             <ViroNode
               key={obj.id}
@@ -234,6 +234,7 @@ class ARScene extends Component {
     );
   }
 }
+//**************************************************************************************************************8 */
 
 /* =========================================================
    MAIN AR SCREEN
@@ -271,6 +272,14 @@ export default function ARScreen({ navigation }) {
         name: "Wild Jeff",
         latitude: 14.842125,
         longitude: 121.045882,
+        description: "Hidden treasure of STI",
+        collectRadius: 20,
+      },
+      {
+        id: 4,
+        name: "Wild Grey",
+        latitude: 14.779076,
+        longitude: 121.074490,
         description: "Hidden treasure of STI",
         collectRadius: 10,
       },
@@ -368,8 +377,8 @@ export default function ARScreen({ navigation }) {
         locationSubscription = await Location.watchPositionAsync(
           {
             accuracy: Location.Accuracy.BestForNavigation,
-            distanceInterval: 0.5, // Update every 0.5 meters
-            timeInterval: 500, // Update every 500ms
+            distanceInterval: 1, // Update every 0.5 meters
+            timeInterval: 1000, // Update every 500ms
           },
           (loc) => {
             console.log("Location updated:", loc.coords);
