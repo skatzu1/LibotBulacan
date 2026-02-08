@@ -228,7 +228,7 @@ function HomeContent() {
       .then((res) => res.json())
       .then((data) => {
         console.log("Fetched data:", data);
-        setSpots(data);
+        if (data.success) setSpots(data.spots);
         setLoading(false);
       })
       .catch((error) => {

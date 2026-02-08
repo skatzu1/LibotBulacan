@@ -45,9 +45,15 @@
     ],
     "ios": {
       "supportsTablet": true,
+      "bundleIdentifier": "com.skatzu15.libot",
       "infoPlist": {
         "NSCameraUsageDescription": "Libot uses the camera to show augmented reality tourism content.",
-        "NSLocationWhenInUseUsageDescription": "Find AR objects nearby at tourist locations"
+        "NSLocationWhenInUseUsageDescription": "Find AR objects nearby at tourist locations",
+        "CFBundleURLTypes": [
+          {
+            "CFBundleURLSchemes": ["libot"]
+          }
+        ]
       }
     },
     "android": {
@@ -61,7 +67,19 @@
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.skatzu15.libot"
+      "package": "com.skatzu15.libot",
+      "intentFilters": [
+        {
+          "action": "VIEW",
+          "autoVerify": true,
+          "data": [
+            {
+              "scheme": "libot"
+            }
+          ],
+          "category": ["BROWSABLE", "DEFAULT"]
+        }
+      ]
     },
     "web": {
       "favicon": "./assets/favicon.png"

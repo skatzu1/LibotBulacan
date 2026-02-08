@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
+import { ActivityIndicator } from 'react-native';
 
 const Settings = ({ navigation }) => {
   const { logout } = useAuth();
@@ -19,10 +20,13 @@ const Settings = ({ navigation }) => {
           text: "Log Out",
           onPress: async () => {
             try {
+              setIsLoggingOut(true);
               await logout();
               navigation.replace('Login');
             } catch (error) {
               Alert.alert("Error", "Failed to log out. Please try again.");
+            } finally {
+              setIsLoggingOut(false);
             }
           },
           style: "destructive"
@@ -30,6 +34,8 @@ const Settings = ({ navigation }) => {
       ]
     );
   };
+
+  const [isLoggingOut, setIsLoggingOut] = React.useState(false);
 
   const MenuItem = ({ icon, title, onPress }) => (
     <TouchableOpacity style={styles.menuItem} onPress={onPress}>
@@ -116,11 +122,13 @@ const Settings = ({ navigation }) => {
             title="Add account" 
             onPress={() => console.log('Add account')} 
           />
-          <MenuItem 
-            icon="log-out" 
-            title="Log out" 
-            onPress={handleLogout} 
-          />
+          <TouchableOpacity style={styles.menuItem} onPress={handleLogout} disabled={isLoggingOut}>
+            <View style={styles.menuLeft}>
+              <Feather name={'log-out'} size={20} color="#4a4a4a" />
+              <Text style={styles.menuText}>Log out</Text>
+            </View>
+            {isLoggingOut && <ActivityIndicator />}
+          </TouchableOpacity>
         </View>
 
         <View style={{ height: 50 }} />
