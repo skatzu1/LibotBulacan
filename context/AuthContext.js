@@ -1,4 +1,5 @@
 import React, { createContext, useState, useContext, useEffect } from 'react';
+import { useClerk } from '@clerk/clerk-expo';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { authAPI } from '../services/api';
 
@@ -8,6 +9,7 @@ export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);         // Logged-in user
   const [loading, setLoading] = useState(true);   // Loading state for startup
   const [error, setError] = useState(null);       // Any login/register errors
+  const clerk = useClerk();
 
   // Check login status when app starts
   useEffect(() => {
@@ -60,7 +62,10 @@ export const AuthProvider = ({ children }) => {
   const register = async (email, password, name) => {
     try {
       setError(null);
-      const response = await authAPI.register(email, password, name);
+      // Support backend expecting separate name fields
+      const [firstName, ...lastNameParts] = (name || '').trim().split(' ');
+      const lastName = lastNameParts.join(' ');
+      const response = await authAPI.register({ email, password, firstName, lastName });
 
       if (response.success && response.token) {
         await AsyncStorage.setItem('userToken', response.token);
@@ -81,6 +86,14 @@ export const AuthProvider = ({ children }) => {
   // LOGOUT function
   const logout = async () => {
     try {
+      // If Clerk is available, sign out the Clerk session as well
+      try {
+        if (clerk && typeof clerk.signOut === 'function') {
+          await clerk.signOut();
+        }
+      } catch (clerkErr) {
+        console.warn('Clerk signOut failed:', clerkErr);
+      }
       await AsyncStorage.removeItem('userToken');
       setUser(null);
     } catch (err) {
