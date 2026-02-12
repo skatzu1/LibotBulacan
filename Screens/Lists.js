@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Image, ActivityIndicator } from 'react-native';
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { Feather } from '@expo/vector-icons';
+import { useBookmark } from '../context/BookmarkContext';
 
 // 🔥 CHANGE THIS TO YOUR RENDER BACKEND URL
 const API_URL = 'https://libotbackend.onrender.com';
@@ -9,6 +10,7 @@ const API_URL = 'https://libotbackend.onrender.com';
 export default function Lists() {
   const navigation = useNavigation();
   const route = useRoute();
+  const { isBookmarked, toggleBookmark } = useBookmark();
   
   // Get category from navigation params
   const category = route.params?.category || "Religious";
@@ -23,7 +25,7 @@ export default function Lists() {
   const fallbackData = {
     "Religious": [
       {
-        id: '1',
+        _id: '1',
         name: "Barasoain Church",
         image: "https://images.unsplash.com/photo-1548013146-72479768bada?w=800",
         description: "Our Lady of Mount Carmel Parish",
@@ -31,7 +33,7 @@ export default function Lists() {
         entranceFee: "Free"
       },
       {
-        id: '2',
+        _id: '2',
         name: "Paoay Church",
         image: "https://images.unsplash.com/photo-1609137144813-7d9921338f24?w=800",
         description: "UNESCO World Heritage",
@@ -41,7 +43,7 @@ export default function Lists() {
     ],
     "Nature": [
       {
-        id: '1',
+        _id: '1',
         name: "Biak-na-Bato National Park",
         image: "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=800",
         description: "Historical and natural site in Bulacan",
@@ -49,7 +51,7 @@ export default function Lists() {
         entranceFee: "₱100"
       },
       {
-        id: '2',
+        _id: '2',
         name: "Mount Pulag",
         image: "https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=800",
         description: "Sea of Clouds",
@@ -59,7 +61,7 @@ export default function Lists() {
     ],
     "Historical": [
       {
-        id: '1',
+        _id: '1',
         name: "Vigan Heritage",
         image: "https://images.unsplash.com/photo-1551882547-ff40c63fe5fa?w=800",
         description: "Spanish colonial city",
@@ -69,7 +71,7 @@ export default function Lists() {
     ],
     "Festivals": [
       {
-        id: '1',
+        _id: '1',
         name: "Pahiyas Festival",
         image: "https://images.unsplash.com/photo-1511632765486-a01980e01a18?w=800",
         description: "Harvest festival celebration",
@@ -114,14 +116,15 @@ export default function Lists() {
       console.log('📦 Data:', JSON.stringify(data, null, 2));
       
       if (data.length > 0) {
-        // Transform backend data to match InformationScreen's expected format
+        // Keep _id as _id (don't transform to id)
         const transformedData = data.map(spot => ({
-          id: spot._id,
+          _id: spot._id,  // ← KEEP AS _id
           name: spot.name,
           image: spot.image,
           description: spot.description,
           coordinates: spot.coordinates,
           category: spot.category,
+          location: spot.location,
           visitingHours: spot.visitingHours || "6am to 10pm",
           entranceFee: spot.entranceFee || "Free",
           history: spot.history || "Historical information coming soon...",
@@ -150,29 +153,56 @@ export default function Lists() {
     }
   };
 
-  const DestinationCard = ({ item }) => (
-    <TouchableOpacity 
-      style={styles.card}
-      onPress={() => {
-        console.log('Navigating to InformationScreen with spot:', item.name);
-        navigation.navigate('InformationScreen', { spot: item });
-      }}
-      activeOpacity={0.8}
-    >
-      <Image 
-        source={{ uri: item.image }} 
-        style={styles.cardImage}
-        resizeMode="cover"
-      />
-      <View style={styles.cardContent}>
-        <Text style={styles.cardTitle}>{item.name}</Text>
-        <View style={styles.locationContainer}>
-          <Feather name="map-pin" size={14} color="#6a5a5a" />
-          <Text style={styles.locationText}>{item.description}</Text>
+  const DestinationCard = ({ item }) => {
+    const spotIsBookmarked = isBookmarked(item._id);
+
+    return (
+      <TouchableOpacity 
+        style={styles.card}
+        onPress={() => {
+          console.log('Navigating to InformationScreen with spot:', item.name, 'ID:', item._id);
+          navigation.navigate('InformationScreen', { spot: item });
+        }}
+        activeOpacity={0.8}
+      >
+        <Image 
+          source={{ uri: item.image }} 
+          style={styles.cardImage}
+          resizeMode="cover"
+        />
+        
+        {/* BOOKMARK BUTTON */}
+        <TouchableOpacity 
+          style={styles.bookmarkButton}
+          onPress={(e) => {
+            e.stopPropagation(); // Prevent card press
+            console.log('Bookmark pressed for:', item.name, 'ID:', item._id);
+            toggleBookmark(item);
+          }}
+          activeOpacity={0.8}
+        >
+          <Feather 
+            name="bookmark" 
+            size={20} 
+            color={spotIsBookmarked ? "#f4c542" : "#4a4a4a"}
+            fill={spotIsBookmarked ? "#f4c542" : "transparent"}
+          />
+        </TouchableOpacity>
+
+        <View style={styles.cardContent}>
+          <Text style={styles.cardTitle} numberOfLines={2}>
+            {item.name}
+          </Text>
+          {item.location && (
+            <View style={styles.locationContainer}>
+              <Feather name="map-pin" size={12} color="#6a5a5a" />
+              <Text style={styles.locationText}>{item.location}</Text>
+            </View>
+          )}
         </View>
-      </View>
-    </TouchableOpacity>
-  );
+      </TouchableOpacity>
+    );
+  };
 
   if (loading) {
     return (
@@ -211,7 +241,7 @@ export default function Lists() {
           {usingFallback && (
             <View style={styles.offlineBadge}>
               <Feather name="wifi-off" size={12} color="#e67e22" />
-              <Text style={styles.offlineText}>Offline Mode</Text>
+              <Text style={styles.offlineText}>Offline</Text>
             </View>
           )}
         </View>
@@ -220,7 +250,7 @@ export default function Lists() {
         {destinations.length > 0 ? (
           <View style={styles.cardsContainer}>
             {destinations.map((item) => (
-              <DestinationCard key={item.id} item={item} />
+              <DestinationCard key={item._id} item={item} />
             ))}
           </View>
         ) : (
@@ -335,12 +365,26 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 5,
     elevation: 3,
+    position: 'relative',
   },
 
   cardImage: {
     width: '100%',
-    height: 180,
+    height: 160,
     backgroundColor: '#e0e0e0',
+  },
+
+  bookmarkButton: {
+    position: 'absolute',
+    top: 12,
+    right: 12,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 10,
   },
 
   cardContent: {
@@ -361,7 +405,7 @@ const styles = StyleSheet.create({
   },
 
   locationText: {
-    fontSize: 14,
+    fontSize: 13,
     color: '#6a5a5a',
   },
 
