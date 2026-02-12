@@ -1,90 +1,232 @@
-import { View, StyleSheet, TouchableOpacity, TextInput, Text, Alert, ActivityIndicator } from "react-native";
-import { useState } from "react";
-import CheckBox from "expo-checkbox";
-import { useAuth } from "../context/AuthContext"; 
+import {
+  View,
+  StyleSheet,
+  TouchableOpacity,
+  TextInput,
+  Text,
+  Alert,
+  ActivityIndicator,
+  Platform,
+} from "react-native";
+import { useState, useEffect } from "react";
+import { useSignIn, useOAuth } from "@clerk/clerk-expo";
+import * as WebBrowser from "expo-web-browser";
+
+WebBrowser.maybeCompleteAuthSession();
 
 export default function Login({ navigation }) {
-  const [isChecked, setChecked] = useState(false);
-  const [passwordVisible, setPasswordVisible] = useState(false);
+  const { isLoaded, signIn, setActive } = useSignIn();
+  const { startOAuthFlow } = useOAuth({ strategy: "oauth_google" });
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [isLoading, setIsLoading] = useState(false);
-  
-  const { login } = useAuth();
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
+  const [passwordVisible, setPasswordVisible] = useState(false);
 
-  const handleForgotPassword = () => { 
-    alert("Password reset feature coming soon!"); 
-  };
+  useEffect(() => {
+    WebBrowser.warmUpAsync();
+    return () => {
+      if (Platform.OS !== "android") WebBrowser.coolDownAsync();
+    };
+  }, []);
 
+  // --- EMAIL LOGIN ---
   const handleLogin = async () => {
-    // Validation
     if (!email || !password) {
-      Alert.alert("Error", "Please fill in all fields");
-      return;
+      return Alert.alert("Error", "Please enter email and password");
     }
-
-    // Basic email validation
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-      Alert.alert("Error", "Please enter a valid email address");
-      return;
+    
+    if (!isLoaded) {
+      return Alert.alert("Error", "Authentication system is loading. Please wait.");
     }
 
     setIsLoading(true);
     
     try {
-      const result = await login(email, password);
+      console.log('🔵 Attempting email login for:', email);
       
-      if (!result.success) {
-        // Show error message from backend
-        Alert.alert(
-          "Login Failed", 
-          result.message || "Invalid credentials. Please check your email and password."
+      // Sign in with Clerk
+      const signInResult = await signIn.create({ 
+        identifier: email, 
+        password 
+      });
+
+      console.log('🔵 Sign-in status:', signInResult.status);
+
+      // Handle verification needed
+      if (signInResult.status === 'needs_first_factor') {
+        console.log('📧 Email verification needed');
+        
+        const emailFactor = signInResult.supportedFirstFactors?.find(
+          f => f.strategy === 'email_code'
         );
+        
+        if (emailFactor) {
+          await signIn.prepareFirstFactor({
+            strategy: 'email_code',
+            emailAddressId: emailFactor.emailAddressId,
+          });
+          
+          navigation.navigate("EmailVerification", { 
+            email, 
+            fromLogin: true 
+          });
+          
+          Alert.alert(
+            "Verification Required", 
+            "Please check your email for the verification code."
+          );
+          return;
+        }
       }
-      // If successful, the AuthContext will handle navigation automatically
-    } catch (error) {
-      Alert.alert(
-        "Error", 
-        "Unable to connect to server. Please check your internet connection."
-      );
+
+      // Check if login is complete
+      if (signInResult.status !== "complete") {
+        Alert.alert(
+          "Login Failed",
+          "Could not complete login. Please check your credentials."
+        );
+        return;
+      }
+
+      // Set active Clerk session
+      await setActive({ session: signInResult.createdSessionId });
+      console.log('✅ Login successful!');
+
+      navigation.replace("Home");
+
+    } catch (err) {
+      console.error("❌ Email Login Error:", err);
+      
+      // Handle specific Clerk errors
+      if (err.errors && err.errors[0]) {
+        const errorCode = err.errors[0].code;
+        const errorMessage = err.errors[0].message;
+        
+        if (errorCode === 'form_identifier_not_found') {
+          Alert.alert("Login Failed", "No account found with this email address");
+        } else if (errorCode === 'form_password_incorrect') {
+          Alert.alert("Login Failed", "Incorrect password");
+        } else if (errorCode === 'not_allowed_access') {
+          Alert.alert("Login Failed", "Please verify your email before signing in");
+        } else {
+          Alert.alert("Login Failed", errorMessage || "Unable to login. Please try again.");
+        }
+      } else {
+        Alert.alert("Login Failed", err.message || "Unable to login. Please try again.");
+      }
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  // --- GOOGLE LOGIN (SIMPLIFIED - NO BACKEND SYNC) ---
+  const handleGoogleLogin = async () => {
+    if (isGoogleLoading || !isLoaded) return;
+
+    setIsGoogleLoading(true);
+
+    try {
+      console.log('🔵 Starting Google OAuth login...');
+      
+      // Start OAuth flow
+      const { createdSessionId, signIn: oauthSignIn, signUp: oauthSignUp } = await startOAuthFlow();
+      
+      console.log('🔵 OAuth result:', {
+        createdSessionId: !!createdSessionId,
+        hasSignIn: !!oauthSignIn,
+        hasSignUp: !!oauthSignUp
+      });
+
+      // Check if we got a session
+      if (!createdSessionId) {
+        throw new Error("No session returned from Google OAuth");
+      }
+
+      // Set active Clerk session - THIS IS ALL WE NEED!
+      await setActive({ session: createdSessionId });
+      console.log('✅ Google login successful!');
+
+      // Navigate to Home
+      navigation.replace("Home");
+
+    } catch (err) {
+      console.error("❌ Google Login Error:", err);
+      
+      // Don't show error if user cancelled
+      if (err.code === 'user-cancelled' || err.code === 'browser-closed') {
+        console.log('User cancelled OAuth');
+        return;
+      }
+      
+      Alert.alert(
+        "Login Failed", 
+        err.message || "Unable to login with Google. Please try again."
+      );
+    } finally {
+      setIsGoogleLoading(false);
     }
   };
 
   return (
     <View style={styles.screen}>
       <View style={styles.titleContainer}>
-        <Text style={styles.title}>Sign in</Text>
-        <Text style={styles.subtitle}>
-          Please sign in to continue
-        </Text>
+        <Text style={styles.title}>Welcome Back</Text>
+        <Text style={styles.subtitle}>Sign in to continue</Text>
       </View>
 
+      {/* GOOGLE LOGIN */}
+      <View style={styles.googleButtonContainer}>
+        <TouchableOpacity
+          style={[
+            styles.googleButton, 
+            (isGoogleLoading || isLoading || !isLoaded) && styles.disabled
+          ]}
+          onPress={handleGoogleLogin}
+          disabled={isGoogleLoading || isLoading || !isLoaded}
+        >
+          {isGoogleLoading ? (
+            <ActivityIndicator color="#444" />
+          ) : (
+            <>
+              <Text style={styles.googleIcon}>🔍</Text>
+              <Text style={styles.googleButtonText}>Sign in with Google</Text>
+            </>
+          )}
+        </TouchableOpacity>
+      </View>
+
+      {/* DIVIDER */}
+      <View style={styles.dividerContainer}>
+        <View style={styles.dividerLine} />
+        <Text style={styles.dividerText}>OR</Text>
+        <View style={styles.dividerLine} />
+      </View>
+
+      {/* EMAIL / PASSWORD */}
       <View style={styles.inputContainer}>
-        <TextInput 
-          style={styles.input} 
-          placeholder="Email" 
-          placeholderTextColor="#808080" 
-          value={email}
-          onChangeText={setEmail}
+        <TextInput
+          style={styles.input}
+          placeholder="Email"
           autoCapitalize="none"
           keyboardType="email-address"
-          editable={!isLoading}
+          value={email}
+          onChangeText={setEmail}
+          editable={!isLoading && !isGoogleLoading && isLoaded}
         />
-        <TextInput 
-          style={styles.input} 
-          placeholder="Password" 
-          placeholderTextColor="#808080" 
+
+        <TextInput
+          style={styles.input}
+          placeholder="Password"
           secureTextEntry={!passwordVisible}
           value={password}
           onChangeText={setPassword}
-          editable={!isLoading}
+          editable={!isLoading && !isGoogleLoading && isLoaded}
         />
       </View>
 
-      <View style={styles.showhideContainer}>
+      <View style={styles.passwordToggleContainer}>
         <TouchableOpacity onPress={() => setPasswordVisible(!passwordVisible)}>
           <Text style={styles.eyeButton}>
             {passwordVisible ? "Hide" : "Show"} Password
@@ -92,26 +234,15 @@ export default function Login({ navigation }) {
         </TouchableOpacity>
       </View>
 
-      <View style={styles.checkboxContainer}>
-        <View style={styles.rememberRow}>
-          <CheckBox 
-            value={isChecked} 
-            onValueChange={setChecked}
-            color={isChecked ? "#6b4b45" : undefined}
-            style={styles.checkbox}
-          />
-          <Text style={styles.rememberMe}>Remember me</Text>
-        </View>
-        <TouchableOpacity onPress={handleForgotPassword}>
-          <Text style={styles.forgotPassword}>Forgot Password?</Text>
-        </TouchableOpacity>
-      </View>
-
+      {/* LOGIN BUTTON */}
       <View style={styles.buttonContainer}>
-        <TouchableOpacity 
-          style={[styles.loginButton, isLoading && styles.loginButtonDisabled]} 
+        <TouchableOpacity
+          style={[
+            styles.loginButton, 
+            (isLoading || isGoogleLoading || !isLoaded) && styles.disabled
+          ]}
           onPress={handleLogin}
-          disabled={isLoading}
+          disabled={isLoading || isGoogleLoading || !isLoaded}
         >
           {isLoading ? (
             <ActivityIndicator color="#fff" />
@@ -121,143 +252,124 @@ export default function Login({ navigation }) {
         </TouchableOpacity>
       </View>
 
-      {/* Optional: Add a sign up link */}
-      <View style={styles.signupContainer}>
-        <Text style={styles.signupText}>Don't have an account? </Text>
-        <TouchableOpacity onPress={() => navigation.navigate("Register")}>
-          <Text style={styles.signupLink}>Sign Up</Text>
-        </TouchableOpacity>
-      </View>
-
-      <View style={styles.devButtonContainer}>
+      {/* REGISTER LINK */}
+      <View style={styles.registerContainer}>
+        <Text>Don't have an account? </Text>
         <TouchableOpacity 
-          style={styles.devButton}
-          onPress={() => navigation.navigate("Home")}
+          onPress={() => navigation.navigate("Register")}
+          disabled={isLoading || isGoogleLoading}
         >
-          <Text style={styles.devButtonText}>Dev: Skip to Home</Text>
+          <Text style={styles.registerLink}>Sign Up</Text>
         </TouchableOpacity>
       </View>
-
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-    screen: {
-      backgroundColor: "#f7cfc9",
-      flex: 1,
-      padding: 20,
-      paddingTop: 80,
-    },
-    titleContainer: {
-      alignItems: "center", 
-      marginBottom: 80,
-      marginTop: 60,
-    },
-    title: {
-      fontSize: 25,
-      fontWeight: "700",
-      textAlign: "center",
-    },
-    subtitle: {
-      fontSize: 18,
-      textAlign: "center",
-      color: "#444",
-      marginTop: 10,
-    },
-    inputContainer: {
-      width: "95%",
-      marginBottom: -5,
-      alignSelf: "center",
-      gap: 20,
-    },
-    input: {
-      backgroundColor: "#fff",
-      padding: 15,
-      borderRadius: 10,
-      marginBottom: 10,
-      width: "100%",
-    },
-    buttonContainer: {
-      width: "100%",
-      alignItems: "center",
-    },
-    loginButton: {
-      backgroundColor: "#6b4b45",
-      padding: 15,
-      borderRadius: 10,
-      alignItems: "center",
-      width: "80%",
-    },
-    loginButtonDisabled: {
-      backgroundColor: "#999",
-    },
-    buttonText: {
-      color: "#fff",
-      fontWeight: "700",
-      fontSize: 18,
-    },
-    checkboxContainer: {
-      flexDirection: "row",
-      justifyContent: "space-between",
-      alignItems: "center",
-      width: "100%",
-      marginBottom: 30,
-    },
-    rememberRow: {
-      flexDirection: "row",
-      alignItems: "center",
-    },
-    checkbox: {
-      marginLeft: 25,
-    },
-    rememberMe: {
-      marginLeft: 8,
-      fontSize: 16,
-    },
-    forgotPassword: {
-      fontSize: 13,
-      marginRight: 30,
-    },
-    showhideContainer: {
-      marginLeft: 25,
-      marginBottom: 15,
-    },
-    eyeButton: {
-      fontSize: 14,
-      color: "#6b4b45",
-      fontWeight: "600",
-    },
-    signupContainer: {
-      flexDirection: "row",
-      justifyContent: "center",
-      marginTop: 20,
-    },
-    signupText: {
-      fontSize: 14,
-      color: "#444",
-    },
-    signupLink: {
-      fontSize: 14,
-      color: "#6b4b45",
-      fontWeight: "700",
-    },
-    devButtonContainer: {
-      alignItems: "center",
-      marginTop: 15,
-    },
-    devButton: {
-      backgroundColor: "#999",
-      padding: 10,
-      borderRadius: 8,
-      width: "60%",
-      alignItems: "center",
-      borderWidth: 1,
-      borderColor: "#666",
-    },
-    devButtonText: {
-      color: "#fff",
-      fontWeight: "600",
-      fontSize: 12,
-    },
+  screen: {
+    flex: 1,
+    backgroundColor: "#f7cfc9",
+    padding: 20,
+    paddingTop: 80,
+  },
+  titleContainer: {
+    alignItems: "center",
+    marginBottom: 40,
+  },
+  title: {
+    fontSize: 28,
+    fontWeight: "700",
+  },
+  subtitle: {
+    fontSize: 16,
+    color: "#444",
+    marginTop: 8,
+  },
+  googleButtonContainer: {
+    alignItems: "center",
+    marginBottom: 20,
+  },
+  googleButton: {
+    backgroundColor: "#fff",
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    width: "90%",
+    borderWidth: 1,
+    borderColor: "#6b4b45",
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  googleIcon: {
+    fontSize: 20,
+    marginRight: 10,
+  },
+  googleButtonText: {
+    fontSize: 16,
+    fontWeight: "600",
+  },
+  dividerContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginVertical: 20,
+  },
+  dividerLine: {
+    flex: 1,
+    height: 1,
+    backgroundColor: "#ccc",
+  },
+  dividerText: {
+    marginHorizontal: 10,
+    color: "#666",
+    fontWeight: "500",
+  },
+  inputContainer: {
+    gap: 15,
+    marginBottom: 10,
+  },
+  input: {
+    backgroundColor: "#fff",
+    padding: 15,
+    borderRadius: 12,
+    fontSize: 16,
+  },
+  passwordToggleContainer: {
+    marginLeft: 15,
+    marginBottom: 20,
+  },
+  eyeButton: {
+    color: "#6b4b45",
+    fontWeight: "600",
+    fontSize: 14,
+  },
+  buttonContainer: {
+    alignItems: "center",
+    marginTop: 10,
+  },
+  loginButton: {
+    backgroundColor: "#6b4b45",
+    paddingVertical: 16,
+    borderRadius: 12,
+    width: "80%",
+    alignItems: "center",
+  },
+  buttonText: {
+    color: "#fff",
+    fontSize: 18,
+    fontWeight: "700",
+  },
+  disabled: {
+    opacity: 0.6,
+  },
+  registerContainer: {
+    flexDirection: "row",
+    justifyContent: "center",
+    marginTop: 25,
+  },
+  registerLink: {
+    color: "#6b4b45",
+    fontWeight: "700",
+  },
 });

@@ -186,7 +186,10 @@ class ARScene extends Component {
   };
 
   render() {
-    const { arPositions = [], collectedObjects = [] } = this.props;
+    const {
+      arPositions = [],
+      collectedObjects = [],
+    } = this.props.sceneNavigator?.viroAppProps || {};
 
     return (
       <ViroARScene onTrackingUpdated={this.onTrackingUpdated}>
@@ -198,7 +201,7 @@ class ARScene extends Component {
           direction={[0, -1, -0.2]}
           position={[0, 3, 1]}
           color="#ffffff"
-          intensity={500}
+          intensity={800}
         />
 
         {/* AR objects will only display according to their uhh pag nasa loob ng data ng lugar kinginamo */}
@@ -206,8 +209,8 @@ class ARScene extends Component {
 
           if (collectedObjects.includes(obj.id)) return null;
 /*-------------------Dito palitan distance (Distance between you and the object bago mag render)----------------------------*/
-          if (obj.distance > 100) return null;
-
+          if (obj.distance > 20) return null;
+// ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
           return (
             <ViroNode
               key={obj.id}
@@ -231,6 +234,7 @@ class ARScene extends Component {
     );
   }
 }
+//**************************************************************************************************************8 */
 
 /* =========================================================
    MAIN AR SCREEN
@@ -261,6 +265,22 @@ export default function ARScreen({ navigation }) {
         latitude: 14.813430703468642,
         longitude: 121.03695068219062,
         description: "Hidden treasure near the plaza",
+        collectRadius: 10,
+      },
+      {
+        id: 3,
+        name: "Wild Jeff",
+        latitude: 14.842125,
+        longitude: 121.045882,
+        description: "Hidden treasure of STI",
+        collectRadius: 20,
+      },
+      {
+        id: 4,
+        name: "Wild Grey",
+        latitude: 14.779076,
+        longitude: 121.074490,
+        description: "Hidden treasure of STI",
         collectRadius: 10,
       },
       // Add more objects here
@@ -359,6 +379,7 @@ export default function ARScreen({ navigation }) {
             accuracy: Location.Accuracy.BestForNavigation,
             distanceInterval: 0.5, // Update every meters
             timeInterval: 1000, // Update every sc.
+
           },
           (loc) => {
             console.log("Location updated:", loc.coords);
