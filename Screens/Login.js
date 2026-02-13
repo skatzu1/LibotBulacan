@@ -11,6 +11,7 @@ import {
 import { useState, useEffect } from "react";
 import { useSignIn, useOAuth } from "@clerk/clerk-expo";
 import * as WebBrowser from "expo-web-browser";
+import { color } from "three/tsl";
 
 WebBrowser.maybeCompleteAuthSession();
 

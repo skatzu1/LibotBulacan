@@ -10,6 +10,7 @@ import {
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import { useBookmark } from "../context/BookmarkContext";
+import { FontAwesome5 } from '@expo/vector-icons';
 
 const { width } = Dimensions.get("window");
 
@@ -38,6 +39,11 @@ export default function InformationScreen({ route, navigation }) {
     toggleBookmark(spot);
   };
 
+  const handleTrackPress = () => {
+    console.log('Track pressed - Navigating to MapScreen with:', spot.name);
+    navigation.navigate("MapScreen", { spot });
+  };
+
   return (
     <View style={styles.container}>
       {/* HEADER */}
@@ -53,12 +59,12 @@ export default function InformationScreen({ route, navigation }) {
           style={styles.bookmarkButton}
           onPress={handleBookmarkPress}
         >
-          <Feather 
-            name="bookmark" 
-            size={24} 
-            color={spotIsBookmarked ? "#f4c542" : "#4a4a4a"}
-            fill={spotIsBookmarked ? "#f4c542" : "transparent"}
-          />
+        <FontAwesome5
+  name="bookmark"
+  size={24}
+  solid={spotIsBookmarked}   // true = filled, false = outline
+  color={spotIsBookmarked ? "#f4c542" : "#f7cfc9"}
+/>
         </TouchableOpacity>
       </View>
 
@@ -151,8 +157,9 @@ export default function InformationScreen({ route, navigation }) {
 
           <TouchableOpacity
             style={styles.trackButton}
-            onPress={() => console.log("Track pressed")}
+            onPress={handleTrackPress}
           >
+            <Feather name="map-pin" size={18} color="#fff" style={{ marginRight: 5 }} />
             <Text style={styles.buttonText}>Track</Text>
           </TouchableOpacity>
 
@@ -174,7 +181,7 @@ export default function InformationScreen({ route, navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f5c4c1",
+    backgroundColor: "#ffffff",
     paddingTop: 50,
   },
 
@@ -244,7 +251,7 @@ const styles = StyleSheet.create({
   },
 
   activeTab: {
-    backgroundColor: "#a07070",
+    backgroundColor: "#f7cfc9",
   },
 
   tabText: {
@@ -259,7 +266,7 @@ const styles = StyleSheet.create({
   },
 
   infoCard: {
-    backgroundColor: "#a07070",
+    backgroundColor: "#f7cfc9",
     borderRadius: 20,
     padding: 20,
     marginBottom: 25,
@@ -304,6 +311,7 @@ const styles = StyleSheet.create({
     borderRadius: 25,
     alignItems: "center",
     justifyContent: "center",
+    flexDirection: "row",
   },
 
   reviewsButton: {

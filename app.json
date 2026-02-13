@@ -6,6 +6,11 @@
     "scheme": "libot",
     "orientation": "portrait",
     "icon": "./assets/logo.png",
+    "splash": {
+      "image": "./assets/logo.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#ffffff"
+    },
     "newArchEnabled": true,
     "userInterfaceStyle": "automatic",
     "assetBundlePatterns": [
@@ -41,7 +46,8 @@
         }
       ],
       "expo-secure-store",
-      "expo-web-browser"
+      "expo-web-browser",
+      "@react-native-community/datetimepicker"
     ],
     "ios": {
       "supportsTablet": true,
@@ -51,7 +57,9 @@
         "NSLocationWhenInUseUsageDescription": "Find AR objects nearby at tourist locations",
         "CFBundleURLTypes": [
           {
-            "CFBundleURLSchemes": ["libot"]
+            "CFBundleURLSchemes": [
+              "libot"
+            ]
           }
         ]
       }
@@ -77,7 +85,10 @@
               "scheme": "libot"
             }
           ],
-          "category": ["BROWSABLE", "DEFAULT"]
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
         }
       ]
     },
