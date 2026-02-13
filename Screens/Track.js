@@ -20,14 +20,12 @@ export default function Track({ route, navigation }) {
   const [userLocation, setUserLocation] = useState(null);
   const [loading, setLoading] = useState(true);
   const [spotData, setSpotData] = useState(null);
-  const [mapKey, setMapKey] = useState(0);
   const webViewRef = useRef(null);
   const locationSubscription = useRef(null);
 
   useEffect(() => {
     fetchSpotData();
     
-    // Cleanup function to stop location tracking when component unmounts
     return () => {
       if (locationSubscription.current) {
         locationSubscription.current.remove();
@@ -77,7 +75,6 @@ export default function Track({ route, navigation }) {
         return;
       }
 
-      // Get initial location
       const location = await Location.getCurrentPositionAsync({
         accuracy: Location.Accuracy.High,
       });
@@ -89,12 +86,11 @@ export default function Track({ route, navigation }) {
 
       setLoading(false);
 
-      // Start watching location changes in realtime
       locationSubscription.current = await Location.watchPositionAsync(
         {
           accuracy: Location.Accuracy.High,
-          timeInterval: 5000, // Update every 5 seconds
-          distanceInterval: 10, // Update every 10 meters
+          timeInterval: 3000, // Seeconds
+          distanceInterval: 5, // Metero
         },
         (newLocation) => {
           const newCoords = {
@@ -105,8 +101,7 @@ export default function Track({ route, navigation }) {
           console.log("Location updated:", newCoords);
           setUserLocation(newCoords);
           
-          // Update marker position on map in realtime
-          updateUserMarkerOnMap(newCoords);
+          updateLocationOnMap(newCoords);
         }
       );
 
@@ -117,13 +112,35 @@ export default function Track({ route, navigation }) {
     }
   };
 
-  const updateUserMarkerOnMap = (coords) => {
-    // Send message to WebView to update user marker position
+  const updateLocationOnMap = (coords) => {
+    if (!spotData || !spotData.coordinates) return;
+    
+    const destLat = spotData.coordinates.lat;
+    const destLng = spotData.coordinates.lng;
+    
+    // JavaScript code to update both marker and route
     const jsCode = `
-      if (window.userMarker) {
-        window.userMarker.setLatLng([${coords.latitude}, ${coords.longitude}]);
-        map.panTo([${coords.latitude}, ${coords.longitude}]);
-      }
+      (function() {
+        try {
+          // Update user marker position
+          if (window.userMarker) {
+            window.userMarker.setLatLng([${coords.latitude}, ${coords.longitude}]);
+          }
+          
+          // Update route with new starting point
+          if (window.routingControl) {
+            window.routingControl.setWaypoints([
+              L.latLng(${coords.latitude}, ${coords.longitude}),
+              L.latLng(${destLat}, ${destLng})
+            ]);
+          }
+          
+          console.log('Location updated on map');
+        } catch (error) {
+          console.error('Error updating location:', error);
+        }
+      })();
+      true; // Required for iOS
     `;
     
     webViewRef.current?.injectJavaScript(jsCode);
@@ -140,6 +157,7 @@ export default function Track({ route, navigation }) {
     );
   }
   
+// Optional lang to my nigga!
   if (!spotData.coordinates || !spotData.coordinates.lat || !spotData.coordinates.lng) {
     return (
       <View style={styles.loading}>
@@ -186,23 +204,51 @@ export default function Track({ route, navigation }) {
       <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
       <script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.js"></script>
       <script>
-        const map = L.map('map').setView([${(userLat + destLat) / 2}, ${(userLng + destLng) / 2}], 12);
+        window.map = L.map('map').setView([${(userLat + destLat) / 2}, ${(userLng + destLng) / 2}], 13);
 
         L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
           attribution: '© OpenStreetMap contributors',
           maxZoom: 19
-        }).addTo(map);
+        }).addTo(window.map);
 
-        // User location marker (blue) - stored globally so we can update it
+        // User location marker (blue) with pulsing effect
         const userIcon = L.divIcon({
-          html: '<div style="background: #4285F4; width: 20px; height: 20px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 5px rgba(0,0,0,0.3);"></div>',
+          html: \`
+            <div style="position: relative;">
+              <div style="
+                position: absolute;
+                background: rgba(66, 133, 244, 0.3);
+                width: 40px;
+                height: 40px;
+                border-radius: 50%;
+                top: -10px;
+                left: -10px;
+                animation: pulse 2s infinite;
+              "></div>
+              <div style="
+                background: #4285F4;
+                width: 20px;
+                height: 20px;
+                border-radius: 50%;
+                border: 3px solid white;
+                box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+              "></div>
+            </div>
+            <style>
+              @keyframes pulse {
+                0% { transform: scale(0.8); opacity: 1; }
+                50% { transform: scale(1.2); opacity: 0.5; }
+                100% { transform: scale(0.8); opacity: 1; }
+              }
+            </style>
+          \`,
           className: '',
           iconSize: [20, 20],
           iconAnchor: [10, 10]
         });
 
         window.userMarker = L.marker([${userLat}, ${userLng}], { icon: userIcon })
-          .addTo(map)
+          .addTo(window.map)
           .bindPopup('Your Location');
 
         // Destination marker (red)
@@ -213,11 +259,11 @@ export default function Track({ route, navigation }) {
           iconAnchor: [15, 30]
         });
 
-        L.marker([${destLat}, ${destLng}], { icon: destIcon })
-          .addTo(map)
+        window.destMarker = L.marker([${destLat}, ${destLng}], { icon: destIcon })
+          .addTo(window.map)
           .bindPopup('${spotData.name.replace(/'/g, "\\'")}');
 
-        // Add routing - stored globally so we can update it
+        // Add routing
         window.routingControl = L.Routing.control({
           waypoints: [
             L.latLng(${userLat}, ${userLng}),
@@ -233,14 +279,16 @@ export default function Track({ route, navigation }) {
           addWaypoints: false,
           routeWhileDragging: false,
           show: false,
-          fitSelectedRoutes: true
-        }).addTo(map);
+          fitSelectedRoutes: false
+        }).addTo(window.map);
 
         const bounds = L.latLngBounds(
           [${userLat}, ${userLng}],
           [${destLat}, ${destLng}]
         );
-        map.fitBounds(bounds, { padding: [80, 80] });
+        window.map.fitBounds(bounds, { padding: [80, 80] });
+
+        console.log('Map initialized');
       </script>
     </body>
     </html>
@@ -250,12 +298,18 @@ export default function Track({ route, navigation }) {
     <View style={styles.container}>
       <WebView
         ref={webViewRef}
-        key={mapKey}
         originWhitelist={["*"]}
         source={{ html: mapHTML }}
         style={styles.map}
         javaScriptEnabled={true}
         domStorageEnabled={true}
+        onMessage={(event) => {
+          console.log("WebView message:", event.nativeEvent.data);
+        }}
+        onError={(syntheticEvent) => {
+          const { nativeEvent } = syntheticEvent;
+          console.error("WebView error:", nativeEvent);
+        }}
       />
 
       <View style={styles.header}>
