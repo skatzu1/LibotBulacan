@@ -151,7 +151,7 @@ export default function InformationScreen({ route, navigation }) {
 
           <TouchableOpacity
             style={styles.trackButton}
-            onPress={() => console.log("Track pressed")}
+            onPress={() => navigation.navigate("Track", { spot })}
           >
             <Text style={styles.buttonText}>Track</Text>
           </TouchableOpacity>
