@@ -377,8 +377,9 @@ export default function ARScreen({ navigation }) {
         locationSubscription = await Location.watchPositionAsync(
           {
             accuracy: Location.Accuracy.BestForNavigation,
-            distanceInterval: 1, // Update every 0.5 meters
-            timeInterval: 1000, // Update every 500ms
+            distanceInterval: 0.5, // Update every meters
+            timeInterval: 1000, // Update every sc.
+
           },
           (loc) => {
             console.log("Location updated:", loc.coords);

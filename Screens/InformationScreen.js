@@ -158,6 +158,7 @@ export default function InformationScreen({ route, navigation }) {
           <TouchableOpacity
             style={styles.trackButton}
             onPress={handleTrackPress}
+            onPress={() => navigation.navigate("Track", { spot })}
           >
             <Feather name="map-pin" size={18} color="#fff" style={{ marginRight: 5 }} />
             <Text style={styles.buttonText}>Track</Text>

@@ -48,13 +48,22 @@
       "expo-secure-store",
       "expo-web-browser",
       "@react-native-community/datetimepicker"
+      [
+        "expo-location",
+        {
+          "locationAlwaysAndWhenInUsePermission": "Libot needs your location to provide navigation to tourist spots in Bulacan.",
+          "locationWhenInUsePermission": "Libot needs your location to show nearby tourist attractions.",
+          "isIosBackgroundLocationEnabled": false
+        }
+      ]
     ],
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.skatzu15.libot",
       "infoPlist": {
         "NSCameraUsageDescription": "Libot uses the camera to show augmented reality tourism content.",
-        "NSLocationWhenInUseUsageDescription": "Find AR objects nearby at tourist locations",
+        "NSLocationWhenInUseUsageDescription": "Libot needs your location to show nearby tourist spots and provide navigation.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Libot needs your location to show nearby tourist spots and provide navigation.",
         "CFBundleURLTypes": [
           {
             "CFBundleURLSchemes": [
@@ -68,7 +77,8 @@
       "permissions": [
         "CAMERA",
         "ACCESS_FINE_LOCATION",
-        "ACCESS_COARSE_LOCATION"
+        "ACCESS_COARSE_LOCATION",
+        "INTERNET"
       ],
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
