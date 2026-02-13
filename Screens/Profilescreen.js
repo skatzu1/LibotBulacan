@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -6,14 +6,48 @@ import {
   TouchableOpacity,
   Image,
   ScrollView,
+  ActivityIndicator,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { Feather } from "@expo/vector-icons";
+import { useUser } from "@clerk/clerk-expo";
 import { useAuth } from "../context/AuthContext";
 
 export default function ProfileScreen() {
   const navigation = useNavigation();
-  const { user } = useAuth();
+  const { user: clerkUser, isLoaded } = useUser();
+  const { user: contextUser } = useAuth();
+  const [userInfo, setUserInfo] = useState({
+    email: "",
+    firstName: "",
+    lastName: "",
+    fullName: "",
+    profilePhoto: null,
+    trips: 0,
+  });
+
+  useEffect(() => {
+    if (isLoaded && clerkUser) {
+      setUserInfo({
+        email: clerkUser.primaryEmailAddress?.emailAddress || "",
+        firstName: clerkUser.firstName || "",
+        lastName: clerkUser.lastName || "",
+        fullName: `${clerkUser.firstName || ""} ${clerkUser.lastName || ""}`.trim() || "User",
+        profilePhoto: clerkUser.imageUrl || clerkUser.profileImageUrl || null,
+        trips: contextUser?.trips || 0,
+      });
+    } else if (contextUser) {
+      // Fallback to context user if Clerk user not available
+      setUserInfo({
+        email: contextUser.email || "",
+        firstName: contextUser.firstName || "",
+        lastName: contextUser.lastName || "",
+        fullName: contextUser.name || contextUser.fullName || "User",
+        profilePhoto: contextUser.profilePhoto || null,
+        trips: contextUser.trips || 0,
+      });
+    }
+  }, [clerkUser, isLoaded, contextUser]);
 
   const menuItems = [
     {
@@ -42,6 +76,15 @@ export default function ProfileScreen() {
     },
   ];
 
+  // Show loading state while user data is being fetched
+  if (!isLoaded) {
+    return (
+      <View style={[styles.container, styles.loadingContainer]}>
+        <ActivityIndicator size="large" color="#7a6a6a" />
+      </View>
+    );
+  }
+
   return (
     <View style={styles.container}>
       <ScrollView 
@@ -63,9 +106,9 @@ export default function ProfileScreen() {
         {/* PROFILE PHOTO */}
         <View style={styles.profilePhotoContainer}>
           <View style={styles.profilePhotoWrapper}>
-            {user?.profilePhoto ? (
+            {userInfo.profilePhoto ? (
               <Image
-                source={{ uri: user.profilePhoto }}
+                source={{ uri: userInfo.profilePhoto }}
                 style={styles.profilePhoto}
               />
             ) : (
@@ -76,13 +119,20 @@ export default function ProfileScreen() {
           </View>
         </View>
 
+        {/* USER NAME */}
+        {userInfo.fullName && (
+          <Text style={styles.userName}>{userInfo.fullName}</Text>
+        )}
+
         {/* EMAIL */}
-        <Text style={styles.email}>{user?.email || "libertybluiscan@gmail.com"}</Text>
+        <Text style={styles.email}>
+          {userInfo.email || "No email available"}
+        </Text>
 
         {/* TRAVEL TRIPS CARD */}
         <View style={styles.tripsCard}>
           <Text style={styles.tripsLabel}>Travel Trips</Text>
-          <Text style={styles.tripsCount}>{user?.trips || "9"}</Text>
+          <Text style={styles.tripsCount}>{userInfo.trips}</Text>
         </View>
 
         {/* MENU ITEMS */}
@@ -114,7 +164,12 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#f5c4c1",
+    backgroundColor: "#ffffff",
+  },
+
+  loadingContainer: {
+    justifyContent: "center",
+    alignItems: "center",
   },
 
   scrollContent: {
@@ -169,6 +224,14 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     backgroundColor: "#4a4a4a",
+  },
+
+  userName: {
+    fontSize: 18,
+    fontWeight: "600",
+    color: "#4a4a4a",
+    textAlign: "center",
+    marginBottom: 4,
   },
 
   email: {

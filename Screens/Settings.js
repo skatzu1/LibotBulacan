@@ -140,7 +140,7 @@ const Settings = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5c4c1',
+    backgroundColor: '#ffffff',
     paddingTop: 50,
   },
 
@@ -185,10 +185,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    backgroundColor: 'transparent',
+    backgroundColor: '#f7cfc9',
     paddingVertical: 12,
     paddingHorizontal: 5,
     marginBottom: 5,
+    borderRadius: 16,
   },
 
   menuLeft: {

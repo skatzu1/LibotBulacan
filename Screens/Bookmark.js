@@ -3,12 +3,21 @@ import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Image } from 'rea
 import { useNavigation } from '@react-navigation/native';
 import { Feather } from '@expo/vector-icons';
 import { useBookmark } from '../context/BookmarkContext';
+import { useUser } from "@clerk/clerk-expo";
+import { useAuth } from "../context/AuthContext";
+import { MaterialIcons } from '@expo/vector-icons';
+import FontAwesome from 'react-native-vector-icons/FontAwesome';
 
 export default function Bookmark() {
   const navigation = useNavigation();
   const { getBookmarkedSpots, toggleBookmark } = useBookmark();
+  const { user: clerkUser } = useUser();
+  const { user: authUser } = useAuth();
   
   const bookmarkedSpots = getBookmarkedSpots();
+
+  // Get profile photo from Clerk user or auth context
+  const profilePhoto = clerkUser?.imageUrl || clerkUser?.profileImageUrl || authUser?.profilePhoto;
 
   const handleToggleBookmark = (spot) => {
     toggleBookmark(spot);
@@ -30,12 +39,11 @@ export default function Bookmark() {
         onPress={() => handleToggleBookmark(item)}
         activeOpacity={0.8}
       >
-        <Feather 
-          name="bookmark" 
-          size={20} 
-          color="#f4c542"
-          fill="#f4c542"
-        />
+        <FontAwesome
+                  name="bookmark"
+                  size={24}
+                  color={"#f4c542"}
+                />
       </TouchableOpacity>
       <View style={styles.cardContent}>
         <Text style={styles.cardTitle}>{item.name}</Text>
@@ -60,9 +68,17 @@ export default function Bookmark() {
         <Text style={styles.headerTitle}>Soon to visit</Text>
         <TouchableOpacity 
           onPress={() => navigation.navigate('Profile')}
-          style={styles.profileButton}
         >
-          <Feather name="user" size={20} color="#fff" />
+          {profilePhoto ? (
+            <Image 
+              source={{ uri: profilePhoto }} 
+              style={styles.profileImage}
+            />
+          ) : (
+            <View style={styles.profileButton}>
+              <Feather name="user" size={20} color="#fff" />
+            </View>
+          )}
         </TouchableOpacity>
       </View>
 
@@ -95,7 +111,7 @@ export default function Bookmark() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5c4c1',
+    backgroundColor: '#ffffff',
     paddingTop: 50,
   },
 
@@ -129,6 +145,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
 
+  profileImage: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#3a3a3a',
+  },
+
   scrollContent: {
     paddingHorizontal: 20,
   },
@@ -138,7 +161,7 @@ const styles = StyleSheet.create({
   },
 
   card: {
-    backgroundColor: '#fff',
+    backgroundColor: '#f7cfc9',
     borderRadius: 15,
     overflow: 'hidden',
     shadowColor: '#000',
