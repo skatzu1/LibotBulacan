@@ -56,35 +56,27 @@ function AppNavigator() {
               initialRouteName={isSignedIn ? "Home" : "WelcomePage"}
               screenOptions={{ headerShown: false }}
             >
-              {isSignedIn ? (
-                <>
-                  <Stack.Screen
-                    name="Home"
-                    component={Home}
-                    options={{ gestureEnabled: false }}
-                  />
-                  <Stack.Screen name="Leaderboard" component={Leaderboard} />
-                  <Stack.Screen name="InformationScreen" component={InformationScreen} />
-                  <Stack.Screen name="Categories" component={Categories} />
-                  <Stack.Screen name="Bookmark" component={Bookmark} />
-                  <Stack.Screen name="ar" component={ARScreen} />
-                  <Stack.Screen name="Settings" component={Settings} />
-                  <Stack.Screen name="Reviews" component={Reviews} />
-                  <Stack.Screen name="Lists" component={Lists} />
-                </>
-              ) : (
-                <>
-                  <Stack.Screen name="WelcomePage" component={WelcomePage} />
-                  <Stack.Screen name="WelcomePage2" component={WelcomePage2} />
-                  <Stack.Screen name="Login" component={Login} />
-                  <Stack.Screen name="Register" component={Register} />
-                  <Stack.Screen
-                    name="EmailVerification"
-                    component={EmailVerification}
-                    options={{ gestureEnabled: false }}
-                  />
-                </>
-              )}
+              {/* Auth Screens */}
+              <Stack.Screen name="WelcomePage" component={WelcomePage} />
+              <Stack.Screen name="WelcomePage2" component={WelcomePage2} />
+              <Stack.Screen name="Login" component={Login} />
+              <Stack.Screen name="Register" component={Register} />
+              <Stack.Screen
+                name="EmailVerification"
+                component={EmailVerification}
+                options={{ gestureEnabled: false }}
+              />
+
+              {/* App Screens */}
+              <Stack.Screen name="Home" component={Home} options={{ gestureEnabled: false }} />
+              <Stack.Screen name="Leaderboard" component={Leaderboard} />
+              <Stack.Screen name="InformationScreen" component={InformationScreen} />
+              <Stack.Screen name="Categories" component={Categories} />
+              <Stack.Screen name="Bookmark" component={Bookmark} />
+              <Stack.Screen name="ar" component={ARScreen} />
+              <Stack.Screen name="Settings" component={Settings} />
+              <Stack.Screen name="Reviews" component={Reviews} />
+              <Stack.Screen name="Lists" component={Lists} />
             </Stack.Navigator>
           </NavigationContainer>
         </BookmarkProvider>

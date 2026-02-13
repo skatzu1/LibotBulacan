@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Image, ActivityIn
 import { useNavigation, useRoute } from '@react-navigation/native';
 import { Feather } from '@expo/vector-icons';
 import { useBookmark } from '../context/BookmarkContext';
+import { FontAwesome5 } from '@expo/vector-icons';
 
 // 🔥 CHANGE THIS TO YOUR RENDER BACKEND URL
 const API_URL = 'https://libotbackend.onrender.com';
@@ -86,72 +87,71 @@ export default function Lists() {
   }, [category]);
 
   const loadDestinations = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      setUsingFallback(false);
-      
-      console.log(`📍 Fetching spots for category: ${category}`);
-      console.log(`🌐 API URL: ${API_URL}/api/spots/category/${category}`);
-      
-      // Try to fetch from backend
-      const response = await fetch(
-        `${API_URL}/api/spots/category/${encodeURIComponent(category)}`,
-        {
-          method: 'GET',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-        }
-      );
-      
-      console.log(`📡 Response status: ${response.status}`);
-      
-      if (!response.ok) {
-        throw new Error(`Backend returned ${response.status}`);
+  try {
+    setLoading(true);
+    setError(null);
+    setUsingFallback(false);
+    
+    console.log(`📍 Fetching spots for category: ${category}`);
+    console.log(`🌐 API URL: ${API_URL}/api/spots/category/${category}`);
+    
+    const response = await fetch(
+      `${API_URL}/api/spots/category/${encodeURIComponent(category)}`,
+      {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
       }
-      
-      const data = await response.json();
-      console.log(`✅ Received ${data.length} spots from backend`);
-      console.log('📦 Data:', JSON.stringify(data, null, 2));
-      
-      if (data.length > 0) {
-        // Keep _id as _id (don't transform to id)
-        const transformedData = data.map(spot => ({
-          _id: spot._id,  // ← KEEP AS _id
-          name: spot.name,
-          image: spot.image,
-          description: spot.description,
-          coordinates: spot.coordinates,
-          category: spot.category,
-          location: spot.location,
-          visitingHours: spot.visitingHours || "6am to 10pm",
-          entranceFee: spot.entranceFee || "Free",
-          history: spot.history || "Historical information coming soon...",
-          recommendations: spot.recommendations || "Recommendations coming soon..."
-        }));
-        
-        setDestinations(transformedData);
-      } else {
-        // No data from backend, use fallback
-        console.log('⚠️ No spots found in backend, using fallback data');
-        setDestinations(fallbackData[category] || []);
-        setUsingFallback(true);
-      }
-      
-    } catch (error) {
-      console.error('❌ Error loading destinations:', error);
-      console.log('🔄 Using fallback data');
-      
-      // Use fallback data on error
-      setDestinations(fallbackData[category] || []);
-      setError('Using offline data');
-      setUsingFallback(true);
-      
-    } finally {
-      setLoading(false);
+    );
+    
+    console.log(`📡 Response status: ${response.status}`);
+    
+    if (!response.ok) {
+      throw new Error(`Backend returned ${response.status}`);
     }
-  };
+    
+    const data = await response.json();
+    
+    // ✅ FIX: Access spots array from response
+    const spots = data.spots || data;
+    console.log(`✅ Received ${spots.length} spots from backend`);
+    console.log('📦 Data:', JSON.stringify(data, null, 2));
+    
+    if (spots.length > 0) {
+      const transformedData = spots.map(spot => ({
+        _id: spot._id,
+        name: spot.name,
+        image: spot.image,
+        description: spot.description,
+        coordinates: spot.coordinates,
+        category: spot.category,
+        location: spot.location,
+        visitingHours: spot.visitingHours || "6am to 10pm",
+        entranceFee: spot.entranceFee || "Free",
+        history: spot.history || "Historical information coming soon...",
+        recommendations: spot.recommendations || "Recommendations coming soon..."
+      }));
+      
+      setDestinations(transformedData);
+    } else {
+      console.log('⚠️ No spots found in backend, using fallback data');
+      setDestinations(fallbackData[category] || []);
+      setUsingFallback(true);
+    }
+    
+  } catch (error) {
+    console.error('❌ Error loading destinations:', error);
+    console.log('🔄 Using fallback data');
+    
+    setDestinations(fallbackData[category] || []);
+    setError('Using offline data');
+    setUsingFallback(true);
+    
+  } finally {
+    setLoading(false);
+  }
+};
 
   const DestinationCard = ({ item }) => {
     const spotIsBookmarked = isBookmarked(item._id);
@@ -181,12 +181,12 @@ export default function Lists() {
           }}
           activeOpacity={0.8}
         >
-          <Feather 
-            name="bookmark" 
-            size={20} 
-            color={spotIsBookmarked ? "#f4c542" : "#4a4a4a"}
-            fill={spotIsBookmarked ? "#f4c542" : "transparent"}
-          />
+        <FontAwesome5
+          name="bookmark"
+          size={24}
+          solid={spotIsBookmarked}   // true = filled, false = outline
+          color={spotIsBookmarked ? "#f4c542" : "#f7cfc9"}
+        />
         </TouchableOpacity>
 
         <View style={styles.cardContent}>
@@ -270,7 +270,7 @@ export default function Lists() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5c4c1',
+    backgroundColor: '#ffffff',
     paddingTop: 50,
   },
 
@@ -357,7 +357,7 @@ const styles = StyleSheet.create({
   },
 
   card: {
-    backgroundColor: '#fff',
+    backgroundColor: '#f7cfc9',
     borderRadius: 15,
     overflow: 'hidden',
     shadowColor: '#000',

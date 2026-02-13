@@ -20,6 +20,8 @@ import Carousel from "react-native-reanimated-carousel";
 import { useEffect, useState } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useReviews } from "../context/ReviewContext";
+import { useUser } from "@clerk/clerk-expo";
+import { MaterialIcons } from '@expo/vector-icons';
 
 import Bookmark from "./Bookmark";
 import Leaderboard from "./Leaderboard";
@@ -84,7 +86,7 @@ function CustomTabBar({ state, descriptors, navigation }) {
               {options.tabBarIcon &&
                 options.tabBarIcon({
                   focused: isFocused,
-                  color: isFocused ? "#8b4440" : "#ffffff",
+                  color: isFocused ? "#f7cfc9" : "#ffffff",
                   size: 24,
                 })}
             </TouchableOpacity>
@@ -110,7 +112,7 @@ function HomeBottomTabs() {
         name="HomeScreen"
         component={HomeTab}
         options={{
-          tabBarLabel: "Home",
+          tabBarLabel: "HomeScreen",
           tabBarIcon: ({ color, size }) => (
             <Feather name="home" size={24} color={color} />
           ),
@@ -159,7 +161,11 @@ function HomeBottomTabs() {
 /* -------------------------------------------------------------------------- */
 function HomeTab() {
   const navigation = useNavigation();
-  const { user } = useAuth();
+  const { user: authUser } = useAuth();
+  const { user: clerkUser } = useUser();
+
+  // Get profile photo from Clerk user or auth context
+  const profilePhoto = clerkUser?.imageUrl || clerkUser?.profileImageUrl || authUser?.profilePhoto;
 
   return (
     <View style={styles.screen}>
@@ -174,9 +180,16 @@ function HomeTab() {
           resizeMode="contain"
         />
         <TouchableOpacity onPress={() => navigation.navigate('Profile')}>
-          <View style={styles.profileIcon}>
-            <Feather name="user" size={20} color="#fff" />
-          </View>
+          {profilePhoto ? (
+            <Image 
+              source={{ uri: profilePhoto }} 
+              style={styles.profileImage}
+            />
+          ) : (
+            <View style={styles.profileIcon}>
+              <Feather name="user" size={20} color="#fff" />
+            </View>
+          )}
         </TouchableOpacity>
       </View>
 
@@ -274,11 +287,11 @@ function HomeContent() {
                 <View style={styles.carouselOverlay}>
                   <Text style={styles.carouselTitle}>{item.title}</Text>
                   <View style={styles.carouselLocationContainer}>
-                    <Feather name="map-pin" size={12} color="#fff" />
+                    <Feather name="map-pin" size={12} color="#ffffff" />
                     <Text style={styles.carouselLocation}>{item.location || "Philippines"}</Text>
                   </View>
                   <View style={styles.carouselRating}>
-                    <Feather name="star" size={12} color="#FFD700" />
+                    <MaterialIcons name="star" size={12} color="#FFD700" />
                     <Text style={styles.carouselRatingText}>
                       {item.rating}
                       {item.reviewCount > 0 && (
@@ -327,11 +340,11 @@ function HomeContent() {
               <View style={styles.topPlaceInfo}>
                 <Text style={styles.topPlaceTitle}>{spot.name}</Text>
                 <View style={styles.topPlaceLocationContainer}>
-                  <Feather name="map-pin" size={12} color="#FFD700" />
+                  <Feather name="map-pin" size={12} color="#ffffff" />
                   <Text style={styles.topPlaceLocation}>{spot.location || "Santa Maria"}</Text>
                 </View>
                 <View style={styles.topPlaceRating}>
-                  <Feather name="star" size={12} color="#FFD700" />
+                  <MaterialIcons name="star" size={12} color="#FFD700" />
                   <Text style={styles.topPlaceRatingText}>
                     {displayRating}
                     {reviewCount > 0 && (
@@ -369,7 +382,7 @@ export default function HomeDrawer() {
         },
       }}
     >
-      <Drawer.Screen name="Home" component={HomeBottomTabs} />
+      <Drawer.Screen name="HomeSide" component={HomeBottomTabs} />
       <Drawer.Screen name="Profile" component={ProfileScreen} />
       <Drawer.Screen name="Logout" component={LogoutScreen} />
     </Drawer.Navigator>
@@ -415,13 +428,13 @@ function LogoutScreen() {
 const styles = StyleSheet.create({
   screen: {
     flex: 1,
-    backgroundColor: "#f7cfc9",
+    backgroundColor: "#ffffff",
     paddingTop: 50,
   },
   
   tabScreen: {
     flex: 1,
-    backgroundColor: "#f7cfc9",
+    backgroundColor: "#ffffff",
   },
 
   header: {
@@ -445,6 +458,13 @@ const styles = StyleSheet.create({
     backgroundColor: "#4a4a4a",
     justifyContent: "center",
     alignItems: "center",
+  },
+
+  profileImage: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: "#4a4a4a",
   },
 
   subtitle: {
@@ -567,7 +587,7 @@ const styles = StyleSheet.create({
   },
 
   viewAll: {
-    color: "#8b4440",
+    color: "#ffffff",
     fontWeight: "600",
     fontSize: 14,
   },
@@ -575,7 +595,7 @@ const styles = StyleSheet.create({
   // Top places card
   topPlaceCard: {
     flexDirection: "row",
-    backgroundColor: "#8f7f7f",
+    backgroundColor: "#f7cfc9",
     borderRadius: 16,
     padding: 12,
     width: "90%",
@@ -614,7 +634,7 @@ const styles = StyleSheet.create({
   },
 
   topPlaceLocation: {
-    color: "#FFD700",
+    color: "#ffffff",
     fontSize: 12,
     marginLeft: 5,
   },

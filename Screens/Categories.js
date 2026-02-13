@@ -1,11 +1,18 @@
 import { View, Text, TouchableOpacity, Image, StyleSheet, ScrollView, Dimensions } from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { Feather } from "@expo/vector-icons";
+import { useUser } from "@clerk/clerk-expo";
+import { useAuth } from "../context/AuthContext";
 
 const { width } = Dimensions.get('window');
 
 export default function Categories(){
     const navigation = useNavigation();
+    const { user: clerkUser } = useUser();
+    const { user: authUser } = useAuth();
+
+    // Get profile photo from Clerk user or auth context
+    const profilePhoto = clerkUser?.imageUrl || clerkUser?.profileImageUrl || authUser?.profilePhoto;
     
     // Categories matching YOUR database exactly
     const categories = [
@@ -13,28 +20,28 @@ export default function Categories(){
             _id: 1, 
             name: 'Religious', 
             backendCategory: 'Religious', // Matches your DB
-            image: 'https://images.unsplash.com/photo-1555881770-68ab362c0ce6?w=400',
+            image: 'https://res.cloudinary.com/dcls9ayhn/image/upload/v1770858981/images_uxnf6s.jpg',
             icon: 'users'
         },
         { 
             _id: 2, 
             name: 'Historical', 
             backendCategory: 'Historical', // For future historical spots
-            image: 'https://images.unsplash.com/photo-1609137144813-7d9921338f24?w=400',
+            image: 'https://res.cloudinary.com/dcls9ayhn/image/upload/v1770859026/images_iggbls.jpg',
             icon: 'book'
         },
         { 
             _id: 3, 
             name: 'Nature', 
             backendCategory: 'Nature', // Matches your DB
-            image: 'https://images.unsplash.com/photo-1506905925346-21bda4d32df4?w=400',
+            image: 'https://res.cloudinary.com/dcls9ayhn/image/upload/v1770859084/JdlD3t1A-image_k7g8cd.webp',
             icon: 'globe'
         },
         { 
             _id: 4, 
             name: 'Festivals', 
             backendCategory: 'Festivals', // For future festival spots
-            image: 'https://images.unsplash.com/photo-1511632765486-a01980e01a18?w=400',
+            image: 'https://res.cloudinary.com/dcls9ayhn/image/upload/v1770859149/newest-tanglawan_pwfcve.jpg',
             icon: 'award'
         },
     ];
@@ -56,9 +63,17 @@ export default function Categories(){
                 
                 <TouchableOpacity 
                     onPress={() => navigation.navigate('Profile')}
-                    style={styles.profileIcon}
                 >
-                    <Feather name="user" size={20} color="#fff" />
+                    {profilePhoto ? (
+                        <Image 
+                            source={{ uri: profilePhoto }} 
+                            style={styles.profileImage}
+                        />
+                    ) : (
+                        <View style={styles.profileIcon}>
+                            <Feather name="user" size={20} color="#fff" />
+                        </View>
+                    )}
                 </TouchableOpacity>
             </View>
 
@@ -130,7 +145,7 @@ export default function Categories(){
 const styles = StyleSheet.create({
     container: {
         flex: 1,
-        backgroundColor: "#f5c4c1",
+        backgroundColor: "#ffffff",
         paddingTop: 50,
     },
 
@@ -176,6 +191,13 @@ const styles = StyleSheet.create({
         backgroundColor: "#4a4a4a",
         justifyContent: "center",
         alignItems: "center",
+    },
+
+    profileImage: {
+        width: 40,
+        height: 40,
+        borderRadius: 20,
+        backgroundColor: "#4a4a4a",
     },
 
     subtitleContainer: {
