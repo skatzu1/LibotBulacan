@@ -28,6 +28,7 @@ import Settings from './Screens/Settings';
 import Leaderboard from './Screens/Leaderboard';
 import Bookmark from './Screens/Bookmark';
 import Reviews from './Screens/Reviews';
+import Track from './Screens/Track';
 
 // 🔑 Clerk Publishable Key
 const CLERK_PUBLISHABLE_KEY =
@@ -68,6 +69,7 @@ function AppNavigator() {
                   <Stack.Screen name="Categories" component={Categories} />
                   <Stack.Screen name="Bookmark" component={Bookmark} />
                   <Stack.Screen name="ar" component={ARScreen} />
+                  <Stack.Screen name="Track" component={Track} />
                   <Stack.Screen name="Settings" component={Settings} />
                   <Stack.Screen name="Reviews" component={Reviews} />
                   <Stack.Screen name="Lists" component={Lists} />
