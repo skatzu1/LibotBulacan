@@ -133,13 +133,13 @@ export default function Register({ navigation }) {
 
       {/* Input Fields */}
       <View style={styles.inputContainer}>
-        <TextInput style={styles.input} placeholder="Full Name" value={name} onChangeText={setName} />
-        <TextInput style={styles.input} placeholder="Email" value={email} onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" />
-        <TextInput style={styles.input} placeholder="Password" secureTextEntry={!passwordVisible} value={password} onChangeText={setPassword} />
+        <TextInput style={styles.input} placeholder="Full Name" value={name} placeholderTextColor="#aaaaaa" onChangeText={setName} />
+        <TextInput style={styles.input} placeholder="Email" value={email} placeholderTextColor="#aaaaaa" onChangeText={setEmail} keyboardType="email-address" autoCapitalize="none" />
+        <TextInput style={styles.input} placeholder="Password"  secureTextEntry={!passwordVisible} value={password} placeholderTextColor="#aaaaaa" onChangeText={setPassword} />
         <TouchableOpacity onPress={() => setPasswordVisible(!passwordVisible)}>
           <Text style={styles.eyeButton}>{passwordVisible ? "Hide" : "Show"} Password</Text>
         </TouchableOpacity>
-        <TextInput style={styles.input} placeholder="Confirm Password" secureTextEntry={!confirmPasswordVisible} value={confirmPassword} onChangeText={setConfirmPassword} />
+        <TextInput style={styles.input} placeholder="Confirm Password" secureTextEntry={!confirmPasswordVisible} value={confirmPassword} placeholderTextColor="#aaaaaa" onChangeText={setConfirmPassword} />
         <TouchableOpacity onPress={() => setConfirmPasswordVisible(!confirmPasswordVisible)}>
           <Text style={styles.eyeButton}>{confirmPasswordVisible ? "Hide" : "Show"} Password</Text>
         </TouchableOpacity>

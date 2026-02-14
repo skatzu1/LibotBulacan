@@ -10,8 +10,8 @@ import {
 } from "react-native";
 import { useState, useEffect } from "react";
 import { useSignIn, useOAuth } from "@clerk/clerk-expo";
+import { AntDesign } from "@expo/vector-icons";
 import * as WebBrowser from "expo-web-browser";
-import { color } from "three/tsl";
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -211,6 +211,7 @@ export default function Login({ navigation }) {
           style={styles.input}
           placeholder="Email"
           autoCapitalize="none"
+          placeholderTextColor="#aaaaaa"
           keyboardType="email-address"
           value={email}
           onChangeText={setEmail}
@@ -220,6 +221,7 @@ export default function Login({ navigation }) {
         <TextInput
           style={styles.input}
           placeholder="Password"
+          placeholderTextColor="#aaaaaa"
           secureTextEntry={!passwordVisible}
           value={password}
           onChangeText={setPassword}
