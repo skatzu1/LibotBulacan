@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import {
   View,
   Text,
@@ -20,132 +20,286 @@ export default function Track({ route, navigation }) {
   const [userLocation, setUserLocation] = useState(null);
   const [loading, setLoading] = useState(true);
   const [spotData, setSpotData] = useState(null);
+  const [locationError, setLocationError] = useState(null);
+
   const webViewRef = useRef(null);
   const locationSubscription = useRef(null);
+  const isMounted = useRef(true); // Prevents state updates after unmount
 
+  /* =========================================================
+     FETCH SPOT DATA
+  ========================================================= */
   useEffect(() => {
-    fetchSpotData();
-    
+    isMounted.current = true;
+
+    const loadSpot = async () => {
+      /* If the spot passed in already has coordinates, use it immediately
+       and skip the network fetch entirely */
+      if (spot?.coordinates?.lat && spot?.coordinates?.lng) {
+        setSpotData(spot);
+        return;
+      }
+
+      // Emergency
+      try {
+        const safeJson = async (res) => {
+          const contentType = res.headers.get("content-type") ?? "";
+          if (!contentType.includes("application/json")) return null;
+          return res.json();
+        };
+
+        let foundSpot = null;
+
+        // Try single-spot endpoint first
+        const singleRes = await fetch(
+          `https://libotbackend.onrender.com/api/spots/${spot._id}`
+        );
+        const singleData = await safeJson(singleRes);
+
+        if (singleData?.success && singleData?.spot) {
+          foundSpot = singleData.spot;
+        } else {
+          // Emergency
+          console.warn("Single-spot endpoint unavailable, falling back to /api/spots");
+          const listRes = await fetch("https://libotbackend.onrender.com/api/spots");
+          const listData = await safeJson(listRes);
+
+          if (listData?.success && Array.isArray(listData.spots)) {
+            foundSpot = listData.spots.find((s) => s._id === spot._id) ?? null;
+          }
+        }
+
+        if (!isMounted.current) return;
+        // Emergency
+        setSpotData(foundSpot ?? spot);
+      } catch (error) {
+        console.error("Error fetching spot data:", error);
+        if (!isMounted.current) return;
+        setSpotData(spot);
+      }
+    };
+
+    loadSpot();
+
     return () => {
+      isMounted.current = false;
       if (locationSubscription.current) {
         locationSubscription.current.remove();
+        locationSubscription.current = null;
       }
     };
   }, [spot._id]);
 
-  const fetchSpotData = async () => {
-    try {
-      setLoading(true);
-      const response = await fetch("https://libotbackend.onrender.com/api/spots");
-      const data = await response.json();
-      
-      if (data.success) {
-        const foundSpot = data.spots.find(s => s._id === spot._id);
-        if (foundSpot) {
-          console.log("Found spot:", foundSpot);
-          setSpotData(foundSpot);
-        } else {
-          Alert.alert("Error", "Spot not found");
-          setSpotData(spot);
+  useEffect(() => {
+    if (!spotData) return;
+
+    let cancelled = false;
+
+    const startTracking = async () => {
+      try {
+        const { status } = await Location.requestForegroundPermissionsAsync();
+
+        if (status !== "granted") {
+          if (!cancelled && isMounted.current) {
+            setLocationError("Location permission is required for navigation.");
+            setLoading(false);
+          }
+          return;
+        }
+
+        const initial = await Location.getCurrentPositionAsync({
+          accuracy: Location.Accuracy.Balanced, 
+        });
+
+        if (cancelled || !isMounted.current) return;
+
+        setUserLocation({
+          latitude: initial.coords.latitude,
+          longitude: initial.coords.longitude,
+        });
+        setLoading(false);
+
+        locationSubscription.current = await Location.watchPositionAsync(
+          {
+            accuracy: Location.Accuracy.High,
+            timeInterval: 3000,   
+            distanceInterval: 3,  
+          },
+          (loc) => {
+            if (!isMounted.current) return;
+
+            const coords = {
+              latitude: loc.coords.latitude,
+              longitude: loc.coords.longitude,
+            };
+
+            setUserLocation(coords);
+            updateMarkerOnMap(coords); 
+          }
+        );
+      } catch (error) {
+        console.error("Location error:", error);
+        if (!cancelled && isMounted.current) {
+          setLocationError("Unable to get your location. Please try again.");
+          setLoading(false);
         }
       }
-    } catch (error) {
-      console.error("Error fetching spot data:", error);
-      Alert.alert("Error", "Could not load spot details");
-      setSpotData(spot);
-    }
-  };
+    };
 
-  useEffect(() => {
-    if (spotData) {
-      startLocationTracking();
-    }
+    startTracking();
+
+    return () => {
+      cancelled = true;
+    };
   }, [spotData]);
 
-  const startLocationTracking = async () => {
-    try {
-      const { status } = await Location.requestForegroundPermissionsAsync();
+  const updateMarkerOnMap = useCallback(
+    (coords) => {
+      if (!webViewRef.current || !spotData?.coordinates) return;
 
-      if (status !== "granted") {
-        Alert.alert(
-          "Permission Required",
-          "Please allow location access to use navigation."
-        );
-        setLoading(false);
-        return;
-      }
+      const { lat: destLat, lng: destLng } = spotData.coordinates;
 
-      const location = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.High,
-      });
-
-      setUserLocation({
-        latitude: location.coords.latitude,
-        longitude: location.coords.longitude,
-      });
-
-      setLoading(false);
-
-      locationSubscription.current = await Location.watchPositionAsync(
-        {
-          accuracy: Location.Accuracy.High,
-          timeInterval: 3000, // Seeconds
-          distanceInterval: 5, // Metero
-        },
-        (newLocation) => {
-          const newCoords = {
-            latitude: newLocation.coords.latitude,
-            longitude: newLocation.coords.longitude,
-          };
-          
-          console.log("Location updated:", newCoords);
-          setUserLocation(newCoords);
-          
-          updateLocationOnMap(newCoords);
-        }
-      );
-
-    } catch (error) {
-      console.error("Location error:", error);
-      Alert.alert("Error", "Unable to get your location. Please try again.");
-      setLoading(false);
-    }
-  };
-
-  const updateLocationOnMap = (coords) => {
-    if (!spotData || !spotData.coordinates) return;
-    
-    const destLat = spotData.coordinates.lat;
-    const destLng = spotData.coordinates.lng;
-    
-    // JavaScript code to update both marker and route
-    const jsCode = `
-      (function() {
-        try {
-          // Update user marker position
-          if (window.userMarker) {
-            window.userMarker.setLatLng([${coords.latitude}, ${coords.longitude}]);
+      const js = `
+        (function() {
+          try {
+            if (window.userMarker) {
+              window.userMarker.setLatLng([${coords.latitude}, ${coords.longitude}]);
+            }
+            if (window.routingControl) {
+              window.routingControl.setWaypoints([
+                L.latLng(${coords.latitude}, ${coords.longitude}),
+                L.latLng(${destLat}, ${destLng})
+              ]);
+            }
+          } catch (e) {
+            console.error('Map update error:', e);
           }
-          
-          // Update route with new starting point
-          if (window.routingControl) {
-            window.routingControl.setWaypoints([
-              L.latLng(${coords.latitude}, ${coords.longitude}),
+        })();
+        true;
+      `;
+
+      webViewRef.current.injectJavaScript(js);
+    },
+    [spotData]
+  );
+
+  const mapHTML = useMemo(() => {
+    if (!spotData?.coordinates || !userLocation) return null;
+
+    const { lat: destLat, lng: destLng } = spotData.coordinates;
+    const { latitude: userLat, longitude: userLng } = userLocation;
+    const spotName = (spotData.name ?? "Destination").replace(/'/g, "\\'");
+
+    return `
+      <!DOCTYPE html>
+      <html>
+      <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+        <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.css" />
+        <style>
+          * { margin: 0; padding: 0; box-sizing: border-box; }
+          body { font-family: -apple-system, sans-serif; }
+          #map { width: 100%; height: 100vh; }
+        </style>
+      </head>
+      <body>
+        <div id="map"></div>
+        <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+        <script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.js"></script>
+        <script>
+          window.map = L.map('map').setView(
+            [${(userLat + destLat) / 2}, ${(userLng + destLng) / 2}], 13
+          );
+
+          L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors',
+            maxZoom: 19
+          }).addTo(window.map);
+
+          // --- User marker (blue pulsing dot) ---
+          const userIcon = L.divIcon({
+            html: \`
+              <div style="position:relative;">
+                <div style="
+                  position:absolute;
+                  background:rgba(66,133,244,0.3);
+                  width:40px; height:40px;
+                  border-radius:50%;
+                  top:-10px; left:-10px;
+                  animation:pulse 2s infinite;
+                "></div>
+                <div style="
+                  background:#4285F4;
+                  width:20px; height:20px;
+                  border-radius:50%;
+                  border:3px solid white;
+                  box-shadow:0 2px 5px rgba(0,0,0,0.3);
+                "></div>
+              </div>
+              <style>
+                @keyframes pulse {
+                  0%   { transform:scale(0.8); opacity:1; }
+                  50%  { transform:scale(1.2); opacity:0.5; }
+                  100% { transform:scale(0.8); opacity:1; }
+                }
+              </style>
+            \`,
+            className: '',
+            iconSize: [20, 20],
+            iconAnchor: [10, 10]
+          });
+
+          window.userMarker = L.marker([${userLat}, ${userLng}], { icon: userIcon })
+            .addTo(window.map)
+            .bindPopup('Your Location');
+
+          // --- Destination marker (red pin) ---
+          const destIcon = L.divIcon({
+            html: '<div style="background:#8b4440;width:30px;height:30px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);border:3px solid white;box-shadow:0 2px 5px rgba(0,0,0,0.3);"></div>',
+            className: '',
+            iconSize: [30, 30],
+            iconAnchor: [15, 30]
+          });
+
+          window.destMarker = L.marker([${destLat}, ${destLng}], { icon: destIcon })
+            .addTo(window.map)
+            .bindPopup('${spotName}');
+
+          // --- Routing ---
+          window.routingControl = L.Routing.control({
+            waypoints: [
+              L.latLng(${userLat}, ${userLng}),
               L.latLng(${destLat}, ${destLng})
-            ]);
-          }
-          
-          console.log('Location updated on map');
-        } catch (error) {
-          console.error('Error updating location:', error);
-        }
-      })();
-      true; // Required for iOS
-    `;
-    
-    webViewRef.current?.injectJavaScript(jsCode);
-  };
+            ],
+            router: L.Routing.osrmv1({
+              serviceUrl: 'https://router.project-osrm.org/route/v1'
+            }),
+            lineOptions: {
+              styles: [{ color: '#8b4440', weight: 5, opacity: 0.7 }]
+            },
+            createMarker: function() { return null; },
+            addWaypoints: false,
+            routeWhileDragging: false,
+            show: false,
+            fitSelectedRoutes: false
+          }).addTo(window.map);
 
+          // Fit both points in view
+          window.map.fitBounds(
+            L.latLngBounds([${userLat}, ${userLng}], [${destLat}, ${destLng}]),
+            { padding: [80, 80] }
+          );
+        </script>
+      </body>
+      </html>
+    `;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [spotData, userLocation !== null]);
+
+  /* =========================================================
+     LOADING / ERROR STATES
+  ========================================================= */
   if (loading || !spotData || !userLocation) {
     return (
       <View style={styles.loading}>
@@ -156,13 +310,12 @@ export default function Track({ route, navigation }) {
       </View>
     );
   }
-  
-// Optional lang to my nigga!
-  if (!spotData.coordinates || !spotData.coordinates.lat || !spotData.coordinates.lng) {
+
+  if (locationError) {
     return (
       <View style={styles.loading}>
-        <Text style={styles.errorText}>Location coordinates not available for this spot</Text>
-        <TouchableOpacity 
+        <Text style={styles.errorText}>{locationError}</Text>
+        <TouchableOpacity
           style={styles.backButtonError}
           onPress={() => navigation.goBack()}
         >
@@ -172,128 +325,25 @@ export default function Track({ route, navigation }) {
     );
   }
 
-  const destLat = spotData.coordinates.lat;
-  const destLng = spotData.coordinates.lng;
-  const userLat = userLocation.latitude;
-  const userLng = userLocation.longitude;
+  if (!spotData.coordinates?.lat || !spotData.coordinates?.lng) {
+    return (
+      <View style={styles.loading}>
+        <Text style={styles.errorText}>
+          Location coordinates not available for this spot.
+        </Text>
+        <TouchableOpacity
+          style={styles.backButtonError}
+          onPress={() => navigation.goBack()}
+        >
+          <Text style={styles.backButtonText}>Go Back</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
-  const mapHTML = `
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-      <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.css" />
-      <style>
-        * {
-          margin: 0;
-          padding: 0;
-          box-sizing: border-box;
-        }
-        body {
-          font-family: -apple-system, sans-serif;
-        }
-        #map {
-          width: 100%;
-          height: 100vh;
-        }
-      </style>
-    </head>
-    <body>
-      <div id="map"></div>
-      <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-      <script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.js"></script>
-      <script>
-        window.map = L.map('map').setView([${(userLat + destLat) / 2}, ${(userLng + destLng) / 2}], 13);
-
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-          attribution: '© OpenStreetMap contributors',
-          maxZoom: 19
-        }).addTo(window.map);
-
-        // User location marker (blue) with pulsing effect
-        const userIcon = L.divIcon({
-          html: \`
-            <div style="position: relative;">
-              <div style="
-                position: absolute;
-                background: rgba(66, 133, 244, 0.3);
-                width: 40px;
-                height: 40px;
-                border-radius: 50%;
-                top: -10px;
-                left: -10px;
-                animation: pulse 2s infinite;
-              "></div>
-              <div style="
-                background: #4285F4;
-                width: 20px;
-                height: 20px;
-                border-radius: 50%;
-                border: 3px solid white;
-                box-shadow: 0 2px 5px rgba(0,0,0,0.3);
-              "></div>
-            </div>
-            <style>
-              @keyframes pulse {
-                0% { transform: scale(0.8); opacity: 1; }
-                50% { transform: scale(1.2); opacity: 0.5; }
-                100% { transform: scale(0.8); opacity: 1; }
-              }
-            </style>
-          \`,
-          className: '',
-          iconSize: [20, 20],
-          iconAnchor: [10, 10]
-        });
-
-        window.userMarker = L.marker([${userLat}, ${userLng}], { icon: userIcon })
-          .addTo(window.map)
-          .bindPopup('Your Location');
-
-        // Destination marker (red)
-        const destIcon = L.divIcon({
-          html: '<div style="background: #8b4440; width: 30px; height: 30px; border-radius: 50% 50% 50% 0; transform: rotate(-45deg); border: 3px solid white; box-shadow: 0 2px 5px rgba(0,0,0,0.3);"></div>',
-          className: '',
-          iconSize: [30, 30],
-          iconAnchor: [15, 30]
-        });
-
-        window.destMarker = L.marker([${destLat}, ${destLng}], { icon: destIcon })
-          .addTo(window.map)
-          .bindPopup('${spotData.name.replace(/'/g, "\\'")}');
-
-        // Add routing
-        window.routingControl = L.Routing.control({
-          waypoints: [
-            L.latLng(${userLat}, ${userLng}),
-            L.latLng(${destLat}, ${destLng})
-          ],
-          router: L.Routing.osrmv1({
-            serviceUrl: 'https://router.project-osrm.org/route/v1'
-          }),
-          lineOptions: {
-            styles: [{ color: '#8b4440', weight: 5, opacity: 0.7 }]
-          },
-          createMarker: function() { return null; },
-          addWaypoints: false,
-          routeWhileDragging: false,
-          show: false,
-          fitSelectedRoutes: false
-        }).addTo(window.map);
-
-        const bounds = L.latLngBounds(
-          [${userLat}, ${userLng}],
-          [${destLat}, ${destLng}]
-        );
-        window.map.fitBounds(bounds, { padding: [80, 80] });
-
-        console.log('Map initialized');
-      </script>
-    </body>
-    </html>
-  `;
-
+  /* =========================================================
+     RENDER
+  ========================================================= */
   return (
     <View style={styles.container}>
       <WebView
@@ -307,8 +357,7 @@ export default function Track({ route, navigation }) {
           console.log("WebView message:", event.nativeEvent.data);
         }}
         onError={(syntheticEvent) => {
-          const { nativeEvent } = syntheticEvent;
-          console.error("WebView error:", nativeEvent);
+          console.error("WebView error:", syntheticEvent.nativeEvent);
         }}
       />
 
@@ -330,6 +379,9 @@ export default function Track({ route, navigation }) {
   );
 }
 
+/* =========================================================
+   STYLES
+========================================================= */
 const styles = StyleSheet.create({
   container: {
     flex: 1,
