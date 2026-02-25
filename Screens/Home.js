@@ -218,7 +218,7 @@ function HomeContent() {
   };
 
   const sliderData = (spots && spots.length > 0) 
-    ? spots.slice(0, 3).map(({ _id, image, name, description, location, rating }, index) => {
+    ? spots.slice(0, 4).map(({ _id, image, name, description, location, rating }, index) => {
         const reviewRating = getAverageRating(_id);
         const reviewCount = getReviewCount(_id);
         const displayRating = reviewCount > 0 ? reviewRating : 0;
@@ -319,7 +319,7 @@ function HomeContent() {
       </View>
 
       {!loading && spots && spots.length > 0 ? (
-        spots.slice(0, 3).map((spot) => {
+        spots.slice(0, 4).map((spot) => {
           const displayRating = getSpotRating(spot);
           const reviewCount = getReviewCount(spot._id);
           
