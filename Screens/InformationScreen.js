@@ -59,12 +59,12 @@ export default function InformationScreen({ route, navigation }) {
           style={styles.bookmarkButton}
           onPress={handleBookmarkPress}
         >
-        <FontAwesome5
-  name="bookmark"
-  size={24}
-  solid={spotIsBookmarked}   // true = filled, false = outline
-  color={spotIsBookmarked ? "#f4c542" : "#f7cfc9"}
-/>
+          <FontAwesome5
+            name="bookmark"
+            size={24}
+            solid={spotIsBookmarked}
+            color={spotIsBookmarked ? "#f4c542" : "#f7cfc9"}
+          />
         </TouchableOpacity>
       </View>
 
@@ -146,7 +146,7 @@ export default function InformationScreen({ route, navigation }) {
           )}
         </View>
 
-        {/* BOTTOM BUTTONS */}
+        {/* BOTTOM BUTTONS ROW */}
         <View style={styles.buttonContainer}>
           <TouchableOpacity
             style={styles.arButton}
@@ -157,7 +157,6 @@ export default function InformationScreen({ route, navigation }) {
 
           <TouchableOpacity
             style={styles.trackButton}
-            onPress={handleTrackPress}
             onPress={() => navigation.navigate("Track", { spot })}
           >
             <Feather name="map-pin" size={18} color="#fff" style={{ marginRight: 5 }} />
@@ -171,6 +170,15 @@ export default function InformationScreen({ route, navigation }) {
             <Text style={styles.buttonText}>Reviews</Text>
           </TouchableOpacity>
         </View>
+
+        {/* MISSION BUTTON - full width */}
+        <TouchableOpacity
+          style={styles.missionButton}
+          onPress={() => navigation.navigate("Mission", { spot })}
+        >
+          <FontAwesome5 name="bullseye" size={18} color="#fff" style={{ marginRight: 8 }} />
+          <Text style={styles.buttonText}>🎯 Start Mission</Text>
+        </TouchableOpacity>
 
         {/* Bottom padding */}
         <View style={{ height: 40 }} />
@@ -292,7 +300,7 @@ const styles = StyleSheet.create({
   buttonContainer: {
     flexDirection: "row",
     justifyContent: "space-between",
-    marginBottom: 15,
+    marginBottom: 12,
     gap: 10,
   },
 
@@ -322,6 +330,18 @@ const styles = StyleSheet.create({
     borderRadius: 25,
     alignItems: "center",
     justifyContent: "center",
+  },
+
+  // NEW - Mission full width button
+  missionButton: {
+    backgroundColor: "#6b4b45",
+    paddingVertical: 15,
+    borderRadius: 25,
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    marginBottom: 15,
+    width: "100%",
   },
 
   buttonText: {
