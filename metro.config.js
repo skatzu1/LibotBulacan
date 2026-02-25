@@ -6,6 +6,7 @@ module.exports = (async () => {
   config.resolver.assetExts.push("glb");
   config.resolver.assetExts.push("gltf");
   config.resolver.assetExts.push("bin");
+  config.resolver.assetExts.push('tflite');
 
   return config;
 })();

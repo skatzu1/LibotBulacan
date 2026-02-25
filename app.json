@@ -21,7 +21,8 @@
         "assetExts": [
           "glb",
           "gltf",
-          "bin"
+          "bin",
+          "tflite"
         ]
       }
     },
@@ -55,15 +56,30 @@
           "locationWhenInUsePermission": "Libot needs your location to show nearby tourist attractions.",
           "isIosBackgroundLocationEnabled": false
         }
-      ]
+      ],
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "Libot uses the camera to scan and verify products for missions.",
+          "microphonePermission": false
+        }
+      ],
+      [
+        "react-native-fast-tflite",
+        {
+          "enableCoreMLDelegate": true
+        }
+      ],
+      "react-native-vision-camera"
     ],
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.skatzu15.libot",
       "infoPlist": {
-        "NSCameraUsageDescription": "Libot uses the camera to show augmented reality tourism content.",
+        "NSCameraUsageDescription": "Libot uses the camera to show augmented reality tourism content and scan products for missions.",
         "NSLocationWhenInUseUsageDescription": "Libot needs your location to show nearby tourist spots and provide navigation.",
         "NSLocationAlwaysAndWhenInUseUsageDescription": "Libot needs your location to show nearby tourist spots and provide navigation.",
+        "NSPhotoLibraryUsageDescription": "Libot needs access to your photos for AR and mission scanning.",
         "CFBundleURLTypes": [
           {
             "CFBundleURLSchemes": [
@@ -78,7 +94,9 @@
         "CAMERA",
         "ACCESS_FINE_LOCATION",
         "ACCESS_COARSE_LOCATION",
-        "INTERNET"
+        "INTERNET",
+        "READ_EXTERNAL_STORAGE",
+        "WRITE_EXTERNAL_STORAGE"
       ],
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",

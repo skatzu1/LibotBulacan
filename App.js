@@ -4,6 +4,7 @@ import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { ClerkProvider, useAuth } from '@clerk/clerk-expo';
 import { ActivityIndicator, View, StyleSheet } from 'react-native';
+// ✅ REMOVED: import { loadTensorflowModel } from 'react-native-fast-tflite'; 
 import 'react-native-reanimated';
 
 // ✅ Context Providers
@@ -29,6 +30,7 @@ import Leaderboard from './Screens/Leaderboard';
 import Bookmark from './Screens/Bookmark';
 import Reviews from './Screens/Reviews';
 import Track from './Screens/Track';
+import Mission from './Screens/Mission';
 
 // 🔑 Clerk Publishable Key
 const CLERK_PUBLISHABLE_KEY =
@@ -67,6 +69,7 @@ function AppNavigator() {
               <Stack.Screen name="Settings" component={Settings} />
               <Stack.Screen name="Reviews" component={Reviews} />
               <Stack.Screen name="Lists" component={Lists} />
+              <Stack.Screen name="Mission" component={Mission} /> 
 
               {/* Auth screens - only when signed out */}
               {!isSignedIn && (
@@ -87,6 +90,7 @@ function AppNavigator() {
               {isSignedIn && (
                 <Stack.Screen name="Track" component={Track} />
               )}
+
             </Stack.Navigator>
           </NavigationContainer>
         </BookmarkProvider>
