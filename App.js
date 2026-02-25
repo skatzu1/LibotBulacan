@@ -1,17 +1,16 @@
+import '@tensorflow/tfjs-react-native';
+import * as tf from '@tensorflow/tfjs';
 import 'react-native-gesture-handler';
-import React from 'react';
+import React, { useEffect, useState } from 'react';  // add useEffect, useState
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { ClerkProvider, useAuth } from '@clerk/clerk-expo';
 import { ActivityIndicator, View, StyleSheet } from 'react-native';
-// ✅ REMOVED: import { loadTensorflowModel } from 'react-native-fast-tflite'; 
 import 'react-native-reanimated';
 
-// ✅ Context Providers
 import { ReviewProvider } from './context/ReviewContext';
 import { AuthProvider } from './context/AuthContext';
 import { BookmarkProvider } from './context/BookmarkContext';
-
 import { tokenCache } from './utils/tokenCache';
 
 // Screens
@@ -32,13 +31,10 @@ import Reviews from './Screens/Reviews';
 import Track from './Screens/Track';
 import Mission from './Screens/Mission';
 
-// 🔑 Clerk Publishable Key
-const CLERK_PUBLISHABLE_KEY =
-  'pk_test_cHJpbWUtY2hpY2tlbi0yNS5jbGVyay5hY2NvdW50cy5kZXYk';
+const CLERK_PUBLISHABLE_KEY = 'pk_test_cHJpbWUtY2hpY2tlbi0yNS5jbGVyay5hY2NvdW50cy5kZXYk';
 
 const Stack = createNativeStackNavigator();
 
-// Navigation Component
 function AppNavigator() {
   const { isLoaded, isSignedIn } = useAuth();
 
@@ -59,7 +55,6 @@ function AppNavigator() {
               initialRouteName={isSignedIn ? "Home" : "WelcomePage"}
               screenOptions={{ headerShown: false }}
             >
-              {/* Always available screens */}
               <Stack.Screen name="Home" component={Home} options={{ gestureEnabled: false }} />
               <Stack.Screen name="Leaderboard" component={Leaderboard} />
               <Stack.Screen name="InformationScreen" component={InformationScreen} />
@@ -69,9 +64,8 @@ function AppNavigator() {
               <Stack.Screen name="Settings" component={Settings} />
               <Stack.Screen name="Reviews" component={Reviews} />
               <Stack.Screen name="Lists" component={Lists} />
-              <Stack.Screen name="Mission" component={Mission} /> 
+              <Stack.Screen name="Mission" component={Mission} />
 
-              {/* Auth screens - only when signed out */}
               {!isSignedIn && (
                 <>
                   <Stack.Screen name="WelcomePage" component={WelcomePage} />
@@ -86,11 +80,9 @@ function AppNavigator() {
                 </>
               )}
 
-              {/* Signed-in only screens */}
               {isSignedIn && (
                 <Stack.Screen name="Track" component={Track} />
               )}
-
             </Stack.Navigator>
           </NavigationContainer>
         </BookmarkProvider>
@@ -101,6 +93,30 @@ function AppNavigator() {
 
 // Root Component
 export default function App() {
+  const [tfReady, setTfReady] = useState(false);
+
+  useEffect(() => {
+    const initTF = async () => {
+      try {
+        await tf.ready();
+        console.log('✅ TensorFlow ready, backend:', tf.getBackend());
+      } catch (e) {
+        console.error('❌ TensorFlow init error:', e);
+      } finally {
+        setTfReady(true);  // proceed even if TF fails
+      }
+    };
+    initTF();
+  }, []);
+
+  if (!tfReady) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#6b4b45" />
+      </View>
+    );
+  }
+
   return (
     <ClerkProvider
       publishableKey={CLERK_PUBLISHABLE_KEY}
