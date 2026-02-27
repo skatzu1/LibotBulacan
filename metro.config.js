@@ -12,10 +12,15 @@ module.exports = (async () => {
   // Fix for TensorFlow.js
   config.resolver.sourceExts.push("cjs");
 
+  // ── Block unused three.js files to prevent OOM crash ──
+  config.resolver.blockList = [
+    /node_modules\/three\/examples\/jsm\/(?!loaders\/).*/,
+    /node_modules\/three\/examples\/js\/.*/,
+  ];
+
   config.resolver.resolveRequest = (context, moduleName, platform) => {
-    // Block Node.js built-in modules from being resolved
-    if (moduleName === 'fs' || moduleName === 'path' || moduleName === 'crypto') {
-      return { type: 'empty' };
+    if (moduleName === "fs" || moduleName === "path" || moduleName === "crypto") {
+      return { type: "empty" };
     }
     return context.resolveRequest(context, moduleName, platform);
   };

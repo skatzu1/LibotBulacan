@@ -218,7 +218,7 @@ function HomeContent() {
   };
 
   const sliderData = (spots && spots.length > 0) 
-    ? spots.slice(0, 4).map(({ _id, image, name, description, location, rating }, index) => {
+    ? spots.slice(0, 4).map(({ _id, image, name, description, location, rating, modelUrl }, index) => {
         const reviewRating = getAverageRating(_id);
         const reviewCount = getReviewCount(_id);
         const displayRating = reviewCount > 0 ? reviewRating : 0;
@@ -230,7 +230,7 @@ function HomeContent() {
           location: location,
           rating: displayRating,
           reviewCount: reviewCount,
-          spot: { _id, image, name, description, location, rating }
+          spot: { _id, image, name, description, location, rating, modelUrl },
         };
       })
     : [];

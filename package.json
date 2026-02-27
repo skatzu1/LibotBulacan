@@ -16,6 +16,7 @@
     "@tensorflow/tfjs": "^4.22.0",
     "@tensorflow/tfjs-react-native": "^1.0.0",
     "axios": "^1.13.3",
+    "base64-arraybuffer": "^1.0.2",
     "expo": "~54.0.0",
     "expo-asset": "~12.0.12",
     "expo-auth-session": "~7.0.0",
@@ -39,6 +40,7 @@
     "expo-system-ui": "~6.0.9",
     "expo-web-browser": "~15.0.10",
     "express": "^5.2.1",
+    "patch-package": "^8.0.1",
     "react": "19.1.0",
     "react-dom": "19.1.0",
     "react-native": "0.81.5",
@@ -60,12 +62,15 @@
     "react-native-webview": "13.15.0",
     "react-native-worklets": "^0.7.2",
     "react-native-worklets-core": "^1.6.3",
+    "three": "^0.183.1",
+    "three-stdlib": "^2.36.1",
     "vision-camera-resize-plugin": "^3.2.0"
   },
   "devDependencies": {
     "@react-native-community/cli": "latest"
   },
   "scripts": {
+    "postinstall": "patch-package",
     "start": "expo start",
     "android": "expo run:android",
     "ios": "expo run:ios",

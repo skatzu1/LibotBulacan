@@ -12,56 +12,96 @@ import {
   Dimensions,
 } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
-import { Feather, FontAwesome5 } from '@expo/vector-icons';
+import { Feather } from '@expo/vector-icons';
 import { loadModel, runPrediction } from '../utils/modelAI';
 
 const { width, height } = Dimensions.get('window');
 
-export default function Mission({ navigation, route }) {
-  const { spot } = route.params;
-  const cameraRef = useRef(null);
+// ─── Mission Configs ──────────────────────────────────────────────────────────
+//
+// Each mission config defines:
+//   id         – unique key, also passed as route.params.missionId
+//   title      – display name shown in the header card
+//   product    – human-readable product name used in copy
+//   resultKey  – the boolean key returned by runPrediction() (e.g. result.isC2)
+//   emoji      – decorative emoji for the mission card
+//   accentColor – hex used for the "approved" success state
+//   hint       – extra tip shown in the instructions box
+//
+// To add more missions, push another object here. It will automatically
+// appear in MissionsScreen without any other changes.
+//
+export const MISSION_CONFIGS = {
+  c2: {
+    id: 'c2',
+    title: 'C2 Green Tea Mission',
+    product: 'C2 Apple Green Tea',
+    resultKey: 'isC2',
+    emoji: '🍵',
+    accentColor: '#2e7d32',
+    hint: 'Buy a C2 Apple Green Tea!',
+  },
+  gatorade: {
+    id: 'gatorade',
+    title: 'Gatorade Mission',
+    product: 'Gatorade',
+    resultKey: 'isGatorade',
+    emoji: '⚡',
+    accentColor: '#f57c00',
+    hint: 'Any Gatorade flavor counts — make sure the logo is clearly visible.',
+  },
+  cocacola: {
+    id: 'cocacola',
+    title: 'Coca-Cola Mission',
+    product: 'Coca-Cola',
+    resultKey: 'isCocaCola', // TODO: implement in runPrediction() when model is ready
+    emoji: '🥤',
+    accentColor: '#c62828',
+    hint: 'Any Coca-Cola variant counts (Classic, Zero, Light) — make sure the red label is clearly visible.',
+  },
+};
 
+// ─── Component ────────────────────────────────────────────────────────────────
+export default function Mission({ navigation, route }) {
+  const { spot, missionId = 'c2' } = route.params;
+  const config = MISSION_CONFIGS[missionId] ?? MISSION_CONFIGS.c2;
+
+  const cameraRef = useRef(null);
   const [permission, requestPermission] = useCameraPermissions();
   const [cameraOpen, setCameraOpen] = useState(false);
   const [capturedImage, setCapturedImage] = useState(null);
-  const [loading, setLoading] = useState(false);
   const [modelReady, setModelReady] = useState(false);
   const [status, setStatus] = useState('pending');
-  // pending | camera | scanning | approved | failed
+  // pending | scanning | approved | failed
   const [confidence, setConfidence] = useState(0);
   const [attempts, setAttempts] = useState(0);
   const [facing, setFacing] = useState('back');
 
-  // Load AI model when screen opens
+  // Load AI model on mount
   useEffect(() => {
-    const prepareModel = async () => {
+    (async () => {
       const m = await loadModel();
       setModelReady(!!m);
-    };
-    prepareModel();
+    })();
   }, []);
 
-  // ─── Open Camera ──────────────────────────────────────────
+  // ─── Open Camera ────────────────────────────────────────
   const openCamera = async () => {
     if (!permission?.granted) {
       const result = await requestPermission();
       if (!result.granted) {
-        Alert.alert(
-          'Permission Required',
-          'Camera access is needed to scan the product.'
-        );
+        Alert.alert('Permission Required', 'Camera access is needed to scan the product.');
         return;
       }
     }
     setCapturedImage(null);
-    setStatus('camera');
+    setStatus('pending');
     setCameraOpen(true);
   };
 
-  // ─── Take Photo ───────────────────────────────────────────
+  // ─── Take Photo ─────────────────────────────────────────
   const takePhoto = async () => {
     if (!cameraRef.current) return;
-
     try {
       const photo = await cameraRef.current.takePictureAsync({
         quality: 0.8,
@@ -72,12 +112,9 @@ export default function Mission({ navigation, route }) {
       setCameraOpen(false);
       setCapturedImage(photo.uri);
       setStatus('scanning');
-      setLoading(true);
       setAttempts(prev => prev + 1);
 
-      // Run AI prediction
       const result = await runPrediction(photo.uri);
-      setLoading(false);
 
       if (!result) {
         Alert.alert('Error', 'Could not analyze image. Try again.');
@@ -86,67 +123,40 @@ export default function Mission({ navigation, route }) {
       }
 
       setConfidence(result.confidence);
-
-      if (result.isC2) {
-        setStatus('approved'); // ✅ C2 detected!
-      } else {
-        setStatus('failed');   // ❌ Not C2
-      }
+      setStatus(result[config.resultKey] ? 'approved' : 'failed');
     } catch (error) {
       console.error('Camera error:', error);
-      setLoading(false);
       setStatus('failed');
     }
   };
 
-  // ─── Flip Camera ──────────────────────────────────────────
-  const flipCamera = () => {
-    setFacing(prev => (prev === 'back' ? 'front' : 'back'));
-  };
+  const flipCamera = () => setFacing(prev => (prev === 'back' ? 'front' : 'back'));
+  const closeCamera = () => { setCameraOpen(false); setStatus('pending'); };
+  const resetScan = () => { setCapturedImage(null); setStatus('pending'); setConfidence(0); };
 
-  // ─── Close Camera ─────────────────────────────────────────
-  const closeCamera = () => {
-    setCameraOpen(false);
-    setStatus('pending');
-  };
-
-  // ─── Reset ────────────────────────────────────────────────
-  const resetScan = () => {
-    setCapturedImage(null);
-    setStatus('pending');
-    setConfidence(0);
-  };
-
-  // ─── Complete Mission ─────────────────────────────────────
   const completeMission = () => {
     Alert.alert(
       '🎉 Mission Complete!',
-      'C2 bottle verified! Mission marked as complete!',
+      `${config.product} verified! Mission marked as complete!`,
       [{ text: 'Back to Home', onPress: () => navigation.goBack() }]
     );
   };
 
-  // ─── CAMERA VIEW ──────────────────────────────────────────
+  // ─── CAMERA VIEW ────────────────────────────────────────
   if (cameraOpen) {
     return (
       <View style={styles.cameraContainer}>
-        <CameraView
-          ref={cameraRef}
-          style={styles.camera}
-          facing={facing}
-        >
-          {/* Top bar */}
+        <CameraView ref={cameraRef} style={styles.camera} facing={facing}>
           <SafeAreaView style={styles.cameraTopBar}>
-            <TouchableOpacity onPress={closeCamera} style={styles.cameraCloseBtn}>
+            <TouchableOpacity onPress={closeCamera} style={styles.cameraIconBtn}>
               <Feather name="x" size={28} color="white" />
             </TouchableOpacity>
-            <Text style={styles.cameraTitle}>Scan C2 Bottle</Text>
-            <TouchableOpacity onPress={flipCamera} style={styles.cameraFlipBtn}>
+            <Text style={styles.cameraTitle}>Scan {config.product}</Text>
+            <TouchableOpacity onPress={flipCamera} style={styles.cameraIconBtn}>
               <Feather name="refresh-cw" size={24} color="white" />
             </TouchableOpacity>
           </SafeAreaView>
 
-          {/* Scan frame guide */}
           <View style={styles.scanFrame}>
             <View style={[styles.corner, styles.topLeft]} />
             <View style={[styles.corner, styles.topRight]} />
@@ -155,25 +165,20 @@ export default function Mission({ navigation, route }) {
           </View>
 
           <Text style={styles.scanHint}>
-            Place the C2 bottle inside the frame
+            Place the {config.product} bottle inside the frame
           </Text>
 
-          {/* Capture button */}
           <View style={styles.cameraBottomBar}>
-            <TouchableOpacity
-              style={styles.captureButton}
-              onPress={takePhoto}
-            >
+            <TouchableOpacity style={styles.captureButton} onPress={takePhoto}>
               <View style={styles.captureInner} />
             </TouchableOpacity>
           </View>
-
         </CameraView>
       </View>
     );
   }
 
-  // ─── MAIN SCREEN ──────────────────────────────────────────
+  // ─── MAIN SCREEN ────────────────────────────────────────
   return (
     <SafeAreaView style={styles.container}>
       <ScrollView contentContainerStyle={styles.scroll}>
@@ -183,11 +188,11 @@ export default function Mission({ navigation, route }) {
           <TouchableOpacity onPress={() => navigation.goBack()}>
             <Feather name="chevron-left" size={28} color="#4a4a4a" />
           </TouchableOpacity>
-          <Text style={styles.header_title}>Daily Mission</Text>
+          <Text style={styles.headerTitle}>Daily Mission</Text>
           <View style={{ width: 28 }} />
         </View>
 
-        {/* Model loading */}
+        {/* Model loading indicator */}
         {!modelReady && (
           <View style={styles.modelLoading}>
             <ActivityIndicator color="#6b4b45" size="small" />
@@ -195,29 +200,45 @@ export default function Mission({ navigation, route }) {
           </View>
         )}
 
-        {/* Attempts */}
         {attempts > 0 && (
           <Text style={styles.attempts}>Attempts: {attempts}</Text>
         )}
 
         {/* Mission Card */}
         <View style={styles.missionCard}>
-          <Text style={styles.missionCardTitle}>🎯 {spot?.name} Mission</Text>
-          <Text style={styles.missionCardDesc}>
-            Find a C2 Green Tea bottle and scan it to complete this mission!
-          </Text>
+          <Text style={styles.missionCardEmoji}>{config.emoji}</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.missionCardTitle}>{config.title}</Text>
+            <Text style={styles.missionCardDesc}>
+              Find a {config.product} and scan it to complete this mission!
+            </Text>
+          </View>
         </View>
+
+        {/* Spot Badge */}
+        {spot?.name && (
+          <View style={styles.spotBadge}>
+            <Feather name="map-pin" size={13} color="#6b4b45" />
+            <Text style={styles.spotBadgeText}>{spot.name}</Text>
+          </View>
+        )}
 
         {/* Instructions */}
         <View style={styles.hintBox}>
           <Text style={styles.hintTitle}>📌 How to complete:</Text>
           <Text style={styles.hintText}>
             1. Tap "Open Camera" below{'\n'}
-            2. Point at a C2 Green Tea bottle{'\n'}
+            2. Point at a {config.product} bottle{'\n'}
             3. Center it in the frame{'\n'}
             4. Tap the capture button{'\n'}
             5. AI will verify it automatically!
           </Text>
+          {config.hint ? (
+            <View style={styles.tipRow}>
+              <Text style={styles.tipIcon}>💡</Text>
+              <Text style={styles.tipText}>{config.hint}</Text>
+            </View>
+          ) : null}
         </View>
 
         {/* Status Box */}
@@ -229,7 +250,7 @@ export default function Mission({ navigation, route }) {
               <Text style={styles.emoji}>📸</Text>
               <Text style={styles.statusTitle}>Ready to Scan</Text>
               <Text style={styles.statusDesc}>
-                Open the camera and point it at a C2 bottle.
+                Open the camera and point it at a {config.product} bottle.
               </Text>
               <TouchableOpacity
                 style={[styles.primaryBtn, !modelReady && styles.disabledBtn]}
@@ -260,16 +281,17 @@ export default function Mission({ navigation, route }) {
           {status === 'approved' && (
             <>
               <Text style={styles.emoji}>✅</Text>
-              <Text style={[styles.statusTitle, { color: '#2e7d32' }]}>
-                C2 Bottle Detected!
+              <Text style={[styles.statusTitle, { color: config.accentColor }]}>
+                {config.product} Detected!
               </Text>
-              <Text style={styles.confidence}>
-                Confidence: {confidence}%
-              </Text>
+              <Text style={styles.confidence}>Confidence: {confidence}%</Text>
               {capturedImage && (
                 <Image source={{ uri: capturedImage }} style={styles.preview} />
               )}
-              <TouchableOpacity style={styles.completeBtn} onPress={completeMission}>
+              <TouchableOpacity
+                style={[styles.completeBtn, { backgroundColor: config.accentColor }]}
+                onPress={completeMission}
+              >
                 <Text style={styles.primaryBtnText}>🏆 Complete Mission</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.outlineBtn} onPress={openCamera}>
@@ -283,13 +305,11 @@ export default function Mission({ navigation, route }) {
             <>
               <Text style={styles.emoji}>❌</Text>
               <Text style={[styles.statusTitle, { color: '#c62828' }]}>
-                Not a C2 Bottle
+                Not a {config.product}
               </Text>
-              <Text style={styles.confidence}>
-                Confidence: {confidence}%
-              </Text>
+              <Text style={styles.confidence}>Confidence: {confidence}%</Text>
               <Text style={styles.statusDesc}>
-                Make sure the C2 bottle is clearly visible and well-lit, then try again!
+                Make sure the {config.product} bottle is clearly visible and well-lit, then try again!
               </Text>
               {capturedImage && (
                 <Image source={{ uri: capturedImage }} style={styles.preview} />
@@ -302,17 +322,17 @@ export default function Mission({ navigation, route }) {
           )}
 
         </View>
-
         <View style={{ height: 40 }} />
       </ScrollView>
     </SafeAreaView>
   );
 }
 
+// ─── Styles ───────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
-  // ── Main Screen ──
   container: { flex: 1, backgroundColor: '#f7cfc9' },
   scroll: { padding: 20, alignItems: 'center' },
+
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -320,36 +340,39 @@ const styles = StyleSheet.create({
     width: '100%',
     marginBottom: 15,
   },
-  header_title: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#4a4a4a',
-  },
-  modelLoading: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 10,
-  },
+  headerTitle: { fontSize: 20, fontWeight: 'bold', color: '#4a4a4a' },
+
+  modelLoading: { flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
   modelLoadingText: { color: '#6b4b45', fontSize: 14 },
   attempts: { fontSize: 13, color: '#999', marginBottom: 8 },
+
   missionCard: {
     backgroundColor: '#6b4b45',
     borderRadius: 16,
     padding: 20,
     width: '100%',
-    marginBottom: 15,
+    marginBottom: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
   },
-  missionCardTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: 'white',
-    marginBottom: 6,
+  missionCardEmoji: { fontSize: 36 },
+  missionCardTitle: { fontSize: 17, fontWeight: 'bold', color: 'white', marginBottom: 4 },
+  missionCardDesc: { fontSize: 13, color: '#f7cfc9', lineHeight: 19 },
+
+  spotBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    backgroundColor: 'white',
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 5,
+    marginBottom: 14,
+    gap: 5,
   },
-  missionCardDesc: {
-    fontSize: 14,
-    color: '#f7cfc9',
-    lineHeight: 20,
-  },
+  spotBadgeText: { fontSize: 13, color: '#6b4b45', fontWeight: '600' },
+
   hintBox: {
     backgroundColor: 'white',
     borderRadius: 12,
@@ -357,13 +380,20 @@ const styles = StyleSheet.create({
     width: '100%',
     marginBottom: 20,
   },
-  hintTitle: {
-    fontSize: 15,
-    fontWeight: 'bold',
-    color: '#6b4b45',
-    marginBottom: 8,
-  },
+  hintTitle: { fontSize: 15, fontWeight: 'bold', color: '#6b4b45', marginBottom: 8 },
   hintText: { fontSize: 14, color: '#555', lineHeight: 22 },
+  tipRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    marginTop: 10,
+    backgroundColor: '#fff8e1',
+    borderRadius: 8,
+    padding: 10,
+    gap: 6,
+  },
+  tipIcon: { fontSize: 14 },
+  tipText: { fontSize: 13, color: '#795548', lineHeight: 18, flex: 1 },
+
   statusBox: {
     backgroundColor: 'white',
     borderRadius: 16,
@@ -391,12 +421,8 @@ const styles = StyleSheet.create({
     lineHeight: 20,
   },
   confidence: { fontSize: 14, color: '#888', marginBottom: 10 },
-  preview: {
-    width: 220,
-    height: 220,
-    borderRadius: 12,
-    marginBottom: 15,
-  },
+  preview: { width: 220, height: 220, borderRadius: 12, marginBottom: 15 },
+
   primaryBtn: {
     backgroundColor: '#6b4b45',
     paddingVertical: 14,
@@ -410,8 +436,8 @@ const styles = StyleSheet.create({
   },
   disabledBtn: { backgroundColor: '#ccc' },
   primaryBtnText: { color: 'white', fontSize: 16, fontWeight: 'bold' },
+
   completeBtn: {
-    backgroundColor: '#2e7d32',
     paddingVertical: 14,
     paddingHorizontal: 30,
     borderRadius: 30,
@@ -430,7 +456,7 @@ const styles = StyleSheet.create({
   },
   outlineBtnText: { color: '#6b4b45', fontSize: 15, fontWeight: '600' },
 
-  // ── Camera Screen ──
+  // ── Camera ──
   cameraContainer: { flex: 1, backgroundColor: 'black' },
   camera: { flex: 1 },
   cameraTopBar: {
@@ -441,45 +467,22 @@ const styles = StyleSheet.create({
     paddingTop: 10,
     backgroundColor: 'rgba(0,0,0,0.4)',
   },
-  cameraCloseBtn: { padding: 8 },
-  cameraFlipBtn: { padding: 8 },
-  cameraTitle: {
-    color: 'white',
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
+  cameraIconBtn: { padding: 8 },
+  cameraTitle: { color: 'white', fontSize: 18, fontWeight: 'bold' },
 
-  // Scan frame corners
   scanFrame: {
     position: 'absolute',
     top: height * 0.2,
     left: width * 0.1,
     width: width * 0.8,
     height: width * 0.8,
-    justifyContent: 'space-between',
   },
-  corner: {
-    position: 'absolute',
-    width: 30,
-    height: 30,
-    borderColor: 'white',
-  },
-  topLeft: {
-    top: 0, left: 0,
-    borderTopWidth: 3, borderLeftWidth: 3,
-  },
-  topRight: {
-    top: 0, right: 0,
-    borderTopWidth: 3, borderRightWidth: 3,
-  },
-  bottomLeft: {
-    bottom: 0, left: 0,
-    borderBottomWidth: 3, borderLeftWidth: 3,
-  },
-  bottomRight: {
-    bottom: 0, right: 0,
-    borderBottomWidth: 3, borderRightWidth: 3,
-  },
+  corner: { position: 'absolute', width: 30, height: 30, borderColor: 'white' },
+  topLeft: { top: 0, left: 0, borderTopWidth: 3, borderLeftWidth: 3 },
+  topRight: { top: 0, right: 0, borderTopWidth: 3, borderRightWidth: 3 },
+  bottomLeft: { bottom: 0, left: 0, borderBottomWidth: 3, borderLeftWidth: 3 },
+  bottomRight: { bottom: 0, right: 0, borderBottomWidth: 3, borderRightWidth: 3 },
+
   scanHint: {
     position: 'absolute',
     bottom: height * 0.22,
@@ -491,8 +494,6 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     borderRadius: 20,
   },
-
-  // Capture button
   cameraBottomBar: {
     position: 'absolute',
     bottom: 40,
@@ -509,10 +510,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  captureInner: {
-    width: 60,
-    height: 60,
-    borderRadius: 30,
-    backgroundColor: 'white',
-  },
+  captureInner: { width: 60, height: 60, borderRadius: 30, backgroundColor: 'white' },
 });
