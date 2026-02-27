@@ -1,0 +1,14 @@
+diff --git a/node_modules/three/examples/jsm/loaders/GLTFLoader.js b/node_modules/three/examples/jsm/loaders/GLTFLoader.js
+index d6ccea1..14b4ffe 100644
+--- a/node_modules/three/examples/jsm/loaders/GLTFLoader.js
++++ b/node_modules/three/examples/jsm/loaders/GLTFLoader.js
+@@ -3304,8 +3304,7 @@ class GLTFParser {
+ 			sourceURI = parser.getDependency( 'bufferView', sourceDef.bufferView ).then( function ( bufferView ) {
+ 
+ 				isObjectURL = true;
+-				const blob = new Blob( [ bufferView ], { type: sourceDef.mimeType } );
+-				sourceURI = URL.createObjectURL( blob );
++				url = `data:${source};base64,` + btoa( String.fromCharCode( ...new Uint8Array( buffer ) ) );
+ 				return sourceURI;
+ 
+ 			} );

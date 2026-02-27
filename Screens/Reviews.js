@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  View, 
-  Text, 
-  StyleSheet, 
-  TouchableOpacity, 
-  ScrollView, 
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  ScrollView,
   Image,
   TextInput,
   Modal,
@@ -19,123 +19,89 @@ const { width } = Dimensions.get('window');
 export default function Reviews({ route }) {
   const navigation = useNavigation();
   const { spot } = route.params || {};
-  const { getReviewsForSpot, addReview, getAverageRating, getReviewCount } = useReviews();
-  
+  const { getReviewsForSpot, addReview, getAverageRating, getReviewCount, fetchReviews } = useReviews();
+
   const [showAddReview, setShowAddReview] = useState(false);
   const [newRating, setNewRating] = useState(0);
   const [newReview, setNewReview] = useState('');
 
-  // Get reviews from context
-  const [reviews, setReviews] = useState([]);
-
   useEffect(() => {
     if (spot && spot._id) {
-      const spotReviews = getReviewsForSpot(spot._id);
-      setReviews(spotReviews);
+      fetchReviews(spot._id);
     }
-  }, [spot, getReviewsForSpot]);
+  }, [spot]);
 
-  // Calculate average rating
+  const reviews = spot && spot._id ? getReviewsForSpot(spot._id) : [];
   const averageRating = spot && spot._id ? getAverageRating(spot._id) || '0.0' : '0.0';
   const reviewCount = spot && spot._id ? getReviewCount(spot._id) : 0;
 
-  const StarRating = ({ rating, size = 16, color = "#FFD700" }) => {
-    return (
-      <View style={styles.starsContainer}>
-        {[1, 2, 3, 4, 5].map((star) => (
+  const StarRating = ({ rating, size = 16, color = "#FFD700" }) => (
+    <View style={styles.starsContainer}>
+      {[1, 2, 3, 4, 5].map((star) => (
+        <Feather
+          key={star}
+          name="star"
+          size={size}
+          color={star <= rating ? color : "#ccc"}
+        />
+      ))}
+    </View>
+  );
+
+  const InteractiveStarRating = ({ rating, onRatingChange, size = 24 }) => (
+    <View style={styles.starsContainer}>
+      {[1, 2, 3, 4, 5].map((star) => (
+        <TouchableOpacity key={star} onPress={() => onRatingChange(star)}>
           <Feather
-            key={star}
-            name={star <= rating ? "star" : "star"}
+            name="star"
             size={size}
-            color={star <= rating ? color : "#ccc"}
-            fill={star <= rating ? color : "transparent"}
+            color={star <= rating ? "#FFD700" : "#ccc"}
           />
-        ))}
-      </View>
-    );
-  };
+        </TouchableOpacity>
+      ))}
+    </View>
+  );
 
-  const InteractiveStarRating = ({ rating, onRatingChange, size = 24 }) => {
-    return (
-      <View style={styles.starsContainer}>
-        {[1, 2, 3, 4, 5].map((star) => (
-          <TouchableOpacity key={star} onPress={() => onRatingChange(star)}>
-            <Feather
-              name="star"
-              size={size}
-              color={star <= rating ? "#FFD700" : "#ccc"}
-              fill={star <= rating ? "#FFD700" : "transparent"}
-            />
-          </TouchableOpacity>
-        ))}
-      </View>
-    );
-  };
-
-  const handleSubmitReview = () => {
+  const handleSubmitReview = async () => {
     if (newRating === 0 || newReview.trim() === '') {
       alert('Please provide a rating and review');
       return;
     }
-
     if (!spot || !spot._id) {
       alert('Error: Spot information not available');
       return;
     }
-
-    const review = {
-      id: Date.now(),
-      userName: "You",
-      userImage: "https://i.pravatar.cc/150?img=10",
-      rating: newRating,
-      date: "Just now",
-      comment: newReview,
-      images: []
-    };
-
-    // Add review to context
-    addReview(spot._id, review);
-    
-    // Update local state
-    setReviews([review, ...reviews]);
+    await addReview(spot._id, newRating, newReview);
     setNewRating(0);
     setNewReview('');
     setShowAddReview(false);
   };
 
+  // ✅ Uses only data stored inside the review — never the current logged-in user
   const ReviewCard = ({ review }) => (
     <View style={styles.reviewCard}>
       <View style={styles.reviewHeader}>
-        <Image 
-          source={{ uri: review.userImage }} 
+        <Image
+          source={{
+            uri: review.userImage && review.userImage !== ''
+              ? review.userImage
+              : "https://i.pravatar.cc/150?img=10"
+          }}
           style={styles.userAvatar}
         />
         <View style={styles.reviewHeaderText}>
-          <Text style={styles.userName}>{review.userName}</Text>
+          <Text style={styles.userName}>{review.userName || "Anonymous"}</Text>
           <View style={styles.ratingDateContainer}>
             <StarRating rating={review.rating} size={12} />
-            <Text style={styles.reviewDate}>{review.date}</Text>
+            <Text style={styles.reviewDate}>
+              {review.createdAt
+                ? new Date(review.createdAt).toLocaleDateString()
+                : "Just now"}
+            </Text>
           </View>
         </View>
       </View>
-      
       <Text style={styles.reviewComment}>{review.comment}</Text>
-      
-      {review.images && review.images.length > 0 && (
-        <ScrollView 
-          horizontal 
-          showsHorizontalScrollIndicator={false}
-          style={styles.reviewImagesContainer}
-        >
-          {review.images.map((img, index) => (
-            <Image 
-              key={index}
-              source={{ uri: img }} 
-              style={styles.reviewImage}
-            />
-          ))}
-        </ScrollView>
-      )}
     </View>
   );
 
@@ -143,27 +109,18 @@ export default function Reviews({ route }) {
     <View style={styles.container}>
       {/* HEADER */}
       <View style={styles.header}>
-        <TouchableOpacity 
-          onPress={() => navigation.goBack()}
-          style={styles.backButton}
-        >
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
           <Feather name="chevron-left" size={24} color="#4a4a4a" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Reviews</Text>
         <View style={{ width: 40 }} />
       </View>
 
-      <ScrollView 
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.scrollContent}
-      >
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
         {/* DESTINATION INFO */}
         {spot && (
           <View style={styles.destinationInfo}>
-            <Image 
-              source={{ uri: spot.image }} 
-              style={styles.destinationImage}
-            />
+            <Image source={{ uri: spot.image }} style={styles.destinationImage} />
             <View style={styles.destinationTextContainer}>
               <Text style={styles.destinationName}>{spot.name}</Text>
               <View style={styles.locationContainer}>
@@ -179,15 +136,14 @@ export default function Reviews({ route }) {
           <View style={styles.ratingNumberContainer}>
             <Text style={styles.ratingNumber}>{averageRating}</Text>
             <StarRating rating={Math.round(parseFloat(averageRating))} size={20} />
-            <Text style={styles.reviewCount}>{reviewCount} {reviewCount === 1 ? 'review' : 'reviews'}</Text>
+            <Text style={styles.reviewCount}>
+              {reviewCount} {reviewCount === 1 ? 'review' : 'reviews'}
+            </Text>
           </View>
         </View>
 
         {/* ADD REVIEW BUTTON */}
-        <TouchableOpacity 
-          style={styles.addReviewButton}
-          onPress={() => setShowAddReview(true)}
-        >
+        <TouchableOpacity style={styles.addReviewButton} onPress={() => setShowAddReview(true)}>
           <Feather name="plus" size={20} color="#fff" />
           <Text style={styles.addReviewButtonText}>Write a Review</Text>
         </TouchableOpacity>
@@ -195,9 +151,13 @@ export default function Reviews({ route }) {
         {/* REVIEWS LIST */}
         <View style={styles.reviewsSection}>
           <Text style={styles.sectionTitle}>All Reviews ({reviewCount})</Text>
-          
+          {reviews.length === 0 && (
+            <Text style={{ color: '#6a5a5a', textAlign: 'center', marginTop: 10 }}>
+              No reviews yet. Be the first!
+            </Text>
+          )}
           {reviews.map((review) => (
-            <ReviewCard key={review.id} review={review} />
+            <ReviewCard key={review._id} review={review} /> // ✅ use _id not idx
           ))}
         </View>
 
@@ -221,10 +181,7 @@ export default function Reviews({ route }) {
             </View>
 
             <Text style={styles.modalLabel}>Your Rating</Text>
-            <InteractiveStarRating 
-              rating={newRating} 
-              onRatingChange={setNewRating}
-            />
+            <InteractiveStarRating rating={newRating} onRatingChange={setNewRating} />
 
             <Text style={styles.modalLabel}>Your Review</Text>
             <TextInput
@@ -238,10 +195,7 @@ export default function Reviews({ route }) {
               textAlignVertical="top"
             />
 
-            <TouchableOpacity 
-              style={styles.submitButton}
-              onPress={handleSubmitReview}
-            >
+            <TouchableOpacity style={styles.submitButton} onPress={handleSubmitReview}>
               <Text style={styles.submitButtonText}>Submit Review</Text>
             </TouchableOpacity>
           </View>
@@ -257,7 +211,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#f5c4c1',
     paddingTop: 50,
   },
-
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -265,24 +218,20 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     marginBottom: 20,
   },
-
   backButton: {
     width: 40,
     height: 40,
     justifyContent: 'center',
     alignItems: 'flex-start',
   },
-
   headerTitle: {
     fontSize: 18,
     fontWeight: '600',
     color: '#4a4a4a',
   },
-
   scrollContent: {
     paddingHorizontal: 20,
   },
-
   destinationInfo: {
     flexDirection: 'row',
     backgroundColor: '#fff',
@@ -295,37 +244,31 @@ const styles = StyleSheet.create({
     shadowRadius: 5,
     elevation: 3,
   },
-
   destinationImage: {
     width: 80,
     height: 80,
     borderRadius: 10,
     marginRight: 12,
   },
-
   destinationTextContainer: {
     flex: 1,
     justifyContent: 'center',
   },
-
   destinationName: {
     fontSize: 18,
     fontWeight: '700',
     color: '#4a4a4a',
     marginBottom: 5,
   },
-
   locationContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 5,
   },
-
   locationText: {
     fontSize: 13,
     color: '#6a5a5a',
   },
-
   ratingSummary: {
     backgroundColor: '#fff',
     borderRadius: 15,
@@ -338,30 +281,25 @@ const styles = StyleSheet.create({
     shadowRadius: 5,
     elevation: 3,
   },
-
   ratingNumberContainer: {
     alignItems: 'center',
   },
-
   ratingNumber: {
     fontSize: 48,
     fontWeight: '700',
     color: '#4a4a4a',
     marginBottom: 10,
   },
-
   starsContainer: {
     flexDirection: 'row',
     gap: 5,
     marginBottom: 5,
   },
-
   reviewCount: {
     fontSize: 14,
     color: '#6a5a5a',
     marginTop: 5,
   },
-
   addReviewButton: {
     flexDirection: 'row',
     backgroundColor: '#4a3a3a',
@@ -373,24 +311,20 @@ const styles = StyleSheet.create({
     marginBottom: 25,
     gap: 10,
   },
-
   addReviewButtonText: {
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
   },
-
   reviewsSection: {
     marginBottom: 20,
   },
-
   sectionTitle: {
     fontSize: 18,
     fontWeight: '700',
     color: '#4a4a4a',
     marginBottom: 15,
   },
-
   reviewCard: {
     backgroundColor: '#fff',
     borderRadius: 15,
@@ -402,66 +336,45 @@ const styles = StyleSheet.create({
     shadowRadius: 5,
     elevation: 3,
   },
-
   reviewHeader: {
     flexDirection: 'row',
     marginBottom: 12,
   },
-
   userAvatar: {
     width: 45,
     height: 45,
     borderRadius: 22.5,
     marginRight: 12,
   },
-
   reviewHeaderText: {
     flex: 1,
     justifyContent: 'center',
   },
-
   userName: {
     fontSize: 16,
     fontWeight: '600',
     color: '#4a4a4a',
     marginBottom: 4,
   },
-
   ratingDateContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
   },
-
   reviewDate: {
     fontSize: 12,
     color: '#999',
   },
-
   reviewComment: {
     fontSize: 14,
     color: '#6a5a5a',
     lineHeight: 20,
   },
-
-  reviewImagesContainer: {
-    marginTop: 10,
-  },
-
-  reviewImage: {
-    width: 100,
-    height: 100,
-    borderRadius: 10,
-    marginRight: 10,
-  },
-
-  // Modal Styles
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.5)',
     justifyContent: 'flex-end',
   },
-
   modalContent: {
     backgroundColor: '#f5c4c1',
     borderTopLeftRadius: 25,
@@ -469,20 +382,17 @@ const styles = StyleSheet.create({
     padding: 25,
     maxHeight: '80%',
   },
-
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 25,
   },
-
   modalTitle: {
     fontSize: 20,
     fontWeight: '700',
     color: '#4a4a4a',
   },
-
   modalLabel: {
     fontSize: 16,
     fontWeight: '600',
@@ -490,7 +400,6 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     marginTop: 15,
   },
-
   reviewInput: {
     backgroundColor: '#fff',
     borderRadius: 15,
@@ -500,7 +409,6 @@ const styles = StyleSheet.create({
     minHeight: 120,
     marginBottom: 20,
   },
-
   submitButton: {
     backgroundColor: '#4a3a3a',
     paddingVertical: 15,
@@ -508,7 +416,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginTop: 10,
   },
-
   submitButtonText: {
     color: '#fff',
     fontSize: 16,
