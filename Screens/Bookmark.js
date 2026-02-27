@@ -10,11 +10,10 @@ import FontAwesome from 'react-native-vector-icons/FontAwesome';
 
 export default function Bookmark() {
   const navigation = useNavigation();
-  const { getBookmarkedSpots, toggleBookmark } = useBookmark();
+  const { bookmarks, toggleBookmark } = useBookmark();
   const { user: clerkUser } = useUser();
   const { user: authUser } = useAuth();
-  
-  const bookmarkedSpots = getBookmarkedSpots();
+  const bookmarkedSpots = bookmarks;
 
   // Get profile photo from Clerk user or auth context
   const profilePhoto = clerkUser?.imageUrl || clerkUser?.profileImageUrl || authUser?.profilePhoto;
