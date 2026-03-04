@@ -1,14 +1,17 @@
 /* =========================================================
-   Temporary
-   Line 259
-   -AR Objects data
+   ARScreen.js
+
+   HOW IT WORKS:
+   - Each AR object has a GPS position and a collectRadius
+   - Objects are INVISIBLE until the user walks within collectRadius
+   - Once in range, a ViroARPlane begins scanning for a flat surface
+     AT that object's AR position
+   - Only when BOTH conditions are true (in range + plane found)
+     does the 3D model appear on the surface
+   - User can then face the object and tap COLLECT
 ========================================================= */
 
-
-/* =========================================================
-   IMPORTS
-========================================================= */
-import React, { useState, useEffect, Component, useMemo } from "react";
+import React, { useState, useEffect, Component, useMemo, useRef } from "react";
 import {
   StyleSheet,
   Text,
@@ -20,6 +23,7 @@ import {
 import {
   ViroARSceneNavigator,
   ViroARScene,
+  ViroARPlane,
   Viro3DObject,
   ViroNode,
   ViroAmbientLight,
@@ -29,7 +33,7 @@ import {
 import * as Location from "expo-location";
 
 /* =========================================================
-   UTILITY: GPS DISTANCE (METERS)
+   UTILITY FUNCTIONS
 ========================================================= */
 function getDistance(lat1, lon1, lat2, lon2) {
   const R = 6371e3;
@@ -37,78 +41,45 @@ function getDistance(lat1, lon1, lat2, lon2) {
   const φ2 = (lat2 * Math.PI) / 180;
   const Δφ = ((lat2 - lat1) * Math.PI) / 180;
   const Δλ = ((lon2 - lon1) * Math.PI) / 180;
-
   const a =
     Math.sin(Δφ / 2) ** 2 +
     Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) ** 2;
-
   return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
 }
 
-/* =========================================================
-   UTILITY: CONVERT GPS TO AR POSITION
-   Calculates relative x,z position from user to object
-========================================================= */
 function gpsToARPosition(userLat, userLon, userHeading, objLat, objLon) {
-  const R = 6371e3; // Earth radius in meters
-  
-  // Convert to radians
   const φ1 = (userLat * Math.PI) / 180;
   const φ2 = (objLat * Math.PI) / 180;
   const Δλ = ((objLon - userLon) * Math.PI) / 180;
-  
-  // Calculate bearing (direction to object)
   const y = Math.sin(Δλ) * Math.cos(φ2);
-  const x = Math.cos(φ1) * Math.sin(φ2) -
-            Math.sin(φ1) * Math.cos(φ2) * Math.cos(Δλ);
-  let bearing = Math.atan2(y, x);
-  
-  // Calculate distance
+  const x =
+    Math.cos(φ1) * Math.sin(φ2) -
+    Math.sin(φ1) * Math.cos(φ2) * Math.cos(Δλ);
+  const bearing = Math.atan2(y, x);
   const distance = getDistance(userLat, userLon, objLat, objLon);
-
-  // bearing adjustment
-  const relativeBearing = bearing - (userHeading * Math.PI / 180);
-  const MAX_RENDER_DISTANCE = 10; 
-  const renderDistance = Math.min(distance, MAX_RENDER_DISTANCE);
-
-  // Convert to AR coordinates (x, z)
-  // In AR: x is left/right, z is forward/back
-  const arX = renderDistance * Math.sin(relativeBearing);
-  const arZ = -renderDistance * Math.cos(relativeBearing); // negative because forward is -z
-  
-  return { x: arX, z: arZ, distance };
+  const relativeBearing = bearing - (userHeading * Math.PI) / 180;
+  const renderDistance = Math.min(distance, 10);
+  return {
+    x: renderDistance * Math.sin(relativeBearing),
+    z: -renderDistance * Math.cos(relativeBearing),
+    distance,
+  };
 }
 
-/* =========================================================
-   UTILITY: CALCULATE BEARING TO OBJECT
-========================================================= */
 function getBearingToObject(userLat, userLon, objLat, objLon) {
   const φ1 = (userLat * Math.PI) / 180;
   const φ2 = (objLat * Math.PI) / 180;
   const Δλ = ((objLon - userLon) * Math.PI) / 180;
-  
   const y = Math.sin(Δλ) * Math.cos(φ2);
-  const x = Math.cos(φ1) * Math.sin(φ2) -
-            Math.sin(φ1) * Math.cos(φ2) * Math.cos(Δλ);
-  
-  let bearing = Math.atan2(y, x) * (180 / Math.PI);
-  bearing = (bearing + 360) % 360; // Normalize to 0-360
-  
-  return bearing;
+  const x =
+    Math.cos(φ1) * Math.sin(φ2) -
+    Math.sin(φ1) * Math.cos(φ2) * Math.cos(Δλ);
+  return ((Math.atan2(y, x) * 180) / Math.PI + 360) % 360;
 }
 
-/* =========================================================
-   UTILITY: CHECK IF CAMERA IS FACING OBJECT
-========================================================= */
 function isFacingObject(userHeading, objectBearing, threshold = 30) {
-  // Calculate the difference between user heading and object bearing
   let diff = Math.abs(userHeading - objectBearing);
-  
-  // Handle wraparound (e.g., 350° vs 10°)
-  if (diff > 180) {
-    diff = 360 - diff;
-  }
-  
+  if (diff > 180) diff = 360 - diff;
   return diff <= threshold;
 }
 
@@ -116,87 +87,123 @@ function isFacingObject(userHeading, objectBearing, threshold = 30) {
    COLLECTION ANIMATION
 ========================================================= */
 function CollectionAnimation({ visible }) {
-  const scale = React.useRef(new Animated.Value(0)).current;
-  const opacity = React.useRef(new Animated.Value(1)).current;
+  const scale = useRef(new Animated.Value(0)).current;
+  const opacity = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
     if (!visible) return;
-
     scale.setValue(0);
     opacity.setValue(1);
-
     Animated.parallel([
-      Animated.spring(scale, {
-        toValue: 1,
-        useNativeDriver: true,
-      }),
-      Animated.timing(opacity, {
-        toValue: 0,
-        duration: 1200,
-        useNativeDriver: true,
-      }),
+      Animated.spring(scale, { toValue: 1, useNativeDriver: true }),
+      Animated.timing(opacity, { toValue: 0, duration: 1200, useNativeDriver: true }),
     ]).start();
   }, [visible]);
 
   if (!visible) return null;
-
   return (
-    <Animated.View
-      style={[
-        styles.collectionAnimation,
-        { transform: [{ scale }], opacity },
-      ]}
-    >
+    <Animated.View style={[styles.collectionAnimation, { transform: [{ scale }], opacity }]}>
       <Text style={styles.collectionText}>✨ Collected! ✨</Text>
     </Animated.View>
   );
 }
 
 /* =========================================================
-   Camera Visoin
+   AR OBJECT NODE
+   Renders ONE object's plane + 3D model.
+
+   Props:
+     obj         — the AR object data (id, x, z, inRange, etc.)
+     collected   — bool, whether this object is already collected
+     onPlaneFound(id) — callback when plane is detected for this obj
+     planeFound  — bool passed from parent, true once plane detected
 ========================================================= */
-class ARScene extends Component {
-  state = {
-    trackingStatus: "Initializing AR...",
-    rotation: 0,
-    hasFoundPlane: false,
+class ARObjectNode extends Component {
+  onAnchorFound = () => {
+    console.log(`Plane found for object ${this.props.obj.id}`);
+    this.props.onPlaneFound(this.props.obj.id);
   };
 
-  componentDidMount() {
-    // rotation animation for objects (degrees per frame)
-    this.rotationInterval = setInterval(() => {
-      this.setState((prev) => ({
-        rotation: (prev.rotation + 1.2) % 360,
-      }));
-    }, 16);
-  }
+  render() {
+    const { obj, collected, planeFound } = this.props;
 
-  componentWillUnmount() {
-    if (this.rotationInterval) {
-      clearInterval(this.rotationInterval);
-    }
-  }
+    // Gate 1: skip if collected
+    if (collected) return null;
 
+    // Gate 2: skip if user is NOT within collectRadius
+    if (!obj.inRange) return null;
+
+    return (
+      /*
+        ViroNode positions the plane scanner at the object's
+        GPS-calculated AR coordinates (x, z).
+        y = 0 means ground level relative to the AR world origin.
+      */
+      <ViroNode position={[obj.x, 0, obj.z]}>
+        {/*
+          ViroARPlane scans for a horizontal surface at this position.
+          - Only activates when the parent ViroNode is rendered
+            (i.e. user is already within collectRadius)
+          - onAnchorFound fires once a valid plane is locked
+          - minHeight/minWidth: ignore tiny or noisy surfaces
+        */}
+        <ViroARPlane
+          minHeight={0.1}
+          minWidth={0.1}
+          alignment="Horizontal"
+          onAnchorFound={this.onAnchorFound}
+        >
+          {/*
+            Gate 3: only show the 3D model once a plane is confirmed.
+            The model sits ON the plane surface (position [0,0,0]
+            inside ViroARPlane = the plane's anchor point).
+          */}
+          {planeFound && (
+            <Viro3DObject
+              source={require("../assets/models/question_mark.glb")}
+              type="GLB"
+              position={[0, 0, 0]}
+              scale={[0.3, 0.3, 0.3]}
+              // Draggable along the plane surface
+              dragType="FixedToPlane"
+              dragPlane={{
+                planePoint: [0, 0, 0],
+                planeNormal: [0, 1, 0], // horizontal
+                maxDistance: 1,
+              }}
+              onLoadStart={() => console.log(`Loading model for obj ${obj.id}`)}
+              onLoadEnd={() => console.log(`Model loaded for obj ${obj.id}`)}
+              onError={(e) => console.warn(`Model error obj ${obj.id}:`, e)}
+            />
+          )}
+        </ViroARPlane>
+      </ViroNode>
+    );
+  }
+}
+
+/* =========================================================
+   MAIN AR SCENE
+   Single scene — no mode switching.
+   Passes each in-range object to ARObjectNode.
+========================================================= */
+class ARScene extends Component {
   onTrackingUpdated = (state) => {
-    if (state === ViroTrackingStateConstants.TRACKING_NORMAL) {
-      this.setState({ trackingStatus: "AR Ready" });
-    } else if (state === ViroTrackingStateConstants.TRACKING_LIMITED) {
-      this.setState({ trackingStatus: "Move device slowly..." });
-    } else {
-      this.setState({ trackingStatus: "Tracking lost..." });
-    }
+    const cb = this.props.sceneNavigator?.viroAppProps?.onTrackingUpdated;
+    if (cb) cb(state);
   };
 
   render() {
     const {
       arPositions = [],
       collectedObjects = [],
+      planesFound = {},
+      onPlaneFound,
     } = this.props.sceneNavigator?.viroAppProps || {};
 
     return (
       <ViroARScene onTrackingUpdated={this.onTrackingUpdated}>
         <ViroAmbientLight color="#ffffff" intensity={300} />
-        
         <ViroSpotLight
           innerAngle={5}
           outerAngle={90}
@@ -206,263 +213,233 @@ class ARScene extends Component {
           intensity={800}
         />
 
-        {/* AR objects will only display according to their uhh pag nasa loob ng data ng lugar kinginamo */}
-        {arPositions.map((obj) => {
-
-          if (collectedObjects.includes(obj.id)) return null;
-/*-------------------Dito palitan distance (Distance between you and the object bago mag render)----------------------------*/
-          // NOTE: Removed hard 20m cutoff — arPositions already filters by collectRadius.
-          // If you want a render distance limit, increase it (e.g. 100m) instead of 20m.
-// ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-          return (
-            <ViroNode
-              key={obj.id}
-              position={[obj.x, -1.5, obj.z]}
-              scale={[0.5, 0.5, 0.5]}
-              rotation={[0, this.state.rotation, 0]}
-            >
-              <Viro3DObject
-                source={require("../assets/models/question_mark.glb")}
-                type="GLB"
-                position={[0, 0, 0]}
-                onLoadStart={() => console.log(`Loading object ${obj.id}...`)}
-                onLoadEnd={() => console.log(`Object ${obj.id} loaded!`)}
-                onError={(error) => console.log(`Object ${obj.id} error:`, error)}
-              />
-            </ViroNode>
-          );
-        })}
+        {arPositions.map((obj) => (
+          <ARObjectNode
+            key={obj.id}
+            obj={obj}
+            collected={collectedObjects.includes(obj.id)}
+            planeFound={!!planesFound[obj.id]}
+            onPlaneFound={onPlaneFound}
+          />
+        ))}
       </ViroARScene>
     );
   }
 }
-//**************************************************************************************************************8 */
 
 /* =========================================================
    MAIN AR SCREEN
 ========================================================= */
 export default function ARScreen({ navigation }) {
-  const [showInstructions, setShowInstructions] = useState(true);
   const [location, setLocation] = useState(null);
   const [heading, setHeading] = useState(0);
   const [locationPermission, setLocationPermission] = useState(false);
   const [collectedObjects, setCollectedObjects] = useState([]);
   const [showCollection, setShowCollection] = useState(false);
-  const [targetObject, setTargetObject] = useState(null); // Object user is looking at
+  const [targetObject, setTargetObject] = useState(null);
+  const [showInstructions, setShowInstructions] = useState(true);
+  // planesFound: { [objectId]: true } — tracks which objects have a plane
+  const [planesFound, setPlanesFound] = useState({});
 
-  /* ---------------- Example Data nigga ---------------- */
-  const arObjects = useMemo(
-    () => [
-      {
-        id: 1,
-        name: "Historic Marker",
-        latitude: 14.813330703468642,
-        longitude: 121.03685068219062,
-        description: "Found at Barasoain Church",
-        collectRadius: 10,
-      },
-      {
-        id: 2,
-        name: "Mystery Box",
-        latitude: 14.813430703468642,
-        longitude: 121.03695068219062,
-        description: "Hidden treasure near the plaza",
-        collectRadius: 10,
-      },
-      {
-        id: 3,
-        name: "Wild Jeff",
-        latitude: 14.842125,
-        longitude: 121.045882,
-        description: "Hidden treasure of STI",
-        collectRadius: 20,
-      },
-      {
-        id: 4,
-        name: "Wild Grey",
-        latitude: 14.779076,
-        longitude: 121.074490,
-        description: "Hidden treasure of STI",
-        collectRadius: 10,
-      },
-      // Add more objects here
-    ],
-    []
-  );
+  /* ---------------- AR Objects Data ---------------- */
+  const arObjects = useMemo(() => [
+    {
+      id: 1,
+      name: "Historic Marker",
+      latitude: 14.813330703468642,
+      longitude: 121.03685068219062,
+      description: "Found at Barasoain Church",
+      collectRadius: 10,
+    },
+    {
+      id: 2,
+      name: "Mystery Box",
+      latitude: 14.813430703468642,
+      longitude: 121.03695068219062,
+      description: "Hidden treasure near the plaza",
+      collectRadius: 10,
+    },
+    {
+      id: 3,
+      name: "Wild Jeff",
+      latitude: 14.842125,
+      longitude: 121.045882,
+      description: "Hidden treasure of STI",
+      collectRadius: 20,
+    },
+    {
+      id: 4,
+      name: "Wild Grey",
+      latitude: 14.779076,
+      longitude: 121.07449,
+      description: "Hidden treasure of STI",
+      collectRadius: 10,
+    },
+  ], []);
 
   /* ---------------- CALCULATE AR POSITIONS ---------------- */
   const arPositions = useMemo(() => {
     if (!location) return [];
-
     return arObjects
       .filter((obj) => !collectedObjects.includes(obj.id))
       .map((obj) => {
         const distance = getDistance(
-          location.latitude,
-          location.longitude,
-          obj.latitude,
-          obj.longitude
+          location.latitude, location.longitude,
+          obj.latitude, obj.longitude
         );
-
         const position = gpsToARPosition(
-          location.latitude,
-          location.longitude,
-          heading,
-          obj.latitude,
-          obj.longitude
+          location.latitude, location.longitude,
+          heading, obj.latitude, obj.longitude
         );
-
         const bearing = getBearingToObject(
-          location.latitude,
-          location.longitude,
-          obj.latitude,
-          obj.longitude
+          location.latitude, location.longitude,
+          obj.latitude, obj.longitude
         );
-
-        const facing = isFacingObject(heading, bearing, 30); // 30° threshold
-
+        const facing = isFacingObject(heading, bearing, 30);
         return {
           ...obj,
           ...position,
           distance,
           bearing,
           facing,
+          // inRange = user is close enough to activate plane scanning + collect
           inRange: distance <= obj.collectRadius,
         };
       });
   }, [location, heading, arObjects, collectedObjects]);
 
-  /* ---------------- NEARBY COLLECTIBLE OBJECTS ---------------- */
-  const collectibleObjects = useMemo(() => {
-    return arPositions.filter((obj) => obj.inRange);
-  }, [arPositions]);
+  // Objects within range that user is also facing → collectable
+  const targetableObject = useMemo(
+    () => arPositions.find((o) => o.inRange && o.facing && planesFound[o.id]) ?? null,
+    [arPositions, planesFound]
+  );
 
-  const currentObject = collectibleObjects[0] ?? null;
+  // Nearest in-range object (for bottom bar hint)
+  const currentObject = useMemo(
+    () => arPositions.find((o) => o.inRange) ?? null,
+    [arPositions]
+  );
 
-  /* ---------------- TARGET OBJECT (in range AND facing) ---------------- */
-  const targetableObject = useMemo(() => {
-    // Find objects that are both in range AND user is facing them
-    const targets = arPositions.filter((obj) => obj.inRange && obj.facing);
-    return targets[0] ?? null; // Return the first one (closest)
-  }, [arPositions]);
-
-  // Update target object state
-  useEffect(() => {
-    setTargetObject(targetableObject);
-  }, [targetableObject]);
-
-  /* ---------------- NEAREST DISTANCE ---------------- */
   const nearestDistance = useMemo(() => {
-    if (arPositions.length === 0) return null;
-    const distances = arPositions.map((obj) => obj.distance);
-    return Math.min(...distances);
+    if (!arPositions.length) return null;
+    return Math.min(...arPositions.map((o) => o.distance));
   }, [arPositions]);
+
+  useEffect(() => { setTargetObject(targetableObject); }, [targetableObject]);
+
+  /* ---------------- PLANE FOUND CALLBACK ---------------- */
+  // Called by ARObjectNode when its ViroARPlane detects a surface
+  const handlePlaneFound = (objectId) => {
+    setPlanesFound((prev) => ({ ...prev, [objectId]: true }));
+  };
 
   /* ---------------- LOCATION TRACKING ---------------- */
   useEffect(() => {
-    let locationSubscription = null;
-    let headingSubscription = null;
+    let locationSub = null;
+    let headingSub = null;
     let lastHeading = 0;
 
     (async () => {
       const { status } = await Location.requestForegroundPermissionsAsync();
-      if (status === "granted") {
-        setLocationPermission(true);
+      if (status !== "granted") return;
+      setLocationPermission(true);
 
-        // Get initial location
-        const currentLocation = await Location.getCurrentPositionAsync({
+      const loc = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.BestForNavigation,
+      });
+      setLocation(loc.coords);
+
+      locationSub = await Location.watchPositionAsync(
+        {
           accuracy: Location.Accuracy.BestForNavigation,
-        });
-        setLocation(currentLocation.coords);
+          distanceInterval: 0.5,
+          timeInterval: 1000,
+        },
+        (l) => setLocation(l.coords)
+      );
 
-        // Watch location with high accuracy
-        locationSubscription = await Location.watchPositionAsync(
-          {
-            accuracy: Location.Accuracy.BestForNavigation,
-            distanceInterval: 0.5, // Update every meters
-            timeInterval: 1000, // Update every sc.
-
-          },
-          (loc) => {
-            console.log("Location updated:", loc.coords);
-            setLocation(loc.coords);
-          }
-        );
-
-        // Watch heading (compass) with smoothing
-        headingSubscription = await Location.watchHeadingAsync((headingData) => {
-          const newHeading = headingData.trueHeading ?? headingData.magHeading;
-          
-          // Smooth heading changes to prevent jitter
-          // Only update if change is significant (> 2 degrees)
-          if (Math.abs(newHeading - lastHeading) > 2) {
-            setHeading(newHeading);
-            lastHeading = newHeading;
-          }
-        });
-      }
+      headingSub = await Location.watchHeadingAsync((h) => {
+        const newH = h.trueHeading ?? h.magHeading;
+        if (Math.abs(newH - lastHeading) > 2) {
+          setHeading(newH);
+          lastHeading = newH;
+        }
+      });
     })();
 
     return () => {
-      if (locationSubscription) locationSubscription.remove();
-      if (headingSubscription) headingSubscription.remove();
+      locationSub?.remove();
+      headingSub?.remove();
     };
   }, []);
 
   /* ---------------- COLLECT ---------------- */
   const handleCollect = () => {
     if (!targetObject) return;
-
     const obj = arObjects.find((o) => o.id === targetObject.id);
     if (!obj) return;
 
     setCollectedObjects((prev) => [...prev, targetObject.id]);
     setShowCollection(true);
 
-    Alert.alert(
-      "Item Collected 🎉",
-      `${obj.name}\n\n${obj.description}`,
-      [{ text: "OK", onPress: () => setShowCollection(false) }]
-    );
+    Alert.alert("Item Collected 🎉", `${obj.name}\n\n${obj.description}`, [
+      { text: "OK", onPress: () => setShowCollection(false) },
+    ]);
 
     setTimeout(() => setShowCollection(false), 2000);
   };
 
-  /* ---------------- PERMISSIONS CHECK ---------------- */
+  /* ---------------- PERMISSION GATE ---------------- */
   if (!locationPermission) {
     return (
-      <View style={styles.container}>
+      <View style={[styles.container, styles.centered]}>
         <Text style={styles.permissionText}>
-          Location permission required for AR experience
+          📍 Location permission required for AR experience.
         </Text>
       </View>
     );
   }
 
+  /* ---------------- STATUS MESSAGE ---------------- */
+  // Tells user what's happening at each stage
+  const getStatusMessage = () => {
+    if (!currentObject) {
+      if (collectedObjects.length === arObjects.length) return "🎉 All objects collected!";
+      return nearestDistance !== null
+        ? `Nearest object: ${nearestDistance.toFixed(0)}m away`
+        : "Searching for objects...";
+    }
+    if (!planesFound[currentObject.id]) {
+      return `🔍 ${currentObject.name} nearby!\nPoint camera at a flat surface to reveal it`;
+    }
+    if (!currentObject.facing) {
+      return `✨ ${currentObject.name} appeared!\nFace the object to collect it`;
+    }
+    return `✅ Ready to collect ${currentObject.name}!`;
+  };
+
   /* ---------------- RENDER ---------------- */
   return (
     <View style={styles.container}>
-      {/* AR Navigator */}
       <ViroARSceneNavigator
         style={styles.arNavigator}
-        initialScene={{
-          scene: ARScene,
-        }}
+        autofocus={true}
+        worldAlignment="GravityAndHeading"
+        initialScene={{ scene: ARScene }}
         viroAppProps={{
           arPositions,
           collectedObjects,
+          planesFound,
+          onPlaneFound: handlePlaneFound,
+          onTrackingUpdated: () => {},
         }}
-        autofocus={true}
-        worldAlignment="GravityAndHeading"
       />
 
-      {/* Instructions overlay */}
+      {/* Instructions banner */}
       {showInstructions && (
         <View style={styles.hintOverlay}>
           <Text style={styles.hintText}>
-            {currentObject
-              ? `${currentObject.name} nearby!\nPoint your camera at the object to collect it`
-              : "Move around to find hidden AR objects"}
+            Walk to a marked location, then point your camera at a flat surface to reveal hidden objects
           </Text>
           <TouchableOpacity
             style={styles.dismissButton}
@@ -476,88 +453,50 @@ export default function ARScreen({ navigation }) {
       {/* Collection animation */}
       <CollectionAnimation visible={showCollection} />
 
-      {/* COLLECT BUTTON - Shows when facing an object in range */}
+      {/* Collect button — only when facing a plane-confirmed in-range object */}
       {targetObject && (
         <View style={styles.collectButtonContainer}>
-          <TouchableOpacity 
-            style={styles.collectButton}
-            onPress={handleCollect}
-          >
+          <TouchableOpacity style={styles.collectButton} onPress={handleCollect}>
             <Text style={styles.collectButtonText}>COLLECT</Text>
             <Text style={styles.collectButtonSubtext}>{targetObject.name}</Text>
           </TouchableOpacity>
         </View>
       )}
 
-      {/* Bottom info bar */}
+      {/* Bottom status bar */}
       <View style={styles.bottomOverlay}>
-        {currentObject ? (
-          <View style={styles.objectInfo}>
-            <Text style={styles.objectName}>
-              📍 {currentObject.name} - {currentObject.distance.toFixed(1)}m away
-            </Text>
-            <Text style={styles.objectHint}>
-              {currentObject.facing 
-                ? "✓ Camera aligned - Ready to collect!" 
-                : "Point your camera at the object"}
-            </Text>
-          </View>
-        ) : (
-          <Text style={styles.infoText}>
-            {nearestDistance !== null
-              ? `Nearest object: ${nearestDistance.toFixed(0)}m away`
-              : collectedObjects.length === arObjects.length
-              ? "🎉 All objects collected!"
-              : "Searching for objects..."}
-          </Text>
-        )}
-
-        {/* Stats */}
+        <Text style={styles.statusText}>{getStatusMessage()}</Text>
         <Text style={styles.statsText}>
           Collected: {collectedObjects.length}/{arObjects.length}
         </Text>
       </View>
 
       {/* Back button */}
-      <TouchableOpacity
-        style={styles.backButton}
-        onPress={() => navigation.goBack()}
-      >
+      <TouchableOpacity style={styles.backButton} onPress={() => navigation.goBack()}>
         <Text style={styles.backButtonText}>←</Text>
       </TouchableOpacity>
 
-      {/* Debug info (remove in production) */}
+      {/* Debug overlay (DEV only) */}
       {__DEV__ && location && (
         <View style={styles.debugInfo}>
-          <Text style={styles.debugText}>
-            Lat: {location.latitude.toFixed(6)}
-          </Text>
-          <Text style={styles.debugText}>
-            Lon: {location.longitude.toFixed(6)}
-          </Text>
-          <Text style={styles.debugText}>
-            Heading: {heading.toFixed(0)}°
-          </Text>
-          {nearestDistance && (
-            <Text style={styles.debugText}>
-              Nearest: {nearestDistance.toFixed(1)}m
-            </Text>
+          <Text style={styles.debugText}>Lat: {location.latitude.toFixed(6)}</Text>
+          <Text style={styles.debugText}>Lon: {location.longitude.toFixed(6)}</Text>
+          <Text style={styles.debugText}>Heading: {heading.toFixed(0)}°</Text>
+          {nearestDistance != null && (
+            <Text style={styles.debugText}>Nearest: {nearestDistance.toFixed(1)}m</Text>
           )}
           <Text style={styles.debugText}>
-            Visible: {arPositions.length}
+            In range: {arPositions.filter((o) => o.inRange).length}
+          </Text>
+          <Text style={styles.debugText}>
+            Planes: {Object.keys(planesFound).join(", ") || "none"}
           </Text>
           {targetObject && (
             <>
-              <Text style={styles.debugText}>---Target---</Text>
-              <Text style={styles.debugText}>
-                X: {targetObject.x.toFixed(1)}
-              </Text>
-              <Text style={styles.debugText}>
-                Z: {targetObject.z.toFixed(1)}
-              </Text>
-              <Text style={styles.debugText}>
-                Bearing: {targetObject.bearing.toFixed(0)}°
-              </Text>
+              <Text style={styles.debugText}>--- Target ---</Text>
+              <Text style={styles.debugText}>ID: {targetObject.id}</Text>
+              <Text style={styles.debugText}>X: {targetObject.x.toFixed(2)}</Text>
+              <Text style={styles.debugText}>Z: {targetObject.z.toFixed(2)}</Text>
               <Text style={styles.debugText}>
                 Facing: {targetObject.facing ? "YES" : "NO"}
               </Text>
@@ -573,29 +512,28 @@ export default function ARScreen({ navigation }) {
    STYLES
 ========================================================= */
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "black",
-  },
-  arNavigator: {
-    flex: 1,
-  },
+  container: { flex: 1, backgroundColor: "black" },
+  centered: { justifyContent: "center", alignItems: "center" },
+  arNavigator: { flex: 1 },
+
   hintOverlay: {
     position: "absolute",
     top: 60,
     width: "100%",
     alignItems: "center",
     paddingHorizontal: 20,
+    zIndex: 100,
   },
   hintText: {
     color: "white",
-    fontSize: 16,
+    fontSize: 15,
     fontWeight: "bold",
-    backgroundColor: "rgba(0,0,0,0.8)",
+    backgroundColor: "rgba(0,0,0,0.85)",
     paddingHorizontal: 20,
-    paddingVertical: 15,
-    borderRadius: 10,
+    paddingVertical: 14,
+    borderRadius: 12,
     textAlign: "center",
+    lineHeight: 22,
   },
   dismissButton: {
     marginTop: 10,
@@ -604,11 +542,8 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     borderRadius: 20,
   },
-  dismissText: {
-    color: "white",
-    fontSize: 14,
-    fontWeight: "600",
-  },
+  dismissText: { color: "white", fontSize: 14, fontWeight: "600" },
+
   backButton: {
     position: "absolute",
     top: 50,
@@ -619,12 +554,10 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0,0,0,0.6)",
     justifyContent: "center",
     alignItems: "center",
+    zIndex: 300,
   },
-  backButtonText: {
-    color: "white",
-    fontSize: 28,
-    fontWeight: "bold",
-  },
+  backButtonText: { color: "white", fontSize: 28, fontWeight: "bold" },
+
   bottomOverlay: {
     position: "absolute",
     bottom: 0,
@@ -632,37 +565,18 @@ const styles = StyleSheet.create({
     padding: 20,
     backgroundColor: "rgba(0,0,0,0.8)",
     alignItems: "center",
+    zIndex: 100,
   },
-  objectInfo: {
-    alignItems: "center",
-    width: "100%",
-  },
-  objectName: {
-    color: "white",
-    fontSize: 18,
-    fontWeight: "bold",
-    marginBottom: 5,
-  },
-  objectHint: {
-    color: "#4CAF50",
-    fontSize: 14,
-    fontWeight: "600",
-  },
-  infoText: {
-    color: "white",
-    fontSize: 16,
-  },
-  statsText: {
-    color: "#aaa",
-    fontSize: 14,
-    marginTop: 8,
-  },
-  permissionText: {
+  statusText: {
     color: "white",
     fontSize: 16,
     textAlign: "center",
-    padding: 20,
+    lineHeight: 22,
+    fontWeight: "500",
   },
+  statsText: { color: "#aaa", fontSize: 14, marginTop: 8 },
+  permissionText: { color: "white", fontSize: 16, textAlign: "center", padding: 20 },
+
   collectionAnimation: {
     position: "absolute",
     top: "40%",
@@ -672,11 +586,8 @@ const styles = StyleSheet.create({
     borderRadius: 20,
     zIndex: 10,
   },
-  collectionText: {
-    color: "white",
-    fontSize: 22,
-    fontWeight: "bold",
-  },
+  collectionText: { color: "white", fontSize: 22, fontWeight: "bold" },
+
   collectButtonContainer: {
     position: "absolute",
     bottom: 120,
@@ -697,29 +608,17 @@ const styles = StyleSheet.create({
     borderWidth: 3,
     borderColor: "#fff",
   },
-  collectButtonText: {
-    color: "white",
-    fontSize: 24,
-    fontWeight: "bold",
-    letterSpacing: 2,
-  },
-  collectButtonSubtext: {
-    color: "white",
-    fontSize: 14,
-    marginTop: 4,
-    opacity: 0.9,
-  },
+  collectButtonText: { color: "white", fontSize: 24, fontWeight: "bold", letterSpacing: 2 },
+  collectButtonSubtext: { color: "white", fontSize: 14, marginTop: 4, opacity: 0.9 },
+
   debugInfo: {
     position: "absolute",
     top: 100,
     right: 10,
-    backgroundColor: "rgba(0,0,0,0.7)",
+    backgroundColor: "rgba(0,0,0,0.75)",
     padding: 10,
     borderRadius: 5,
+    zIndex: 200,
   },
-  debugText: {
-    color: "lime",
-    fontSize: 12,
-    fontFamily: "monospace",
-  },
+  debugText: { color: "lime", fontSize: 11, fontFamily: "monospace" },
 });
