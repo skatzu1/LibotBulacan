@@ -2,6 +2,7 @@
   "expo": {
     "name": "Libot",
     "slug": "libot",
+    "jsEngine": "hermes",
     "version": "1.0.0",
     "scheme": "libot",
     "orientation": "portrait",
@@ -85,25 +86,33 @@
             "CFBundleURLSchemes": [
               "libot"
             ]
+          },
+          {
+            "CFBundleURLSchemes": [
+              "libot"
+            ]
           }
-        ]
+        ],
+        "NSPhotoLibraryAddUsageDescription": "Allow $(PRODUCT_NAME) to save photos",
+        "NSMicrophoneUsageDescription": "Libot uses your microphone for AR experiences.",
+        "ITSAppUsesNonExemptEncryption": false
       }
     },
     "android": {
       "permissions": [
-        "CAMERA",
-        "ACCESS_FINE_LOCATION",
-        "ACCESS_COARSE_LOCATION",
-        "INTERNET",
-        "READ_EXTERNAL_STORAGE",
-        "WRITE_EXTERNAL_STORAGE"
+        "android.permission.CAMERA",
+        "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.INTERNET",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE"
       ],
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
+        "foregroundImage": "./assets/logo.png",
         "backgroundColor": "#ffffff"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.skatzu15.libot",
+      "package": "com.skatzu15.libot.beta",
       "intentFilters": [
         {
           "action": "VIEW",
@@ -125,8 +134,10 @@
     },
     "extra": {
       "eas": {
-        "projectId": "8f2cc8dd-553e-49c8-a0c4-cfe299f6489f"
-      }
-    }
+        "projectId": "ce019b8b-d9d3-49c7-be10-9f3624a80041"
+      },
+      "router": {}
+    },
+    "owner": "komiigurii"
   }
 }

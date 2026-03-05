@@ -21,7 +21,6 @@ export const loadModel = async () => {
 };
 
 export const runPrediction = async (imageUri) => {
-  let tensor = null;
   try {
     const loadedModel = await loadModel();
     if (!loadedModel) {
@@ -29,21 +28,18 @@ export const runPrediction = async (imageUri) => {
       return null;
     }
 
-    // Convert image to tensor
-    tensor = await imageToTensor(imageUri);
-    if (!tensor) {
+    // imageToTensor already returns a Float32Array — no conversion needed
+    const inputData = await imageToTensor(imageUri);
+    if (!inputData) {
       console.error('❌ Failed to process image');
       return null;
     }
 
-    // Get raw data as Float32Array (required by fast-tflite)
-    const inputData = new Float32Array(tensor.dataSync());
-
-    console.log('📐 Input size:', inputData.length); // should be 150528 (1*224*224*3)
+    console.log('📐 Input size:', inputData.length); // should be 150528 (224*224*3)
 
     // Validate size
     if (inputData.length !== 224 * 224 * 3) {
-      console.error('❌ Incorrect tensor size:', inputData.length, '(expected', 224 * 224 * 3, ')');
+      console.error('❌ Incorrect input size:', inputData.length, '(expected', 224 * 224 * 3, ')');
       return null;
     }
 
@@ -53,7 +49,7 @@ export const runPrediction = async (imageUri) => {
       return null;
     }
 
-    // Run model
+    // Run model — fast-tflite takes an array of typed arrays
     const output = await loadedModel.run([inputData]);
     console.log('🤖 Raw model output:', output);
 
@@ -62,7 +58,7 @@ export const runPrediction = async (imageUri) => {
       return null;
     }
 
-    const predictions = Array.from(output[0]); // convert to plain array
+    const predictions = Array.from(output[0]);
     console.log('📊 Predictions:', predictions);
 
     // Validate output
@@ -84,7 +80,6 @@ export const runPrediction = async (imageUri) => {
   } catch (error) {
     console.error('❌ Prediction error:', error);
     return null;
-  } finally {
-    if (tensor) tensor.dispose();  // always clean up
   }
+  // ✅ No tensor.dispose() needed — Float32Array is plain JS memory, GC handles it
 };
