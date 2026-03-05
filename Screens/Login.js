@@ -197,7 +197,6 @@ export default function Login({ navigation }) {
           <Text>Don't have an account? </Text>
           <TouchableOpacity
             onPress={() => navigation.navigate("Register")}
-            disabled={isLoading || isGoogleLoading}
           >
             <Text style={styles.registerLink}>Sign Up</Text>
           </TouchableOpacity>
