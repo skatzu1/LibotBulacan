@@ -21,10 +21,12 @@ export default function Track({ route, navigation }) {
   const [loading, setLoading] = useState(true);
   const [spotData, setSpotData] = useState(null);
   const [locationError, setLocationError] = useState(null);
+  // followMode: when true, map pans to user on every location update
+  const [followMode, setFollowMode] = useState(false);
 
   const webViewRef = useRef(null);
   const locationSubscription = useRef(null);
-  const isMounted = useRef(true); // Prevents state updates after unmount
+  const isMounted = useRef(true);
 
   /* =========================================================
      FETCH SPOT DATA
@@ -33,14 +35,11 @@ export default function Track({ route, navigation }) {
     isMounted.current = true;
 
     const loadSpot = async () => {
-      /* If the spot passed in already has coordinates, use it immediately
-       and skip the network fetch entirely */
       if (spot?.coordinates?.lat && spot?.coordinates?.lng) {
         setSpotData(spot);
         return;
       }
 
-      // Emergency
       try {
         const safeJson = async (res) => {
           const contentType = res.headers.get("content-type") ?? "";
@@ -50,7 +49,6 @@ export default function Track({ route, navigation }) {
 
         let foundSpot = null;
 
-        // Try single-spot endpoint first
         const singleRes = await fetch(
           `https://libotbackend.onrender.com/api/spots/${spot._id}`
         );
@@ -59,7 +57,6 @@ export default function Track({ route, navigation }) {
         if (singleData?.success && singleData?.spot) {
           foundSpot = singleData.spot;
         } else {
-          // Emergency
           console.warn("Single-spot endpoint unavailable, falling back to /api/spots");
           const listRes = await fetch("https://libotbackend.onrender.com/api/spots");
           const listData = await safeJson(listRes);
@@ -70,7 +67,6 @@ export default function Track({ route, navigation }) {
         }
 
         if (!isMounted.current) return;
-        // Emergency
         setSpotData(foundSpot ?? spot);
       } catch (error) {
         console.error("Error fetching spot data:", error);
@@ -90,6 +86,9 @@ export default function Track({ route, navigation }) {
     };
   }, [spot._id]);
 
+  /* =========================================================
+     LOCATION TRACKING
+  ========================================================= */
   useEffect(() => {
     if (!spotData) return;
 
@@ -108,7 +107,7 @@ export default function Track({ route, navigation }) {
         }
 
         const initial = await Location.getCurrentPositionAsync({
-          accuracy: Location.Accuracy.Balanced, 
+          accuracy: Location.Accuracy.Balanced,
         });
 
         if (cancelled || !isMounted.current) return;
@@ -122,8 +121,8 @@ export default function Track({ route, navigation }) {
         locationSubscription.current = await Location.watchPositionAsync(
           {
             accuracy: Location.Accuracy.High,
-            timeInterval: 3000,   
-            distanceInterval: 3,  
+            timeInterval: 3000,
+            distanceInterval: 3,
           },
           (loc) => {
             if (!isMounted.current) return;
@@ -134,7 +133,7 @@ export default function Track({ route, navigation }) {
             };
 
             setUserLocation(coords);
-            updateMarkerOnMap(coords); 
+            updateMarkerOnMap(coords);
           }
         );
       } catch (error) {
@@ -152,6 +151,16 @@ export default function Track({ route, navigation }) {
       cancelled = true;
     };
   }, [spotData]);
+
+  /* =========================================================
+     UPDATE MARKER + OPTIONALLY PAN MAP
+     Called on every location update.
+     If followMode is true, also pans the map to the user.
+  ========================================================= */
+  const followModeRef = useRef(followMode);
+  useEffect(() => {
+    followModeRef.current = followMode;
+  }, [followMode]);
 
   const updateMarkerOnMap = useCallback(
     (coords) => {
@@ -171,6 +180,10 @@ export default function Track({ route, navigation }) {
                 L.latLng(${destLat}, ${destLng})
               ]);
             }
+            // If follow mode is on, pan the map to the user's new position
+            if (${followModeRef.current} && window.map) {
+              window.map.panTo([${coords.latitude}, ${coords.longitude}], { animate: true, duration: 0.5 });
+            }
           } catch (e) {
             console.error('Map update error:', e);
           }
@@ -183,6 +196,40 @@ export default function Track({ route, navigation }) {
     [spotData]
   );
 
+  /* =========================================================
+     CENTER ON ME
+     Immediately snaps map to user, then enables follow mode.
+     Tapping again disables follow mode.
+  ========================================================= */
+  const handleCenterOnMe = useCallback(() => {
+    if (!webViewRef.current || !userLocation) return;
+
+    const { latitude, longitude } = userLocation;
+
+    if (!followMode) {
+      // Enable follow mode and immediately pan to user
+      setFollowMode(true);
+
+      const js = `
+        (function() {
+          try {
+            if (window.map) {
+              window.map.setView([${latitude}, ${longitude}], 17, { animate: true, duration: 0.8 });
+            }
+          } catch(e) {}
+        })();
+        true;
+      `;
+      webViewRef.current.injectJavaScript(js);
+    } else {
+      // Disable follow mode — user can pan freely again
+      setFollowMode(false);
+    }
+  }, [followMode, userLocation]);
+
+  /* =========================================================
+     MAP HTML
+  ========================================================= */
   const mapHTML = useMemo(() => {
     if (!spotData?.coordinates || !userLocation) return null;
 
@@ -217,7 +264,7 @@ export default function Track({ route, navigation }) {
             maxZoom: 19
           }).addTo(window.map);
 
-          // --- User marker (blue pulsing dot) ---
+          // User marker (blue pulsing dot)
           const userIcon = L.divIcon({
             html: \`
               <div style="position:relative;">
@@ -254,7 +301,7 @@ export default function Track({ route, navigation }) {
             .addTo(window.map)
             .bindPopup('Your Location');
 
-          // --- Destination marker (red pin) ---
+          // Destination marker (red pin)
           const destIcon = L.divIcon({
             html: '<div style="background:#8b4440;width:30px;height:30px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);border:3px solid white;box-shadow:0 2px 5px rgba(0,0,0,0.3);"></div>',
             className: '',
@@ -266,7 +313,7 @@ export default function Track({ route, navigation }) {
             .addTo(window.map)
             .bindPopup('${spotName}');
 
-          // --- Routing ---
+          // Routing
           window.routingControl = L.Routing.control({
             waypoints: [
               L.latLng(${userLat}, ${userLng}),
@@ -285,7 +332,6 @@ export default function Track({ route, navigation }) {
             fitSelectedRoutes: false
           }).addTo(window.map);
 
-          // Fit both points in view
           window.map.fitBounds(
             L.latLngBounds([${userLat}, ${userLng}], [${destLat}, ${destLng}]),
             { padding: [80, 80] }
@@ -294,7 +340,6 @@ export default function Track({ route, navigation }) {
       </body>
       </html>
     `;
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [spotData, userLocation !== null]);
 
   /* =========================================================
@@ -361,6 +406,7 @@ export default function Track({ route, navigation }) {
         }}
       />
 
+      {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity
           onPress={() => navigation.goBack()}
@@ -375,6 +421,22 @@ export default function Track({ route, navigation }) {
         </View>
         <View style={styles.placeholder} />
       </View>
+
+      {/* Center on Me button */}
+      <TouchableOpacity
+        style={[styles.centerButton, followMode && styles.centerButtonActive]}
+        onPress={handleCenterOnMe}
+        activeOpacity={0.85}
+      >
+        <Feather
+          name="navigation"
+          size={22}
+          color={followMode ? "#fff" : "#8b4440"}
+        />
+        {followMode && (
+          <Text style={styles.centerButtonLabel}>Following</Text>
+        )}
+      </TouchableOpacity>
     </View>
   );
 }
@@ -454,5 +516,33 @@ const styles = StyleSheet.create({
   },
   placeholder: {
     width: 40,
+  },
+
+  // Center-on-me button — bottom right corner
+  centerButton: {
+    position: "absolute",
+    bottom: 40,
+    right: 20,
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#fff",
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 30,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
+    gap: 6,
+  },
+  // Active state — filled with brand color when following
+  centerButtonActive: {
+    backgroundColor: "#8b4440",
+  },
+  centerButtonLabel: {
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: "700",
   },
 });
