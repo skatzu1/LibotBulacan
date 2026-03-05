@@ -1,7 +1,5 @@
-import '@tensorflow/tfjs-react-native';
-import * as tf from '@tensorflow/tfjs';
 import 'react-native-gesture-handler';
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { ClerkProvider, useAuth } from '@clerk/clerk-expo';
@@ -12,7 +10,7 @@ import { ReviewProvider } from './context/ReviewContext';
 import { AuthProvider } from './context/AuthContext';
 import { BookmarkProvider } from './context/BookmarkContext';
 import { tokenCache } from './utils/tokenCache';
-import { setupClerkInterceptor } from './api'; // ← added
+import { setupClerkInterceptor } from './api';
 
 // Screens
 import WelcomePage from "./Screens/WelcomePage";
@@ -38,9 +36,8 @@ const CLERK_PUBLISHABLE_KEY = 'pk_test_cHJpbWUtY2hpY2tlbi0yNS5jbGVyay5hY2NvdW50c
 const Stack = createNativeStackNavigator();
 
 function AppNavigator() {
-  const { isLoaded, isSignedIn, getToken } = useAuth(); // ← added getToken
+  const { isLoaded, isSignedIn, getToken } = useAuth();
 
-  // ── Wire Clerk token into every axios request ──────────────────────────────
   useEffect(() => {
     if (isLoaded) {
       setupClerkInterceptor(getToken);
@@ -74,14 +71,13 @@ function AppNavigator() {
               <Stack.Screen name="Reviews" component={Reviews} />
               <Stack.Screen name="Lists" component={Lists} />
               <Stack.Screen name="Mission" component={Mission} />
-              <Stack.Screen name="Missions" component={MissionsScreen} /> 
+              <Stack.Screen name="Missions" component={MissionsScreen} />
 
               {!isSignedIn && (
                 <>
                   <Stack.Screen name="WelcomePage" component={WelcomePage} />
                   <Stack.Screen name="WelcomePage2" component={WelcomePage2} />
                   <Stack.Screen name="Login" component={Login} />
-
                   <Stack.Screen
                     name="EmailVerification"
                     component={EmailVerification}
@@ -101,32 +97,7 @@ function AppNavigator() {
   );
 }
 
-// ─── Root Component ───────────────────────────────────────────────────────────
 export default function App() {
-  const [tfReady, setTfReady] = useState(false);
-
-  useEffect(() => {
-    const initTF = async () => {
-      try {
-        await tf.ready();
-        console.log('✅ TensorFlow ready, backend:', tf.getBackend());
-      } catch (e) {
-        console.error('❌ TensorFlow init error:', e);
-      } finally {
-        setTfReady(true);
-      }
-    };
-    initTF();
-  }, []);
-
-  if (!tfReady) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#6b4b45" />
-      </View>
-    );
-  }
-
   return (
     <ClerkProvider
       publishableKey={CLERK_PUBLISHABLE_KEY}

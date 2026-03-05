@@ -1,6 +1,5 @@
 /* =========================================================
-   Temporary
-   Line 259
+   Line 250
    -AR Objects data
 ========================================================= */
 
@@ -48,6 +47,7 @@ function getDistance(lat1, lon1, lat2, lon2) {
 /* =========================================================
    UTILITY: CONVERT GPS TO AR POSITION
    Calculates relative x,z position from user to object
+   lakas ni claude
 ========================================================= */
 function gpsToARPosition(userLat, userLon, userHeading, objLat, objLon) {
   const R = 6371e3; // Earth radius in meters
@@ -65,16 +65,14 @@ function gpsToARPosition(userLat, userLon, userHeading, objLat, objLon) {
   
   // Calculate distance
   const distance = getDistance(userLat, userLon, objLat, objLon);
-
-  // bearing adjustment
+  
+  // Adjust bearing relative to user's heading
   const relativeBearing = bearing - (userHeading * Math.PI / 180);
-  const MAX_RENDER_DISTANCE = 10; 
-  const renderDistance = Math.min(distance, MAX_RENDER_DISTANCE);
-
+  
   // Convert to AR coordinates (x, z)
   // In AR: x is left/right, z is forward/back
-  const arX = renderDistance * Math.sin(relativeBearing);
-  const arZ = -renderDistance * Math.cos(relativeBearing); // negative because forward is -z
+  const arX = distance * Math.sin(relativeBearing);
+  const arZ = -distance * Math.cos(relativeBearing); // negative because forward is -z
   
   return { x: arX, z: arZ, distance };
 }
@@ -163,10 +161,10 @@ class ARScene extends Component {
   };
 
   componentDidMount() {
-    // rotation animation for objects (degrees per frame)
+    // rotation animation for objects
     this.rotationInterval = setInterval(() => {
       this.setState((prev) => ({
-        rotation: (prev.rotation + 1.2) % 360,
+        rotation: (prev.rotation + 0.02) % (Math.PI * 2),
       }));
     }, 16);
   }
@@ -211,15 +209,15 @@ class ARScene extends Component {
 
           if (collectedObjects.includes(obj.id)) return null;
 /*-------------------Dito palitan distance (Distance between you and the object bago mag render)----------------------------*/
-          // NOTE: Removed hard 20m cutoff — arPositions already filters by collectRadius.
-          // If you want a render distance limit, increase it (e.g. 100m) instead of 20m.
+          if (obj.distance > 20) return null;
 // ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
           return (
             <ViroNode
               key={obj.id}
               position={[obj.x, -1.5, obj.z]}
               scale={[0.5, 0.5, 0.5]}
-              rotation={[0, this.state.rotation, 0]}
+              rotation={[0, this.state.rotation * (180 / Math.PI), 0]}
+              transformBehaviors={["billboardY"]}
             >
               <Viro3DObject
                 source={require("../assets/models/question_mark.glb")}
@@ -279,9 +277,9 @@ export default function ARScreen({ navigation }) {
       },
       {
         id: 4,
-        name: "Wild Grey",
-        latitude: 14.779076,
-        longitude: 121.074490,
+        name: "Test",
+        latitude: 14.779107,
+        longitude: 121.074327,
         description: "Hidden treasure of STI",
         collectRadius: 10,
       },
