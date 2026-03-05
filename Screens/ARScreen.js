@@ -1,8 +1,4 @@
 /* =========================================================
-<<<<<<< HEAD
-   Line 250
-   -AR Objects data
-=======
    ARScreen.js
 
    HOW IT WORKS:
@@ -13,7 +9,6 @@
    - Only when BOTH conditions are true (in range + plane found)
      does the 3D model appear on the surface
    - User can then face the object and tap COLLECT
->>>>>>> d292da0dc2c052c418600c7069e4e1defc45555e
 ========================================================= */
 
 import React, { useState, useEffect, Component, useMemo, useRef } from "react";
@@ -52,14 +47,6 @@ function getDistance(lat1, lon1, lat2, lon2) {
   return R * (2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)));
 }
 
-<<<<<<< HEAD
-/* =========================================================
-   UTILITY: CONVERT GPS TO AR POSITION
-   Calculates relative x,z position from user to object
-   lakas ni claude
-========================================================= */
-=======
->>>>>>> d292da0dc2c052c418600c7069e4e1defc45555e
 function gpsToARPosition(userLat, userLon, userHeading, objLat, objLon) {
   const φ1 = (userLat * Math.PI) / 180;
   const φ2 = (objLat * Math.PI) / 180;
@@ -70,18 +57,6 @@ function gpsToARPosition(userLat, userLon, userHeading, objLat, objLon) {
     Math.sin(φ1) * Math.cos(φ2) * Math.cos(Δλ);
   const bearing = Math.atan2(y, x);
   const distance = getDistance(userLat, userLon, objLat, objLon);
-<<<<<<< HEAD
-  
-  // Adjust bearing relative to user's heading
-  const relativeBearing = bearing - (userHeading * Math.PI / 180);
-  
-  // Convert to AR coordinates (x, z)
-  // In AR: x is left/right, z is forward/back
-  const arX = distance * Math.sin(relativeBearing);
-  const arZ = -distance * Math.cos(relativeBearing); // negative because forward is -z
-  
-  return { x: arX, z: arZ, distance };
-=======
   const relativeBearing = bearing - (userHeading * Math.PI) / 180;
   const renderDistance = Math.min(distance, 10);
   return {
@@ -89,7 +64,6 @@ function gpsToARPosition(userLat, userLon, userHeading, objLat, objLon) {
     z: -renderDistance * Math.cos(relativeBearing),
     distance,
   };
->>>>>>> d292da0dc2c052c418600c7069e4e1defc45555e
 }
 
 function getBearingToObject(userLat, userLon, objLat, objLon) {
@@ -150,19 +124,8 @@ class ARObjectNode extends Component {
     this.props.onPlaneFound(this.props.obj.id);
   };
 
-<<<<<<< HEAD
-  componentDidMount() {
-    // rotation animation for objects
-    this.rotationInterval = setInterval(() => {
-      this.setState((prev) => ({
-        rotation: (prev.rotation + 0.02) % (Math.PI * 2),
-      }));
-    }, 16);
-  }
-=======
   render() {
     const { obj, collected, planeFound } = this.props;
->>>>>>> d292da0dc2c052c418600c7069e4e1defc45555e
 
     // Gate 1: skip if collected
     if (collected) return null;
@@ -171,30 +134,13 @@ class ARObjectNode extends Component {
     if (!obj.inRange) return null;
 
     return (
-      /*
-        ViroNode positions the plane scanner at the object's
-        GPS-calculated AR coordinates (x, z).
-        y = 0 means ground level relative to the AR world origin.
-      */
       <ViroNode position={[obj.x, 0, obj.z]}>
-        {/*
-          ViroARPlane scans for a horizontal surface at this position.
-          - Only activates when the parent ViroNode is rendered
-            (i.e. user is already within collectRadius)
-          - onAnchorFound fires once a valid plane is locked
-          - minHeight/minWidth: ignore tiny or noisy surfaces
-        */}
         <ViroARPlane
           minHeight={0.1}
           minWidth={0.1}
           alignment="Horizontal"
           onAnchorFound={this.onAnchorFound}
         >
-          {/*
-            Gate 3: only show the 3D model once a plane is confirmed.
-            The model sits ON the plane surface (position [0,0,0]
-            inside ViroARPlane = the plane's anchor point).
-          */}
           {planeFound && (
             <Viro3DObject
               source={require("../assets/models/question_mark.glb")}
@@ -221,8 +167,6 @@ class ARObjectNode extends Component {
 
 /* =========================================================
    MAIN AR SCENE
-   Single scene — no mode switching.
-   Passes each in-range object to ARObjectNode.
 ========================================================= */
 class ARScene extends Component {
   onTrackingUpdated = (state) => {
@@ -250,34 +194,6 @@ class ARScene extends Component {
           intensity={800}
         />
 
-<<<<<<< HEAD
-        {/* AR objects will only display according to their uhh pag nasa loob ng data ng lugar kinginamo */}
-        {arPositions.map((obj) => {
-
-          if (collectedObjects.includes(obj.id)) return null;
-/*-------------------Dito palitan distance (Distance between you and the object bago mag render)----------------------------*/
-          if (obj.distance > 20) return null;
-// ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-          return (
-            <ViroNode
-              key={obj.id}
-              position={[obj.x, -1.5, obj.z]}
-              scale={[0.5, 0.5, 0.5]}
-              rotation={[0, this.state.rotation * (180 / Math.PI), 0]}
-              transformBehaviors={["billboardY"]}
-            >
-              <Viro3DObject
-                source={require("../assets/models/question_mark.glb")}
-                type="GLB"
-                position={[0, 0, 0]}
-                onLoadStart={() => console.log(`Loading object ${obj.id}...`)}
-                onLoadEnd={() => console.log(`Object ${obj.id} loaded!`)}
-                onError={(error) => console.log(`Object ${obj.id} error:`, error)}
-              />
-            </ViroNode>
-          );
-        })}
-=======
         {arPositions.map((obj) => (
           <ARObjectNode
             key={obj.id}
@@ -287,7 +203,6 @@ class ARScene extends Component {
             onPlaneFound={onPlaneFound}
           />
         ))}
->>>>>>> d292da0dc2c052c418600c7069e4e1defc45555e
       </ViroARScene>
     );
   }
@@ -307,47 +222,6 @@ export default function ARScreen({ navigation }) {
   // planesFound: { [objectId]: true } — tracks which objects have a plane
   const [planesFound, setPlanesFound] = useState({});
 
-<<<<<<< HEAD
-  /* ---------------- Example Data nigga ---------------- */
-  const arObjects = useMemo(
-    () => [
-      {
-        id: 1,
-        name: "Historic Marker",
-        latitude: 14.813330703468642,
-        longitude: 121.03685068219062,
-        description: "Found at Barasoain Church",
-        collectRadius: 10,
-      },
-      {
-        id: 2,
-        name: "Mystery Box",
-        latitude: 14.813430703468642,
-        longitude: 121.03695068219062,
-        description: "Hidden treasure near the plaza",
-        collectRadius: 10,
-      },
-      {
-        id: 3,
-        name: "Wild Jeff",
-        latitude: 14.842125,
-        longitude: 121.045882,
-        description: "Hidden treasure of STI",
-        collectRadius: 20,
-      },
-      {
-        id: 4,
-        name: "Test",
-        latitude: 14.779107,
-        longitude: 121.074327,
-        description: "Hidden treasure of STI",
-        collectRadius: 10,
-      },
-      // Add more objects here
-    ],
-    []
-  );
-=======
   /* ---------------- AR Objects Data ---------------- */
   const arObjects = useMemo(() => [
     {
@@ -383,7 +257,6 @@ export default function ARScreen({ navigation }) {
       collectRadius: 10,
     },
   ], []);
->>>>>>> d292da0dc2c052c418600c7069e4e1defc45555e
 
   /* ---------------- CALCULATE AR POSITIONS ---------------- */
   const arPositions = useMemo(() => {
@@ -584,6 +457,8 @@ export default function ARScreen({ navigation }) {
         <Text style={styles.backButtonText}>←</Text>
       </TouchableOpacity>
 
+      
+{/* ========================================================= 
       {/* Debug overlay (DEV only) */}
       {__DEV__ && location && (
         <View style={styles.debugInfo}>
