@@ -4,13 +4,8 @@
   "description": "Tourism app for Bulacan",
   "main": "node_modules/expo/AppEntry.js",
   "dependencies": {
-<<<<<<< HEAD
     "@clerk/clerk-expo": "^2.19.29",
     "@react-native-async-storage/async-storage": "^2.2.0",
-=======
-    "@clerk/clerk-expo": "^2.19.22",
-    "@react-native-async-storage/async-storage": "^1.24.0",
->>>>>>> d292da0dc2c052c418600c7069e4e1defc45555e
     "@react-native-community/datetimepicker": "8.4.4",
     "@react-navigation/bottom-tabs": "^7.4.0",
     "@react-navigation/drawer": "^7.5.0",
@@ -45,8 +40,8 @@
     "express": "^5.2.1",
     "jpeg-js": "^0.4.4",
     "patch-package": "^8.0.1",
-    "react": "19.1.0",
-    "react-dom": "19.1.0",
+    "react": "^19.1.4",
+    "react-dom": "^19.1.4",
     "react-native": "0.81.5",
     "react-native-drawer-layout": "^4.2.1",
     "react-native-fast-tflite": "^2.0.0",
@@ -64,7 +59,7 @@
     "react-native-vision-camera": "^4.7.3",
     "react-native-web": "~0.21.2",
     "react-native-webview": "13.15.0",
-    "react-native-worklets": "0.7.4",
+    "react-native-worklets": "0.5.1",
     "react-native-worklets-core": "^1.6.3",
     "three": "^0.183.1",
     "three-stdlib": "^2.36.1",
