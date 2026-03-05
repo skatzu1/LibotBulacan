@@ -1,16 +1,21 @@
-import React, { createContext, useState, useContext, useCallback, useEffect } from 'react';
+import React, { createContext, useState, useContext, useCallback, useEffect, useRef } from 'react';
 import { useAuth } from '@clerk/clerk-expo';
 
 const BookmarkContext = createContext();
 export const useBookmark = () => useContext(BookmarkContext);
 
 export const BookmarkProvider = ({ children }) => {
-  const { getToken } = useAuth();
+  const { getToken, userId, isLoaded } = useAuth();
+  const getTokenRef = useRef(getToken);
   const [bookmarks, setBookmarks] = useState([]);
+
+  useEffect(() => {
+    getTokenRef.current = getToken;
+  });
 
   const fetchBookmarks = useCallback(async () => {
     try {
-      const token = await getToken();
+      const token = await getTokenRef.current();
       const res = await fetch("https://libotbackend.onrender.com/api/bookmarks", {
         headers: { Authorization: `Bearer ${token}` }
       });
@@ -20,15 +25,17 @@ export const BookmarkProvider = ({ children }) => {
     } catch (err) {
       console.error("❌ Error fetching bookmarks:", err);
     }
-  }, [getToken]);
+  }, []);
 
   useEffect(() => {
-    fetchBookmarks();
-  }, [fetchBookmarks]);
+    if (isLoaded && userId) {
+      fetchBookmarks();
+    }
+  }, [isLoaded, userId]);
 
   const addBookmark = useCallback(async (locationId) => {
     try {
-      const token = await getToken();
+      const token = await getTokenRef.current();
       await fetch("https://libotbackend.onrender.com/api/bookmarks", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
@@ -38,11 +45,11 @@ export const BookmarkProvider = ({ children }) => {
     } catch (err) {
       console.error("❌ Error adding bookmark:", err);
     }
-  }, [getToken, fetchBookmarks]);
+  }, [fetchBookmarks]);
 
   const removeBookmark = useCallback(async (locationId) => {
     try {
-      const token = await getToken();
+      const token = await getTokenRef.current();
       await fetch(`https://libotbackend.onrender.com/api/bookmarks/${locationId}`, {
         method: "DELETE",
         headers: { Authorization: `Bearer ${token}` }
@@ -51,7 +58,7 @@ export const BookmarkProvider = ({ children }) => {
     } catch (err) {
       console.error("❌ Error removing bookmark:", err);
     }
-  }, [getToken, fetchBookmarks]);
+  }, [fetchBookmarks]);
 
   const isBookmarked = useCallback((locationId) => {
     return bookmarks.some(b => String(b._id || b) === String(locationId));
