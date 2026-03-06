@@ -1,3 +1,4 @@
+// App.js
 import 'react-native-gesture-handler';
 import React, { useEffect, useState } from 'react';
 import { NavigationContainer } from "@react-navigation/native";
@@ -10,6 +11,7 @@ import 'react-native-reanimated';
 import { ReviewProvider } from './context/ReviewContext';
 import { AuthProvider } from './context/AuthContext';
 import { BookmarkProvider } from './context/BookmarkContext';
+import { ArrivalProvider } from './context/ArrivalContext'; // ✅ ADD THIS
 import { tokenCache } from './utils/tokenCache';
 import { setupClerkInterceptor } from './api';
 
@@ -32,6 +34,7 @@ import Track from './Screens/Track';
 import Mission from './Screens/Mission';
 import MissionsScreen from './Screens/MissionsScreen';
 import BadgeScreen from './Screens/BadgeScreen';
+import PreviousTripsScreen from './Screens/PreviousTripScreen';
 
 const CLERK_PUBLISHABLE_KEY = 'pk_test_cHJpbWUtY2hpY2tlbi0yNS5jbGVyay5hY2NvdW50cy5kZXYk';
 
@@ -57,7 +60,7 @@ function AppNavigator() {
       }
     };
     checkWelcome();
-  }, [isSignedIn]); // 👈 re-check every time sign in state changes
+  }, [isSignedIn]);
 
   if (!isLoaded || hasSeenWelcome === null) {
     return (
@@ -71,47 +74,46 @@ function AppNavigator() {
     <AuthProvider>
       <ReviewProvider>
         <BookmarkProvider>
-          <NavigationContainer>
-            <Stack.Navigator screenOptions={{ headerShown: false }}>
-              {isSignedIn ? (
-                <>
-                  <Stack.Screen name="Home" component={Home} options={{ gestureEnabled: false }} />
-                  <Stack.Screen name="Leaderboard" component={Leaderboard} />
-                  <Stack.Screen name="InformationScreen" component={InformationScreen} />
-                  <Stack.Screen name="Categories" component={Categories} />
-                  <Stack.Screen name="Bookmark" component={Bookmark} />
-                  <Stack.Screen name="ar" component={ARScreen} />
-                  <Stack.Screen name="Settings" component={Settings} />
-                  <Stack.Screen name="Reviews" component={Reviews} />
-                  <Stack.Screen name="Lists" component={Lists} />
-                  <Stack.Screen name="Mission" component={Mission} />
-                  <Stack.Screen name="Missions" component={MissionsScreen} />
-                  <Stack.Screen name="Track" component={Track} />
-                  <Stack.Screen name="Badges" component={BadgeScreen} />
-                </>
-              ) : (
-                <>
-                  {!hasSeenWelcome && (
-                    <>
-                      <Stack.Screen name="WelcomePage" component={WelcomePage} />
-                      <Stack.Screen name="WelcomePage2" component={WelcomePage2} />
-                    </>
-                  )}
-                  <Stack.Screen
-                    name="Login"
-                    component={Login}
-                    options={{ gestureEnabled: false }}
-                  />
-                  <Stack.Screen name="Register" component={Register} />
-                  <Stack.Screen
-                    name="EmailVerification"
-                    component={EmailVerification}
-                    options={{ gestureEnabled: false }}
-                  />
-                </>
-              )}
-            </Stack.Navigator>
-          </NavigationContainer>
+          <ArrivalProvider> {/* ✅ WRAP HERE — inside ClerkProvider so useAuth() works */}
+            <NavigationContainer>
+              <Stack.Navigator screenOptions={{ headerShown: false }}>
+                {isSignedIn ? (
+                  <>
+                    <Stack.Screen name="Home" component={Home} options={{ gestureEnabled: false }} />
+                    <Stack.Screen name="Leaderboard" component={Leaderboard} />
+                    <Stack.Screen name="InformationScreen" component={InformationScreen} />
+                    <Stack.Screen name="Categories" component={Categories} />
+                    <Stack.Screen name="Bookmark" component={Bookmark} />
+                    <Stack.Screen name="ar" component={ARScreen} />
+                    <Stack.Screen name="Settings" component={Settings} />
+                    <Stack.Screen name="Reviews" component={Reviews} />
+                    <Stack.Screen name="Lists" component={Lists} />
+                    <Stack.Screen name="Mission" component={Mission} />
+                    <Stack.Screen name="Missions" component={MissionsScreen} />
+                    <Stack.Screen name="Track" component={Track} />
+                    <Stack.Screen name="Badges" component={BadgeScreen} />
+                    <Stack.Screen name="PreviousTrips" component={PreviousTripsScreen} />
+                  </>
+                ) : (
+                  <>
+                    {!hasSeenWelcome && (
+                      <>
+                        <Stack.Screen name="WelcomePage" component={WelcomePage} />
+                        <Stack.Screen name="WelcomePage2" component={WelcomePage2} />
+                      </>
+                    )}
+                    <Stack.Screen name="Login" component={Login} options={{ gestureEnabled: false }} />
+                    <Stack.Screen name="Register" component={Register} />
+                    <Stack.Screen
+                      name="EmailVerification"
+                      component={EmailVerification}
+                      options={{ gestureEnabled: false }}
+                    />
+                  </>
+                )}
+              </Stack.Navigator>
+            </NavigationContainer>
+          </ArrivalProvider> {/* ✅ */}
         </BookmarkProvider>
       </ReviewProvider>
     </AuthProvider>
