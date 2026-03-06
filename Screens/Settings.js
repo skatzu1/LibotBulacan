@@ -1,11 +1,11 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Alert, ActivityIndicator } from 'react-native';
 import { Feather } from '@expo/vector-icons';
 import { useAuth } from '../context/AuthContext';
-import { ActivityIndicator } from 'react-native';
 
 const Settings = ({ navigation }) => {
   const { logout } = useAuth();
+  const [isLoggingOut, setIsLoggingOut] = React.useState(false);
 
   const handleLogout = () => {
     Alert.alert(
@@ -22,7 +22,8 @@ const Settings = ({ navigation }) => {
             try {
               setIsLoggingOut(true);
               await logout();
-              navigation.replace('Login');
+              // No need to navigate manually — isSignedIn becoming false
+              // will automatically switch the navigator to auth screens
             } catch (error) {
               Alert.alert("Error", "Failed to log out. Please try again.");
             } finally {
@@ -34,8 +35,6 @@ const Settings = ({ navigation }) => {
       ]
     );
   };
-
-  const [isLoggingOut, setIsLoggingOut] = React.useState(false);
 
   const MenuItem = ({ icon, title, onPress }) => (
     <TouchableOpacity style={styles.menuItem} onPress={onPress}>
@@ -124,7 +123,7 @@ const Settings = ({ navigation }) => {
           />
           <TouchableOpacity style={styles.menuItem} onPress={handleLogout} disabled={isLoggingOut}>
             <View style={styles.menuLeft}>
-              <Feather name={'log-out'} size={20} color="#4a4a4a" />
+              <Feather name="log-out" size={20} color="#4a4a4a" />
               <Text style={styles.menuText}>Log out</Text>
             </View>
             {isLoggingOut && <ActivityIndicator />}
@@ -143,7 +142,6 @@ const styles = StyleSheet.create({
     backgroundColor: '#ffffff',
     paddingTop: 50,
   },
-
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -151,28 +149,23 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     marginBottom: 30,
   },
-
   backButton: {
     width: 40,
     height: 40,
     justifyContent: 'center',
     alignItems: 'flex-start',
   },
-
   headerTitle: {
     fontSize: 20,
     fontWeight: '600',
     color: '#4a4a4a',
   },
-
   scrollContent: {
     paddingHorizontal: 20,
   },
-
   section: {
     marginBottom: 30,
   },
-
   sectionTitle: {
     fontSize: 14,
     color: '#4a4a4a',
@@ -180,7 +173,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginLeft: 5,
   },
-
   menuItem: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -191,12 +183,10 @@ const styles = StyleSheet.create({
     marginBottom: 5,
     borderRadius: 16,
   },
-
   menuLeft: {
     flexDirection: 'row',
     alignItems: 'center',
   },
-
   menuText: {
     fontSize: 16,
     color: '#4a4a4a',

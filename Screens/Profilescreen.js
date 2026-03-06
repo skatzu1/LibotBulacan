@@ -12,6 +12,8 @@ import { useNavigation } from "@react-navigation/native";
 import { Feather } from "@expo/vector-icons";
 import { useUser } from "@clerk/clerk-expo";
 import { useAuth } from "../context/AuthContext";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { ALL_BADGES } from "./BadgeScreen";
 
 export default function ProfileScreen() {
   const navigation = useNavigation();
@@ -25,6 +27,8 @@ export default function ProfileScreen() {
     profilePhoto: null,
     trips: 0,
   });
+  const [points, setPoints] = useState(0);
+  const [unlockedBadgeCount, setUnlockedBadgeCount] = useState(0);
 
   useEffect(() => {
     if (isLoaded && clerkUser) {
@@ -37,7 +41,6 @@ export default function ProfileScreen() {
         trips: contextUser?.trips || 0,
       });
     } else if (contextUser) {
-      // Fallback to context user if Clerk user not available
       setUserInfo({
         email: contextUser.email || "",
         firstName: contextUser.firstName || "",
@@ -48,6 +51,25 @@ export default function ProfileScreen() {
       });
     }
   }, [clerkUser, isLoaded, contextUser]);
+
+  const loadStats = async () => {
+    try {
+      const storedPoints = await AsyncStorage.getItem("userPoints");
+      if (storedPoints !== null) setPoints(parseInt(storedPoints, 10));
+
+      const storedBadges = await AsyncStorage.getItem("unlockedBadges");
+      const ids = storedBadges ? JSON.parse(storedBadges) : [];
+      setUnlockedBadgeCount(ids.length);
+    } catch (e) {
+      console.warn("Failed to load stats:", e);
+    }
+  };
+
+  useEffect(() => {
+    loadStats();
+    const unsubscribe = navigation.addListener("focus", loadStats);
+    return unsubscribe;
+  }, [navigation]);
 
   const menuItems = [
     {
@@ -64,19 +86,19 @@ export default function ProfileScreen() {
     },
     {
       id: 3,
+      icon: "award",
+      title: "Badges",
+      badge: `${unlockedBadgeCount}/${ALL_BADGES.length}`,
+      onPress: () => navigation.navigate("Badges"),
+    },
+    {
+      id: 4,
       icon: "settings",
       title: "Settings",
       onPress: () => navigation.navigate("Settings"),
     },
-    {
-      id: 4, 
-      icon: "award",
-      title: "Badges",
-      onPress: () => console.log("Badges pressed"),
-    },
   ];
 
-  // Show loading state while user data is being fetched
   if (!isLoaded) {
     return (
       <View style={[styles.container, styles.loadingContainer]}>
@@ -87,16 +109,13 @@ export default function ProfileScreen() {
 
   return (
     <View style={styles.container}>
-      <ScrollView 
+      <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
         {/* HEADER */}
         <View style={styles.header}>
-          <TouchableOpacity 
-            onPress={() => navigation.goBack()}
-            style={styles.backButton}
-          >
+          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
             <Feather name="chevron-left" size={24} color="#8a7a7a" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Profile</Text>
@@ -107,10 +126,7 @@ export default function ProfileScreen() {
         <View style={styles.profilePhotoContainer}>
           <View style={styles.profilePhotoWrapper}>
             {userInfo.profilePhoto ? (
-              <Image
-                source={{ uri: userInfo.profilePhoto }}
-                style={styles.profilePhoto}
-              />
+              <Image source={{ uri: userInfo.profilePhoto }} style={styles.profilePhoto} />
             ) : (
               <View style={styles.profilePhotoPlaceholder}>
                 <Feather name="user" size={40} color="#fff" />
@@ -125,14 +141,24 @@ export default function ProfileScreen() {
         )}
 
         {/* EMAIL */}
-        <Text style={styles.email}>
-          {userInfo.email || "No email available"}
-        </Text>
+        <Text style={styles.email}>{userInfo.email || "No email available"}</Text>
 
-        {/* TRAVEL TRIPS CARD */}
-        <View style={styles.tripsCard}>
-          <Text style={styles.tripsLabel}>Travel Trips</Text>
-          <Text style={styles.tripsCount}>{userInfo.trips}</Text>
+        {/* STATS ROW */}
+        <View style={styles.statsRow}>
+          <View style={styles.statCard}>
+            <Feather name="map-pin" size={18} color="#8b4440" style={styles.statIcon} />
+            <Text style={styles.statLabel}>Travel Trips</Text>
+            <Text style={styles.statCount}>{userInfo.trips}</Text>
+          </View>
+
+          <View style={styles.statDivider} />
+
+          <View style={styles.statCard}>
+            <Feather name="star" size={18} color="#f4c542" style={styles.statIcon} />
+            <Text style={styles.statLabel}>Points</Text>
+            <Text style={[styles.statCount, styles.pointsCount]}>{points}</Text>
+          </View>
+
         </View>
 
         {/* MENU ITEMS */}
@@ -150,7 +176,14 @@ export default function ProfileScreen() {
                 </View>
                 <Text style={styles.menuText}>{item.title}</Text>
               </View>
-              <Feather name="chevron-right" size={18} color="#8a7a7a" />
+              <View style={styles.menuRight}>
+                {item.badge && (
+                  <View style={styles.badgePill}>
+                    <Text style={styles.badgePillText}>{item.badge}</Text>
+                  </View>
+                )}
+                <Feather name="chevron-right" size={18} color="#8a7a7a" />
+              </View>
             </TouchableOpacity>
           ))}
         </View>
@@ -162,142 +195,71 @@ export default function ProfileScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#ffffff",
-  },
-
-  loadingContainer: {
-    justifyContent: "center",
-    alignItems: "center",
-  },
-
-  scrollContent: {
-    paddingHorizontal: 20,
-    paddingTop: 50,
-  },
+  container: { flex: 1, backgroundColor: "#ffffff" },
+  loadingContainer: { justifyContent: "center", alignItems: "center" },
+  scrollContent: { paddingHorizontal: 20, paddingTop: 50 },
 
   header: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 25,
+    flexDirection: "row", justifyContent: "space-between",
+    alignItems: "center", marginBottom: 25,
   },
+  backButton: { width: 40, height: 40, justifyContent: "center", alignItems: "flex-start" },
+  headerTitle: { fontSize: 18, fontWeight: "600", color: "#4a4a4a" },
 
-  backButton: {
-    width: 40,
-    height: 40,
-    justifyContent: "center",
-    alignItems: "flex-start",
-  },
-
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: "#4a4a4a",
-  },
-
-  profilePhotoContainer: {
-    alignItems: "center",
-    marginBottom: 12,
-  },
-
+  profilePhotoContainer: { alignItems: "center", marginBottom: 12 },
   profilePhotoWrapper: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    overflow: "hidden",
-    backgroundColor: "#4a4a4a",
-    justifyContent: "center",
-    alignItems: "center",
+    width: 100, height: 100, borderRadius: 50,
+    overflow: "hidden", backgroundColor: "#4a4a4a",
+    justifyContent: "center", alignItems: "center",
   },
-
-  profilePhoto: {
-    width: "100%",
-    height: "100%",
-    resizeMode: "cover",
-  },
-
+  profilePhoto: { width: "100%", height: "100%", resizeMode: "cover" },
   profilePhotoPlaceholder: {
-    width: "100%",
-    height: "100%",
-    justifyContent: "center",
-    alignItems: "center",
+    width: "100%", height: "100%",
+    justifyContent: "center", alignItems: "center",
     backgroundColor: "#4a4a4a",
   },
 
-  userName: {
-    fontSize: 18,
-    fontWeight: "600",
-    color: "#4a4a4a",
-    textAlign: "center",
-    marginBottom: 4,
-  },
+  userName: { fontSize: 18, fontWeight: "600", color: "#4a4a4a", textAlign: "center", marginBottom: 4 },
+  email: { fontSize: 13, color: "#6a5a5a", textAlign: "center", marginBottom: 20 },
 
-  email: {
-    fontSize: 13,
-    color: "#6a5a5a",
-    textAlign: "center",
-    marginBottom: 20,
-  },
-
-  tripsCard: {
+  // Stats
+  statsRow: {
+    flexDirection: "row",
     backgroundColor: "#fff",
-    borderRadius: 12,
-    paddingVertical: 18,
-    paddingHorizontal: 20,
-    alignItems: "center",
+    borderRadius: 16,
+    paddingVertical: 18, paddingHorizontal: 12,
     marginBottom: 25,
-    alignSelf: "center",
-    minWidth: 140,
+    alignItems: "center",
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.06, shadowRadius: 6, elevation: 3,
+    borderWidth: 1, borderColor: "#f0e0de",
   },
+  statCard: { flex: 1, alignItems: "center" },
+  statIcon: { marginBottom: 5 },
+  statDivider: { width: 1, height: 50, backgroundColor: "#e8d0ce", marginHorizontal: 4 },
+  statLabel: { fontSize: 11, color: "#5a4a4a", fontWeight: "500", marginBottom: 4 },
+  statCount: { fontSize: 24, color: "#4a4a4a", fontWeight: "700" },
+  pointsCount: { color: "#8b4440" },
 
-  tripsLabel: {
-    fontSize: 14,
-    color: "#5a4a4a",
-    fontWeight: "500",
-    marginBottom: 6,
-  },
-
-  tripsCount: {
-    fontSize: 28,
-    color: "#4a4a4a",
-    fontWeight: "700",
-  },
-
-  menuContainer: {
-    backgroundColor: "transparent",
-  },
-
+  // Menu
+  menuContainer: { backgroundColor: "transparent" },
   menuItem: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    backgroundColor: "#f5d4d1",
-    borderRadius: 10,
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    marginBottom: 10,
+    flexDirection: "row", justifyContent: "space-between", alignItems: "center",
+    backgroundColor: "#f5d4d1", borderRadius: 10,
+    paddingVertical: 14, paddingHorizontal: 16, marginBottom: 10,
   },
-
-  menuLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-
+  menuLeft: { flexDirection: "row", alignItems: "center" },
   iconContainer: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: "#e8bfbc",
-    justifyContent: "center",
-    alignItems: "center",
-    marginRight: 12,
+    width: 36, height: 36, borderRadius: 18,
+    backgroundColor: "#e8bfbc", justifyContent: "center",
+    alignItems: "center", marginRight: 12,
   },
-
-  menuText: {
-    fontSize: 15,
-    color: "#4a4a4a",
-    fontWeight: "500",
+  menuText: { fontSize: 15, color: "#4a4a4a", fontWeight: "500" },
+  menuRight: { flexDirection: "row", alignItems: "center", gap: 8 },
+  badgePill: {
+    backgroundColor: "#8b4440", borderRadius: 12,
+    paddingHorizontal: 8, paddingVertical: 2,
   },
+  badgePillText: { color: "#fff", fontSize: 11, fontWeight: "700" },
 });

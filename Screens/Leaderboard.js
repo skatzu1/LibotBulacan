@@ -1,124 +1,295 @@
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, ScrollView, Image } from 'react-native';
+import React, { useEffect, useState, useRef } from 'react';
+import {
+  View,
+  Text,
+  StyleSheet,
+  TouchableOpacity,
+  ScrollView,
+  Image,
+  ActivityIndicator,
+  RefreshControl,
+} from 'react-native';
 import { useNavigation } from '@react-navigation/native';
 import { Feather } from '@expo/vector-icons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { useUser, useAuth } from '@clerk/clerk-expo';
+
+const BASE_URL = 'https://libotbackend.onrender.com';
 
 export default function Leaderboard() {
   const navigation = useNavigation();
+  const { user: clerkUser, isLoaded } = useUser();
+  const { getToken } = useAuth();
 
-  // Sample leaderboard data
-  const topThree = [
-    { id: 2, name: 'Valent', visits: '45 visits', position: 2, avatar: null },
-    { id: 1, name: 'Co.Vistol', visits: '65 visits', position: 1, avatar: null },
-    { id: 3, name: 'Jonathan', visits: '35 visits', position: 3, avatar: null },
-  ];
+  const [allUsers, setAllUsers] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError] = useState(null);
 
-  const otherUsers = [
-    { id: 4, rank: 4, name: 'Mae', visits: '29 visits', avatar: null },
-    { id: 5, rank: 5, name: 'Yuan', visits: '21 visits', avatar: null },
-    { id: 6, rank: 6, name: 'Jonathan', visits: '20 visits', avatar: null },
-  ];
+  const isFetching = useRef(false);
+
+  /* =========================================================
+     FETCH ALL USERS
+  ========================================================= */
+  const buildLeaderboard = async (isRefresh = false) => {
+    if (isFetching.current) return;
+    isFetching.current = true;
+
+    if (isRefresh) setRefreshing(true);
+    else setLoading(true);
+    setError(null);
+
+    try {
+      const token = await getToken();
+
+      const res = await fetch(`${BASE_URL}/api/users`, {
+        headers: {
+          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      const ct = res.headers.get('content-type') ?? '';
+
+      if (!res.ok || !ct.includes('application/json')) {
+        setError('Could not reach the server.');
+        return;
+      }
+
+      const data = await res.json();
+
+      const list = Array.isArray(data)
+        ? data
+        : Array.isArray(data.users)
+        ? data.users
+        : null;
+
+      if (!list) {
+        setError('Unexpected response from server.');
+        return;
+      }
+
+      // Map MongoDB User schema fields
+      let serverUsers = list.map((u) => ({
+        id: u._id,
+        clerkUserId: u.clerkUserId,
+        name:
+          u.name && u.name !== 'User'
+            ? u.name
+            : `${u.firstName || ''} ${u.lastName || ''}`.trim() ||
+              u.email?.split('@')[0] ||
+              'User',
+        points: typeof u.points === 'number' ? u.points : 0,
+        avatar: u.profileImage || null,
+        isMe: false,
+      }));
+
+      // Mark the current user and use their Clerk avatar
+      if (clerkUser?.id) {
+        const idx = serverUsers.findIndex((u) => u.clerkUserId === clerkUser.id);
+        if (idx >= 0) {
+          serverUsers[idx] = {
+            ...serverUsers[idx],
+            avatar: clerkUser.imageUrl || clerkUser.profileImageUrl || serverUsers[idx].avatar,
+            isMe: true,
+          };
+          // Sync local AsyncStorage with DB value
+          await AsyncStorage.setItem('userPoints', String(serverUsers[idx].points)).catch(() => {});
+        }
+      }
+
+      // Sort by points descending, then alphabetically for ties
+      serverUsers.sort((a, b) => b.points - a.points || a.name.localeCompare(b.name));
+
+      setAllUsers(serverUsers);
+    } catch (e) {
+      console.warn('Leaderboard error:', e);
+      setError('Failed to load leaderboard.');
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+      isFetching.current = false;
+    }
+  };
+
+  // Fetch once Clerk is ready
+  useEffect(() => {
+    if (!isLoaded) return;
+    buildLeaderboard();
+  }, [isLoaded]);
+
+  // Re-fetch on screen focus
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('focus', () => {
+      if (isLoaded) buildLeaderboard();
+    });
+    return unsubscribe;
+  }, [navigation, isLoaded]);
+
+  /* =========================================================
+     AVATAR HELPER
+  ========================================================= */
+  const renderAvatar = (user, size = 'normal') => {
+    const dim = size === 'winner' ? 85 : size === 'small' ? 40 : 70;
+    const radius = dim / 2;
+    const iconSize = size === 'winner' ? 35 : size === 'small' ? 18 : 30;
+    const bg = user.isMe ? '#8b4440' : size === 'winner' ? '#2c2c54' : '#6a5a5a';
+
+    if (user.avatar) {
+      return (
+        <Image source={{ uri: user.avatar }} style={{ width: dim, height: dim, borderRadius: radius }} />
+      );
+    }
+    return (
+      <View style={{ width: dim, height: dim, borderRadius: radius, backgroundColor: bg, justifyContent: 'center', alignItems: 'center' }}>
+        <Feather name="user" size={iconSize} color="#fff" />
+      </View>
+    );
+  };
+
+  /* =========================================================
+     STATES
+  ========================================================= */
+  if (!isLoaded || loading) {
+    return (
+      <View style={[styles.container, styles.centered]}>
+        <ActivityIndicator size="large" color="#8b4440" />
+        <Text style={styles.loadingText}>Loading leaderboard...</Text>
+      </View>
+    );
+  }
+
+  if (error) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+            <Feather name="chevron-left" size={24} color="#6a5a5a" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Leaderboard</Text>
+          <View style={{ width: 40 }} />
+        </View>
+        <View style={styles.centered}>
+          <Text style={styles.emptyEmoji}>⚠️</Text>
+          <Text style={styles.emptyTitle}>Something went wrong</Text>
+          <Text style={styles.emptySubtitle}>{error}</Text>
+          <TouchableOpacity style={styles.retryButton} onPress={() => buildLeaderboard()}>
+            <Text style={styles.retryText}>Retry</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
+
+  if (allUsers.length === 0) {
+    return (
+      <View style={styles.container}>
+        <View style={styles.header}>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+            <Feather name="chevron-left" size={24} color="#6a5a5a" />
+          </TouchableOpacity>
+          <Text style={styles.headerTitle}>Leaderboard</Text>
+          <View style={{ width: 40 }} />
+        </View>
+        <View style={styles.centered}>
+          <Text style={styles.emptyEmoji}>🏆</Text>
+          <Text style={styles.emptyTitle}>No rankings yet</Text>
+          <Text style={styles.emptySubtitle}>Visit locations to earn points and appear on the leaderboard!</Text>
+        </View>
+      </View>
+    );
+  }
+
+  /* =========================================================
+     MAIN RENDER
+  ========================================================= */
+  const topThree = allUsers.slice(0, 3);
+  const podiumOrder = [topThree[1], topThree[0], topThree[2]].filter(Boolean);
+  const podiumPositions = [2, 1, 3];
+  const otherUsers = allUsers.slice(3);
 
   return (
     <View style={styles.container}>
-      {/* HEADER */}
       <View style={styles.header}>
-        <TouchableOpacity 
-          onPress={() => navigation.goBack()}
-          style={styles.backButton}
-        >
-          <Feather name="chevron-left" size={24} color="#fff" />
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+          <Feather name="chevron-left" size={24} color="#6a5a5a" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Leaderboard</Text>
-        <TouchableOpacity style={styles.settingsButton}>
-          <Feather name="settings" size={24} color="#fff" />
-        </TouchableOpacity>
+        <View style={{ width: 40 }} />
       </View>
 
-      <ScrollView 
+      <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={() => buildLeaderboard(true)}
+            tintColor="#8b4440"
+            colors={['#8b4440']}
+          />
+        }
       >
+        <Text style={styles.totalLabel}>
+          {allUsers.length} player{allUsers.length !== 1 ? 's' : ''} ranked
+        </Text>
+
         {/* TOP 3 PODIUM */}
         <View style={styles.podiumContainer}>
-          {/* Second Place */}
-          <View style={styles.podiumItem}>
-            <View style={styles.avatarContainer}>
-              {topThree[0].avatar ? (
-                <Image source={{ uri: topThree[0].avatar }} style={styles.avatar} />
-              ) : (
-                <View style={[styles.avatar, styles.avatarPlaceholder]}>
-                  <Feather name="user" size={30} color="#fff" />
-                </View>
-              )}
-            </View>
-            <Text style={styles.podiumName}>{topThree[0].name}</Text>
-            <Text style={styles.podiumVisits}>{topThree[0].visits}</Text>
-          </View>
-
-          {/* First Place (Winner) */}
-          <View style={[styles.podiumItem, styles.winnerItem]}>
-            <View style={styles.crownContainer}>
-              <Text style={styles.crown}>👑</Text>
-            </View>
-            <View style={[styles.avatarContainer, styles.winnerAvatar]}>
-              {topThree[1].avatar ? (
-                <Image source={{ uri: topThree[1].avatar }} style={styles.avatar} />
-              ) : (
-                <View style={[styles.avatar, styles.avatarPlaceholder, styles.winnerAvatarBg]}>
-                  <Feather name="user" size={35} color="#fff" />
-                </View>
-              )}
-              <View style={styles.winnerBadge}>
-                <Text style={styles.winnerBadgeText}>1</Text>
-              </View>
-            </View>
-            <Text style={[styles.podiumName, styles.winnerName]}>{topThree[1].name}</Text>
-            <Text style={styles.podiumVisits}>{topThree[1].visits}</Text>
-          </View>
-
-          {/* Third Place */}
-          <View style={styles.podiumItem}>
-            <View style={styles.avatarContainer}>
-              {topThree[2].avatar ? (
-                <Image source={{ uri: topThree[2].avatar }} style={styles.avatar} />
-              ) : (
-                <View style={[styles.avatar, styles.avatarPlaceholder]}>
-                  <Feather name="user" size={30} color="#fff" />
-                </View>
-              )}
-            </View>
-            <Text style={styles.podiumName}>{topThree[2].name}</Text>
-            <Text style={styles.podiumVisits}>{topThree[2].visits}</Text>
-          </View>
-        </View>
-
-        {/* RANKED LIST */}
-        <View style={styles.rankedList}>
-          {otherUsers.map((user) => (
-            <View key={user.id} style={styles.rankItem}>
-              <View style={styles.rankLeft}>
-                <Text style={styles.rankNumber}>{user.rank}</Text>
-                <View style={styles.rankAvatar}>
-                  {user.avatar ? (
-                    <Image source={{ uri: user.avatar }} style={styles.smallAvatar} />
+          {podiumOrder.map((user, index) => {
+            if (!user) return null;
+            const position = podiumPositions[index];
+            const isWinner = position === 1;
+            return (
+              <View key={user.id} style={[styles.podiumItem, isWinner && styles.winnerItem]}>
+                {isWinner && (
+                  <View style={styles.crownContainer}>
+                    <Text style={styles.crown}>👑</Text>
+                  </View>
+                )}
+                <View style={styles.avatarContainer}>
+                  {renderAvatar(user, isWinner ? 'winner' : 'normal')}
+                  {isWinner ? (
+                    <View style={styles.winnerBadge}>
+                      <Text style={styles.winnerBadgeText}>1</Text>
+                    </View>
                   ) : (
-                    <View style={[styles.smallAvatar, styles.smallAvatarPlaceholder]}>
-                      <Feather name="user" size={18} color="#fff" />
+                    <View style={[styles.rankBadge, position === 2 ? styles.rank2Badge : styles.rank3Badge]}>
+                      <Text style={styles.rankBadgeText}>{position}</Text>
                     </View>
                   )}
                 </View>
-                <Text style={styles.rankName}>{user.name}</Text>
+                <Text
+                  style={[styles.podiumName, isWinner && styles.winnerName, user.isMe && styles.meName]}
+                  numberOfLines={1}
+                >
+                  {user.name}{user.isMe ? ' (You)' : ''}
+                </Text>
+                <Text style={styles.podiumPts}>{user.points} pts</Text>
               </View>
-              <Text style={styles.rankVisits}>{user.visits}</Text>
-            </View>
-          ))}
+            );
+          })}
         </View>
 
-        {/* VIEW ALL BUTTON */}
-        <TouchableOpacity style={styles.viewAllButton}>
-          <Text style={styles.viewAllText}>View All</Text>
-        </TouchableOpacity>
+        {/* RANKED LIST */}
+        {otherUsers.length > 0 && (
+          <View style={styles.rankedList}>
+            {otherUsers.map((user, index) => (
+              <View key={user.id} style={[styles.rankItem, user.isMe && styles.rankItemMe]}>
+                <View style={styles.rankLeft}>
+                  <Text style={styles.rankNumber}>{index + 4}</Text>
+                  <View style={styles.rankAvatarWrap}>
+                    {renderAvatar(user, 'small')}
+                  </View>
+                  <Text style={[styles.rankName, user.isMe && styles.meName]} numberOfLines={1}>
+                    {user.name}{user.isMe ? ' (You)' : ''}
+                  </Text>
+                </View>
+                <Text style={styles.rankPts}>{user.points} pts</Text>
+              </View>
+            ))}
+          </View>
+        )}
 
         <View style={{ height: 50 }} />
       </ScrollView>
@@ -127,204 +298,66 @@ export default function Leaderboard() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#f5c4c1',
-    paddingTop: 50,
-  },
+  container: { flex: 1, backgroundColor: '#f5c4c1', paddingTop: 50 },
+  centered: { flex: 1, justifyContent: 'center', alignItems: 'center', paddingHorizontal: 30 },
+  loadingText: { marginTop: 12, fontSize: 14, color: '#6a5a5a', fontWeight: '500' },
 
   header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 20,
-    marginBottom: 30,
+    flexDirection: 'row', justifyContent: 'space-between',
+    alignItems: 'center', paddingHorizontal: 20, marginBottom: 10,
   },
+  backButton: { width: 40, height: 40, justifyContent: 'center', alignItems: 'flex-start' },
+  headerTitle: { fontSize: 18, fontWeight: '700', color: '#4a2e2c' },
 
-  backButton: {
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'flex-start',
-  },
+  scrollContent: { paddingHorizontal: 20, paddingTop: 10 },
+  totalLabel: { fontSize: 12, color: '#6a5a5a', fontWeight: '500', textAlign: 'center', marginBottom: 20 },
 
-  headerTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#6a5a5a',
-  },
+  emptyEmoji: { fontSize: 56, marginBottom: 14 },
+  emptyTitle: { fontSize: 18, fontWeight: '700', color: '#4a2e2c', marginBottom: 6, textAlign: 'center' },
+  emptySubtitle: { fontSize: 13, color: '#6a5a5a', textAlign: 'center', lineHeight: 19 },
+  retryButton: { marginTop: 20, backgroundColor: '#8b4440', paddingHorizontal: 28, paddingVertical: 10, borderRadius: 20 },
+  retryText: { color: '#fff', fontWeight: '700', fontSize: 14 },
 
-  settingsButton: {
-    width: 40,
-    height: 40,
-    justifyContent: 'center',
-    alignItems: 'flex-end',
-  },
-
-  scrollContent: {
-    paddingHorizontal: 20,
-  },
-
-  // PODIUM STYLES
   podiumContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'flex-end',
-    marginBottom: 40,
-    gap: 15,
+    flexDirection: 'row', justifyContent: 'center',
+    alignItems: 'flex-end', marginBottom: 30, gap: 12,
   },
-
-  podiumItem: {
-    alignItems: 'center',
-    flex: 1,
-  },
-
-  winnerItem: {
-    marginBottom: 20,
-  },
-
-  crownContainer: {
-    marginBottom: 5,
-  },
-
-  crown: {
-    fontSize: 35,
-  },
-
-  avatarContainer: {
-    position: 'relative',
-    marginBottom: 8,
-  },
-
-  winnerAvatar: {
-    marginBottom: 10,
-  },
-
-  avatar: {
-    width: 70,
-    height: 70,
-    borderRadius: 35,
-    backgroundColor: '#6a5a5a',
-  },
-
-  avatarPlaceholder: {
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-
-  winnerAvatarBg: {
-    width: 85,
-    height: 85,
-    borderRadius: 42.5,
-    backgroundColor: '#2c2c54',
-  },
-
+  podiumItem: { alignItems: 'center', flex: 1 },
+  winnerItem: { marginBottom: 18 },
+  crownContainer: { marginBottom: 4 },
+  crown: { fontSize: 32 },
+  avatarContainer: { position: 'relative', marginBottom: 8 },
   winnerBadge: {
-    position: 'absolute',
-    bottom: -5,
-    alignSelf: 'center',
-    backgroundColor: '#f4c542',
-    width: 30,
-    height: 30,
-    borderRadius: 15,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 3,
-    borderColor: '#f5c4c1',
+    position: 'absolute', bottom: -5, alignSelf: 'center',
+    backgroundColor: '#f4c542', width: 28, height: 28, borderRadius: 14,
+    justifyContent: 'center', alignItems: 'center',
+    borderWidth: 2.5, borderColor: '#f5c4c1',
   },
-
-  winnerBadgeText: {
-    color: '#2c2c54',
-    fontSize: 16,
-    fontWeight: '700',
+  winnerBadgeText: { color: '#2c2c54', fontSize: 14, fontWeight: '800' },
+  rankBadge: {
+    position: 'absolute', bottom: -5, alignSelf: 'center',
+    width: 24, height: 24, borderRadius: 12,
+    justifyContent: 'center', alignItems: 'center',
+    borderWidth: 2, borderColor: '#f5c4c1',
   },
+  rank2Badge: { backgroundColor: '#a8a8a8' },
+  rank3Badge: { backgroundColor: '#cd7f32' },
+  rankBadgeText: { color: '#fff', fontSize: 11, fontWeight: '800' },
+  podiumName: { fontSize: 13, fontWeight: '600', color: '#4a4a4a', marginBottom: 2, textAlign: 'center' },
+  winnerName: { fontSize: 14, fontWeight: '700' },
+  meName: { color: '#8b4440' },
+  podiumPts: { fontSize: 11, color: '#6a5a5a', fontWeight: '500' },
 
-  podiumName: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#4a4a4a',
-    marginBottom: 3,
-  },
-
-  winnerName: {
-    fontSize: 15,
-    fontWeight: '700',
-  },
-
-  podiumVisits: {
-    fontSize: 12,
-    color: '#6a5a5a',
-  },
-
-  // RANKED LIST STYLES
-  rankedList: {
-    backgroundColor: 'transparent',
-    marginBottom: 25,
-  },
-
+  rankedList: { marginBottom: 10 },
   rankItem: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    backgroundColor: '#f5d4d1',
-    borderRadius: 10,
-    paddingVertical: 12,
-    paddingHorizontal: 15,
-    marginBottom: 10,
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    backgroundColor: '#f5d4d1', borderRadius: 12,
+    paddingVertical: 11, paddingHorizontal: 14, marginBottom: 8,
   },
-
-  rankLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-
-  rankNumber: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#4a4a4a',
-    width: 25,
-  },
-
-  rankAvatar: {
-    marginRight: 12,
-  },
-
-  smallAvatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#6a5a5a',
-  },
-
-  smallAvatarPlaceholder: {
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-
-  rankName: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: '#4a4a4a',
-  },
-
-  rankVisits: {
-    fontSize: 14,
-    color: '#6a5a5a',
-  },
-
-  // VIEW ALL BUTTON
-  viewAllButton: {
-    backgroundColor: 'transparent',
-    borderWidth: 1,
-    borderColor: '#6a5a5a',
-    borderRadius: 10,
-    paddingVertical: 12,
-    alignItems: 'center',
-  },
-
-  viewAllText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#4a4a4a',
-  },
+  rankItemMe: { backgroundColor: '#f0c4c0', borderWidth: 1.5, borderColor: '#8b4440' },
+  rankLeft: { flexDirection: 'row', alignItems: 'center', flex: 1 },
+  rankNumber: { fontSize: 15, fontWeight: '700', color: '#8b4440', width: 30, textAlign: 'center' },
+  rankAvatarWrap: { marginRight: 11 },
+  rankName: { fontSize: 15, fontWeight: '500', color: '#4a4a4a', flex: 1 },
+  rankPts: { fontSize: 13, color: '#6a5a5a', fontWeight: '600' },
 });
