@@ -77,7 +77,8 @@ export default function Login({ navigation }) {
       }
 
       await setActive({ session: signInResult.createdSessionId });
-      navigation.replace("Home");
+      // isSignedIn becomes true → App.js automatically switches to app screens
+
     } catch (err) {
       console.error("Email Login Error:", err);
       Alert.alert("Login Failed", err.message || "Unable to login. Please try again.");
@@ -100,7 +101,8 @@ export default function Login({ navigation }) {
       }
 
       await setActive({ session: createdSessionId });
-      navigation.replace("Home");
+      // isSignedIn becomes true → App.js automatically switches to app screens
+
     } catch (err) {
       if (err.code === "user-cancelled" || err.code === "browser-closed") return;
       Alert.alert("Login Failed", err.message || "Unable to login with Google. Please try again.");
@@ -195,9 +197,7 @@ export default function Login({ navigation }) {
         {/* REGISTER LINK */}
         <View style={styles.registerContainer}>
           <Text>Don't have an account? </Text>
-          <TouchableOpacity
-            onPress={() => navigation.navigate("Register")}
-          >
+          <TouchableOpacity onPress={() => navigation.navigate("Register")}>
             <Text style={styles.registerLink}>Sign Up</Text>
           </TouchableOpacity>
         </View>
@@ -221,7 +221,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.1,
     shadowRadius: 10,
-    elevation: 8, // Android shadow
+    elevation: 8,
   },
   titleContainer: {
     alignItems: "center",
@@ -285,7 +285,7 @@ const styles = StyleSheet.create({
     padding: 14,
     borderRadius: 12,
     fontSize: 16,
-    color: "#000000"
+    color: "#000000",
   },
   passwordToggleContainer: {
     alignItems: "flex-end",

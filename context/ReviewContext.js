@@ -9,8 +9,26 @@ export const ReviewProvider = ({ children }) => {
   const { getToken } = useAuth();
   const [reviewsBySpot, setReviewsBySpot] = useState({});
 
+  // ✅ Fetch all spots then prefetch reviews for each on app start
+  useEffect(() => {
+    const prefetchAllReviews = async () => {
+      try {
+        const res = await fetch("https://libotbackend.onrender.com/api/spots");
+        const data = await res.json();
+        if (data.success && data.spots) {
+          data.spots.forEach((spot) => {
+            if (spot._id) fetchReviews(spot._id);
+          });
+        }
+      } catch (err) {
+        console.error("❌ Error prefetching reviews:", err);
+      }
+    };
+    prefetchAllReviews();
+  }, []);
+
   const fetchReviews = useCallback(async (locationId) => {
-    if (!locationId) return; // ✅ Guard against undefined locationId
+    if (!locationId) return;
     try {
       const res = await fetch(`https://libotbackend.onrender.com/api/reviews/${locationId}`);
       const data = await res.json();
@@ -28,15 +46,11 @@ export const ReviewProvider = ({ children }) => {
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ locationId, rating, comment })
       });
-
-      // Refresh reviews after posting
       fetchReviews(locationId);
     } catch (err) {
       console.error("❌ Error adding review:", err);
     }
   }, [getToken]);
-
-  // ✅ Removed broken useEffect that called fetchReviews() without a locationId
 
   const getReviewsForSpot = useCallback((locationId) => reviewsBySpot[locationId] || [], [reviewsBySpot]);
 
