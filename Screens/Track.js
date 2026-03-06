@@ -1,3 +1,4 @@
+// screens/Track.js
 import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import {
   View,
@@ -5,237 +6,53 @@ import {
   StyleSheet,
   TouchableOpacity,
   ActivityIndicator,
-  Animated,
   Dimensions,
 } from "react-native";
 import { WebView } from "react-native-webview";
 import { Feather } from "@expo/vector-icons";
 import * as Location from "expo-location";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useAuth } from "@clerk/clerk-expo";
-import { ALL_BADGES } from "./BadgeScreen";
+import { useArrival } from "../context/ArrivalContext";
 
 const { width, height } = Dimensions.get("window");
-
 const BASE_URL = "https://libotbackend.onrender.com";
-const ARRIVAL_RADIUS_METERS = 50;
-const POINTS_PER_VISIT = 10;
 
-function getDistanceMeters(lat1, lng1, lat2, lng2) {
-  const R = 6371000;
-  const dLat = ((lat2 - lat1) * Math.PI) / 180;
-  const dLng = ((lng2 - lng1) * Math.PI) / 180;
-  const a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos((lat1 * Math.PI) / 180) *
-      Math.cos((lat2 * Math.PI) / 180) *
-      Math.sin(dLng / 2) *
-      Math.sin(dLng / 2);
-  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+// Safely get lat/lng from any spot shape
+function getSpotCoords(spot) {
+  if (!spot) return null;
+  if (spot.coordinates?.lat != null && spot.coordinates?.lng != null)
+    return { lat: spot.coordinates.lat, lng: spot.coordinates.lng };
+  if (spot.latitude != null && spot.longitude != null)
+    return { lat: spot.latitude, lng: spot.longitude };
+  return null;
 }
 
 export default function Track({ route, navigation }) {
   const { spot } = route.params;
-  const { getToken } = useAuth();
+  const { setActiveSpot } = useArrival();
 
-  const [userLocation, setUserLocation] = useState(null);
-  const [loading, setLoading] = useState(true);
-  const [spotData, setSpotData] = useState(null);
+  const [userLocation, setUserLocation]   = useState(null);
+  const [loading, setLoading]             = useState(true);
+  const [spotData, setSpotData]           = useState(null);
   const [locationError, setLocationError] = useState(null);
-  const [followMode, setFollowMode] = useState(false);
+  const [followMode, setFollowMode]       = useState(false);
 
-  const [hasArrived, setHasArrived] = useState(false);
-  const [totalPoints, setTotalPoints] = useState(0);
-
-  // Points popup animations
-  const [showPointsPopup, setShowPointsPopup] = useState(false);
-  const pointsOpacity = useRef(new Animated.Value(0)).current;
-  const pointsTranslateY = useRef(new Animated.Value(40)).current;
-  const pointsScale = useRef(new Animated.Value(0.8)).current;
-
-  // Badge banner animation
-  const [pendingBadge, setPendingBadge] = useState(null);
-  const [showBadgeBanner, setShowBadgeBanner] = useState(false);
-  const badgeTranslateY = useRef(new Animated.Value(-160)).current;
-
-  const webViewRef = useRef(null);
+  const webViewRef          = useRef(null);
   const locationSubscription = useRef(null);
-  const isMounted = useRef(true);
+  const isMounted           = useRef(true);
 
-  /* =========================================================
-     LOAD POINTS FROM MONGODB ON MOUNT
-     Fetches the user's current points from the backend so
-     the header badge always shows the real DB value.
-  ========================================================= */
+  /* ── Tell global context which spot we're heading to ── */
   useEffect(() => {
-    const loadPointsFromDB = async () => {
-      try {
-        const token = await getToken();
-        const res = await fetch(`${BASE_URL}/api/users/me`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (res.ok) {
-          const data = await res.json();
-          const dbPoints = data?.user?.points ?? data?.points ?? null;
-          if (typeof dbPoints === "number") {
-            setTotalPoints(dbPoints);
-            // Keep AsyncStorage in sync
-            await AsyncStorage.setItem("userPoints", String(dbPoints));
-            return;
-          }
-        }
-      } catch (_) {}
+    if (spotData) setActiveSpot(spotData);
+    return () => setActiveSpot(null);
+  }, [spotData]);
 
-      // Fallback to AsyncStorage if backend unavailable
-      const stored = await AsyncStorage.getItem("userPoints").catch(() => null);
-      if (stored !== null) setTotalPoints(parseInt(stored, 10));
-    };
-
-    loadPointsFromDB();
-  }, []);
-
-  /* =========================================================
-     AWARD POINTS — saves to MongoDB via PATCH /api/users/points
-     Falls back to AsyncStorage-only if request fails.
-  ========================================================= */
-  const savePointsToDB = useCallback(async (spotId) => {
-    try {
-      const token = await getToken();
-      const res = await fetch(`${BASE_URL}/api/users/points`, {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ spotId }),
-      });
-
-      if (!res.ok) return null;
-
-      const data = await res.json();
-      if (data.success) {
-        // Sync AsyncStorage with DB value
-        await AsyncStorage.setItem("userPoints", String(data.points));
-        return data; // { success, alreadyAwarded, points }
-      }
-      return null;
-    } catch (e) {
-      console.warn("savePointsToDB error:", e);
-      return null;
-    }
-  }, [getToken]);
-
-  /* =========================================================
-     POINTS POPUP
-  ========================================================= */
-  const triggerPointsPopup = useCallback((newTotal) => {
-    setTotalPoints(newTotal);
-    pointsOpacity.setValue(0);
-    pointsTranslateY.setValue(40);
-    pointsScale.setValue(0.8);
-    setShowPointsPopup(true);
-
-    Animated.parallel([
-      Animated.timing(pointsOpacity, { toValue: 1, duration: 300, useNativeDriver: true }),
-      Animated.timing(pointsTranslateY, { toValue: 0, duration: 300, useNativeDriver: true }),
-      Animated.timing(pointsScale, { toValue: 1, duration: 300, useNativeDriver: true }),
-    ]).start(() => {
-      setTimeout(() => {
-        Animated.parallel([
-          Animated.timing(pointsOpacity, { toValue: 0, duration: 300, useNativeDriver: true }),
-          Animated.timing(pointsTranslateY, { toValue: -20, duration: 300, useNativeDriver: true }),
-        ]).start(() => setShowPointsPopup(false));
-      }, 2400);
-    });
-  }, [pointsOpacity, pointsTranslateY, pointsScale]);
-
-  /* =========================================================
-     BADGE BANNER
-  ========================================================= */
-  const triggerBadgeBanner = useCallback((badge) => {
-    badgeTranslateY.setValue(-160);
-    setPendingBadge(badge);
-    setShowBadgeBanner(true);
-    Animated.timing(badgeTranslateY, {
-      toValue: 0, duration: 350, useNativeDriver: true,
-    }).start();
-  }, [badgeTranslateY]);
-
-  const dismissBadgeBanner = useCallback(() => {
-    Animated.timing(badgeTranslateY, {
-      toValue: -160, duration: 280, useNativeDriver: true,
-    }).start(() => {
-      setShowBadgeBanner(false);
-      setPendingBadge(null);
-    });
-  }, [badgeTranslateY]);
-
-  const claimBadge = useCallback(async () => {
-    if (!pendingBadge) return;
-    try {
-      const raw = await AsyncStorage.getItem("unlockedBadges");
-      const ids = raw ? JSON.parse(raw) : [];
-      if (!ids.includes(pendingBadge.id)) {
-        ids.push(pendingBadge.id);
-        await AsyncStorage.setItem("unlockedBadges", JSON.stringify(ids));
-      }
-    } catch (e) {
-      console.warn("Failed to save badge:", e);
-    }
-    dismissBadgeBanner();
-  }, [pendingBadge, dismissBadgeBanner]);
-
-  /* =========================================================
-     AWARD REWARDS ON ARRIVAL
-     1. PATCH points to MongoDB
-     2. Show points popup with updated DB total
-     3. Trigger badge banner if spot has a badge
-  ========================================================= */
-  const awardRewards = useCallback(async () => {
-    if (hasArrived) return;
-    setHasArrived(true);
-
-    // Save to DB — backend handles duplicate prevention per spotId
-    const result = await savePointsToDB(spot._id);
-
-    if (result) {
-      if (!result.alreadyAwarded) {
-        // Fresh visit — show popup with new total from DB
-        triggerPointsPopup(result.points);
-      } else {
-        // Already visited — just update display silently
-        setTotalPoints(result.points);
-      }
-    } else {
-      // Backend unavailable — fall back to local increment
-      const stored = await AsyncStorage.getItem("userPoints").catch(() => "0");
-      const current = parseInt(stored ?? "0", 10);
-      const updated = current + POINTS_PER_VISIT;
-      await AsyncStorage.setItem("userPoints", String(updated)).catch(() => {});
-      triggerPointsPopup(updated);
-    }
-
-    // Badge — only show if not already awarded for this spot
-    const matchedBadge = ALL_BADGES.find((b) => b.spotId === spot._id);
-    if (matchedBadge) {
-      try {
-        const raw = await AsyncStorage.getItem("unlockedBadges");
-        const ids = raw ? JSON.parse(raw) : [];
-        if (!ids.includes(matchedBadge.id)) {
-          setTimeout(() => triggerBadgeBanner(matchedBadge), 1400);
-        }
-      } catch (_) {}
-    }
-  }, [hasArrived, spot._id, savePointsToDB, triggerPointsPopup, triggerBadgeBanner]);
-
-  /* =========================================================
-     FETCH SPOT DATA
-  ========================================================= */
+  /* ── Fetch spot data ── */
   useEffect(() => {
     isMounted.current = true;
 
     const loadSpot = async () => {
-      if (spot?.coordinates?.lat && spot?.coordinates?.lng) {
+      // If spot already has coords, use it directly
+      if (getSpotCoords(spot)) {
         setSpotData(spot);
         return;
       }
@@ -246,12 +63,12 @@ export default function Track({ route, navigation }) {
           return res.json();
         };
         let foundSpot = null;
-        const singleRes = await fetch(`${BASE_URL}/api/spots/${spot._id}`);
+        const singleRes  = await fetch(`${BASE_URL}/api/spots/${spot._id}`);
         const singleData = await safeJson(singleRes);
         if (singleData?.success && singleData?.spot) {
           foundSpot = singleData.spot;
         } else {
-          const listRes = await fetch(`${BASE_URL}/api/spots`);
+          const listRes  = await fetch(`${BASE_URL}/api/spots`);
           const listData = await safeJson(listRes);
           if (listData?.success && Array.isArray(listData.spots)) {
             foundSpot = listData.spots.find((s) => s._id === spot._id) ?? null;
@@ -274,9 +91,7 @@ export default function Track({ route, navigation }) {
     };
   }, [spot._id]);
 
-  /* =========================================================
-     LOCATION TRACKING
-  ========================================================= */
+  /* ── Location tracking (map display only) ── */
   useEffect(() => {
     if (!spotData) return;
     let cancelled = false;
@@ -297,13 +112,9 @@ export default function Track({ route, navigation }) {
         });
         if (cancelled || !isMounted.current) return;
 
-        const coords = {
-          latitude: initial.coords.latitude,
-          longitude: initial.coords.longitude,
-        };
+        const coords = { latitude: initial.coords.latitude, longitude: initial.coords.longitude };
         setUserLocation(coords);
         setLoading(false);
-        checkArrival(coords);
 
         locationSubscription.current = await Location.watchPositionAsync(
           { accuracy: Location.Accuracy.High, timeInterval: 3000, distanceInterval: 3 },
@@ -312,7 +123,7 @@ export default function Track({ route, navigation }) {
             const c = { latitude: loc.coords.latitude, longitude: loc.coords.longitude };
             setUserLocation(c);
             updateMarkerOnMap(c);
-            checkArrival(c);
+            // ✅ No arrival check here — ArrivalContext handles it globally
           }
         );
       } catch {
@@ -327,36 +138,15 @@ export default function Track({ route, navigation }) {
     return () => { cancelled = true; };
   }, [spotData]);
 
-  /* =========================================================
-     CHECK ARRIVAL
-  ========================================================= */
-  const checkArrival = useCallback((coords) => {
-  if (!spotData?.coordinates?.lat || !spotData?.coordinates?.lng) return;
-
-  const dist = getDistanceMeters(
-    coords.latitude,
-    coords.longitude,
-    spotData.coordinates.lat,
-    spotData.coordinates.lng
-  );
-
-  console.log("DISTANCE:", dist);   // 👈 ADD THIS
-
-  if (dist <= ARRIVAL_RADIUS_METERS) {
-    console.log("ARRIVED");        // 👈 ADD THIS
-    awardRewards();
-  }
-}, [spotData, awardRewards]);
-
-  /* =========================================================
-     MAP UPDATE
-  ========================================================= */
+  /* ── Map marker update ── */
   const followModeRef = useRef(followMode);
   useEffect(() => { followModeRef.current = followMode; }, [followMode]);
 
   const updateMarkerOnMap = useCallback((coords) => {
-    if (!webViewRef.current || !spotData?.coordinates) return;
-    const { lat: destLat, lng: destLng } = spotData.coordinates;
+    if (!webViewRef.current || !spotData) return;
+    const dest = getSpotCoords(spotData);
+    if (!dest) return;
+
     webViewRef.current.injectJavaScript(`
       (function() {
         try {
@@ -364,7 +154,7 @@ export default function Track({ route, navigation }) {
           if (window.routingControl) {
             window.routingControl.setWaypoints([
               L.latLng(${coords.latitude}, ${coords.longitude}),
-              L.latLng(${destLat}, ${destLng})
+              L.latLng(${dest.lat}, ${dest.lng})
             ]);
           }
           if (${followModeRef.current} && window.map)
@@ -389,13 +179,14 @@ export default function Track({ route, navigation }) {
     }
   }, [followMode, userLocation]);
 
-  /* =========================================================
-     MAP HTML
-  ========================================================= */
+  /* ── Map HTML ── */
   const mapHTML = useMemo(() => {
-    if (!spotData?.coordinates || !userLocation) return null;
-    const { lat: destLat, lng: destLng } = spotData.coordinates;
+    if (!spotData || !userLocation) return null;
+    const dest = getSpotCoords(spotData);
+    if (!dest) return null;
+
     const { latitude: userLat, longitude: userLng } = userLocation;
+    const { lat: destLat, lng: destLng } = dest;
     const spotName = (spotData.name ?? "Destination").replace(/'/g, "\\'");
 
     return `<!DOCTYPE html><html>
@@ -436,11 +227,9 @@ export default function Track({ route, navigation }) {
           window.map.fitBounds(L.latLngBounds([${userLat}, ${userLng}], [${destLat}, ${destLng}]), { padding: [80, 80] });
         </script>
       </body></html>`;
-  }, [spotData, userLocation !== null]);
+  }, [spotData, userLocation]);
 
-  /* =========================================================
-     LOADING / ERROR
-  ========================================================= */
+  /* ── Loading / Error ── */
   if (loading || !spotData || !userLocation) {
     return (
       <View style={styles.loading}>
@@ -461,7 +250,7 @@ export default function Track({ route, navigation }) {
       </View>
     );
   }
-  if (!spotData.coordinates?.lat || !spotData.coordinates?.lng) {
+  if (!getSpotCoords(spotData)) {
     return (
       <View style={styles.loading}>
         <Text style={styles.errorText}>Location coordinates not available for this spot.</Text>
@@ -472,9 +261,6 @@ export default function Track({ route, navigation }) {
     );
   }
 
-  /* =========================================================
-     RENDER
-  ========================================================= */
   return (
     <View style={styles.container}>
       <WebView
@@ -484,7 +270,6 @@ export default function Track({ route, navigation }) {
         style={styles.map}
         javaScriptEnabled
         domStorageEnabled
-        onMessage={(e) => console.log("WebView:", e.nativeEvent.data)}
         onError={(e) => console.error("WebView error:", e.nativeEvent)}
       />
 
@@ -499,27 +284,6 @@ export default function Track({ route, navigation }) {
         <View style={{ width: 40 }} />
       </View>
 
-      {/* Badge Claim Banner */}
-      {showBadgeBanner && pendingBadge && (
-        <Animated.View style={[styles.badgeBanner, { transform: [{ translateY: badgeTranslateY }] }]}>
-          <View style={styles.badgeBannerLeft}>
-            <Image source = {pendingBadge.icon}style={{ width: 40, height: 40 }}/>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.badgeBannerTitle}>New Badge Unlocked!</Text>
-              <Text style={styles.badgeBannerName} numberOfLines={1}>{pendingBadge.name}</Text>
-            </View>
-          </View>
-          <View style={styles.badgeBannerActions}>
-            <TouchableOpacity style={styles.claimButton} onPress={claimBadge}>
-              <Text style={styles.claimButtonText}>Claim</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.dismissButton} onPress={dismissBadgeBanner}>
-              <Feather name="x" size={16} color="#8b4440" />
-            </TouchableOpacity>
-          </View>
-        </Animated.View>
-      )}
-
       {/* Center on Me */}
       <TouchableOpacity
         style={[styles.centerButton, followMode && styles.centerButtonActive]}
@@ -530,36 +294,19 @@ export default function Track({ route, navigation }) {
         {followMode && <Text style={styles.centerButtonLabel}>Following</Text>}
       </TouchableOpacity>
 
-      {/* Points Popup */}
-      {showPointsPopup && (
-        <Animated.View
-          style={[
-            styles.pointsPopup,
-            {
-              opacity: pointsOpacity,
-              transform: [{ translateY: pointsTranslateY }, { scale: pointsScale }],
-            },
-          ]}
-        >
-          <Text style={styles.pointsPopupEmoji}>🎉</Text>
-          <Text style={styles.pointsPopupTitle}>You arrived!</Text>
-          <Text style={styles.pointsPopupPoints}>+{POINTS_PER_VISIT} Points</Text>
-          <Text style={styles.pointsPopupTotal}>Total: {totalPoints} pts</Text>
-        </Animated.View>
-      )}
+      {/* ✅ Points popup and badge banner rendered globally by ArrivalContext */}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#000" },
-  map: { flex: 1, width, height },
-  loading: { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "#f7cfc9" },
-  loadingText: { marginTop: 15, fontSize: 16, color: "#4a4a4a", fontWeight: "600" },
-  errorText: { fontSize: 16, color: "#8b4440", fontWeight: "600", textAlign: "center", paddingHorizontal: 40 },
+  container:      { flex: 1, backgroundColor: "#000" },
+  map:            { flex: 1, width, height },
+  loading:        { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "#f7cfc9" },
+  loadingText:    { marginTop: 15, fontSize: 16, color: "#4a4a4a", fontWeight: "600" },
+  errorText:      { fontSize: 16, color: "#8b4440", fontWeight: "600", textAlign: "center", paddingHorizontal: 40 },
   backButtonError: { marginTop: 20, backgroundColor: "#8b4440", paddingHorizontal: 30, paddingVertical: 12, borderRadius: 25 },
   backButtonText: { color: "#fff", fontSize: 16, fontWeight: "700" },
-
   header: {
     position: "absolute", top: 0, left: 0, right: 0,
     flexDirection: "row", alignItems: "center",
@@ -570,28 +317,8 @@ const styles = StyleSheet.create({
     width: 40, height: 40, justifyContent: "center", alignItems: "center",
     backgroundColor: "rgba(0,0,0,0.2)", borderRadius: 20,
   },
-  headerContent: { flex: 1, marginHorizontal: 15 },
-  headerTitle: { fontSize: 18, fontWeight: "700", color: "#fff" },
-
-
-  badgeBanner: {
-    position: "absolute", top: 110, left: 16, right: 16,
-    backgroundColor: "#fff", borderRadius: 16,
-    paddingVertical: 14, paddingHorizontal: 16,
-    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
-    shadowColor: "#000", shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.18, shadowRadius: 10, elevation: 10,
-    borderWidth: 1.5, borderColor: "#f4c542",
-  },
-  badgeBannerLeft: { flexDirection: "row", alignItems: "center", gap: 12, flex: 1 },
-  badgeBannerEmoji: { fontSize: 32 },
-  badgeBannerTitle: { fontSize: 11, color: "#8b4440", fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.5 },
-  badgeBannerName: { fontSize: 14, color: "#4a2e2c", fontWeight: "600", marginTop: 1 },
-  badgeBannerActions: { flexDirection: "row", alignItems: "center", gap: 8 },
-  claimButton: { backgroundColor: "#8b4440", paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20 },
-  claimButtonText: { color: "#fff", fontWeight: "700", fontSize: 13 },
-  dismissButton: { width: 30, height: 30, borderRadius: 15, backgroundColor: "#fce8e6", justifyContent: "center", alignItems: "center" },
-
+  headerContent:  { flex: 1, marginHorizontal: 15 },
+  headerTitle:    { fontSize: 18, fontWeight: "700", color: "#fff" },
   centerButton: {
     position: "absolute", bottom: 40, right: 20,
     flexDirection: "row", alignItems: "center",
@@ -600,18 +327,5 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25, shadowRadius: 4, elevation: 5, gap: 6,
   },
   centerButtonActive: { backgroundColor: "#8b4440" },
-  centerButtonLabel: { color: "#fff", fontSize: 14, fontWeight: "700" },
-
-  pointsPopup: {
-    position: "absolute", bottom: 120, alignSelf: "center",
-    backgroundColor: "#fff", borderRadius: 20,
-    paddingVertical: 20, paddingHorizontal: 35, alignItems: "center",
-    shadowColor: "#000", shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3, shadowRadius: 8, elevation: 10,
-    borderWidth: 2, borderColor: "#f4c542",
-  },
-  pointsPopupEmoji: { fontSize: 36, marginBottom: 6 },
-  pointsPopupTitle: { fontSize: 18, fontWeight: "700", color: "#4a4a4a", marginBottom: 4 },
-  pointsPopupPoints: { fontSize: 26, fontWeight: "800", color: "#8b4440", marginBottom: 2 },
-  pointsPopupTotal: { fontSize: 13, color: "#6a5a5a", fontWeight: "500" },
+  centerButtonLabel:  { color: "#fff", fontSize: 14, fontWeight: "700" },
 });

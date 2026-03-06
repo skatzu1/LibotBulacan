@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import {
   View,
   Text,
@@ -10,67 +10,80 @@ import {
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { Feather } from "@expo/vector-icons";
-import { useUser } from "@clerk/clerk-expo";
-import { useAuth } from "../context/AuthContext";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import { ALL_BADGES } from "./BadgeScreen";
+import { useUser, useAuth } from "@clerk/clerk-expo";
+import { useAuth as useAppAuth } from "../context/AuthContext";
+
+const BASE_URL = "https://libotbackend.onrender.com";
 
 export default function ProfileScreen() {
   const navigation = useNavigation();
   const { user: clerkUser, isLoaded } = useUser();
-  const { user: contextUser } = useAuth();
+  const { getToken } = useAuth();
+  const { user: contextUser } = useAppAuth();
+
   const [userInfo, setUserInfo] = useState({
     email: "",
     firstName: "",
     lastName: "",
     fullName: "",
     profilePhoto: null,
-    trips: 0,
   });
-  const [points, setPoints] = useState(0);
-  const [unlockedBadgeCount, setUnlockedBadgeCount] = useState(0);
+  const [points, setPoints]         = useState(0);
+  const [badgeCount, setBadgeCount] = useState(0);
+  const [tripCount, setTripCount]   = useState(0); // ✅ from DB
 
+  /* ── User info from Clerk ── */
   useEffect(() => {
     if (isLoaded && clerkUser) {
       setUserInfo({
-        email: clerkUser.primaryEmailAddress?.emailAddress || "",
-        firstName: clerkUser.firstName || "",
-        lastName: clerkUser.lastName || "",
-        fullName: `${clerkUser.firstName || ""} ${clerkUser.lastName || ""}`.trim() || "User",
+        email:        clerkUser.primaryEmailAddress?.emailAddress || "",
+        firstName:    clerkUser.firstName || "",
+        lastName:     clerkUser.lastName || "",
+        fullName:     `${clerkUser.firstName || ""} ${clerkUser.lastName || ""}`.trim() || "User",
         profilePhoto: clerkUser.imageUrl || clerkUser.profileImageUrl || null,
-        trips: contextUser?.trips || 0,
       });
     } else if (contextUser) {
       setUserInfo({
-        email: contextUser.email || "",
-        firstName: contextUser.firstName || "",
-        lastName: contextUser.lastName || "",
-        fullName: contextUser.name || contextUser.fullName || "User",
+        email:        contextUser.email || "",
+        firstName:    contextUser.firstName || "",
+        lastName:     contextUser.lastName || "",
+        fullName:     contextUser.name || contextUser.fullName || "User",
         profilePhoto: contextUser.profilePhoto || null,
-        trips: contextUser.trips || 0,
       });
     }
   }, [clerkUser, isLoaded, contextUser]);
 
-  const loadStats = async () => {
+  /* ── Load stats from DB ── */
+  const loadStats = useCallback(async () => {
     try {
-      const storedPoints = await AsyncStorage.getItem("userPoints");
-      if (storedPoints !== null) setPoints(parseInt(storedPoints, 10));
+      const token = await getToken();
+      const res   = await fetch(`${BASE_URL}/api/users/me`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) return;
 
-      const storedBadges = await AsyncStorage.getItem("unlockedBadges");
-      const ids = storedBadges ? JSON.parse(storedBadges) : [];
-      setUnlockedBadgeCount(ids.length);
+      const data = await res.json();
+      const user = data?.user;
+
+      if (typeof user?.points === "number") setPoints(user.points);
+
+      const badges = Array.isArray(user?.badges) ? user.badges : [];
+      setBadgeCount(badges.length);
+
+      const trips = Array.isArray(user?.visitedSpots) ? user.visitedSpots : [];
+      setTripCount(trips.length);
     } catch (e) {
-      console.warn("Failed to load stats:", e);
+      console.warn("ProfileScreen loadStats error:", e);
     }
-  };
+  }, [getToken]);
 
   useEffect(() => {
     loadStats();
     const unsubscribe = navigation.addListener("focus", loadStats);
     return unsubscribe;
-  }, [navigation]);
+  }, [navigation, loadStats]);
 
+  /* ── Menu ── */
   const menuItems = [
     {
       id: 1,
@@ -82,13 +95,14 @@ export default function ProfileScreen() {
       id: 2,
       icon: "map-pin",
       title: "Previous Trips",
-      onPress: () => console.log("Previous Trips pressed"),
+      badge: tripCount > 0 ? `${tripCount} spots` : null,
+      onPress: () => navigation.navigate("PreviousTrips"), // ✅ register this in your navigator
     },
     {
       id: 3,
       icon: "award",
       title: "Badges",
-      badge: `${unlockedBadgeCount}/${ALL_BADGES.length}`,
+      badge: badgeCount > 0 ? `${badgeCount} earned` : null,
       onPress: () => navigation.navigate("Badges"),
     },
     {
@@ -135,20 +149,18 @@ export default function ProfileScreen() {
           </View>
         </View>
 
-        {/* USER NAME */}
-        {userInfo.fullName && (
+        {userInfo.fullName ? (
           <Text style={styles.userName}>{userInfo.fullName}</Text>
-        )}
+        ) : null}
 
-        {/* EMAIL */}
         <Text style={styles.email}>{userInfo.email || "No email available"}</Text>
 
         {/* STATS ROW */}
         <View style={styles.statsRow}>
           <View style={styles.statCard}>
             <Feather name="map-pin" size={18} color="#8b4440" style={styles.statIcon} />
-            <Text style={styles.statLabel}>Travel Trips</Text>
-            <Text style={styles.statCount}>{userInfo.trips}</Text>
+            <Text style={styles.statLabel}>Trips</Text>
+            <Text style={styles.statCount}>{tripCount}</Text>
           </View>
 
           <View style={styles.statDivider} />
@@ -159,6 +171,13 @@ export default function ProfileScreen() {
             <Text style={[styles.statCount, styles.pointsCount]}>{points}</Text>
           </View>
 
+          <View style={styles.statDivider} />
+
+          <View style={styles.statCard}>
+            <Feather name="award" size={18} color="#8b4440" style={styles.statIcon} />
+            <Text style={styles.statLabel}>Badges</Text>
+            <Text style={[styles.statCount, styles.pointsCount]}>{badgeCount}</Text>
+          </View>
         </View>
 
         {/* MENU ITEMS */}
@@ -177,11 +196,11 @@ export default function ProfileScreen() {
                 <Text style={styles.menuText}>{item.title}</Text>
               </View>
               <View style={styles.menuRight}>
-                {item.badge && (
+                {item.badge ? (
                   <View style={styles.badgePill}>
                     <Text style={styles.badgePillText}>{item.badge}</Text>
                   </View>
-                )}
+                ) : null}
                 <Feather name="chevron-right" size={18} color="#8a7a7a" />
               </View>
             </TouchableOpacity>
@@ -195,15 +214,15 @@ export default function ProfileScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#ffffff" },
+  container:        { flex: 1, backgroundColor: "#ffffff" },
   loadingContainer: { justifyContent: "center", alignItems: "center" },
-  scrollContent: { paddingHorizontal: 20, paddingTop: 50 },
+  scrollContent:    { paddingHorizontal: 20, paddingTop: 50 },
 
   header: {
     flexDirection: "row", justifyContent: "space-between",
     alignItems: "center", marginBottom: 25,
   },
-  backButton: { width: 40, height: 40, justifyContent: "center", alignItems: "flex-start" },
+  backButton:  { width: 40, height: 40, justifyContent: "center", alignItems: "flex-start" },
   headerTitle: { fontSize: 18, fontWeight: "600", color: "#4a4a4a" },
 
   profilePhotoContainer: { alignItems: "center", marginBottom: 12 },
@@ -220,43 +239,37 @@ const styles = StyleSheet.create({
   },
 
   userName: { fontSize: 18, fontWeight: "600", color: "#4a4a4a", textAlign: "center", marginBottom: 4 },
-  email: { fontSize: 13, color: "#6a5a5a", textAlign: "center", marginBottom: 20 },
+  email:    { fontSize: 13, color: "#6a5a5a", textAlign: "center", marginBottom: 20 },
 
-  // Stats
   statsRow: {
-    flexDirection: "row",
-    backgroundColor: "#fff",
-    borderRadius: 16,
-    paddingVertical: 18, paddingHorizontal: 12,
-    marginBottom: 25,
-    alignItems: "center",
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
+    flexDirection: "row", backgroundColor: "#fff",
+    borderRadius: 16, paddingVertical: 18, paddingHorizontal: 12,
+    marginBottom: 25, alignItems: "center",
+    shadowColor: "#000", shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.06, shadowRadius: 6, elevation: 3,
     borderWidth: 1, borderColor: "#f0e0de",
   },
-  statCard: { flex: 1, alignItems: "center" },
-  statIcon: { marginBottom: 5 },
+  statCard:    { flex: 1, alignItems: "center" },
+  statIcon:    { marginBottom: 5 },
   statDivider: { width: 1, height: 50, backgroundColor: "#e8d0ce", marginHorizontal: 4 },
-  statLabel: { fontSize: 11, color: "#5a4a4a", fontWeight: "500", marginBottom: 4 },
-  statCount: { fontSize: 24, color: "#4a4a4a", fontWeight: "700" },
+  statLabel:   { fontSize: 11, color: "#5a4a4a", fontWeight: "500", marginBottom: 4 },
+  statCount:   { fontSize: 24, color: "#4a4a4a", fontWeight: "700" },
   pointsCount: { color: "#8b4440" },
 
-  // Menu
   menuContainer: { backgroundColor: "transparent" },
   menuItem: {
     flexDirection: "row", justifyContent: "space-between", alignItems: "center",
     backgroundColor: "#f5d4d1", borderRadius: 10,
     paddingVertical: 14, paddingHorizontal: 16, marginBottom: 10,
   },
-  menuLeft: { flexDirection: "row", alignItems: "center" },
+  menuLeft:      { flexDirection: "row", alignItems: "center" },
   iconContainer: {
     width: 36, height: 36, borderRadius: 18,
     backgroundColor: "#e8bfbc", justifyContent: "center",
     alignItems: "center", marginRight: 12,
   },
-  menuText: { fontSize: 15, color: "#4a4a4a", fontWeight: "500" },
-  menuRight: { flexDirection: "row", alignItems: "center", gap: 8 },
+  menuText:      { fontSize: 15, color: "#4a4a4a", fontWeight: "500" },
+  menuRight:     { flexDirection: "row", alignItems: "center", gap: 8 },
   badgePill: {
     backgroundColor: "#8b4440", borderRadius: 12,
     paddingHorizontal: 8, paddingVertical: 2,
