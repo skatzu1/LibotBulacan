@@ -1,9 +1,10 @@
 import 'react-native-gesture-handler';
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { ClerkProvider, useAuth } from '@clerk/clerk-expo';
 import { ActivityIndicator, View, StyleSheet } from 'react-native';
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import 'react-native-reanimated';
 
 import { ReviewProvider } from './context/ReviewContext';
@@ -30,6 +31,7 @@ import Reviews from './Screens/Reviews';
 import Track from './Screens/Track';
 import Mission from './Screens/Mission';
 import MissionsScreen from './Screens/MissionsScreen';
+import BadgeScreen from './Screens/BadgeScreen';
 
 const CLERK_PUBLISHABLE_KEY = 'pk_test_cHJpbWUtY2hpY2tlbi0yNS5jbGVyay5hY2NvdW50cy5kZXYk';
 
@@ -37,6 +39,7 @@ const Stack = createNativeStackNavigator();
 
 function AppNavigator() {
   const { isLoaded, isSignedIn, getToken } = useAuth();
+  const [hasSeenWelcome, setHasSeenWelcome] = useState(null);
 
   useEffect(() => {
     if (isLoaded) {
@@ -44,7 +47,19 @@ function AppNavigator() {
     }
   }, [isLoaded, getToken]);
 
-  if (!isLoaded) {
+  useEffect(() => {
+    const checkWelcome = async () => {
+      try {
+        const value = await AsyncStorage.getItem("hasSeenWelcome");
+        setHasSeenWelcome(value === "true");
+      } catch (error) {
+        setHasSeenWelcome(false);
+      }
+    };
+    checkWelcome();
+  }, [isSignedIn]); // 👈 re-check every time sign in state changes
+
+  if (!isLoaded || hasSeenWelcome === null) {
     return (
       <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#6b4b45" />
@@ -57,37 +72,43 @@ function AppNavigator() {
       <ReviewProvider>
         <BookmarkProvider>
           <NavigationContainer>
-            <Stack.Navigator
-              initialRouteName={isSignedIn ? "Home" : "WelcomePage"}
-              screenOptions={{ headerShown: false }}
-            >
-              <Stack.Screen name="Home" component={Home} options={{ gestureEnabled: false }} />
-              <Stack.Screen name="Leaderboard" component={Leaderboard} />
-              <Stack.Screen name="InformationScreen" component={InformationScreen} />
-              <Stack.Screen name="Categories" component={Categories} />
-              <Stack.Screen name="Bookmark" component={Bookmark} />
-              <Stack.Screen name="ar" component={ARScreen} />
-              <Stack.Screen name="Settings" component={Settings} />
-              <Stack.Screen name="Reviews" component={Reviews} />
-              <Stack.Screen name="Lists" component={Lists} />
-              <Stack.Screen name="Mission" component={Mission} />
-              <Stack.Screen name="Missions" component={MissionsScreen} />
-
-              {!isSignedIn && (
+            <Stack.Navigator screenOptions={{ headerShown: false }}>
+              {isSignedIn ? (
                 <>
-                  <Stack.Screen name="WelcomePage" component={WelcomePage} />
-                  <Stack.Screen name="WelcomePage2" component={WelcomePage2} />
-                  <Stack.Screen name="Login" component={Login} />
+                  <Stack.Screen name="Home" component={Home} options={{ gestureEnabled: false }} />
+                  <Stack.Screen name="Leaderboard" component={Leaderboard} />
+                  <Stack.Screen name="InformationScreen" component={InformationScreen} />
+                  <Stack.Screen name="Categories" component={Categories} />
+                  <Stack.Screen name="Bookmark" component={Bookmark} />
+                  <Stack.Screen name="ar" component={ARScreen} />
+                  <Stack.Screen name="Settings" component={Settings} />
+                  <Stack.Screen name="Reviews" component={Reviews} />
+                  <Stack.Screen name="Lists" component={Lists} />
+                  <Stack.Screen name="Mission" component={Mission} />
+                  <Stack.Screen name="Missions" component={MissionsScreen} />
+                  <Stack.Screen name="Track" component={Track} />
+                  <Stack.Screen name="Badges" component={BadgeScreen} />
+                </>
+              ) : (
+                <>
+                  {!hasSeenWelcome && (
+                    <>
+                      <Stack.Screen name="WelcomePage" component={WelcomePage} />
+                      <Stack.Screen name="WelcomePage2" component={WelcomePage2} />
+                    </>
+                  )}
+                  <Stack.Screen
+                    name="Login"
+                    component={Login}
+                    options={{ gestureEnabled: false }}
+                  />
+                  <Stack.Screen name="Register" component={Register} />
                   <Stack.Screen
                     name="EmailVerification"
                     component={EmailVerification}
                     options={{ gestureEnabled: false }}
                   />
                 </>
-              )}
-
-              {isSignedIn && (
-                <Stack.Screen name="Track" component={Track} />
               )}
             </Stack.Navigator>
           </NavigationContainer>

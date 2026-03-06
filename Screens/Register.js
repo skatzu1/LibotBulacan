@@ -124,7 +124,6 @@ export default function Register({ navigation }) {
           {/* Birthdate */}
           <TouchableOpacity style={styles.birthdateContainer} onPress={() => setShowDatePicker(true)} activeOpacity={0.8}>
             <Text style={styles.birthdateText}>{birthdate ? birthdate.toDateString() : "Select your birthdate"}</Text>
-            <Text style={styles.calendarIcon}>📅</Text>
           </TouchableOpacity>
 
           {showDatePicker && (

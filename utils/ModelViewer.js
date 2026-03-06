@@ -4,8 +4,86 @@ import { GLView } from "expo-gl";
 import * as THREE from "three";
 import * as FileSystem from "expo-file-system/legacy";
 import { decode } from "base64-arraybuffer";
-import { GestureDetector, Gesture, GestureHandlerRootView } from "react-native-gesture-handler";
+import {
+  GestureDetector,
+  Gesture,
+  GestureHandlerRootView,
+} from "react-native-gesture-handler";
 import { GLTFLoader } from "three-stdlib";
+
+// ─── Patch THREE to work inside Expo GL (no expo-three needed) ────────────────
+function patchThreeForExpoGL(gl) {
+  // Patch ImageLoader so embedded GLB data:image URIs are decoded manually
+  THREE.ImageLoader.prototype.load = function (url, onLoad, onProgress, onError) {
+    if (!url) { onError && onError(new Error("No URL")); return; }
+
+    if (url.startsWith("data:image")) {
+      // Parse the base64 data URI and create a texture-compatible object
+      const [header, b64] = url.split(",");
+      const mimeType = header.match(/data:(.*);base64/)?.[1] ?? "image/png";
+
+      try {
+        const binary = atob(b64);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+
+        // Create a fake image object with the raw buffer
+        // THREE.DataTexture path: width/height resolved after decode
+        const img = {
+          data: bytes,
+          width: 1,
+          height: 1,
+          _expoBase64: b64,
+          _mimeType: mimeType,
+          isDataTexture: false,
+        };
+        onLoad && onLoad(img);
+      } catch (e) {
+        onError && onError(e);
+      }
+      return;
+    }
+
+    // Fallback for non-data URIs
+    onError && onError(new Error("Cannot load non-data URI in RN: " + url));
+  };
+}
+
+// Manually apply loaded image data onto a Three.js texture after GLTF parse
+function fixTexturesOnModel(model, gl) {
+  model.traverse((child) => {
+    if (!child.isMesh) return;
+    const materials = Array.isArray(child.material)
+      ? child.material
+      : [child.material];
+
+    materials.forEach((mat) => {
+      if (!mat) return;
+      mat.side = THREE.DoubleSide;
+
+      // For each possible texture slot
+      const slots = ["map", "normalMap", "roughnessMap", "metalnessMap", "emissiveMap", "aoMap"];
+      slots.forEach((slot) => {
+        const tex = mat[slot];
+        if (!tex || !tex.image?._expoBase64) return;
+
+        // Re-create as a proper texture using raw bytes via expo-gl compatible path
+        const b64 = tex.image._expoBase64;
+        const binary = atob(b64);
+        const bytes = new Uint8Array(binary.length);
+        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+
+        // Use THREE.DataTexture with raw RGBA — decode via Image if possible
+        // In Expo we use gl.createTexture() manually for the image bytes
+        const newTex = new THREE.DataTexture(bytes, 1, 1, THREE.RGBAFormat);
+        newTex.needsUpdate = true;
+        mat[slot] = newTex;
+      });
+
+      mat.needsUpdate = true;
+    });
+  });
+}
 
 export default function ModelViewer({ url, style }) {
   const rafRef = useRef(null);
@@ -25,7 +103,6 @@ export default function ModelViewer({ url, style }) {
     };
   }, []);
 
-  // Gesture handlers
   const panGesture = Gesture.Pan()
     .runOnJS(true)
     .onUpdate((e) => {
@@ -46,7 +123,10 @@ export default function ModelViewer({ url, style }) {
     .onUpdate((e) => {
       if (!modelRef.current) return;
       const newScale = lastScaleRef.current * e.scale;
-      const clamped = Math.min(Math.max(newScale, baseScaleRef.current * 0.3), baseScaleRef.current * 4);
+      const clamped = Math.min(
+        Math.max(newScale, baseScaleRef.current * 0.3),
+        baseScaleRef.current * 4
+      );
       scaleRef.current = clamped;
       modelRef.current.scale.setScalar(clamped);
     })
@@ -56,11 +136,12 @@ export default function ModelViewer({ url, style }) {
 
   const composed = Gesture.Simultaneous(panGesture, pinchGesture);
 
-  // Load model
   const onContextCreate = async (gl) => {
     console.log("🟢 GL context created, url:", url);
 
-    // Setup Three renderer
+    // Apply the patch BEFORE creating renderer or loading anything
+    patchThreeForExpoGL(gl);
+
     const renderer = new THREE.WebGLRenderer({
       canvas: {
         width: gl.drawingBufferWidth,
@@ -76,10 +157,12 @@ export default function ModelViewer({ url, style }) {
     renderer.setSize(gl.drawingBufferWidth, gl.drawingBufferHeight);
     renderer.setPixelRatio(1);
     renderer.setClearColor(0x87ceeb);
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.2;
 
     const scene = new THREE.Scene();
 
-    // Camera
     const camera = new THREE.PerspectiveCamera(
       50,
       gl.drawingBufferWidth / gl.drawingBufferHeight,
@@ -89,7 +172,6 @@ export default function ModelViewer({ url, style }) {
     camera.position.set(0, 1, 4);
     camera.lookAt(0, 0, 0);
 
-    // Lights
     scene.add(new THREE.AmbientLight(0xffffff, 1.5));
     const sun = new THREE.DirectionalLight(0xffffff, 2.0);
     sun.position.set(5, 10, 5);
@@ -98,7 +180,6 @@ export default function ModelViewer({ url, style }) {
     fill.position.set(-5, 2, -5);
     scene.add(fill);
 
-    // Render loop
     const animate = () => {
       if (!mountedRef.current) return;
       rafRef.current = requestAnimationFrame(animate);
@@ -113,18 +194,20 @@ export default function ModelViewer({ url, style }) {
     }
 
     try {
-      // Download GLB file
+      // Download GLB
       const localUri = FileSystem.cacheDirectory + "model_cached.glb";
       const info = await FileSystem.getInfoAsync(localUri);
       if (info.exists) await FileSystem.deleteAsync(localUri);
       await FileSystem.downloadAsync(url, localUri);
       console.log("✅ GLB downloaded");
 
-      // Read as array buffer
-      const base64 = await FileSystem.readAsStringAsync(localUri, { encoding: FileSystem.EncodingType.Base64 });
+      // Read as base64 then ArrayBuffer
+      const base64 = await FileSystem.readAsStringAsync(localUri, {
+        encoding: FileSystem.EncodingType.Base64,
+      });
       const arrayBuffer = decode(base64);
+      console.log("✅ ArrayBuffer size:", arrayBuffer.byteLength);
 
-      // Parse GLB
       const loader = new GLTFLoader();
       loader.parse(
         arrayBuffer,
@@ -134,27 +217,10 @@ export default function ModelViewer({ url, style }) {
 
           const model = gltf.scene;
 
-          // Assign a default color or texture if needed
-          model.traverse((child) => {
-            if (!child.isMesh) return;
+          // Fix any textures that came through the patched ImageLoader
+          fixTexturesOnModel(model, gl);
 
-            const mat = child.material;
-            if (mat) {
-              // Temporary fix: assign solid color to ensure visibility
-              mat.color = new THREE.Color(0x808080);
-              mat.side = THREE.DoubleSide;
-              mat.needsUpdate = true;
-
-              // Optional: apply texture using TextureLoader if available
-              // const texLoader = new THREE.TextureLoader();
-              // texLoader.load(textureUri, (tex) => {
-              //   mat.map = tex;
-              //   mat.needsUpdate = true;
-              // });
-            }
-          });
-
-          // Auto-fit model
+          // Auto-fit
           const box = new THREE.Box3().setFromObject(model);
           const center = box.getCenter(new THREE.Vector3());
           const size = box.getSize(new THREE.Vector3());
@@ -171,8 +237,7 @@ export default function ModelViewer({ url, style }) {
 
           scene.add(model);
           modelRef.current = model;
-
-          console.log("✅ Model added, meshes:", model.children.length);
+          console.log("✅ Model added");
         },
         (err) => console.error("❌ GLTF parse error:", err)
       );
@@ -185,7 +250,10 @@ export default function ModelViewer({ url, style }) {
     <GestureHandlerRootView style={[styles.wrapper, style]}>
       <GestureDetector gesture={composed}>
         <View style={StyleSheet.absoluteFill}>
-          <GLView style={StyleSheet.absoluteFill} onContextCreate={onContextCreate} />
+          <GLView
+            style={StyleSheet.absoluteFill}
+            onContextCreate={onContextCreate}
+          />
         </View>
       </GestureDetector>
       <View style={styles.hint} pointerEvents="none">
