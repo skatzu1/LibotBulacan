@@ -1,3 +1,4 @@
+// screens/BadgeScreen.js
 import React, { useEffect, useState, useRef } from "react";
 import {
   View,
@@ -8,231 +9,164 @@ import {
   Image,
   Animated,
   Dimensions,
+  ActivityIndicator,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { Feather } from "@expo/vector-icons";
-import AsyncStorage from "@react-native-async-storage/async-storage";
+import { useAuth } from "@clerk/clerk-expo";
 
 const { width } = Dimensions.get("window");
 const CARD_SIZE = (width - 60) / 3;
+const BASE_URL  = "https://libotbackend.onrender.com";
 
-/* ================= BADGES ================= */
-
-export const ALL_BADGES = [
-  {
-    id: "Bahay ko",
-    name: "bahay ko",
-    icon: require("../assets/badges/BarasoainBadge.png"),
-    spotId: "69a9bcc7be09c4f474aa686f",
-  },
-  {
-    id: "divine_mercy",
-    name: "National Shrine of Divine Mercy",
-    icon: null,
-    spotId: "spot_divine_mercy",
-  },
-  {
-    id: "biak_na_bato",
-    name: "Biak-na-Bato",
-    icon: null,
-    spotId: "spot_biak_na_bato",
-  },
-  {
-    id: "bahay_pula",
-    name: "Bahay-na-Pula",
-    icon: null,
-    spotId: "spot_bahay_pula",
-  },
-  {
-    id: "lourdes",
-    name: "Grotto of Our Lady of Lourdes",
-    icon: null,
-    spotId: "spot_lourdes",
-  },
-  {
-    id: "san_rafael",
-    name: "San Rafael Church",
-    icon: null,
-    spotId: "spot_san_rafael",
-  },
-  {
-    id: "casa_real_1",
-    name: "Casa Real Shrine",
-    icon: null,
-    spotId: "spot_STI",
-  },
-  {
-    id: "STI",
-    name: "STI",
-    icon: null,
-    spotId: "spot_casa_real_2",
-  },
-  {
-    id: "bamboo_art",
-    name: "Meycauayan Bamboo Art",
-    icon: null,
-    spotId: "spot_bamboo_art",
-  },
-];
-
-/* ================= SCREEN ================= */
-
+/* ─────────────────────────────────────────────
+   BadgeScreen
+   Fetches the user's claimed badges from MongoDB.
+   Each badge is { spotId, name, image, claimedAt }.
+   No local ALL_BADGES list needed — everything comes from the DB.
+───────────────────────────────────────────── */
 export default function BadgeScreen() {
   const navigation = useNavigation();
-  const [unlockedIds, setUnlockedIds] = useState([]);
+  const { getToken } = useAuth();
 
-  const fadeAnims = useRef(
-    ALL_BADGES.map(() => new Animated.Value(0))
-  ).current;
+  const [badges, setBadges]     = useState([]);   // array of { spotId, name, image, claimedAt }
+  const [loading, setLoading]   = useState(true);
+  const [error, setError]       = useState(null);
+
+  const fadeAnims = useRef([]).current;
+
+  /* ── Fetch badges from DB ── */
+  const loadBadges = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const token = await getToken();
+      const res   = await fetch(`${BASE_URL}/api/users/me`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      if (!res.ok) throw new Error("Failed to fetch profile");
+
+      const data   = await res.json();
+      const dbBadges = data?.user?.badges ?? [];
+
+      setBadges(dbBadges);
+
+      // Build fade-in animations for however many badges came back
+      while (fadeAnims.length < dbBadges.length) {
+        fadeAnims.push(new Animated.Value(0));
+      }
+
+      dbBadges.forEach((_, i) => {
+        fadeAnims[i].setValue(0);
+        Animated.timing(fadeAnims[i], {
+          toValue: 1,
+          duration: 350,
+          delay: i * 70,
+          useNativeDriver: true,
+        }).start();
+      });
+    } catch (e) {
+      console.warn("BadgeScreen load error:", e);
+      setError("Could not load badges. Pull down to retry.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
-    const loadBadges = async () => {
-      try {
-        const raw = await AsyncStorage.getItem("unlockedBadges");
-        const ids = raw ? JSON.parse(raw) : [];
-        setUnlockedIds(ids);
-
-        ALL_BADGES.forEach((_, i) => {
-          fadeAnims[i].setValue(0);
-
-          Animated.timing(fadeAnims[i], {
-            toValue: 1,
-            duration: 350,
-            delay: i * 60,
-            useNativeDriver: true,
-          }).start();
-        });
-      } catch (e) {
-        console.warn("Failed to load badges:", e);
-      }
-    };
-
     loadBadges();
-    const unsubscribe = navigation.addListener("focus", loadBadges);
-    return unsubscribe;
+    const unsub = navigation.addListener("focus", loadBadges);
+    return unsub;
   }, [navigation]);
 
-  const unlockedCount = unlockedIds.length;
+  /* ── Render states ── */
+  if (loading) {
+    return (
+      <View style={styles.centered}>
+        <ActivityIndicator size="large" color="#8b4440" />
+        <Text style={styles.loadingText}>Loading badges...</Text>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
-      {/* HEADER */}
-
+      {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity
-          onPress={() => navigation.goBack()}
-          style={styles.backButton}
-        >
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
           <Feather name="chevron-left" size={24} color="#5a3a38" />
         </TouchableOpacity>
-
         <Text style={styles.headerTitle}>Badges</Text>
-
         <View style={styles.countBadge}>
-          <Text style={styles.countText}>
-            {unlockedCount}/{ALL_BADGES.length}
-          </Text>
+          <Text style={styles.countText}>{badges.length} earned</Text>
         </View>
       </View>
 
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
+        onRefresh={loadBadges}
       >
-        {/* PROGRESS */}
+        {error && (
+          <TouchableOpacity onPress={loadBadges} style={styles.errorBanner}>
+            <Text style={styles.errorText}>{error}</Text>
+            <Text style={styles.retryText}>Tap to retry</Text>
+          </TouchableOpacity>
+        )}
 
-        <View style={styles.progressContainer}>
-          <Text style={styles.progressLabel}>
-            {unlockedCount === 0
-              ? "Visit locations to earn badges!"
-              : unlockedCount === ALL_BADGES.length
-              ? "🎉 All badges unlocked!"
-              : `${ALL_BADGES.length - unlockedCount} more to unlock`}
-          </Text>
-
-          <View style={styles.progressTrack}>
-            <Animated.View
-              style={[
-                styles.progressFill,
-                {
-                  width: `${
-                    (unlockedCount / ALL_BADGES.length) * 100
-                  }%`,
-                },
-              ]}
-            />
+        {/* Empty state */}
+        {!error && badges.length === 0 && (
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyEmoji}>🏅</Text>
+            <Text style={styles.emptyTitle}>No badges yet</Text>
+            <Text style={styles.emptySubtitle}>
+              Navigate to a historical spot and arrive to earn your first badge!
+            </Text>
           </View>
-        </View>
+        )}
 
-        {/* BADGE GRID */}
-
-        <View style={styles.grid}>
-          {ALL_BADGES.map((badge, index) => {
-            const unlocked = unlockedIds.includes(badge.id);
-
-            return (
+        {/* Badge grid */}
+        {badges.length > 0 && (
+          <View style={styles.grid}>
+            {badges.map((badge, index) => (
               <Animated.View
-                key={badge.id}
-                style={[
-                  styles.badgeWrapper,
-                  { opacity: fadeAnims[index] },
-                ]}
+                key={badge.spotId}
+                style={[styles.badgeWrapper, { opacity: fadeAnims[index] ?? 1 }]}
               >
-                <View
-                  style={[
-                    styles.badgeCard,
-                    !unlocked && styles.badgeCardLocked,
-                  ]}
-                >
-                  <View
-                    style={[
-                      styles.iconCircle,
-                      !unlocked && styles.iconCircleLocked,
-                    ]}
-                  >
-                    {badge.icon ? (
+                <View style={styles.badgeCard}>
+                  <View style={styles.iconCircle}>
+                    {badge.image ? (
                       <Image
-                        source={badge.icon}
-                        style={[
-                          styles.badgeImage,
-                          !unlocked && styles.badgeIconLocked,
-                        ]}
+                        source={{ uri: badge.image }}
+                        style={styles.badgeImage}
                       />
                     ) : (
-                      <Feather name="image" size={22} color="#bbb" />
+                      <Feather name="award" size={26} color="#8b4440" />
                     )}
-
-                    {unlocked && (
-                      <View style={styles.checkOverlay}>
-                        <Feather
-                          name="check-circle"
-                          size={16}
-                          color="#8b4440"
-                        />
-                      </View>
-                    )}
-
-                    {!unlocked && (
-                      <View style={styles.lockOverlay}>
-                        <Feather name="lock" size={14} color="#aaa" />
-                      </View>
-                    )}
+                    <View style={styles.checkOverlay}>
+                      <Feather name="check-circle" size={16} color="#8b4440" />
+                    </View>
                   </View>
 
-                  <Text
-                    style={[
-                      styles.badgeName,
-                      !unlocked && styles.badgeNameLocked,
-                    ]}
-                    numberOfLines={3}
-                  >
+                  <Text style={styles.badgeName} numberOfLines={3}>
                     {badge.name}
                   </Text>
+
+                  {badge.claimedAt && (
+                    <Text style={styles.claimedDate}>
+                      {new Date(badge.claimedAt).toLocaleDateString("en-PH", {
+                        month: "short",
+                        day:   "numeric",
+                        year:  "numeric",
+                      })}
+                    </Text>
+                  )}
                 </View>
               </Animated.View>
-            );
-          })}
-        </View>
+            ))}
+          </View>
+        )}
 
         <View style={{ height: 40 }} />
       </ScrollView>
@@ -240,14 +174,13 @@ export default function BadgeScreen() {
   );
 }
 
-/* ================= STYLES ================= */
-
+/* ─────────────────────────────────────────────
+   Styles
+───────────────────────────────────────────── */
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#f5c4c1",
-    paddingTop: 50,
-  },
+  container:   { flex: 1, backgroundColor: "#f5c4c1", paddingTop: 50 },
+  centered:    { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "#f5c4c1" },
+  loadingText: { marginTop: 12, fontSize: 14, color: "#6a5a5a", fontWeight: "500" },
 
   header: {
     flexDirection: "row",
@@ -256,73 +189,38 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     marginBottom: 10,
   },
+  backButton:  { width: 40, height: 40, justifyContent: "center", alignItems: "flex-start" },
+  headerTitle: { fontSize: 20, fontWeight: "700", color: "#4a2e2c" },
+  countBadge:  { backgroundColor: "#8b4440", borderRadius: 20, paddingHorizontal: 12, paddingVertical: 4 },
+  countText:   { color: "#fff", fontWeight: "700", fontSize: 13 },
 
-  backButton: {
-    width: 40,
-    height: 40,
-    justifyContent: "center",
-    alignItems: "flex-start",
-  },
+  scrollContent: { paddingHorizontal: 20, paddingTop: 15 },
 
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: "700",
-    color: "#4a2e2c",
-  },
-
-  countBadge: {
-    backgroundColor: "#8b4440",
-    borderRadius: 20,
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-  },
-
-  countText: {
-    color: "#fff",
-    fontWeight: "700",
-    fontSize: 13,
-  },
-
-  scrollContent: {
-    paddingHorizontal: 20,
-    paddingTop: 15,
-  },
-
-  progressContainer: {
-    marginBottom: 20,
-  },
-
-  progressLabel: {
-    fontSize: 13,
-    color: "#6a4a48",
-    fontWeight: "500",
-    marginBottom: 8,
-    textAlign: "center",
-  },
-
-  progressTrack: {
-    height: 8,
-    backgroundColor: "#e8b8b4",
-    borderRadius: 4,
-    overflow: "hidden",
-  },
-
-  progressFill: {
-    height: "100%",
-    backgroundColor: "#8b4440",
-    borderRadius: 4,
-  },
-
-  grid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    justifyContent: "space-between",
-  },
-
-  badgeWrapper: {
-    width: CARD_SIZE,
+  errorBanner: {
+    backgroundColor: "#fce8e6",
+    borderRadius: 12,
+    padding: 14,
     marginBottom: 16,
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#e8b8b4",
   },
+  errorText: { fontSize: 13, color: "#8b4440", fontWeight: "600", textAlign: "center" },
+  retryText: { fontSize: 12, color: "#8b4440", marginTop: 4 },
+
+  emptyState: { alignItems: "center", marginTop: 60, paddingHorizontal: 30 },
+  emptyEmoji: { fontSize: 56, marginBottom: 14 },
+  emptyTitle: { fontSize: 18, fontWeight: "700", color: "#4a2e2c", marginBottom: 6 },
+  emptySubtitle: {
+    fontSize: 13,
+    color: "#6a5a5a",
+    textAlign: "center",
+    lineHeight: 19,
+  },
+
+  grid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between" },
+
+  badgeWrapper: { width: CARD_SIZE, marginBottom: 16 },
 
   badgeCard: {
     backgroundColor: "#fff",
@@ -334,12 +232,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.12,
     shadowRadius: 6,
     elevation: 3,
-    minHeight: 110,
-  },
-
-  badgeCardLocked: {
-    backgroundColor: "#f0e0de",
-    shadowOpacity: 0.05,
+    minHeight: 120,
   },
 
   iconCircle: {
@@ -355,20 +248,7 @@ const styles = StyleSheet.create({
     position: "relative",
   },
 
-  iconCircleLocked: {
-    backgroundColor: "#e8dede",
-    borderColor: "#ccc",
-  },
-
-  badgeImage: {
-    width: 40,
-    height: 40,
-    resizeMode: "contain",
-  },
-
-  badgeIconLocked: {
-    opacity: 0.25,
-  },
+  badgeImage: { width: 44, height: 44, borderRadius: 22, resizeMode: "cover" },
 
   checkOverlay: {
     position: "absolute",
@@ -376,15 +256,6 @@ const styles = StyleSheet.create({
     right: -4,
     backgroundColor: "#fff",
     borderRadius: 10,
-  },
-
-  lockOverlay: {
-    position: "absolute",
-    bottom: -4,
-    right: -4,
-    backgroundColor: "#f0e0de",
-    borderRadius: 10,
-    padding: 1,
   },
 
   badgeName: {
@@ -395,7 +266,10 @@ const styles = StyleSheet.create({
     lineHeight: 13,
   },
 
-  badgeNameLocked: {
+  claimedDate: {
+    fontSize: 9,
     color: "#aaa",
+    marginTop: 4,
+    textAlign: "center",
   },
 });
