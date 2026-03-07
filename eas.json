@@ -22,8 +22,7 @@
     },
     "production": {
       "android": {
-        "buildType": "apk",
-        "applicationArchivePath": "android/app/build/outputs/apk/release/Libot-v1.0.0.apk"
+        "buildType": "apk"
       },
       "autoIncrement": true,
       "env": {
