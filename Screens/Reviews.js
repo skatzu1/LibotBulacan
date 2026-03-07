@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -8,84 +8,72 @@ import {
   Image,
   TextInput,
   Modal,
-  Dimensions
-} from 'react-native';
-import { useNavigation } from '@react-navigation/native';
-import { Feather } from '@expo/vector-icons';
-import { useReviews } from '../context/ReviewContext';
+  Dimensions,
+} from "react-native";
+import { useNavigation } from "@react-navigation/native";
+import { Feather } from "@expo/vector-icons";
+import { useReviews } from "../context/ReviewContext";
 
-const { width } = Dimensions.get('window');
+const { width } = Dimensions.get("window");
 
 export default function Reviews({ route }) {
   const navigation = useNavigation();
-  const { spot } = route.params || {};
+  const { spot }   = route.params || {};
   const { getReviewsForSpot, addReview, getAverageRating, getReviewCount, fetchReviews } = useReviews();
 
   const [showAddReview, setShowAddReview] = useState(false);
-  const [newRating, setNewRating] = useState(0);
-  const [newReview, setNewReview] = useState('');
+  const [newRating, setNewRating]         = useState(0);
+  const [newReview, setNewReview]         = useState("");
 
   useEffect(() => {
-    if (spot && spot._id) {
-      fetchReviews(spot._id);
-    }
+    if (spot?._id) fetchReviews(spot._id);
   }, [spot]);
 
-  const reviews = spot && spot._id ? getReviewsForSpot(spot._id) : [];
-  const averageRating = spot && spot._id ? getAverageRating(spot._id) || '0.0' : '0.0';
-  const reviewCount = spot && spot._id ? getReviewCount(spot._id) : 0;
+  const reviews       = spot?._id ? getReviewsForSpot(spot._id) : [];
+  const averageRating = spot?._id ? getAverageRating(spot._id) || "0.0" : "0.0";
+  const reviewCount   = spot?._id ? getReviewCount(spot._id) : 0;
 
-  const StarRating = ({ rating, size = 16, color = "#FFD700" }) => (
+  const StarRating = ({ rating, size = 16, color = "#f4c542" }) => (
     <View style={styles.starsContainer}>
       {[1, 2, 3, 4, 5].map((star) => (
-        <Feather
-          key={star}
-          name="star"
-          size={size}
-          color={star <= rating ? color : "#ccc"}
-        />
+        <Feather key={star} name="star" size={size} color={star <= rating ? color : "#d9b8b5"} />
       ))}
     </View>
   );
 
-  const InteractiveStarRating = ({ rating, onRatingChange, size = 24 }) => (
+  const InteractiveStarRating = ({ rating, onRatingChange, size = 26 }) => (
     <View style={styles.starsContainer}>
       {[1, 2, 3, 4, 5].map((star) => (
         <TouchableOpacity key={star} onPress={() => onRatingChange(star)}>
-          <Feather
-            name="star"
-            size={size}
-            color={star <= rating ? "#FFD700" : "#ccc"}
-          />
+          <Feather name="star" size={size} color={star <= rating ? "#f4c542" : "#d9b8b5"} />
         </TouchableOpacity>
       ))}
     </View>
   );
 
   const handleSubmitReview = async () => {
-    if (newRating === 0 || newReview.trim() === '') {
-      alert('Please provide a rating and review');
+    if (newRating === 0 || newReview.trim() === "") {
+      alert("Please provide a rating and review");
       return;
     }
-    if (!spot || !spot._id) {
-      alert('Error: Spot information not available');
+    if (!spot?._id) {
+      alert("Error: Spot information not available");
       return;
     }
     await addReview(spot._id, newRating, newReview);
     setNewRating(0);
-    setNewReview('');
+    setNewReview("");
     setShowAddReview(false);
   };
 
-  // ✅ Uses only data stored inside the review — never the current logged-in user
   const ReviewCard = ({ review }) => (
     <View style={styles.reviewCard}>
       <View style={styles.reviewHeader}>
         <Image
           source={{
-            uri: review.userImage && review.userImage !== ''
+            uri: review.userImage && review.userImage !== ""
               ? review.userImage
-              : "https://i.pravatar.cc/150?img=10"
+              : "https://i.pravatar.cc/150?img=10",
           }}
           style={styles.userAvatar}
         />
@@ -107,64 +95,69 @@ export default function Reviews({ route }) {
 
   return (
     <View style={styles.container}>
-      {/* HEADER */}
+
+      {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <Feather name="chevron-left" size={24} color="#4a4a4a" />
+          <Feather name="chevron-left" size={24} color="#4a2e2c" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Reviews</Text>
         <View style={{ width: 40 }} />
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-        {/* DESTINATION INFO */}
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.scrollContent}
+      >
+
+        {/* Destination info */}
         {spot && (
           <View style={styles.destinationInfo}>
             <Image source={{ uri: spot.image }} style={styles.destinationImage} />
             <View style={styles.destinationTextContainer}>
               <Text style={styles.destinationName}>{spot.name}</Text>
               <View style={styles.locationContainer}>
-                <Feather name="map-pin" size={12} color="#6a5a5a" />
+                <Feather name="map-pin" size={12} color="#7a5a58" />
                 <Text style={styles.locationText}>{spot.location || "Philippines"}</Text>
               </View>
             </View>
           </View>
         )}
 
-        {/* RATING SUMMARY */}
+        {/* Rating summary */}
         <View style={styles.ratingSummary}>
-          <View style={styles.ratingNumberContainer}>
-            <Text style={styles.ratingNumber}>{averageRating}</Text>
-            <StarRating rating={Math.round(parseFloat(averageRating))} size={20} />
-            <Text style={styles.reviewCount}>
-              {reviewCount} {reviewCount === 1 ? 'review' : 'reviews'}
-            </Text>
-          </View>
+          <Text style={styles.ratingNumber}>{averageRating}</Text>
+          <StarRating rating={Math.round(parseFloat(averageRating))} size={22} />
+          <Text style={styles.reviewCount}>
+            {reviewCount} {reviewCount === 1 ? "review" : "reviews"}
+          </Text>
         </View>
 
-        {/* ADD REVIEW BUTTON */}
-        <TouchableOpacity style={styles.addReviewButton} onPress={() => setShowAddReview(true)}>
-          <Feather name="plus" size={20} color="#fff" />
+        {/* Write a review button */}
+        <TouchableOpacity
+          style={styles.addReviewButton}
+          onPress={() => setShowAddReview(true)}
+          activeOpacity={0.85}
+        >
+          <Feather name="edit-2" size={18} color="#fff" />
           <Text style={styles.addReviewButtonText}>Write a Review</Text>
         </TouchableOpacity>
 
-        {/* REVIEWS LIST */}
-        <View style={styles.reviewsSection}>
-          <Text style={styles.sectionTitle}>All Reviews ({reviewCount})</Text>
-          {reviews.length === 0 && (
-            <Text style={{ color: '#6a5a5a', textAlign: 'center', marginTop: 10 }}>
-              No reviews yet. Be the first!
-            </Text>
-          )}
-          {reviews.map((review) => (
-            <ReviewCard key={review._id} review={review} /> // ✅ use _id not idx
-          ))}
-        </View>
+        {/* Reviews list */}
+        <Text style={styles.sectionTitle}>All Reviews ({reviewCount})</Text>
+
+        {reviews.length === 0 && (
+          <Text style={styles.emptyText}>No reviews yet. Be the first!</Text>
+        )}
+
+        {reviews.map((review) => (
+          <ReviewCard key={review._id} review={review} />
+        ))}
 
         <View style={{ height: 100 }} />
       </ScrollView>
 
-      {/* ADD REVIEW MODAL */}
+      {/* Add review modal */}
       <Modal
         visible={showAddReview}
         animationType="slide"
@@ -176,7 +169,7 @@ export default function Reviews({ route }) {
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Write a Review</Text>
               <TouchableOpacity onPress={() => setShowAddReview(false)}>
-                <Feather name="x" size={24} color="#4a4a4a" />
+                <Feather name="x" size={24} color="#4a2e2c" />
               </TouchableOpacity>
             </View>
 
@@ -189,18 +182,23 @@ export default function Reviews({ route }) {
               multiline
               numberOfLines={5}
               placeholder="Share your experience..."
-              placeholderTextColor="#999"
+              placeholderTextColor="#b0908c"
               value={newReview}
               onChangeText={setNewReview}
               textAlignVertical="top"
             />
 
-            <TouchableOpacity style={styles.submitButton} onPress={handleSubmitReview}>
+            <TouchableOpacity
+              style={styles.submitButton}
+              onPress={handleSubmitReview}
+              activeOpacity={0.85}
+            >
               <Text style={styles.submitButtonText}>Submit Review</Text>
             </TouchableOpacity>
           </View>
         </View>
       </Modal>
+
     </View>
   );
 }
@@ -208,217 +206,229 @@ export default function Reviews({ route }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#f5c4c1',
+    backgroundColor: "#f7cfc9",
     paddingTop: 50,
   },
+
+  // ── Header ──
   header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     paddingHorizontal: 20,
     marginBottom: 20,
   },
   backButton: {
     width: 40,
     height: 40,
-    justifyContent: 'center',
-    alignItems: 'flex-start',
+    justifyContent: "center",
+    alignItems: "flex-start",
   },
   headerTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#4a4a4a',
+    fontSize: 20,
+    fontWeight: "700",
+    color: "#4a2e2c",
   },
-  scrollContent: {
-    paddingHorizontal: 20,
-  },
+
+  scrollContent: { paddingHorizontal: 20 },
+
+  // ── Destination info ──
   destinationInfo: {
-    flexDirection: 'row',
-    backgroundColor: '#fff',
-    borderRadius: 15,
+    flexDirection: "row",
+    backgroundColor: "#fff",
+    borderRadius: 16,
     padding: 12,
-    marginBottom: 20,
-    shadowColor: '#000',
+    marginBottom: 16,
+    shadowColor: "#4a2e2c",
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 5,
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
     elevation: 3,
   },
   destinationImage: {
     width: 80,
     height: 80,
-    borderRadius: 10,
+    borderRadius: 12,
     marginRight: 12,
   },
   destinationTextContainer: {
     flex: 1,
-    justifyContent: 'center',
+    justifyContent: "center",
   },
   destinationName: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#4a4a4a',
-    marginBottom: 5,
+    fontSize: 17,
+    fontWeight: "700",
+    color: "#4a2e2c",
+    marginBottom: 6,
   },
   locationContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 5,
   },
   locationText: {
     fontSize: 13,
-    color: '#6a5a5a',
+    color: "#7a5a58",
   },
+
+  // ── Rating summary ──
   ratingSummary: {
-    backgroundColor: '#fff',
-    borderRadius: 15,
+    backgroundColor: "#fff",
+    borderRadius: 16,
     padding: 20,
-    marginBottom: 20,
-    alignItems: 'center',
-    shadowColor: '#000',
+    marginBottom: 16,
+    alignItems: "center",
+    shadowColor: "#4a2e2c",
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 5,
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
     elevation: 3,
   },
-  ratingNumberContainer: {
-    alignItems: 'center',
-  },
   ratingNumber: {
-    fontSize: 48,
-    fontWeight: '700',
-    color: '#4a4a4a',
-    marginBottom: 10,
+    fontSize: 52,
+    fontWeight: "700",
+    color: "#4a2e2c",
+    marginBottom: 8,
   },
   starsContainer: {
-    flexDirection: 'row',
+    flexDirection: "row",
     gap: 5,
-    marginBottom: 5,
+    marginBottom: 6,
   },
   reviewCount: {
     fontSize: 14,
-    color: '#6a5a5a',
-    marginTop: 5,
+    color: "#7a5a58",
+    marginTop: 4,
   },
+
+  // ── Add review button ──
   addReviewButton: {
-    flexDirection: 'row',
-    backgroundColor: '#4a3a3a',
-    paddingVertical: 15,
+    flexDirection: "row",
+    backgroundColor: "#6b4b45",
+    paddingVertical: 14,
     paddingHorizontal: 20,
-    borderRadius: 25,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 25,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    marginBottom: 24,
     gap: 10,
   },
   addReviewButtonText: {
-    color: '#fff',
+    color: "#fff",
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: "700",
   },
-  reviewsSection: {
-    marginBottom: 20,
-  },
+
+  // ── Reviews list ──
   sectionTitle: {
     fontSize: 18,
-    fontWeight: '700',
-    color: '#4a4a4a',
-    marginBottom: 15,
+    fontWeight: "700",
+    color: "#4a2e2c",
+    marginBottom: 14,
+  },
+  emptyText: {
+    color: "#7a5a58",
+    textAlign: "center",
+    marginTop: 10,
+    fontSize: 14,
   },
   reviewCard: {
-    backgroundColor: '#fff',
-    borderRadius: 15,
+    backgroundColor: "#fff",
+    borderRadius: 16,
     padding: 15,
-    marginBottom: 15,
-    shadowColor: '#000',
+    marginBottom: 12,
+    shadowColor: "#4a2e2c",
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.1,
-    shadowRadius: 5,
+    shadowOpacity: 0.07,
+    shadowRadius: 6,
     elevation: 3,
   },
   reviewHeader: {
-    flexDirection: 'row',
-    marginBottom: 12,
+    flexDirection: "row",
+    marginBottom: 10,
   },
   userAvatar: {
-    width: 45,
-    height: 45,
-    borderRadius: 22.5,
+    width: 44,
+    height: 44,
+    borderRadius: 22,
     marginRight: 12,
   },
   reviewHeaderText: {
     flex: 1,
-    justifyContent: 'center',
+    justifyContent: "center",
   },
   userName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#4a4a4a',
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#4a2e2c",
     marginBottom: 4,
   },
   ratingDateContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: 10,
   },
   reviewDate: {
     fontSize: 12,
-    color: '#999',
+    color: "#b0908c",
   },
   reviewComment: {
     fontSize: 14,
-    color: '#6a5a5a',
+    color: "#7a5a58",
     lineHeight: 20,
   },
+
+  // ── Modal ──
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.5)',
-    justifyContent: 'flex-end',
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "flex-end",
   },
   modalContent: {
-    backgroundColor: '#f5c4c1',
-    borderTopLeftRadius: 25,
-    borderTopRightRadius: 25,
-    padding: 25,
-    maxHeight: '80%',
+    backgroundColor: "#f7cfc9",
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 24,
+    maxHeight: "80%",
   },
   modalHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 25,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 24,
   },
   modalTitle: {
     fontSize: 20,
-    fontWeight: '700',
-    color: '#4a4a4a',
+    fontWeight: "700",
+    color: "#4a2e2c",
   },
   modalLabel: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: '#4a4a4a',
+    fontSize: 15,
+    fontWeight: "600",
+    color: "#4a2e2c",
     marginBottom: 10,
-    marginTop: 15,
+    marginTop: 14,
   },
   reviewInput: {
-    backgroundColor: '#fff',
-    borderRadius: 15,
-    padding: 15,
+    backgroundColor: "#fff",
+    borderRadius: 12,
+    padding: 14,
     fontSize: 14,
-    color: '#4a4a4a',
+    color: "#4a2e2c",
     minHeight: 120,
     marginBottom: 20,
+    borderWidth: 1.5,
+    borderColor: "#e8d0ce",
   },
   submitButton: {
-    backgroundColor: '#4a3a3a',
+    backgroundColor: "#6b4b45",
     paddingVertical: 15,
-    borderRadius: 25,
-    alignItems: 'center',
-    marginTop: 10,
+    borderRadius: 12,
+    alignItems: "center",
   },
   submitButtonText: {
-    color: '#fff',
-    fontSize: 16,
-    fontWeight: '600',
+    color: "#fff",
+    fontSize: 17,
+    fontWeight: "700",
   },
 });
