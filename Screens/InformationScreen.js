@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   StyleSheet,
   Dimensions,
+  ScrollView,
 } from "react-native";
 import { Feather } from "@expo/vector-icons";
 import { FontAwesome5, MaterialCommunityIcons } from "@expo/vector-icons";
@@ -17,35 +18,35 @@ const { width } = Dimensions.get("window");
 export default function InformationScreen({ route, navigation }) {
   const { spot } = route.params;
   const [activeTab, setActiveTab] = useState("Information");
-  const [show3D, setShow3D] = useState(false);
+  const [show3D, setShow3D]       = useState(false);
   const { isBookmarked, toggleBookmark } = useBookmark();
 
   const spotIsBookmarked = isBookmarked(spot._id || spot.id);
 
   return (
     <View style={styles.container}>
-      {/* HEADER */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Feather name="chevron-left" size={28} color="#4a4a4a" />
-        </TouchableOpacity>
 
-        <TouchableOpacity onPress={() => toggleBookmark(spot)}>
+      {/* Header */}
+      <View style={styles.header}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.headerButton}>
+          <Feather name="chevron-left" size={26} color="#4a2e2c" />
+        </TouchableOpacity>
+        <TouchableOpacity onPress={() => toggleBookmark(spot)} style={styles.headerButton}>
           <FontAwesome5
             name="bookmark"
-            size={24}
+            size={22}
             solid={spotIsBookmarked}
-            color={spotIsBookmarked ? "#f4c542" : "#f7cfc9"}
+            color={spotIsBookmarked ? "#f4c542" : "#d9b8b5"}
           />
         </TouchableOpacity>
       </View>
 
-      {/* MAIN CONTENT */}
-      <View style={styles.content}>
-        {/* TITLE */}
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+
+        {/* Title */}
         <Text style={styles.title}>{spot.name}</Text>
 
-        {/* IMAGE / 3D VIEW */}
+        {/* Image / 3D view */}
         <View style={styles.imageContainer}>
           {show3D && spot.modelUrl ? (
             <ModelViewer url={spot.modelUrl} style={styles.image} />
@@ -57,6 +58,7 @@ export default function InformationScreen({ route, navigation }) {
             <TouchableOpacity
               style={styles.toggleButton}
               onPress={() => setShow3D(!show3D)}
+              activeOpacity={0.85}
             >
               <MaterialCommunityIcons
                 name={show3D ? "image" : "cube-scan"}
@@ -71,92 +73,104 @@ export default function InformationScreen({ route, navigation }) {
           )}
         </View>
 
-        {/* TABS */}
+        {/* Tabs */}
         <View style={styles.tabsContainer}>
           {["History", "Information", "Recommendations"].map((tab) => (
             <TouchableOpacity
               key={tab}
               style={[styles.tab, activeTab === tab && styles.activeTab]}
               onPress={() => setActiveTab(tab)}
+              activeOpacity={0.8}
             >
-              <Text
-                style={[
-                  styles.tabText,
-                  activeTab === tab && styles.activeTabText,
-                ]}
-              >
-                {tab === "Recommendations" ? "Find recommendations" : tab}
+              <Text style={[styles.tabText, activeTab === tab && styles.activeTabText]}>
+                {tab === "Recommendations" ? "Tips" : tab}
               </Text>
             </TouchableOpacity>
           ))}
         </View>
 
-        {/* INFO CARD */}
+        {/* Info card */}
         <View style={styles.infoCard}>
           {activeTab === "Information" && (
             <>
-              <Text style={styles.infoText}>
-                Visiting Hours: {spot.visitingHours || "6am to 10pm"}
-              </Text>
-              <Text style={styles.infoText}>
-                Entrance fee: {spot.entranceFee || "Free"}
-              </Text>
-              {spot.description && (
-                <Text style={styles.descriptionText}>
-                  {spot.description}
+              <View style={styles.infoRow}>
+                <Feather name="clock" size={15} color="#6b4b45" />
+                <Text style={styles.infoText}>
+                  {spot.visitingHours || "6am to 10pm"}
                 </Text>
+              </View>
+              <View style={styles.infoRow}>
+                <Feather name="tag" size={15} color="#6b4b45" />
+                <Text style={styles.infoText}>
+                  {spot.entranceFee || "Free"}
+                </Text>
+              </View>
+              {spot.description && (
+                <Text style={styles.descriptionText}>{spot.description}</Text>
               )}
             </>
           )}
 
           {activeTab === "History" && (
-            <Text style={styles.infoText}>
+            <Text style={styles.descriptionText}>
               {spot.history || "Historical information coming soon..."}
             </Text>
           )}
 
           {activeTab === "Recommendations" && (
-            <Text style={styles.infoText}>
+            <Text style={styles.descriptionText}>
               {spot.recommendations || "Recommendations coming soon..."}
             </Text>
           )}
         </View>
-      </View>
 
-      {/* FIXED BOTTOM BUTTONS */}
+        <View style={{ height: 120 }} />
+      </ScrollView>
+
+      {/* Fixed bottom buttons */}
       <View style={styles.bottomBar}>
         <View style={styles.buttonRow}>
           <TouchableOpacity
             style={styles.smallButton}
             onPress={() => navigation.navigate("ar", { spot })}
+            activeOpacity={0.85}
           >
-            <Text style={styles.buttonText}>AR</Text>
+            <View style={{ flexDirection: "row", alignItems: "center" }}>
+              <Feather name="camera" size={15} color="#fff" />
+              <Text style={[styles.buttonText, { marginLeft: 6 }]}>AR</Text>
+              </View>
+
           </TouchableOpacity>
 
           <TouchableOpacity
             style={styles.smallButton}
             onPress={() => navigation.navigate("Track", { spot })}
+            activeOpacity={0.85}
           >
-            <Feather name="map-pin" size={16} color="#fff" />
+            <Feather name="map-pin" size={15} color="#fff" />
             <Text style={styles.buttonText}> Track</Text>
           </TouchableOpacity>
 
           <TouchableOpacity
             style={styles.smallButton}
             onPress={() => navigation.navigate("Reviews", { spot })}
+            activeOpacity={0.85}
           >
-            <Text style={styles.buttonText}>Reviews</Text>
+            <Feather name="star" size={15} color="#fff" />
+            <Text style={styles.buttonText}> Reviews</Text>
           </TouchableOpacity>
         </View>
 
         <TouchableOpacity
           style={styles.missionButton}
           onPress={() => navigation.navigate("Missions", { spot })}
+          activeOpacity={0.85}
         >
           <FontAwesome5 name="bullseye" size={16} color="#fff" />
           <Text style={styles.buttonText}> Start Mission</Text>
         </TouchableOpacity>
       </View>
+
     </View>
   );
 }
@@ -165,142 +179,150 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#fff",
-    paddingTop: 60,
+    paddingTop: 50,
   },
 
+  // ── Header ──
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
     paddingHorizontal: 20,
     marginBottom: 10,
   },
-
-  content: {
-  flex: 1,
-  paddingHorizontal: 20,
-  paddingBottom: 1, // reduces gap before buttons
-},
-
-  title: {
-    fontSize: 26,
-    fontWeight: "700",
-    textAlign: "center",
-    marginBottom: 15,
-    color: "#1a1a1a",
+  headerButton: {
+    width: 40,
+    height: 40,
+    justifyContent: "center",
+    alignItems: "center",
   },
 
+  scrollContent: { paddingHorizontal: 20 },
+
+  // ── Title ──
+  title: {
+    fontSize: 24,
+    fontWeight: "700",
+    textAlign: "center",
+    marginBottom: 16,
+    color: "#4a2e2c",
+  },
+
+  // ── Image ──
   imageContainer: {
     alignItems: "center",
     marginBottom: 20,
   },
-
   image: {
-    width: width * 0.85,
+    width: width * 0.9,
     height: 230,
     borderRadius: 20,
-    backgroundColor: "#e0e0e0",
+    backgroundColor: "#e8d0ce",
   },
-
   toggleButton: {
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#4a3a3a",
+    backgroundColor: "#6b4b45",
     paddingVertical: 8,
     paddingHorizontal: 16,
     borderRadius: 20,
     marginTop: 10,
   },
-
   toggleButtonText: {
     color: "#fff",
     fontWeight: "600",
     fontSize: 14,
   },
 
+  // ── Tabs ──
   tabsContainer: {
     flexDirection: "row",
     justifyContent: "space-between",
-    marginBottom: 15,
+    marginBottom: 14,
+    gap: 8,
   },
-
   tab: {
     flex: 1,
     paddingVertical: 10,
-    marginHorizontal: 4,
     borderRadius: 20,
-    backgroundColor: "#d4a5a5",
+    backgroundColor: "#faf5f4",
     alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#f0e0de",
   },
-
   activeTab: {
-    backgroundColor: "#f7cfc9",
+    backgroundColor: "#6b4b45",
+    borderColor: "#6b4b45",
   },
-
   tabText: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: "600",
-    color: "#4a4a4a",
+    color: "#7a5a58",
   },
-
   activeTabText: {
-    color: "#1a1a1a",
+    color: "#fff",
   },
 
+  // ── Info card ──
   infoCard: {
-    backgroundColor: "#f7cfc9",
-    borderRadius: 20,
-    padding: 18,
-    minHeight: 130,
+    backgroundColor: "#faf5f4",
+    borderRadius: 16,
+    padding: 16,
+    minHeight: 120,
+    borderWidth: 1,
+    borderColor: "#f0e0de",
   },
-
+  infoRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    marginBottom: 8,
+  },
   infoText: {
     fontSize: 15,
     fontWeight: "600",
-    marginBottom: 8,
-    color: "#1a1a1a",
+    color: "#4a2e2c",
   },
-
   descriptionText: {
     fontSize: 14,
+    color: "#7a5a58",
+    lineHeight: 21,
     marginTop: 8,
-    color: "#2a2a2a",
-    lineHeight: 20,
   },
 
+  // ── Bottom bar ──
   bottomBar: {
-  paddingHorizontal: 20,
-  paddingTop: 6,   // was 10–12
-  paddingBottom: 50, // was 20
-  backgroundColor: "#fff",
-},
-
+    paddingHorizontal: 20,
+    paddingTop: 10,
+    paddingBottom: 30,
+    backgroundColor: "#fff",
+    borderTopWidth: 1,
+    borderTopColor: "#f0e0de",
+  },
   buttonRow: {
     flexDirection: "row",
     marginBottom: 10,
+    gap: 8,
   },
-
   smallButton: {
     flex: 1,
-    backgroundColor: "#4a3a3a",
-    paddingVertical: 14,
-    borderRadius: 20,
-    alignItems: "center",
-    justifyContent: "center",
-    marginHorizontal: 4,
-    flexDirection: "row",
-  },
-
-  missionButton: {
     backgroundColor: "#6b4b45",
-    paddingVertical: 16,
-    borderRadius: 25,
+    paddingVertical: 13,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+  },
+  missionButton: {
+    backgroundColor: "#4a2e2c",
+    paddingVertical: 15,
+    borderRadius: 12,
     alignItems: "center",
     flexDirection: "row",
     justifyContent: "center",
   },
-
   buttonText: {
     color: "#fff",
     fontWeight: "700",
+    fontSize: 14,
   },
 });

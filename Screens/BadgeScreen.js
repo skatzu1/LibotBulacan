@@ -10,6 +10,7 @@ import {
   Animated,
   Dimensions,
   ActivityIndicator,
+  RefreshControl,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { Feather } from "@expo/vector-icons";
@@ -19,72 +20,70 @@ const { width } = Dimensions.get("window");
 const CARD_SIZE = (width - 60) / 3;
 const BASE_URL  = "https://libotbackend.onrender.com";
 
-/* ─────────────────────────────────────────────
-   BadgeScreen
-   Fetches the user's claimed badges from MongoDB.
-   Each badge is { spotId, name, image, claimedAt }.
-   No local ALL_BADGES list needed — everything comes from the DB.
-───────────────────────────────────────────── */
 export default function BadgeScreen() {
-  const navigation = useNavigation();
+  const navigation   = useNavigation();
   const { getToken } = useAuth();
 
-  const [badges, setBadges]     = useState([]);   // array of { spotId, name, image, claimedAt }
-  const [loading, setLoading]   = useState(true);
-  const [error, setError]       = useState(null);
+  const [badges, setBadges]         = useState([]);
+  const [loading, setLoading]       = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [error, setError]           = useState(null);
 
   const fadeAnims = useRef([]).current;
 
-  /* ── Fetch badges from DB ── */
+  /* ── Fetch badges ── */
   const loadBadges = async () => {
-    setLoading(true);
     setError(null);
     try {
       const token = await getToken();
       const res   = await fetch(`${BASE_URL}/api/users/me`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-
       if (!res.ok) throw new Error("Failed to fetch profile");
 
-      const data   = await res.json();
+      const data     = await res.json();
       const dbBadges = data?.user?.badges ?? [];
 
       setBadges(dbBadges);
 
-      // Build fade-in animations for however many badges came back
       while (fadeAnims.length < dbBadges.length) {
         fadeAnims.push(new Animated.Value(0));
       }
-
       dbBadges.forEach((_, i) => {
         fadeAnims[i].setValue(0);
         Animated.timing(fadeAnims[i], {
-          toValue: 1,
-          duration: 350,
-          delay: i * 70,
-          useNativeDriver: true,
+          toValue: 1, duration: 350, delay: i * 70, useNativeDriver: true,
         }).start();
       });
     } catch (e) {
       console.warn("BadgeScreen load error:", e);
       setError("Could not load badges. Pull down to retry.");
-    } finally {
-      setLoading(false);
     }
   };
 
+  const initialLoad = async () => {
+    setLoading(true);
+    await loadBadges();
+    setLoading(false);
+  };
+
+  const onRefresh = async () => {
+    setRefreshing(true);
+    await loadBadges();
+    setRefreshing(false);
+  };
+
   useEffect(() => {
-    loadBadges();
-    const unsub = navigation.addListener("focus", loadBadges);
+    initialLoad();
+    const unsub = navigation.addListener("focus", initialLoad);
     return unsub;
   }, [navigation]);
 
-  /* ── Render states ── */
+  /* ── Loading ── */
   if (loading) {
     return (
       <View style={styles.centered}>
-        <ActivityIndicator size="large" color="#8b4440" />
+        <ActivityIndicator size="large" color="#6b4b45" />
         <Text style={styles.loadingText}>Loading badges...</Text>
       </View>
     );
@@ -92,10 +91,11 @@ export default function BadgeScreen() {
 
   return (
     <View style={styles.container}>
+
       {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <Feather name="chevron-left" size={24} color="#5a3a38" />
+          <Feather name="chevron-left" size={24} color="#4a2e2c" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Badges</Text>
         <View style={styles.countBadge}>
@@ -106,10 +106,17 @@ export default function BadgeScreen() {
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
-        onRefresh={loadBadges}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor="#6b4b45"
+            colors={["#6b4b45"]}
+          />
+        }
       >
         {error && (
-          <TouchableOpacity onPress={loadBadges} style={styles.errorBanner}>
+          <TouchableOpacity onPress={onRefresh} style={styles.errorBanner}>
             <Text style={styles.errorText}>{error}</Text>
             <Text style={styles.retryText}>Tap to retry</Text>
           </TouchableOpacity>
@@ -137,15 +144,12 @@ export default function BadgeScreen() {
                 <View style={styles.badgeCard}>
                   <View style={styles.iconCircle}>
                     {badge.image ? (
-                      <Image
-                        source={{ uri: badge.image }}
-                        style={styles.badgeImage}
-                      />
+                      <Image source={{ uri: badge.image }} style={styles.badgeImage} />
                     ) : (
-                      <Feather name="award" size={26} color="#8b4440" />
+                      <Feather name="award" size={26} color="#6b4b45" />
                     )}
                     <View style={styles.checkOverlay}>
-                      <Feather name="check-circle" size={16} color="#8b4440" />
+                      <Feather name="check-circle" size={16} color="#6b4b45" />
                     </View>
                   </View>
 
@@ -156,9 +160,7 @@ export default function BadgeScreen() {
                   {badge.claimedAt && (
                     <Text style={styles.claimedDate}>
                       {new Date(badge.claimedAt).toLocaleDateString("en-PH", {
-                        month: "short",
-                        day:   "numeric",
-                        year:  "numeric",
+                        month: "short", day: "numeric", year: "numeric",
                       })}
                     </Text>
                   )}
@@ -174,14 +176,12 @@ export default function BadgeScreen() {
   );
 }
 
-/* ─────────────────────────────────────────────
-   Styles
-───────────────────────────────────────────── */
 const styles = StyleSheet.create({
-  container:   { flex: 1, backgroundColor: "#f5c4c1", paddingTop: 50 },
-  centered:    { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "#f5c4c1" },
-  loadingText: { marginTop: 12, fontSize: 14, color: "#6a5a5a", fontWeight: "500" },
+  container:   { flex: 1, backgroundColor: "#f7cfc9", paddingTop: 50 },
+  centered:    { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "#f7cfc9" },
+  loadingText: { marginTop: 12, fontSize: 14, color: "#7a5a58", fontWeight: "500" },
 
+  // ── Header ──
   header: {
     flexDirection: "row",
     alignItems: "center",
@@ -191,65 +191,63 @@ const styles = StyleSheet.create({
   },
   backButton:  { width: 40, height: 40, justifyContent: "center", alignItems: "flex-start" },
   headerTitle: { fontSize: 20, fontWeight: "700", color: "#4a2e2c" },
-  countBadge:  { backgroundColor: "#8b4440", borderRadius: 20, paddingHorizontal: 12, paddingVertical: 4 },
-  countText:   { color: "#fff", fontWeight: "700", fontSize: 13 },
+  countBadge:  {
+    backgroundColor: "#6b4b45",
+    borderRadius: 20,
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+  },
+  countText: { color: "#fff", fontWeight: "700", fontSize: 13 },
 
   scrollContent: { paddingHorizontal: 20, paddingTop: 15 },
 
+  // ── Error ──
   errorBanner: {
-    backgroundColor: "#fce8e6",
+    backgroundColor: "#fde8e6",
     borderRadius: 12,
     padding: 14,
     marginBottom: 16,
     alignItems: "center",
     borderWidth: 1,
-    borderColor: "#e8b8b4",
+    borderColor: "#f4c0bc",
   },
-  errorText: { fontSize: 13, color: "#8b4440", fontWeight: "600", textAlign: "center" },
-  retryText: { fontSize: 12, color: "#8b4440", marginTop: 4 },
+  errorText: { fontSize: 13, color: "#c0392b", fontWeight: "600", textAlign: "center" },
+  retryText: { fontSize: 12, color: "#c0392b", marginTop: 4 },
 
-  emptyState: { alignItems: "center", marginTop: 60, paddingHorizontal: 30 },
-  emptyEmoji: { fontSize: 56, marginBottom: 14 },
-  emptyTitle: { fontSize: 18, fontWeight: "700", color: "#4a2e2c", marginBottom: 6 },
-  emptySubtitle: {
-    fontSize: 13,
-    color: "#6a5a5a",
-    textAlign: "center",
-    lineHeight: 19,
-  },
+  // ── Empty state ──
+  emptyState:    { alignItems: "center", marginTop: 60, paddingHorizontal: 30 },
+  emptyEmoji:    { fontSize: 56, marginBottom: 14 },
+  emptyTitle:    { fontSize: 18, fontWeight: "700", color: "#4a2e2c", marginBottom: 6 },
+  emptySubtitle: { fontSize: 13, color: "#7a5a58", textAlign: "center", lineHeight: 19 },
 
-  grid: { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between" },
-
+  // ── Badge grid ──
+  grid:         { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between" },
   badgeWrapper: { width: CARD_SIZE, marginBottom: 16 },
-
   badgeCard: {
     backgroundColor: "#fff",
     borderRadius: 16,
     padding: 12,
     alignItems: "center",
-    shadowColor: "#8b4440",
+    shadowColor: "#4a2e2c",
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.12,
+    shadowOpacity: 0.08,
     shadowRadius: 6,
     elevation: 3,
     minHeight: 120,
   },
-
   iconCircle: {
     width: 56,
     height: 56,
     borderRadius: 28,
-    backgroundColor: "#fce8e6",
+    backgroundColor: "#faf5f4",
     justifyContent: "center",
     alignItems: "center",
     marginBottom: 8,
     borderWidth: 2,
-    borderColor: "#e8b8b4",
+    borderColor: "#f0e0de",
     position: "relative",
   },
-
-  badgeImage: { width: 44, height: 44, borderRadius: 22, resizeMode: "cover" },
-
+  badgeImage:   { width: 44, height: 44, borderRadius: 22, resizeMode: "cover" },
   checkOverlay: {
     position: "absolute",
     bottom: -4,
@@ -257,7 +255,6 @@ const styles = StyleSheet.create({
     backgroundColor: "#fff",
     borderRadius: 10,
   },
-
   badgeName: {
     fontSize: 10,
     fontWeight: "600",
@@ -265,10 +262,9 @@ const styles = StyleSheet.create({
     textAlign: "center",
     lineHeight: 13,
   },
-
   claimedDate: {
     fontSize: 9,
-    color: "#aaa",
+    color: "#b0908c",
     marginTop: 4,
     textAlign: "center",
   },

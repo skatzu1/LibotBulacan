@@ -74,7 +74,7 @@ function AppNavigator() {
     <AuthProvider>
       <ReviewProvider>
         <BookmarkProvider>
-          <ArrivalProvider> {/* ✅ WRAP HERE — inside ClerkProvider so useAuth() works */}
+          <ArrivalProvider> 
             <NavigationContainer>
               <Stack.Navigator screenOptions={{ headerShown: false }}>
                 {isSignedIn ? (
@@ -113,7 +113,7 @@ function AppNavigator() {
                 )}
               </Stack.Navigator>
             </NavigationContainer>
-          </ArrivalProvider> {/* ✅ */}
+          </ArrivalProvider> 
         </BookmarkProvider>
       </ReviewProvider>
     </AuthProvider>

@@ -16,7 +16,6 @@ import { useArrival } from "../context/ArrivalContext";
 const { width, height } = Dimensions.get("window");
 const BASE_URL = "https://libotbackend.onrender.com";
 
-// Safely get lat/lng from any spot shape
 function getSpotCoords(spot) {
   if (!spot) return null;
   if (spot.coordinates?.lat != null && spot.coordinates?.lng != null)
@@ -36,14 +35,12 @@ export default function Track({ route, navigation }) {
   const [locationError, setLocationError] = useState(null);
   const [followMode, setFollowMode]       = useState(false);
 
-  const webViewRef          = useRef(null);
+  const webViewRef           = useRef(null);
   const locationSubscription = useRef(null);
-  const isMounted           = useRef(true);
+  const isMounted            = useRef(true);
 
-  /* ── Tell global context which spot we're heading to ── */
   useEffect(() => {
     if (spotData) setActiveSpot(spotData);
-    return () => setActiveSpot(null);
   }, [spotData]);
 
   /* ── Fetch spot data ── */
@@ -51,7 +48,6 @@ export default function Track({ route, navigation }) {
     isMounted.current = true;
 
     const loadSpot = async () => {
-      // If spot already has coords, use it directly
       if (getSpotCoords(spot)) {
         setSpotData(spot);
         return;
@@ -62,9 +58,11 @@ export default function Track({ route, navigation }) {
           if (!ct.includes("application/json")) return null;
           return res.json();
         };
+
         let foundSpot = null;
         const singleRes  = await fetch(`${BASE_URL}/api/spots/${spot._id}`);
         const singleData = await safeJson(singleRes);
+
         if (singleData?.success && singleData?.spot) {
           foundSpot = singleData.spot;
         } else {
@@ -74,6 +72,7 @@ export default function Track({ route, navigation }) {
             foundSpot = listData.spots.find((s) => s._id === spot._id) ?? null;
           }
         }
+
         if (!isMounted.current) return;
         setSpotData(foundSpot ?? spot);
       } catch {
@@ -91,7 +90,7 @@ export default function Track({ route, navigation }) {
     };
   }, [spot._id]);
 
-  /* ── Location tracking (map display only) ── */
+  /* ── Location tracking for map display only ── */
   useEffect(() => {
     if (!spotData) return;
     let cancelled = false;
@@ -112,8 +111,10 @@ export default function Track({ route, navigation }) {
         });
         if (cancelled || !isMounted.current) return;
 
-        const coords = { latitude: initial.coords.latitude, longitude: initial.coords.longitude };
-        setUserLocation(coords);
+        setUserLocation({
+          latitude:  initial.coords.latitude,
+          longitude: initial.coords.longitude,
+        });
         setLoading(false);
 
         locationSubscription.current = await Location.watchPositionAsync(
@@ -123,7 +124,6 @@ export default function Track({ route, navigation }) {
             const c = { latitude: loc.coords.latitude, longitude: loc.coords.longitude };
             setUserLocation(c);
             updateMarkerOnMap(c);
-            // ✅ No arrival check here — ArrivalContext handles it globally
           }
         );
       } catch {
@@ -164,6 +164,7 @@ export default function Track({ route, navigation }) {
     `);
   }, [spotData]);
 
+  /* ── Center on Me ── */
   const handleCenterOnMe = useCallback(() => {
     if (!webViewRef.current || !userLocation) return;
     if (!followMode) {
@@ -229,7 +230,7 @@ export default function Track({ route, navigation }) {
       </body></html>`;
   }, [spotData, userLocation]);
 
-  /* ── Loading / Error ── */
+  /* ── Loading / Error states ── */
   if (loading || !spotData || !userLocation) {
     return (
       <View style={styles.loading}>
@@ -273,14 +274,12 @@ export default function Track({ route, navigation }) {
         onError={(e) => console.error("WebView error:", e.nativeEvent)}
       />
 
-      {/* Header */}
+      {/* Header — back button and spot name only */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
           <Feather name="chevron-left" size={24} color="#fff" />
         </TouchableOpacity>
-        <View style={styles.headerContent}>
-          <Text style={styles.headerTitle} numberOfLines={1}>{spotData.name}</Text>
-        </View>
+        <Text style={styles.headerTitle} numberOfLines={1}>{spotData.name}</Text>
         <View style={{ width: 40 }} />
       </View>
 
@@ -293,39 +292,107 @@ export default function Track({ route, navigation }) {
         <Feather name="navigation" size={22} color={followMode ? "#fff" : "#8b4440"} />
         {followMode && <Text style={styles.centerButtonLabel}>Following</Text>}
       </TouchableOpacity>
-
-      {/* ✅ Points popup and badge banner rendered globally by ArrivalContext */}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container:      { flex: 1, backgroundColor: "#000" },
-  map:            { flex: 1, width, height },
-  loading:        { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "#f7cfc9" },
-  loadingText:    { marginTop: 15, fontSize: 16, color: "#4a4a4a", fontWeight: "600" },
-  errorText:      { fontSize: 16, color: "#8b4440", fontWeight: "600", textAlign: "center", paddingHorizontal: 40 },
-  backButtonError: { marginTop: 20, backgroundColor: "#8b4440", paddingHorizontal: 30, paddingVertical: 12, borderRadius: 25 },
-  backButtonText: { color: "#fff", fontSize: 16, fontWeight: "700" },
+  container: {
+    flex: 1,
+    backgroundColor: "#000",
+  },
+  map: {
+    flex: 1,
+    width,
+    height,
+  },
+
+  // ── Loading / Error ──
+  loading: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "#f7cfc9",
+  },
+  loadingText: {
+    marginTop: 15,
+    fontSize: 16,
+    color: "#4a4a4a",
+    fontWeight: "600",
+  },
+  errorText: {
+    fontSize: 16,
+    color: "#8b4440",
+    fontWeight: "600",
+    textAlign: "center",
+    paddingHorizontal: 40,
+  },
+  backButtonError: {
+    marginTop: 20,
+    backgroundColor: "#8b4440",
+    paddingHorizontal: 30,
+    paddingVertical: 12,
+    borderRadius: 25,
+  },
+  backButtonText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "700",
+  },
+
+  // ── Header ──
   header: {
-    position: "absolute", top: 0, left: 0, right: 0,
-    flexDirection: "row", alignItems: "center",
-    paddingHorizontal: 20, paddingTop: 50, paddingBottom: 20,
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 20,
+    paddingTop: 50,
+    paddingBottom: 20,
     backgroundColor: "rgba(139, 68, 64, 0.95)",
   },
   backButton: {
-    width: 40, height: 40, justifyContent: "center", alignItems: "center",
-    backgroundColor: "rgba(0,0,0,0.2)", borderRadius: 20,
+    width: 40,
+    height: 40,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "rgba(0,0,0,0.2)",
+    borderRadius: 20,
   },
-  headerContent:  { flex: 1, marginHorizontal: 15 },
-  headerTitle:    { fontSize: 18, fontWeight: "700", color: "#fff" },
+  headerTitle: {
+    flex: 1,
+    fontSize: 18,
+    fontWeight: "700",
+    color: "#fff",
+    marginHorizontal: 12,
+  },
+
+  // ── Center on Me button ──
   centerButton: {
-    position: "absolute", bottom: 40, right: 20,
-    flexDirection: "row", alignItems: "center",
-    backgroundColor: "#fff", paddingHorizontal: 16, paddingVertical: 12,
-    borderRadius: 30, shadowColor: "#000", shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25, shadowRadius: 4, elevation: 5, gap: 6,
+    position: "absolute",
+    bottom: 40,
+    right: 20,
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#fff",
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 30,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    elevation: 5,
+    gap: 6,
   },
-  centerButtonActive: { backgroundColor: "#8b4440" },
-  centerButtonLabel:  { color: "#fff", fontSize: 14, fontWeight: "700" },
+  centerButtonActive: {
+    backgroundColor: "#8b4440",
+  },
+  centerButtonLabel: {
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: "700",
+  },
 });
