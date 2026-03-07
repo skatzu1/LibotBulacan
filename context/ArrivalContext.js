@@ -14,18 +14,23 @@ import {
   TouchableOpacity,
   Image,
   StyleSheet,
+  Modal,
+  Platform,
 } from "react-native";
 import * as Location from "expo-location";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useAuth } from "@clerk/clerk-expo";
 import { Feather } from "@expo/vector-icons";
 
-const BASE_URL = "https://libotbackend.onrender.com";
+const BASE_URL             = "https://libotbackend.onrender.com";
 const ARRIVAL_RADIUS_METERS = 50;
-const POINTS_PER_VISIT = 10;
+const POINTS_PER_VISIT     = 10;
+const ACTIVE_SPOT_KEY      = "activeSpot";
+const ALL_SPOTS_KEY        = "allSpots";
+const SPOTS_CACHE_TTL_MS   = 5 * 60 * 1000; // re-fetch spot list every 5 minutes
 
 function getDistanceMeters(lat1, lng1, lat2, lng2) {
-  const R = 6371000;
+  const R    = 6371000;
   const dLat = ((lat2 - lat1) * Math.PI) / 180;
   const dLng = ((lng2 - lng1) * Math.PI) / 180;
   const a =
@@ -46,10 +51,20 @@ function getSpotCoords(spot) {
   return null;
 }
 
-// ✅ Safe default — prevents null crash if Provider is ever missing
+async function safeJson(res) {
+  const text = await res.text();
+  try { return JSON.parse(text); }
+  catch {
+    console.error("[HTTP] Non-JSON from", res.url, "status:", res.status, "body:", text.slice(0, 150));
+    return null;
+  }
+}
+
 const ArrivalContext = createContext({
-  activeSpot: null,
-  setActiveSpot: () => {},
+  activeSpot:      null,
+  setActiveSpot:   () => {},
+  clearActiveSpot: () => {},
+  allSpots:        [],
 });
 
 export function useArrival() {
@@ -61,171 +76,288 @@ export function useArrival() {
 export function ArrivalProvider({ children }) {
   const { getToken, isSignedIn } = useAuth();
 
-  const [activeSpot, setActiveSpot] = useState(null);
+  // activeSpot — optional single destination (set by Track screen)
+  const [activeSpot, setActiveSpotState] = useState(null);
 
-  // Points popup
+  // allSpots — full list fetched once, used for automatic nearby detection
+  const [allSpots, setAllSpots]         = useState([]);
+  const allSpotsRef                     = useRef([]);
+  const spotsFetchedAt                  = useRef(0);
+
+  // ── Points popup ──
   const [showPointsPopup, setShowPointsPopup] = useState(false);
   const [popupPoints, setPopupPoints]         = useState({ earned: 0, total: 0 });
   const pointsOpacity    = useRef(new Animated.Value(0)).current;
-  const pointsTranslateY = useRef(new Animated.Value(40)).current;
+  const pointsTranslateY = useRef(new Animated.Value(60)).current;
   const pointsScale      = useRef(new Animated.Value(0.8)).current;
 
-  // Badge banner
+  // ── Badge banner ──
   const [pendingBadge, setPendingBadge]       = useState(null);
   const [showBadgeBanner, setShowBadgeBanner] = useState(false);
-  const badgeTranslateY = useRef(new Animated.Value(-160)).current;
+  const badgeTranslateY = useRef(new Animated.Value(-200)).current;
 
   const locationSub  = useRef(null);
-  const arrivedSpots = useRef(new Set());
+  const arrivedSpots = useRef(new Set()); // spotIds processed this session
+  const activeSpotRef = useRef(null);
 
-  // Keep a ref to activeSpot so the location watcher always sees latest value
-  const activeSpotRef = useRef(activeSpot);
   useEffect(() => { activeSpotRef.current = activeSpot; }, [activeSpot]);
 
-  /* ── Points popup ── */
+  /* ─────────────────────────────────────────────────────────
+     FETCH ALL SPOTS
+     Called once on mount and then every SPOTS_CACHE_TTL_MS.
+     Cached in AsyncStorage so it works even if network is slow.
+  ───────────────────────────────────────────────────────── */
+  const fetchAllSpots = useCallback(async () => {
+    const now = Date.now();
+    // Skip if we fetched recently
+    if (now - spotsFetchedAt.current < SPOTS_CACHE_TTL_MS && allSpotsRef.current.length > 0) return;
+
+    try {
+      // Try network first
+      const res  = await fetch(`${BASE_URL}/api/spots`);
+      const data = await safeJson(res);
+      if (data?.success && Array.isArray(data.spots)) {
+        const spots = data.spots;
+        allSpotsRef.current = spots;
+        setAllSpots(spots);
+        spotsFetchedAt.current = now;
+        // Cache for offline use
+        await AsyncStorage.setItem(ALL_SPOTS_KEY, JSON.stringify(spots));
+        console.log("[Arrival] Loaded", spots.length, "spots for proximity detection");
+      }
+    } catch (e) {
+      console.warn("[Arrival] Could not fetch spots, using cache:", e.message);
+      // Fall back to cached spots
+      try {
+        const raw = await AsyncStorage.getItem(ALL_SPOTS_KEY);
+        if (raw) {
+          const cached = JSON.parse(raw);
+          allSpotsRef.current = cached;
+          setAllSpots(cached);
+          console.log("[Arrival] Restored", cached.length, "spots from cache");
+        }
+      } catch (_) {}
+    }
+  }, []);
+
+  // Fetch spots on sign-in
+  useEffect(() => {
+    if (isSignedIn) fetchAllSpots();
+  }, [isSignedIn]);
+
+  /* ── Active spot (from Track screen) ── */
+  const setActiveSpot = useCallback(async (spot) => {
+    try { if (spot) await AsyncStorage.setItem(ACTIVE_SPOT_KEY, JSON.stringify(spot)); } catch (_) {}
+    setActiveSpotState(spot);
+    activeSpotRef.current = spot;
+  }, []);
+
+  const clearActiveSpot = useCallback(async () => {
+    try { await AsyncStorage.removeItem(ACTIVE_SPOT_KEY); } catch (_) {}
+    setActiveSpotState(null);
+    activeSpotRef.current = null;
+  }, []);
+
+  // Restore active spot on app launch
+  useEffect(() => {
+    const restore = async () => {
+      try {
+        const raw = await AsyncStorage.getItem(ACTIVE_SPOT_KEY);
+        if (raw) {
+          const spot = JSON.parse(raw);
+          setActiveSpotState(spot);
+          activeSpotRef.current = spot;
+          console.log("[Arrival] Restored active spot:", spot.name);
+        }
+      } catch (_) {}
+    };
+    restore();
+  }, []);
+
+  /* ── Points popup animation ── */
   const triggerPointsPopup = useCallback((earned, total) => {
     setPopupPoints({ earned, total });
     pointsOpacity.setValue(0);
-    pointsTranslateY.setValue(40);
+    pointsTranslateY.setValue(60);
     pointsScale.setValue(0.8);
     setShowPointsPopup(true);
 
     Animated.parallel([
-      Animated.timing(pointsOpacity,    { toValue: 1, duration: 300, useNativeDriver: true }),
-      Animated.timing(pointsTranslateY, { toValue: 0, duration: 300, useNativeDriver: true }),
-      Animated.timing(pointsScale,      { toValue: 1, duration: 300, useNativeDriver: true }),
+      Animated.spring(pointsOpacity,    { toValue: 1, useNativeDriver: true, tension: 80, friction: 8 }),
+      Animated.spring(pointsTranslateY, { toValue: 0, useNativeDriver: true, tension: 80, friction: 8 }),
+      Animated.spring(pointsScale,      { toValue: 1, useNativeDriver: true, tension: 80, friction: 8 }),
     ]).start(() => {
       setTimeout(() => {
         Animated.parallel([
-          Animated.timing(pointsOpacity,    { toValue: 0, duration: 300, useNativeDriver: true }),
-          Animated.timing(pointsTranslateY, { toValue: -20, duration: 300, useNativeDriver: true }),
+          Animated.timing(pointsOpacity,    { toValue: 0, duration: 350, useNativeDriver: true }),
+          Animated.timing(pointsTranslateY, { toValue: -30, duration: 350, useNativeDriver: true }),
+          Animated.timing(pointsScale,      { toValue: 0.85, duration: 350, useNativeDriver: true }),
         ]).start(() => setShowPointsPopup(false));
-      }, 2400);
+      }, 2600);
     });
   }, [pointsOpacity, pointsTranslateY, pointsScale]);
 
-  /* ── Badge banner ── */
+  /* ── Badge banner animation ── */
   const triggerBadgeBanner = useCallback((badge) => {
-    badgeTranslateY.setValue(-160);
+    badgeTranslateY.setValue(-200);
     setPendingBadge(badge);
     setShowBadgeBanner(true);
-    Animated.timing(badgeTranslateY, { toValue: 0, duration: 350, useNativeDriver: true }).start();
+    Animated.spring(badgeTranslateY, {
+      toValue: 0, useNativeDriver: true, tension: 70, friction: 10,
+    }).start();
   }, [badgeTranslateY]);
 
   const dismissBadgeBanner = useCallback(() => {
-    Animated.timing(badgeTranslateY, { toValue: -160, duration: 280, useNativeDriver: true })
-      .start(() => { setShowBadgeBanner(false); setPendingBadge(null); });
+    Animated.timing(badgeTranslateY, {
+      toValue: -200, duration: 300, useNativeDriver: true,
+    }).start(() => {
+      setShowBadgeBanner(false);
+      setPendingBadge(null);
+    });
   }, [badgeTranslateY]);
 
   /* ── Claim badge ── */
   const claimBadge = useCallback(async () => {
     if (!pendingBadge) return;
-    const badge = pendingBadge;
+    const badge = { ...pendingBadge };
     dismissBadgeBanner();
 
     try {
       const token = await getToken();
-      await fetch(`${BASE_URL}/api/users/badges`, {
+      if (!token) { console.warn("[Badge] No token"); return; }
+
+      const res  = await fetch(`${BASE_URL}/api/users/badges`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ spotId: badge.spotId }),
       });
-    } catch (e) {
-      console.warn("claimBadge network error:", e);
-    }
+      const data = await safeJson(res);
 
-    try {
-      const raw = await AsyncStorage.getItem("claimedSpotIds");
-      const ids = raw ? JSON.parse(raw) : [];
-      if (!ids.includes(badge.spotId)) {
-        ids.push(badge.spotId);
-        await AsyncStorage.setItem("claimedSpotIds", JSON.stringify(ids));
-      }
-    } catch (_) {}
+      if (!data) { console.error("[Badge] No JSON — check PATCH /api/users/badges exists in server.js"); return; }
+      console.log("[Badge] Claim response:", res.status, JSON.stringify(data));
+
+      if (!res.ok || !data.success) { console.warn("[Badge] Claim failed:", data?.message); return; }
+
+      console.log("[Badge] ✅ Saved:", JSON.stringify(data.claimed));
+
+      try {
+        const raw = await AsyncStorage.getItem("claimedSpotIds");
+        const ids = raw ? JSON.parse(raw) : [];
+        if (!ids.includes(badge.spotId))
+          await AsyncStorage.setItem("claimedSpotIds", JSON.stringify([...ids, badge.spotId]));
+      } catch (_) {}
+
+    } catch (e) { console.error("[Badge] Claim error:", e); }
   }, [pendingBadge, dismissBadgeBanner, getToken]);
 
-  /* ── Award rewards on arrival ── */
+  /* ─────────────────────────────────────────────────────────
+     AWARD REWARDS
+     Called when user arrives within 50m of a spot.
+     Points and badge run fully independently.
+  ───────────────────────────────────────────────────────── */
   const awardRewards = useCallback(async (spot) => {
-    const spotId = spot._id;
+    const spotId = String(spot._id ?? "").trim();
+    if (!spotId) return;
     if (arrivedSpots.current.has(spotId)) return;
     arrivedSpots.current.add(spotId);
 
-    // 1. Points
-    let earned = 0;
-    let total  = 0;
+    console.log("[Arrival] ✅ Arrived at:", spot.name, "| spotId:", spotId);
+
+    // ── 1. Points ──────────────────────────────────────────
+    let pointsJustEarned = false;
     try {
       const token = await getToken();
-      const res = await fetch(`${BASE_URL}/api/users/points`, {
+      const res   = await fetch(`${BASE_URL}/api/users/points`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ spotId }),
       });
-      if (res.ok) {
-        const data = await res.json();
-        if (data.success) {
-          total  = data.points;
-          earned = data.alreadyAwarded ? 0 : POINTS_PER_VISIT;
-          await AsyncStorage.setItem("userPoints", String(total));
+      const data = await safeJson(res);
+      console.log("[Points]", res.status, JSON.stringify(data));
+
+      if (res.ok && data?.success && !data.alreadyAwarded) {
+        pointsJustEarned = true;
+        await AsyncStorage.setItem("userPoints", String(data.points));
+        triggerPointsPopup(POINTS_PER_VISIT, data.points);
+      }
+    } catch (e) { console.warn("[Points] Error:", e); }
+
+    // ── 2. Badge (always runs independently) ───────────────
+    try {
+      // Read badge from the spot data we already have in allSpotsRef
+      // to avoid an extra network call if possible
+      const cachedSpot    = allSpotsRef.current.find((s) => String(s._id) === spotId);
+      let badgeImageUrl   = cachedSpot?.Badge ?? cachedSpot?.badge?.image ?? null;
+      let spotName        = cachedSpot?.name ?? spot.name;
+
+      // If not in cache (e.g. only activeSpot was set), fetch from network
+      if (!cachedSpot) {
+        const spotRes  = await fetch(`${BASE_URL}/api/spots/${spotId}`);
+        const spotJson = await safeJson(spotRes);
+        const fresh    = spotJson?.spot;
+        if (fresh) {
+          badgeImageUrl = fresh.Badge ?? fresh.badge?.image ?? null;
+          spotName      = fresh.name;
         }
       }
-    } catch (e) {
-      console.warn("awardRewards points error:", e);
-      const stored  = await AsyncStorage.getItem("userPoints").catch(() => "0");
-      const current = parseInt(stored ?? "0", 10);
-      total  = current + POINTS_PER_VISIT;
-      earned = POINTS_PER_VISIT;
-      await AsyncStorage.setItem("userPoints", String(total)).catch(() => {});
-    }
 
-    if (earned > 0) triggerPointsPopup(earned, total);
-
-    // 2. Badge
-    try {
-      const token   = await getToken();
-      const spotRes = await fetch(`${BASE_URL}/api/spots/${spotId}`);
-      if (!spotRes.ok) return;
-
-      const spotData  = await spotRes.json();
-      const freshSpot = spotData?.spot;
-
-      const badgeImageUrl = freshSpot?.Badge ?? freshSpot?.badge?.image ?? null;
-      if (!badgeImageUrl) return;
-
-      const meRes = await fetch(`${BASE_URL}/api/users/me`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
-      if (!meRes.ok) return;
-
-      const meData         = await meRes.json();
-      const userBadges     = meData?.user?.badges ?? [];
-      const alreadyClaimed = userBadges.some((b) => b.spotId === spotId);
-
-      if (!alreadyClaimed) {
-        const delay = earned > 0 ? 1400 : 0;
-        setTimeout(() => {
-          triggerBadgeBanner({ spotId, name: freshSpot.name, image: badgeImageUrl });
-        }, delay);
+      if (!badgeImageUrl) {
+        console.log("[Badge] No badge for:", spotName);
+        return;
       }
-    } catch (e) {
-      console.warn("awardRewards badge check error:", e);
-    }
+
+      console.log("[Badge] Badge URL:", badgeImageUrl);
+
+      // Check local cache
+      try {
+        const raw       = await AsyncStorage.getItem("claimedSpotIds");
+        const cachedIds = raw ? JSON.parse(raw) : [];
+        if (cachedIds.includes(spotId)) { console.log("[Badge] Already claimed (cache)"); return; }
+      } catch (_) {}
+
+      // Check DB
+      const token  = await getToken();
+      const meRes  = await fetch(`${BASE_URL}/api/users/me`, { headers: { Authorization: `Bearer ${token}` } });
+      const meData = await safeJson(meRes);
+      const alreadyClaimed = (meData?.user?.badges ?? []).some((b) => String(b.spotId) === spotId);
+
+      if (alreadyClaimed) { console.log("[Badge] Already in DB"); return; }
+
+      const delay = pointsJustEarned ? 1500 : 0;
+      console.log("[Badge] Showing banner in", delay, "ms");
+      setTimeout(() => triggerBadgeBanner({ spotId, name: spotName, image: badgeImageUrl }), delay);
+
+    } catch (e) { console.error("[Badge] Error:", e); }
   }, [getToken, triggerPointsPopup, triggerBadgeBanner]);
 
-  /* ── Arrival check — uses ref so watcher never stales ── */
+  /* ─────────────────────────────────────────────────────────
+     CHECK ARRIVAL AGAINST ALL SPOTS
+     Every location update checks:
+       1. All spots in the DB (automatic — no Track needed)
+       2. The active spot if set (for extra precision during navigation)
+     The arrivedSpots Set prevents duplicate triggers.
+  ───────────────────────────────────────────────────────── */
   const checkArrival = useCallback((coords) => {
-    const spot = activeSpotRef.current; // ✅ always fresh
-    if (!spot) return;
-    const dest = getSpotCoords(spot);
-    if (!dest) return;
+    const spots = allSpotsRef.current;
 
-    const dist = getDistanceMeters(
-      coords.latitude, coords.longitude,
-      dest.lat, dest.lng
-    );
-    if (dist <= ARRIVAL_RADIUS_METERS) awardRewards(spot);
-  }, [awardRewards]); // no activeSpot dep needed — uses ref
+    // Check every spot in the database
+    for (const spot of spots) {
+      const dest = getSpotCoords(spot);
+      if (!dest) continue;
 
-  /* ── Global location watcher ── */
+      const dist = getDistanceMeters(
+        coords.latitude, coords.longitude,
+        dest.lat, dest.lng
+      );
+
+      if (dist <= ARRIVAL_RADIUS_METERS) {
+        awardRewards(spot);
+        // Don't break — user could theoretically be near multiple spots
+      }
+    }
+  }, [awardRewards]);
+
+  /* ── Global location watcher — runs for the entire app lifetime ── */
   useEffect(() => {
     if (!isSignedIn) return;
     let cancelled = false;
@@ -249,100 +381,90 @@ export function ArrivalProvider({ children }) {
       locationSub.current?.remove();
       locationSub.current = null;
     };
-  }, [isSignedIn]); // ✅ checkArrival removed from deps — uses ref internally
+  }, [isSignedIn]);
 
   return (
-    <ArrivalContext.Provider value={{ activeSpot, setActiveSpot }}>
+    <ArrivalContext.Provider value={{ activeSpot, setActiveSpot, clearActiveSpot, allSpots }}>
       {children}
 
       {/* Points Popup */}
-      {showPointsPopup && (
-        <Animated.View
-          pointerEvents="none"
-          style={[styles.pointsPopup, {
-            opacity: pointsOpacity,
-            transform: [{ translateY: pointsTranslateY }, { scale: pointsScale }],
-          }]}
-        >
-          <Text style={styles.pointsEmoji}>🎉</Text>
-          <Text style={styles.pointsTitle}>You arrived!</Text>
-          <Text style={styles.pointsEarned}>+{popupPoints.earned} Points</Text>
-          <Text style={styles.pointsTotal}>Total: {popupPoints.total} pts</Text>
-        </Animated.View>
-      )}
+      <Modal visible={showPointsPopup} transparent animationType="none" statusBarTranslucent onRequestClose={() => {}}>
+        <View style={styles.pointsOverlay} pointerEvents="box-none">
+          <Animated.View
+            pointerEvents="none"
+            style={[styles.pointsPopup, { opacity: pointsOpacity, transform: [{ translateY: pointsTranslateY }, { scale: pointsScale }] }]}
+          >
+            <Text style={styles.pointsEmoji}>🎉</Text>
+            <Text style={styles.pointsTitle}>You arrived!</Text>
+            <Text style={styles.pointsEarned}>+{String(popupPoints.earned)} Points</Text>
+            <Text style={styles.pointsTotal}>Total: {String(popupPoints.total)} pts</Text>
+          </Animated.View>
+        </View>
+      </Modal>
 
       {/* Badge Banner */}
-      {showBadgeBanner && pendingBadge && (
-        <Animated.View style={[styles.badgeBanner, { transform: [{ translateY: badgeTranslateY }] }]}>
-          <View style={styles.bannerLeft}>
-            {pendingBadge.image ? (
-              <Image source={{ uri: pendingBadge.image }} style={styles.bannerImage} />
-            ) : (
-              <View style={styles.bannerPlaceholder}>
-                <Feather name="award" size={22} color="#8b4440" />
+      <Modal visible={showBadgeBanner && !!pendingBadge} transparent animationType="none" statusBarTranslucent onRequestClose={dismissBadgeBanner}>
+        <TouchableOpacity style={styles.badgeBackdrop} activeOpacity={1} onPress={dismissBadgeBanner}>
+          <TouchableOpacity activeOpacity={1} onPress={() => {}}>
+            <Animated.View style={[styles.badgeBanner, { transform: [{ translateY: badgeTranslateY }] }]}>
+              <View style={styles.bannerLeft}>
+                {pendingBadge?.image ? (
+                  <Image source={{ uri: pendingBadge.image }} style={styles.bannerImage} />
+                ) : (
+                  <View style={styles.bannerPlaceholder}>
+                    <Feather name="award" size={22} color="#8b4440" />
+                  </View>
+                )}
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.bannerLabel}>New Badge Unlocked!</Text>
+                  <Text style={styles.bannerName} numberOfLines={2}>{String(pendingBadge?.name ?? "")}</Text>
+                </View>
               </View>
-            )}
-            <View style={{ flex: 1 }}>
-              <Text style={styles.bannerLabel}>New Badge Unlocked!</Text>
-              <Text style={styles.bannerName} numberOfLines={1}>{pendingBadge.name}</Text>
-            </View>
-          </View>
-          <View style={styles.bannerActions}>
-            <TouchableOpacity style={styles.claimBtn} onPress={claimBadge}>
-              <Text style={styles.claimBtnText}>Claim</Text>
-            </TouchableOpacity>
-            <TouchableOpacity style={styles.dismissBtn} onPress={dismissBadgeBanner}>
-              <Feather name="x" size={16} color="#8b4440" />
-            </TouchableOpacity>
-          </View>
-        </Animated.View>
-      )}
+              <View style={styles.bannerActions}>
+                <TouchableOpacity style={styles.claimBtn} onPress={claimBadge}>
+                  <Text style={styles.claimBtnText}>Claim</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.dismissBtn} onPress={dismissBadgeBanner}>
+                  <Feather name="x" size={16} color="#8b4440" />
+                </TouchableOpacity>
+              </View>
+            </Animated.View>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
     </ArrivalContext.Provider>
   );
 }
 
 const styles = StyleSheet.create({
+  pointsOverlay: { flex: 1, justifyContent: "flex-end", alignItems: "center", paddingBottom: 110 },
   pointsPopup: {
-    position: "absolute", bottom: 120, alignSelf: "center",
-    backgroundColor: "#fff", borderRadius: 20,
-    paddingVertical: 20, paddingHorizontal: 35, alignItems: "center",
-    shadowColor: "#000", shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.3, shadowRadius: 8, elevation: 20,
-    borderWidth: 2, borderColor: "#f4c542", zIndex: 9999,
+    backgroundColor: "#fff", borderRadius: 24, paddingVertical: 22, paddingHorizontal: 40,
+    alignItems: "center", shadowColor: "#000", shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.25, shadowRadius: 10, elevation: 25,
+    borderWidth: 2, borderColor: "#f4c542", minWidth: 200,
   },
-  pointsEmoji:  { fontSize: 36, marginBottom: 6 },
+  pointsEmoji:  { fontSize: 38, marginBottom: 6 },
   pointsTitle:  { fontSize: 18, fontWeight: "700", color: "#4a4a4a", marginBottom: 4 },
-  pointsEarned: { fontSize: 26, fontWeight: "800", color: "#8b4440", marginBottom: 2 },
+  pointsEarned: { fontSize: 28, fontWeight: "800", color: "#8b4440", marginBottom: 2 },
   pointsTotal:  { fontSize: 13, color: "#6a5a5a", fontWeight: "500" },
 
+  badgeBackdrop: { flex: 1 },
   badgeBanner: {
-    position: "absolute", top: 55, left: 16, right: 16,
-    backgroundColor: "#fff", borderRadius: 16,
-    paddingVertical: 14, paddingHorizontal: 16,
+    marginTop: Platform.OS === "ios" ? 55 : 40, marginHorizontal: 16,
+    backgroundColor: "#fff", borderRadius: 18, paddingVertical: 14, paddingHorizontal: 16,
     flexDirection: "row", alignItems: "center", justifyContent: "space-between",
-    shadowColor: "#000", shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.18, shadowRadius: 10, elevation: 20,
-    borderWidth: 1.5, borderColor: "#f4c542", zIndex: 9999,
+    shadowColor: "#000", shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.2, shadowRadius: 12, elevation: 25,
+    borderWidth: 1.5, borderColor: "#f4c542",
   },
   bannerLeft:        { flexDirection: "row", alignItems: "center", gap: 12, flex: 1 },
-  bannerImage:       { width: 44, height: 44, borderRadius: 22, resizeMode: "cover" },
-  bannerPlaceholder: {
-    width: 44, height: 44, borderRadius: 22,
-    backgroundColor: "#fce8e6", justifyContent: "center", alignItems: "center",
-  },
-  bannerLabel: {
-    fontSize: 11, color: "#8b4440", fontWeight: "700",
-    textTransform: "uppercase", letterSpacing: 0.5,
-  },
-  bannerName:    { fontSize: 14, color: "#4a2e2c", fontWeight: "600", marginTop: 1 },
-  bannerActions: { flexDirection: "row", alignItems: "center", gap: 8 },
-  claimBtn: {
-    backgroundColor: "#8b4440", paddingHorizontal: 16,
-    paddingVertical: 8, borderRadius: 20,
-  },
-  claimBtnText: { color: "#fff", fontWeight: "700", fontSize: 13 },
-  dismissBtn: {
-    width: 30, height: 30, borderRadius: 15,
-    backgroundColor: "#fce8e6", justifyContent: "center", alignItems: "center",
-  },
+  bannerImage:       { width: 46, height: 46, borderRadius: 23, resizeMode: "cover" },
+  bannerPlaceholder: { width: 46, height: 46, borderRadius: 23, backgroundColor: "#fce8e6", justifyContent: "center", alignItems: "center" },
+  bannerLabel:       { fontSize: 11, color: "#8b4440", fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.6 },
+  bannerName:        { fontSize: 14, color: "#4a2e2c", fontWeight: "600", marginTop: 2 },
+  bannerActions:     { flexDirection: "row", alignItems: "center", gap: 8, marginLeft: 8 },
+  claimBtn:          { backgroundColor: "#8b4440", paddingHorizontal: 16, paddingVertical: 9, borderRadius: 20 },
+  claimBtnText:      { color: "#fff", fontWeight: "700", fontSize: 13 },
+  dismissBtn:        { width: 30, height: 30, borderRadius: 15, backgroundColor: "#fce8e6", justifyContent: "center", alignItems: "center" },
 });

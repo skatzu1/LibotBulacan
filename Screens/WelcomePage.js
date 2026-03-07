@@ -1,12 +1,12 @@
 import { View, Text, StyleSheet, TouchableOpacity, Image } from "react-native";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 
 export default function WelcomePage({ navigation }) {
   return (
     <View style={styles.screen}>
+
       <View style={styles.titleContainer}>
         <Text style={styles.title}>Welcome</Text>
-        <Text style={styles.subtitle}>we're glad that you are here</Text>
+        <Text style={styles.subtitle}>We're glad that you are here</Text>
       </View>
 
       <View style={styles.card}>
@@ -20,62 +20,73 @@ export default function WelcomePage({ navigation }) {
         <TouchableOpacity
           style={styles.button}
           onPress={() => navigation.navigate("WelcomePage2")}
+          activeOpacity={0.85}
         >
           <Text style={styles.buttonText}>Continue</Text>
         </TouchableOpacity>
       </View>
+
     </View>
   );
 }
 
 const styles = StyleSheet.create({
   screen: {
-    backgroundColor: "#f7cfc9",
     flex: 1,
+    backgroundColor: "#f7cfc9",
     justifyContent: "center",
     alignItems: "center",
     padding: 20,
   },
-  image: {
-    width: 300,
-    height: 300,
-    resizeMode: "contain",
+
+  // ── Title ──
+  titleContainer: {
+    alignItems: "center",
+    marginBottom: 8,
   },
+  title: {
+    fontSize: 26,
+    fontWeight: "700",
+    color: "#4a2e2c",
+    textAlign: "center",
+  },
+  subtitle: {
+    fontSize: 16,
+    textAlign: "center",
+    color: "#7a5a58",
+    marginTop: 8,
+  },
+
+  // ── Image card ──
   card: {
     width: "100%",
     backgroundColor: "#f7cfc9",
     borderRadius: 20,
     padding: 40,
     alignItems: "center",
-    justifyContent: "space-between",
-    height: 400,
+    justifyContent: "center",
+    height: 380,
   },
-  titleContainer: {
-    alignItems: "center",
+  image: {
+    width: 300,
+    height: 300,
+    resizeMode: "contain",
   },
-  title: {
-    fontSize: 25,
-    fontWeight: "700",
-    textAlign: "center",
-  },
-  subtitle: {
-    fontSize: 18,
-    textAlign: "center",
-    color: "#444",
-    marginTop: 10,
-  },
+
+  // ── Button ──
   buttonContainer: {
-    marginTop: 20,
+    width: "100%",
+    marginTop: 12,
   },
   button: {
     backgroundColor: "#6b4b45",
     paddingVertical: 15,
-    paddingHorizontal: 60,
     borderRadius: 12,
+    alignItems: "center",
   },
   buttonText: {
     color: "#fff",
-    fontSize: 18,
-    fontWeight: "600",
+    fontSize: 17,
+    fontWeight: "700",
   },
 });
