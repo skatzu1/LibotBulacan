@@ -160,10 +160,7 @@ function HomeTab() {
         />
         <TouchableOpacity onPress={() => navigation.navigate("Profile")}>
           {profilePhoto ? (
-            <Image
-              source={{ uri: profilePhoto }}
-              style={styles.profileImage}
-            />
+            <Image source={{ uri: profilePhoto }} style={styles.profileImage} />
           ) : (
             <View style={styles.profileIcon}>
               <Feather name="user" size={20} color="#fff" />
@@ -182,44 +179,65 @@ function HomeTab() {
 function HomeContent() {
   const navigation = useNavigation();
   const { getAverageRating, getReviewCount } = useReviews();
-  const [spots, setSpots] = useState([]);
-  const [loading, setLoading] = useState(true);
+  const [spots, setSpots]           = useState([]);
+  const [topSpots, setTopSpots]     = useState([]);
+  const [loading, setLoading]       = useState(true);
+  const [topLoading, setTopLoading] = useState(true);
 
   const getSpotRating = (spot) => {
     const reviewCount = getReviewCount(spot._id);
     return reviewCount > 0 ? getAverageRating(spot._id) : 0;
   };
 
+  // ── Navigate to spot (visitCount is handled by ArrivalContext on physical arrival) ──
+  const handleSpotPress = (spot) => {
+    navigation.navigate("InformationScreen", { spot });
+  };
+
   const sliderData =
-    spots && spots.length > 0
-      ? spots
-          .slice(0, 5)
-          .map(({ _id, image, name, description, location, rating, modelUrl }, index) => {
-            const reviewCount = getReviewCount(_id);
-            const displayRating = reviewCount > 0 ? getAverageRating(_id) : 0;
-            return {
-              id: _id || String(index),
-              image,
-              title: name,
-              location,
-              rating: displayRating,
-              reviewCount,
-              spot: { _id, image, name, description, location, rating, modelUrl },
-            };
-          })
+    spots.length > 0
+      ? spots.slice(0, 5).map(({ _id, image, name, description, location, rating, modelUrl }, index) => {
+          const reviewCount   = getReviewCount(_id);
+          const displayRating = reviewCount > 0 ? getAverageRating(_id) : 0;
+          return {
+            id: _id || String(index),
+            image,
+            title: name,
+            location,
+            rating: displayRating,
+            reviewCount,
+            spot: { _id, image, name, description, location, rating, modelUrl },
+          };
+        })
       : [];
 
+  // Fetch all spots for carousel
   useEffect(() => {
     setLoading(true);
-    fetch("https://libotbackend.onrender.com/api/spots")
+    fetch(`https://libotbackend.onrender.com/api/spots`)
       .then((res) => res.json())
       .then((data) => {
         if (data.success) setSpots(data.spots);
         setLoading(false);
       })
-      .catch((error) => {
-        console.error("Error fetching spots:", error);
+      .catch((err) => {
+        console.error("Error fetching spots:", err);
         setLoading(false);
+      });
+  }, []);
+
+  // Fetch top visited spots
+  useEffect(() => {
+    setTopLoading(true);
+    fetch(`https://libotbackend.onrender.com/api/spots/top/visited`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success) setTopSpots(data.spots);
+        setTopLoading(false);
+      })
+      .catch((err) => {
+        console.error("Error fetching top spots:", err);
+        setTopLoading(false);
       });
   }, []);
 
@@ -246,9 +264,7 @@ function HomeContent() {
             scrollAnimationDuration={1000}
             renderItem={({ item }) => (
               <TouchableOpacity
-                onPress={() =>
-                  navigation.navigate("InformationScreen", { spot: item.spot })
-                }
+                onPress={() => handleSpotPress(item.spot)}
                 style={styles.carouselCard}
               >
                 <Image
@@ -264,7 +280,6 @@ function HomeContent() {
                       {item.location || "Philippines"}
                     </Text>
                   </View>
-                  {/* ✅ FIX: String() prevents raw number text node */}
                   <View style={styles.carouselRating}>
                     <MaterialIcons name="star" size={12} color="#FFD700" />
                     <Text style={styles.carouselRatingText}>
@@ -295,18 +310,20 @@ function HomeContent() {
         </TouchableOpacity>
       </View>
 
-      {!loading && spots && spots.length > 0 ? (
-        spots.slice(0, 5).map((spot) => {
+      {topLoading ? (
+        <View style={styles.loadingContainer}>
+          <Text style={styles.loadingText}>Loading top places...</Text>
+        </View>
+      ) : topSpots.length > 0 ? (
+        topSpots.map((spot) => {
           const displayRating = getSpotRating(spot);
-          const reviewCount = getReviewCount(spot._id);
+          const reviewCount   = getReviewCount(spot._id);
 
           return (
             <TouchableOpacity
               key={spot._id}
               style={styles.topPlaceCard}
-              onPress={() =>
-                navigation.navigate("InformationScreen", { spot })
-              }
+              onPress={() => handleSpotPress(spot)}
             >
               <Image
                 source={{ uri: spot.image, cache: "force-cache" }}
@@ -318,10 +335,9 @@ function HomeContent() {
                 <View style={styles.topPlaceLocationContainer}>
                   <Feather name="map-pin" size={12} color="#ffffff" />
                   <Text style={styles.topPlaceLocation}>
-                    {spot.location || "Santa Maria"}
+                    {spot.location || "Philippines"}
                   </Text>
                 </View>
-                {/* ✅ FIX: String() + ternary instead of && */}
                 <View style={styles.topPlaceRating}>
                   <MaterialIcons name="star" size={12} color="#FFD700" />
                   <Text style={styles.topPlaceRatingText}>
@@ -334,15 +350,24 @@ function HomeContent() {
                     ) : null}
                   </Text>
                 </View>
+                <View style={styles.visitCountRow}>
+                  <Feather name="eye" size={11} color="#f7cfc9" />
+                  <Text style={styles.visitCountText}>
+                    {" "}{spot.visitCount ?? 0}{" "}
+                    {spot.visitCount === 1 ? "visit" : "visits"}
+                  </Text>
+                </View>
               </View>
             </TouchableOpacity>
           );
         })
-      ) : !loading ? (
+      ) : (
         <View style={styles.loadingContainer}>
-          <Text style={styles.loadingText}>No places to display</Text>
+          <Text style={styles.loadingText}>
+            No visits yet — be the first to explore!
+          </Text>
         </View>
-      ) : null}
+      )}
 
       <View style={{ height: 150 }} />
     </ScrollView>
@@ -401,15 +426,8 @@ function LogoutScreen() {
 /*                                  STYLES                                    */
 /* -------------------------------------------------------------------------- */
 const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    backgroundColor: "#ffffff",
-    paddingTop: 50,
-  },
-  tabScreen: {
-    flex: 1,
-    backgroundColor: "#ffffff",
-  },
+  screen:   { flex: 1, backgroundColor: "#ffffff", paddingTop: 50 },
+  tabScreen: { flex: 1, backgroundColor: "#ffffff" },
   header: {
     width: "90%",
     flexDirection: "row",
@@ -418,226 +436,71 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     alignSelf: "center",
   },
-  logo: {
-    width: 50,
-    height: 50,
-  },
+  logo:         { width: 50, height: 50 },
   profileIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+    width: 40, height: 40, borderRadius: 20,
     backgroundColor: "#4a4a4a",
-    justifyContent: "center",
-    alignItems: "center",
+    justifyContent: "center", alignItems: "center",
   },
-  profileImage: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "#4a4a4a",
-  },
-  subtitle: {
-    fontSize: 20,
-    fontWeight: "600",
-    color: "#4a4a4a",
-  },
-  centeredText: {
-    width: "100%",
-    alignItems: "center",
-    marginBottom: 20,
-  },
-  recommendedTextContainer: {
-    marginTop: 15,
-    width: "90%",
-    alignSelf: "center",
-  },
-  recommendedText: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#4a4a4a",
-  },
-  carouselContainer: {
-    width: "100%",
-    alignItems: "center",
-    marginBottom: 20,
-    height: 250,
-  },
+  profileImage: { width: 40, height: 40, borderRadius: 20, backgroundColor: "#4a4a4a" },
+  recommendedTextContainer: { marginTop: 15, width: "90%", alignSelf: "center" },
+  recommendedText: { fontSize: 16, fontWeight: "600", color: "#4a4a4a" },
+  carouselContainer: { width: "100%", alignItems: "center", marginBottom: 20, height: 250 },
   carouselCard: {
-    flex: 1,
-    borderRadius: 20,
-    overflow: "hidden",
-    marginHorizontal: 10,
+    flex: 1, borderRadius: 20, overflow: "hidden", marginHorizontal: 10,
     backgroundColor: "#fff",
-    shadowColor: "#000",
-    shadowOpacity: 0.2,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
-    elevation: 5,
+    shadowColor: "#000", shadowOpacity: 0.2, shadowRadius: 10,
+    shadowOffset: { width: 0, height: 4 }, elevation: 5,
   },
-  carouselImage: {
-    width: "100%",
-    height: "100%",
-    backgroundColor: "#e0e0e0",
-  },
+  carouselImage:   { width: "100%", height: "100%", backgroundColor: "#e0e0e0" },
   carouselOverlay: {
-    position: "absolute",
-    bottom: 0,
-    left: 0,
-    right: 0,
-    padding: 15,
-    backgroundColor: "rgba(0,0,0,0.4)",
+    position: "absolute", bottom: 0, left: 0, right: 0,
+    padding: 15, backgroundColor: "rgba(0,0,0,0.4)",
   },
-  carouselTitle: {
-    color: "#fff",
-    fontSize: 18,
-    fontWeight: "700",
-    marginBottom: 5,
-  },
-  carouselLocationContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 5,
-  },
-  carouselLocation: {
-    color: "#fff",
-    fontSize: 12,
-    marginLeft: 5,
-  },
+  carouselTitle:    { color: "#fff", fontSize: 18, fontWeight: "700", marginBottom: 5 },
+  carouselLocationContainer: { flexDirection: "row", alignItems: "center", marginBottom: 5 },
+  carouselLocation: { color: "#fff", fontSize: 12, marginLeft: 5 },
   carouselRating: {
-    flexDirection: "row",
-    alignItems: "center",
-    position: "absolute",
-    top: 15,
-    right: 15,
+    flexDirection: "row", alignItems: "center",
+    position: "absolute", top: 15, right: 15,
     backgroundColor: "rgba(255,255,255,0.9)",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
+    paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12,
   },
-  carouselRatingText: {
-    color: "#4a4a4a",
-    fontSize: 12,
-    fontWeight: "700",
-    marginLeft: 4,
-  },
-  reviewCountText: {
-    fontSize: 10,
-    fontWeight: "400",
-  },
+  carouselRatingText: { color: "#4a4a4a", fontSize: 12, fontWeight: "700", marginLeft: 4 },
+  reviewCountText:    { fontSize: 10, fontWeight: "400" },
   sectionHeader: {
-    width: "90%",
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 15,
-    alignSelf: "center",
+    width: "90%", flexDirection: "row", justifyContent: "space-between",
+    alignItems: "center", marginBottom: 15, alignSelf: "center",
   },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#4a4a4a",
-  },
-  viewAll: {
-    color: "#ffffff",
-    fontWeight: "600",
-    fontSize: 14,
-  },
+  sectionTitle: { fontSize: 16, fontWeight: "600", color: "#4a4a4a" },
+  viewAll:      { color: "#ffffff", fontWeight: "600", fontSize: 14 },
   topPlaceCard: {
-    flexDirection: "row",
-    backgroundColor: "#f7cfc9",
-    borderRadius: 16,
-    padding: 12,
-    width: "90%",
-    alignSelf: "center",
-    marginBottom: 15,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.2,
-    shadowRadius: 5,
-    elevation: 5,
+    flexDirection: "row", backgroundColor: "#f7cfc9",
+    borderRadius: 16, padding: 12, width: "90%",
+    alignSelf: "center", marginBottom: 15,
+    shadowColor: "#000", shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.2, shadowRadius: 5, elevation: 5,
   },
-  topPlaceImage: {
-    width: 80,
-    height: 80,
-    borderRadius: 12,
-    marginRight: 15,
-  },
-  topPlaceInfo: {
-    flex: 1,
-    justifyContent: "center",
-  },
-  topPlaceTitle: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "700",
-    marginBottom: 8,
-  },
-  topPlaceLocationContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: 5,
-  },
-  topPlaceLocation: {
-    color: "#ffffff",
-    fontSize: 12,
-    marginLeft: 5,
-  },
-  topPlaceRating: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  topPlaceRatingText: {
-    color: "#fff",
-    fontSize: 12,
-    fontWeight: "600",
-    marginLeft: 5,
-  },
-  reviewCountInCard: {
-    fontSize: 10,
-    fontWeight: "400",
-    color: "#FFD700",
-  },
-  customTabBarContainer: {
-    position: "absolute",
-    bottom: 30,
-    left: 0,
-    right: 0,
-    alignItems: "center",
-  },
+  topPlaceImage:           { width: 80, height: 80, borderRadius: 12, marginRight: 15 },
+  topPlaceInfo:            { flex: 1, justifyContent: "center" },
+  topPlaceTitle:           { color: "#fff", fontSize: 16, fontWeight: "700", marginBottom: 4 },
+  topPlaceLocationContainer: { flexDirection: "row", alignItems: "center", marginBottom: 4 },
+  topPlaceLocation:        { color: "#ffffff", fontSize: 12, marginLeft: 5 },
+  topPlaceRating:          { flexDirection: "row", alignItems: "center", marginBottom: 4 },
+  topPlaceRatingText:      { color: "#fff", fontSize: 12, fontWeight: "600", marginLeft: 5 },
+  reviewCountInCard:       { fontSize: 10, fontWeight: "400", color: "#FFD700" },
+  visitCountRow:           { flexDirection: "row", alignItems: "center" },
+  visitCountText:          { fontSize: 11, color: "#f7cfc9", fontWeight: "500" },
+  customTabBarContainer:   { position: "absolute", bottom: 30, left: 0, right: 0, alignItems: "center" },
   customTabBar: {
-    flexDirection: "row",
-    height: 70,
-    borderRadius: 35,
-    backgroundColor: "#5a4a4a",
-    paddingHorizontal: 20,
-    alignItems: "center",
-    justifyContent: "space-around",
+    flexDirection: "row", height: 70, borderRadius: 35,
+    backgroundColor: "#5a4a4a", paddingHorizontal: 20,
+    alignItems: "center", justifyContent: "space-around",
     width: width * 0.85,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3,
-    shadowRadius: 15,
-    elevation: 10,
+    shadowColor: "#000", shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.3, shadowRadius: 15, elevation: 10,
   },
-  tabItem: {
-    alignItems: "center",
-    justifyContent: "center",
-    flex: 1,
-  },
-  emptyText: {
-    fontSize: 16,
-    color: "#888",
-    textAlign: "center",
-    marginTop: 50,
-  },
-  loadingContainer: {
-    height: 200,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  loadingText: {
-    fontSize: 16,
-    color: "#888",
-    textAlign: "center",
-  },
+  tabItem:          { alignItems: "center", justifyContent: "center", flex: 1 },
+  loadingContainer: { height: 100, justifyContent: "center", alignItems: "center" },
+  loadingText:      { fontSize: 14, color: "#888", textAlign: "center" },
 });
