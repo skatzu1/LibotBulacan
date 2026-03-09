@@ -189,26 +189,29 @@ function HomeContent() {
     return reviewCount > 0 ? getAverageRating(spot._id) : 0;
   };
 
-  // ── Navigate to spot (visitCount is handled by ArrivalContext on physical arrival) ──
   const handleSpotPress = (spot) => {
     navigation.navigate("InformationScreen", { spot });
   };
 
+  // ── Include visitCount in sliderData ──
   const sliderData =
     spots.length > 0
-      ? spots.slice(0, 5).map(({ _id, image, name, description, location, rating, modelUrl }, index) => {
-          const reviewCount   = getReviewCount(_id);
-          const displayRating = reviewCount > 0 ? getAverageRating(_id) : 0;
-          return {
-            id: _id || String(index),
-            image,
-            title: name,
-            location,
-            rating: displayRating,
-            reviewCount,
-            spot: { _id, image, name, description, location, rating, modelUrl },
-          };
-        })
+      ? spots.slice(0, 5).map(
+          ({ _id, image, name, description, location, rating, modelUrl, visitCount }, index) => {
+            const reviewCount   = getReviewCount(_id);
+            const displayRating = reviewCount > 0 ? getAverageRating(_id) : 0;
+            return {
+              id: _id || String(index),
+              image,
+              title: name,
+              location,
+              rating: displayRating,
+              reviewCount,
+              visitCount: visitCount ?? 0,
+              spot: { _id, image, name, description, location, rating, modelUrl },
+            };
+          }
+        )
       : [];
 
   // Fetch all spots for carousel
@@ -280,6 +283,16 @@ function HomeContent() {
                       {item.location || "Philippines"}
                     </Text>
                   </View>
+                  <View style={styles.carouselBottomRow}>
+                    <View style={styles.carouselVisitRow}>
+                      <Feather name="eye" size={11} color="#f7cfc9" />
+                      <Text style={styles.carouselVisitText}>
+                        {" "}{item.visitCount}{" "}
+                        {item.visitCount === 1 ? "visit" : "visits"}
+                      </Text>
+                    </View>
+                  </View>
+                  {/* Rating badge — top right */}
                   <View style={styles.carouselRating}>
                     <MaterialIcons name="star" size={12} color="#FFD700" />
                     <Text style={styles.carouselRatingText}>
@@ -351,7 +364,7 @@ function HomeContent() {
                   </Text>
                 </View>
                 <View style={styles.visitCountRow}>
-                  <Feather name="eye" size={11} color="#f7cfc9" />
+                  <Feather name="eye" size={11} color="#5a4a4a" />
                   <Text style={styles.visitCountText}>
                     {" "}{spot.visitCount ?? 0}{" "}
                     {spot.visitCount === 1 ? "visit" : "visits"}
@@ -426,7 +439,7 @@ function LogoutScreen() {
 /*                                  STYLES                                    */
 /* -------------------------------------------------------------------------- */
 const styles = StyleSheet.create({
-  screen:   { flex: 1, backgroundColor: "#ffffff", paddingTop: 50 },
+  screen:    { flex: 1, backgroundColor: "#ffffff", paddingTop: 50 },
   tabScreen: { flex: 1, backgroundColor: "#ffffff" },
   header: {
     width: "90%",
@@ -436,7 +449,7 @@ const styles = StyleSheet.create({
     marginBottom: 20,
     alignSelf: "center",
   },
-  logo:         { width: 50, height: 50 },
+  logo:        { width: 50, height: 50 },
   profileIcon: {
     width: 40, height: 40, borderRadius: 20,
     backgroundColor: "#4a4a4a",
@@ -457,9 +470,12 @@ const styles = StyleSheet.create({
     position: "absolute", bottom: 0, left: 0, right: 0,
     padding: 15, backgroundColor: "rgba(0,0,0,0.4)",
   },
-  carouselTitle:    { color: "#fff", fontSize: 18, fontWeight: "700", marginBottom: 5 },
+  carouselTitle:             { color: "#fff", fontSize: 18, fontWeight: "700", marginBottom: 5 },
   carouselLocationContainer: { flexDirection: "row", alignItems: "center", marginBottom: 5 },
-  carouselLocation: { color: "#fff", fontSize: 12, marginLeft: 5 },
+  carouselLocation:          { color: "#fff", fontSize: 12, marginLeft: 5 },
+  carouselBottomRow:         { flexDirection: "row", alignItems: "center", marginTop: 2 },
+  carouselVisitRow:          { flexDirection: "row", alignItems: "center" },
+  carouselVisitText:         { fontSize: 11, color: "#f7cfc9", fontWeight: "500" },
   carouselRating: {
     flexDirection: "row", alignItems: "center",
     position: "absolute", top: 15, right: 15,
@@ -481,17 +497,17 @@ const styles = StyleSheet.create({
     shadowColor: "#000", shadowOffset: { width: 0, height: 3 },
     shadowOpacity: 0.2, shadowRadius: 5, elevation: 5,
   },
-  topPlaceImage:           { width: 80, height: 80, borderRadius: 12, marginRight: 15 },
-  topPlaceInfo:            { flex: 1, justifyContent: "center" },
-  topPlaceTitle:           { color: "#fff", fontSize: 16, fontWeight: "700", marginBottom: 4 },
+  topPlaceImage:             { width: 80, height: 80, borderRadius: 12, marginRight: 15 },
+  topPlaceInfo:              { flex: 1, justifyContent: "center" },
+  topPlaceTitle:             { color: "#fff", fontSize: 16, fontWeight: "700", marginBottom: 4 },
   topPlaceLocationContainer: { flexDirection: "row", alignItems: "center", marginBottom: 4 },
-  topPlaceLocation:        { color: "#ffffff", fontSize: 12, marginLeft: 5 },
-  topPlaceRating:          { flexDirection: "row", alignItems: "center", marginBottom: 4 },
-  topPlaceRatingText:      { color: "#fff", fontSize: 12, fontWeight: "600", marginLeft: 5 },
-  reviewCountInCard:       { fontSize: 10, fontWeight: "400", color: "#FFD700" },
-  visitCountRow:           { flexDirection: "row", alignItems: "center" },
-  visitCountText:          { fontSize: 11, color: "#f7cfc9", fontWeight: "500" },
-  customTabBarContainer:   { position: "absolute", bottom: 30, left: 0, right: 0, alignItems: "center" },
+  topPlaceLocation:          { color: "#ffffff", fontSize: 12, marginLeft: 5 },
+  topPlaceRating:            { flexDirection: "row", alignItems: "center", marginBottom: 4 },
+  topPlaceRatingText:        { color: "#fff", fontSize: 12, fontWeight: "600", marginLeft: 5 },
+  reviewCountInCard:         { fontSize: 10, fontWeight: "400", color: "#FFD700" },
+  visitCountRow:             { flexDirection: "row", alignItems: "center" },
+  visitCountText:            { fontSize: 11, color: "#5a4a4a", fontWeight: "500" },
+  customTabBarContainer:     { position: "absolute", bottom: 30, left: 0, right: 0, alignItems: "center" },
   customTabBar: {
     flexDirection: "row", height: 70, borderRadius: 35,
     backgroundColor: "#5a4a4a", paddingHorizontal: 20,
