@@ -1,11 +1,3 @@
-/* =========================================================
-   SimpleARScreen.js
-
-   A minimal AR screen that just places a 3D model in front
-   of the user using ViroARPlane for surface detection.
-   No GPS, no collecting, no logic — just AR + model.
-========================================================= */
-
 import React, { Component } from "react";
 import { StyleSheet, View, Text, TouchableOpacity } from "react-native";
 import {
@@ -15,59 +7,66 @@ import {
   Viro3DObject,
   ViroAmbientLight,
   ViroSpotLight,
+  ViroNode,
 } from "@reactvision/react-viro";
 
 /* =========================================================
    AR SCENE
-   - Waits for a flat surface (ViroARPlane)
-   - Once found, renders the 3D model on it
 ========================================================= */
 class SimpleARScene extends Component {
   state = {
     planeFound: false,
+    anchorPosition: null,
   };
 
-  onAnchorFound = () => {
-    console.log("Plane detected!");
-    this.setState({ planeFound: true });
+  onAnchorFound = (anchor) => {
+    console.log("Plane detected!", anchor);
+    this.setState({
+      planeFound: true,
+      anchorPosition: anchor.position ?? [0, -0.5, -1.5],
+    });
   };
 
   render() {
-    const { planeFound } = this.state;
+    const { planeFound, anchorPosition } = this.state;
 
     return (
       <ViroARScene>
-        {/* Lighting */}
-        <ViroAmbientLight color="#ffffff" intensity={300} />
+        <ViroAmbientLight color="#ffffff" intensity={500} />
         <ViroSpotLight
           innerAngle={5}
           outerAngle={90}
           direction={[0, -1, -0.2]}
           position={[0, 3, 1]}
           color="#ffffff"
-          intensity={800}
+          intensity={1000}
         />
 
-        {/* Plane detector — scans for a flat horizontal surface */}
-        <ViroARPlane
-          minHeight={0.1}
-          minWidth={0.1}
-          alignment="Horizontal"
-          onAnchorFound={this.onAnchorFound}
-        >
-          {/* Only render the model once a plane is found */}
-          {planeFound && (
+        {/* Once a plane is found, place the model at that plane's position */}
+        {planeFound && anchorPosition && (
+          <ViroNode position={anchorPosition}>
             <Viro3DObject
               source={require("../assets/models/question_mark.glb")}
               type="GLB"
               position={[0, 0, 0]}
               scale={[0.3, 0.3, 0.3]}
+              rotation={[0, 0, 0]}
               onLoadStart={() => console.log("Loading model...")}
               onLoadEnd={() => console.log("Model loaded!")}
               onError={(e) => console.warn("Model error:", e)}
             />
-          )}
-        </ViroARPlane>
+          </ViroNode>
+        )}
+
+        {/* Keep scanning until a plane is found */}
+        {!planeFound && (
+          <ViroARPlane
+            minHeight={0.1}
+            minWidth={0.1}
+            alignment="Horizontal"
+            onAnchorFound={this.onAnchorFound}
+          />
+        )}
       </ViroARScene>
     );
   }
@@ -79,7 +78,6 @@ class SimpleARScene extends Component {
 export default function SimpleARScreen({ navigation }) {
   return (
     <View style={styles.container}>
-      {/* AR View */}
       <ViroARSceneNavigator
         style={styles.arNavigator}
         autofocus={true}
@@ -87,14 +85,12 @@ export default function SimpleARScreen({ navigation }) {
         initialScene={{ scene: SimpleARScene }}
       />
 
-      {/* Hint */}
       <View style={styles.hint}>
         <Text style={styles.hintText}>
           Point your camera at a flat surface to reveal the 3D model
         </Text>
       </View>
 
-      {/* Back button */}
       {navigation && (
         <TouchableOpacity
           style={styles.backButton}
@@ -107,17 +103,9 @@ export default function SimpleARScreen({ navigation }) {
   );
 }
 
-/* =========================================================
-   STYLES
-========================================================= */
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "black",
-  },
-  arNavigator: {
-    flex: 1,
-  },
+  container: { flex: 1, backgroundColor: "black" },
+  arNavigator: { flex: 1 },
   hint: {
     position: "absolute",
     bottom: 0,
@@ -126,12 +114,7 @@ const styles = StyleSheet.create({
     backgroundColor: "rgba(0,0,0,0.75)",
     alignItems: "center",
   },
-  hintText: {
-    color: "white",
-    fontSize: 15,
-    textAlign: "center",
-    lineHeight: 22,
-  },
+  hintText: { color: "white", fontSize: 15, textAlign: "center", lineHeight: 22 },
   backButton: {
     position: "absolute",
     top: 50,
@@ -143,9 +126,5 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  backButtonText: {
-    color: "white",
-    fontSize: 28,
-    fontWeight: "bold",
-  },
+  backButtonText: { color: "white", fontSize: 28, fontWeight: "bold" },
 });

@@ -90,7 +90,31 @@ export default function Track({ route, navigation }) {
     };
   }, [spot._id]);
 
-  /* ── Location tracking for map display only ── */
+  /* ── followMode ref ── */
+  const followModeRef = useRef(followMode);
+  useEffect(() => { followModeRef.current = followMode; }, [followMode]);
+
+  /* ── Update marker via injectJavaScript — no HTML rebuild, no reload ── */
+  const updateMarkerRef = useRef(null);
+  const updateMarkerOnMap = useCallback((coords) => {
+    if (!webViewRef.current || !spotData) return;
+    webViewRef.current.injectJavaScript(`
+      (function() {
+        try {
+          window.updateUserLocation(
+            ${coords.latitude},
+            ${coords.longitude},
+            ${followModeRef.current}
+          );
+        } catch(e) {}
+      })(); true;
+    `);
+  }, [spotData]);
+
+  // Always keep ref pointing to latest callback so watcher closure never goes stale
+  updateMarkerRef.current = updateMarkerOnMap;
+
+  /* ── Location tracking ── */
   useEffect(() => {
     if (!spotData) return;
     let cancelled = false;
@@ -111,11 +135,15 @@ export default function Track({ route, navigation }) {
         });
         if (cancelled || !isMounted.current) return;
 
-        setUserLocation({
+        const initialCoords = {
           latitude:  initial.coords.latitude,
           longitude: initial.coords.longitude,
-        });
+        };
+        setUserLocation(initialCoords);
         setLoading(false);
+
+        // Send initial position to map right away
+        updateMarkerRef.current?.(initialCoords);
 
         locationSubscription.current = await Location.watchPositionAsync(
           { accuracy: Location.Accuracy.High, timeInterval: 3000, distanceInterval: 3 },
@@ -123,7 +151,7 @@ export default function Track({ route, navigation }) {
             if (!isMounted.current) return;
             const c = { latitude: loc.coords.latitude, longitude: loc.coords.longitude };
             setUserLocation(c);
-            updateMarkerOnMap(c);
+            updateMarkerRef.current?.(c);
           }
         );
       } catch {
@@ -136,32 +164,6 @@ export default function Track({ route, navigation }) {
 
     startTracking();
     return () => { cancelled = true; };
-  }, [spotData]);
-
-  /* ── Map marker update ── */
-  const followModeRef = useRef(followMode);
-  useEffect(() => { followModeRef.current = followMode; }, [followMode]);
-
-  const updateMarkerOnMap = useCallback((coords) => {
-    if (!webViewRef.current || !spotData) return;
-    const dest = getSpotCoords(spotData);
-    if (!dest) return;
-
-    webViewRef.current.injectJavaScript(`
-      (function() {
-        try {
-          if (window.userMarker) window.userMarker.setLatLng([${coords.latitude}, ${coords.longitude}]);
-          if (window.routingControl) {
-            window.routingControl.setWaypoints([
-              L.latLng(${coords.latitude}, ${coords.longitude}),
-              L.latLng(${dest.lat}, ${dest.lng})
-            ]);
-          }
-          if (${followModeRef.current} && window.map)
-            window.map.panTo([${coords.latitude}, ${coords.longitude}], { animate: true });
-        } catch(e) {}
-      })(); true;
-    `);
   }, [spotData]);
 
   /* ── Center on Me ── */
@@ -180,55 +182,211 @@ export default function Track({ route, navigation }) {
     }
   }, [followMode, userLocation]);
 
-  /* ── Map HTML ── */
+  /* ── Map HTML — depends ONLY on spotData, never rebuilds on location change ── */
   const mapHTML = useMemo(() => {
-    if (!spotData || !userLocation) return null;
+    if (!spotData) return null;
     const dest = getSpotCoords(spotData);
     if (!dest) return null;
 
-    const { latitude: userLat, longitude: userLng } = userLocation;
     const { lat: destLat, lng: destLng } = dest;
     const spotName = (spotData.name ?? "Destination").replace(/'/g, "\\'");
 
     return `<!DOCTYPE html><html>
-      <head>
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-        <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.css" />
-        <style>* { margin:0; padding:0; box-sizing:border-box; } #map { width:100%; height:100vh; }</style>
-      </head>
-      <body>
-        <div id="map"></div>
-        <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-        <script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.js"></script>
-        <script>
-          window.map = L.map('map').setView([${(userLat + destLat) / 2}, ${(userLng + destLng) / 2}], 13);
-          L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { attribution: '© OpenStreetMap', maxZoom: 19 }).addTo(window.map);
+    <head>
+      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+      <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.css" />
+      <style>
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body { background:#1a1a2e; }
+        #map { width:100%; height:100vh; background:#1a1a2e; }
+        .leaflet-control-attribution { display:none; }
+        #loading-overlay {
+          position:fixed; top:0; left:0; right:0; bottom:0;
+          background:#1a1a2e;
+          display:flex; flex-direction:column;
+          align-items:center; justify-content:center;
+          z-index:9999;
+          font-family:sans-serif; color:#aaa;
+          font-size:14px; font-weight:600; gap:12px;
+        }
+        .spinner {
+          width:36px; height:36px;
+          border:4px solid #333; border-top-color:#8b4440;
+          border-radius:50%; animation:spin 0.8s linear infinite;
+        }
+        @keyframes spin { to { transform:rotate(360deg); } }
+      </style>
+    </head>
+    <body>
+      <div id="loading-overlay">
+        <div class="spinner"></div>
+        <span>Loading Bulacan map…</span>
+      </div>
+      <div id="map"></div>
+      <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+      <script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.js"></script>
+      <script>
+        const DEST_LAT  = ${destLat};
+        const DEST_LNG  = ${destLng};
+        const SPOT_NAME = '${spotName}';
+
+        const bulacanBounds = L.latLngBounds(
+          L.latLng(14.55, 120.68),
+          L.latLng(15.35, 121.35)
+        );
+
+        window.map = L.map('map', {
+          maxBounds: bulacanBounds,
+          maxBoundsViscosity: 1.0,
+          minZoom: 10, maxZoom: 18, zoomControl: true,
+        }).setView([14.9200, 120.9900], 11);
+
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+          attribution: '© OpenStreetMap contributors', maxZoom: 19,
+        }).addTo(window.map);
+
+        // ── Fetch Bulacan boundary ONCE from Overpass ──
+        const overpassQuery = \`[out:json][timeout:30];
+          relation["name"="Bulacan"]["admin_level"="4"];
+          out geom;\`;
+        const overpassURL = 'https://overpass-api.de/api/interpreter?data=' + encodeURIComponent(overpassQuery);
+
+        fetch(overpassURL)
+          .then(r => r.json())
+          .then(data => {
+            const relation = data.elements[0];
+            if (!relation?.members) throw new Error('No boundary');
+
+            const outerRings = relation.members
+              .filter(m => m.role === 'outer' && m.geometry?.length > 1)
+              .map(m => m.geometry.map(pt => [pt.lat, pt.lon]));
+
+            if (!outerRings.length) throw new Error('No outer rings');
+
+            const merged = mergeRings(outerRings);
+
+            // Ensure closed
+            const f = merged[0], l = merged[merged.length - 1];
+            if (Math.abs(f[0]-l[0]) > 0.0001 || Math.abs(f[1]-l[1]) > 0.0001) merged.push(f);
+
+            // World mask with Bulacan hole
+            L.polygon(
+              [[ [-90,-180],[-90,180],[90,180],[90,-180],[-90,-180] ], merged],
+              { fillColor:'#1a1a2e', fillOpacity:0.92, stroke:false, interactive:false }
+            ).addTo(window.map);
+
+            // Bulacan border outline
+            L.polyline(merged, { color:'#8b4440', weight:2.5, opacity:0.9 }).addTo(window.map);
+
+            document.getElementById('loading-overlay').style.display = 'none';
+          })
+          .catch(() => {
+            // Fallback rectangular mask
+            L.polygon(
+              [[ [-90,-180],[-90,180],[90,180],[90,-180] ],
+               [ [14.62,120.76],[14.62,121.28],[15.22,121.28],[15.22,120.76] ]],
+              { fillColor:'#1a1a2e', fillOpacity:0.92, stroke:false, interactive:false }
+            ).addTo(window.map);
+            document.getElementById('loading-overlay').style.display = 'none';
+          });
+
+        // ── Destination marker (static, drawn once) ──
+        const destIcon = L.divIcon({
+          html: '<div style="background:#8b4440;width:30px;height:30px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);border:3px solid white;box-shadow:0 2px 5px rgba(0,0,0,0.3);"></div>',
+          className:'', iconSize:[30,30], iconAnchor:[15,30]
+        });
+        window.destMarker = L.marker([DEST_LAT, DEST_LNG], { icon: destIcon })
+          .addTo(window.map).bindPopup(SPOT_NAME);
+
+        window.userMarker     = null;
+        window.routingControl = null;
+        window.mapReady       = false;
+
+        // Called once on first location update
+        window.initUserLocation = function(lat, lng) {
           const userIcon = L.divIcon({
             html: \`<div style="position:relative;">
               <div style="position:absolute;background:rgba(66,133,244,0.3);width:40px;height:40px;border-radius:50%;top:-10px;left:-10px;animation:pulse 2s infinite;"></div>
               <div style="background:#4285F4;width:20px;height:20px;border-radius:50%;border:3px solid white;box-shadow:0 2px 5px rgba(0,0,0,0.3);"></div>
             </div>
-            <style>@keyframes pulse{0%{transform:scale(0.8);opacity:1;}50%{transform:scale(1.2);opacity:0.5;}100%{transform:scale(0.8);opacity:1;}}</style>\`,
-            className: '', iconSize: [20,20], iconAnchor: [10,10]
+            <style>@keyframes pulse{0%{transform:scale(0.8);opacity:1}50%{transform:scale(1.2);opacity:0.5}100%{transform:scale(0.8);opacity:1}}</style>\`,
+            className:'', iconSize:[20,20], iconAnchor:[10,10]
           });
-          window.userMarker = L.marker([${userLat}, ${userLng}], { icon: userIcon }).addTo(window.map).bindPopup('Your Location');
-          const destIcon = L.divIcon({
-            html: '<div style="background:#8b4440;width:30px;height:30px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);border:3px solid white;box-shadow:0 2px 5px rgba(0,0,0,0.3);"></div>',
-            className: '', iconSize: [30,30], iconAnchor: [15,30]
-          });
-          window.destMarker = L.marker([${destLat}, ${destLng}], { icon: destIcon }).addTo(window.map).bindPopup('${spotName}');
+
+          window.userMarker = L.marker([lat, lng], { icon: userIcon })
+            .addTo(window.map).bindPopup('Your Location');
+
           window.routingControl = L.Routing.control({
-            waypoints: [L.latLng(${userLat}, ${userLng}), L.latLng(${destLat}, ${destLng})],
-            router: L.Routing.osrmv1({ serviceUrl: 'https://router.project-osrm.org/route/v1' }),
-            lineOptions: { styles: [{ color: '#8b4440', weight: 5, opacity: 0.7 }] },
+            waypoints: [L.latLng(lat, lng), L.latLng(DEST_LAT, DEST_LNG)],
+            router: L.Routing.osrmv1({ serviceUrl:'https://router.project-osrm.org/route/v1' }),
+            lineOptions: { styles:[{ color:'#8b4440', weight:5, opacity:0.8 }] },
             createMarker: () => null,
-            addWaypoints: false, routeWhileDragging: false, show: false, fitSelectedRoutes: false
+            addWaypoints: false, routeWhileDragging: false,
+            show: false, fitSelectedRoutes: false,
           }).addTo(window.map);
-          window.map.fitBounds(L.latLngBounds([${userLat}, ${userLng}], [${destLat}, ${destLng}]), { padding: [80, 80] });
-        </script>
-      </body></html>`;
-  }, [spotData, userLocation]);
+
+          window.map.fitBounds(
+            L.latLngBounds([lat, lng], [DEST_LAT, DEST_LNG]),
+            { padding:[80,80] }
+          );
+
+          window.mapReady = true;
+        };
+
+        // Called every 3s via injectJavaScript — just moves marker, no reload
+        window.updateUserLocation = function(lat, lng, follow) {
+          if (!window.mapReady) {
+            window.initUserLocation(lat, lng);
+            return;
+          }
+          if (window.userMarker) window.userMarker.setLatLng([lat, lng]);
+          if (window.routingControl) {
+            window.routingControl.setWaypoints([
+              L.latLng(lat, lng),
+              L.latLng(DEST_LAT, DEST_LNG)
+            ]);
+          }
+          if (follow && window.map) window.map.panTo([lat, lng], { animate:true });
+        };
+
+        // ── Ring merge utility ──
+        function mergeRings(rings) {
+          if (rings.length === 1) return rings[0].slice();
+          const dist = (a,b) => Math.hypot(a[0]-b[0], a[1]-b[1]);
+          const TOL  = 0.001;
+          let merged = rings[0].slice();
+          const rem  = rings.slice(1).map(r => r.slice());
+          let passes = rem.length * 4;
+          while (rem.length > 0 && passes-- > 0) {
+            const mF = merged[0], mL = merged[merged.length-1];
+            let found = false;
+            for (let i = 0; i < rem.length; i++) {
+              const r = rem[i], rF = r[0], rL = r[r.length-1];
+              if      (dist(mL,rF) < TOL) { merged = merged.concat(r.slice(1));              rem.splice(i,1); found=true; break; }
+              else if (dist(mL,rL) < TOL) { merged = merged.concat(r.slice(0,-1).reverse()); rem.splice(i,1); found=true; break; }
+              else if (dist(mF,rL) < TOL) { merged = r.slice(0,-1).concat(merged);           rem.splice(i,1); found=true; break; }
+              else if (dist(mF,rF) < TOL) { merged = r.slice(1).reverse().concat(merged);    rem.splice(i,1); found=true; break; }
+            }
+            if (!found) {
+              let bi=0, bd=Infinity, br=false;
+              for (let i=0;i<rem.length;i++) {
+                const r=rem[i];
+                const d1=dist(mL,r[0]), d2=dist(mL,r[r.length-1]);
+                if (d1<bd){bd=d1;bi=i;br=false;}
+                if (d2<bd){bd=d2;bi=i;br=true;}
+              }
+              merged = br
+                ? merged.concat(rem[bi].slice(0,-1).reverse())
+                : merged.concat(rem[bi].slice(1));
+              rem.splice(bi,1);
+            }
+          }
+          return merged;
+        }
+      </script>
+    </body></html>`;
+  }, [spotData]); // ← ONLY spotData — never re-runs on location change
 
   /* ── Loading / Error states ── */
   if (loading || !spotData || !userLocation) {
@@ -274,7 +432,7 @@ export default function Track({ route, navigation }) {
         onError={(e) => console.error("WebView error:", e.nativeEvent)}
       />
 
-      {/* Header — back button and spot name only */}
+      {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
           <Feather name="chevron-left" size={24} color="#fff" />
@@ -306,8 +464,6 @@ const styles = StyleSheet.create({
     width,
     height,
   },
-
-  // ── Loading / Error ──
   loading: {
     flex: 1,
     justifyContent: "center",
@@ -339,8 +495,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: "700",
   },
-
-  // ── Header ──
   header: {
     position: "absolute",
     top: 0,
@@ -368,8 +522,6 @@ const styles = StyleSheet.create({
     color: "#fff",
     marginHorizontal: 12,
   },
-
-  // ── Center on Me button ──
   centerButton: {
     position: "absolute",
     bottom: 40,
