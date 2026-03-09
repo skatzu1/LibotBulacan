@@ -22,12 +22,12 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useAuth } from "@clerk/clerk-expo";
 import { Feather } from "@expo/vector-icons";
 
-const BASE_URL             = "https://libotbackend.onrender.com";
+const BASE_URL              = "https://libotbackend.onrender.com";
 const ARRIVAL_RADIUS_METERS = 50;
-const POINTS_PER_VISIT     = 10;
-const ACTIVE_SPOT_KEY      = "activeSpot";
-const ALL_SPOTS_KEY        = "allSpots";
-const SPOTS_CACHE_TTL_MS   = 5 * 60 * 1000; // re-fetch spot list every 5 minutes
+const POINTS_PER_VISIT      = 10;
+const ACTIVE_SPOT_KEY       = "activeSpot";
+const ALL_SPOTS_KEY         = "allSpots";
+const SPOTS_CACHE_TTL_MS    = 5 * 60 * 1000;
 
 function getDistanceMeters(lat1, lng1, lat2, lng2) {
   const R    = 6371000;
@@ -76,13 +76,10 @@ export function useArrival() {
 export function ArrivalProvider({ children }) {
   const { getToken, isSignedIn } = useAuth();
 
-  // activeSpot — optional single destination (set by Track screen)
   const [activeSpot, setActiveSpotState] = useState(null);
-
-  // allSpots — full list fetched once, used for automatic nearby detection
-  const [allSpots, setAllSpots]         = useState([]);
-  const allSpotsRef                     = useRef([]);
-  const spotsFetchedAt                  = useRef(0);
+  const [allSpots, setAllSpots]          = useState([]);
+  const allSpotsRef                      = useRef([]);
+  const spotsFetchedAt                   = useRef(0);
 
   // ── Points popup ──
   const [showPointsPopup, setShowPointsPopup] = useState(false);
@@ -96,24 +93,18 @@ export function ArrivalProvider({ children }) {
   const [showBadgeBanner, setShowBadgeBanner] = useState(false);
   const badgeTranslateY = useRef(new Animated.Value(-200)).current;
 
-  const locationSub  = useRef(null);
-  const arrivedSpots = useRef(new Set()); // spotIds processed this session
+  const locationSub   = useRef(null);
+  const arrivedSpots  = useRef(new Set());
   const activeSpotRef = useRef(null);
 
   useEffect(() => { activeSpotRef.current = activeSpot; }, [activeSpot]);
 
-  /* ─────────────────────────────────────────────────────────
-     FETCH ALL SPOTS
-     Called once on mount and then every SPOTS_CACHE_TTL_MS.
-     Cached in AsyncStorage so it works even if network is slow.
-  ───────────────────────────────────────────────────────── */
+  /* ── Fetch all spots ── */
   const fetchAllSpots = useCallback(async () => {
     const now = Date.now();
-    // Skip if we fetched recently
     if (now - spotsFetchedAt.current < SPOTS_CACHE_TTL_MS && allSpotsRef.current.length > 0) return;
 
     try {
-      // Try network first
       const res  = await fetch(`${BASE_URL}/api/spots`);
       const data = await safeJson(res);
       if (data?.success && Array.isArray(data.spots)) {
@@ -121,13 +112,11 @@ export function ArrivalProvider({ children }) {
         allSpotsRef.current = spots;
         setAllSpots(spots);
         spotsFetchedAt.current = now;
-        // Cache for offline use
         await AsyncStorage.setItem(ALL_SPOTS_KEY, JSON.stringify(spots));
         console.log("[Arrival] Loaded", spots.length, "spots for proximity detection");
       }
     } catch (e) {
       console.warn("[Arrival] Could not fetch spots, using cache:", e.message);
-      // Fall back to cached spots
       try {
         const raw = await AsyncStorage.getItem(ALL_SPOTS_KEY);
         if (raw) {
@@ -140,12 +129,11 @@ export function ArrivalProvider({ children }) {
     }
   }, []);
 
-  // Fetch spots on sign-in
   useEffect(() => {
     if (isSignedIn) fetchAllSpots();
   }, [isSignedIn]);
 
-  /* ── Active spot (from Track screen) ── */
+  /* ── Active spot ── */
   const setActiveSpot = useCallback(async (spot) => {
     try { if (spot) await AsyncStorage.setItem(ACTIVE_SPOT_KEY, JSON.stringify(spot)); } catch (_) {}
     setActiveSpotState(spot);
@@ -158,7 +146,6 @@ export function ArrivalProvider({ children }) {
     activeSpotRef.current = null;
   }, []);
 
-  // Restore active spot on app launch
   useEffect(() => {
     const restore = async () => {
       try {
@@ -237,7 +224,6 @@ export function ArrivalProvider({ children }) {
       console.log("[Badge] Claim response:", res.status, JSON.stringify(data));
 
       if (!res.ok || !data.success) { console.warn("[Badge] Claim failed:", data?.message); return; }
-
       console.log("[Badge] ✅ Saved:", JSON.stringify(data.claimed));
 
       try {
@@ -252,8 +238,8 @@ export function ArrivalProvider({ children }) {
 
   /* ─────────────────────────────────────────────────────────
      AWARD REWARDS
-     Called when user arrives within 50m of a spot.
-     Points and badge run fully independently.
+     Called when user physically arrives within 50m of a spot.
+     visitCount is incremented here — NOT on card tap.
   ───────────────────────────────────────────────────────── */
   const awardRewards = useCallback(async (spot) => {
     const spotId = String(spot._id ?? "").trim();
@@ -262,6 +248,14 @@ export function ArrivalProvider({ children }) {
     arrivedSpots.current.add(spotId);
 
     console.log("[Arrival] ✅ Arrived at:", spot.name, "| spotId:", spotId);
+
+    // ── 0. Increment visitCount (physical arrival only) ────
+    try {
+      await fetch(`${BASE_URL}/api/spots/${spotId}/visit`, { method: "PATCH" });
+      console.log("[Visit] ✅ Incremented visitCount for:", spot.name);
+    } catch (e) {
+      console.warn("[Visit] Failed to increment visitCount:", e);
+    }
 
     // ── 1. Points ──────────────────────────────────────────
     let pointsJustEarned = false;
@@ -282,15 +276,12 @@ export function ArrivalProvider({ children }) {
       }
     } catch (e) { console.warn("[Points] Error:", e); }
 
-    // ── 2. Badge (always runs independently) ───────────────
+    // ── 2. Badge ───────────────────────────────────────────
     try {
-      // Read badge from the spot data we already have in allSpotsRef
-      // to avoid an extra network call if possible
-      const cachedSpot    = allSpotsRef.current.find((s) => String(s._id) === spotId);
-      let badgeImageUrl   = cachedSpot?.Badge ?? cachedSpot?.badge?.image ?? null;
-      let spotName        = cachedSpot?.name ?? spot.name;
+      const cachedSpot  = allSpotsRef.current.find((s) => String(s._id) === spotId);
+      let badgeImageUrl = cachedSpot?.Badge ?? cachedSpot?.badge?.image ?? null;
+      let spotName      = cachedSpot?.name ?? spot.name;
 
-      // If not in cache (e.g. only activeSpot was set), fetch from network
       if (!cachedSpot) {
         const spotRes  = await fetch(`${BASE_URL}/api/spots/${spotId}`);
         const spotJson = await safeJson(spotRes);
@@ -301,21 +292,16 @@ export function ArrivalProvider({ children }) {
         }
       }
 
-      if (!badgeImageUrl) {
-        console.log("[Badge] No badge for:", spotName);
-        return;
-      }
+      if (!badgeImageUrl) { console.log("[Badge] No badge for:", spotName); return; }
 
       console.log("[Badge] Badge URL:", badgeImageUrl);
 
-      // Check local cache
       try {
         const raw       = await AsyncStorage.getItem("claimedSpotIds");
         const cachedIds = raw ? JSON.parse(raw) : [];
         if (cachedIds.includes(spotId)) { console.log("[Badge] Already claimed (cache)"); return; }
       } catch (_) {}
 
-      // Check DB
       const token  = await getToken();
       const meRes  = await fetch(`${BASE_URL}/api/users/me`, { headers: { Authorization: `Bearer ${token}` } });
       const meData = await safeJson(meRes);
@@ -330,34 +316,23 @@ export function ArrivalProvider({ children }) {
     } catch (e) { console.error("[Badge] Error:", e); }
   }, [getToken, triggerPointsPopup, triggerBadgeBanner]);
 
-  /* ─────────────────────────────────────────────────────────
-     CHECK ARRIVAL AGAINST ALL SPOTS
-     Every location update checks:
-       1. All spots in the DB (automatic — no Track needed)
-       2. The active spot if set (for extra precision during navigation)
-     The arrivedSpots Set prevents duplicate triggers.
-  ───────────────────────────────────────────────────────── */
+  /* ── Check arrival against all spots ── */
   const checkArrival = useCallback((coords) => {
     const spots = allSpotsRef.current;
-
-    // Check every spot in the database
     for (const spot of spots) {
       const dest = getSpotCoords(spot);
       if (!dest) continue;
-
       const dist = getDistanceMeters(
         coords.latitude, coords.longitude,
         dest.lat, dest.lng
       );
-
       if (dist <= ARRIVAL_RADIUS_METERS) {
         awardRewards(spot);
-        // Don't break — user could theoretically be near multiple spots
       }
     }
   }, [awardRewards]);
 
-  /* ── Global location watcher — runs for the entire app lifetime ── */
+  /* ── Global location watcher ── */
   useEffect(() => {
     if (!isSignedIn) return;
     let cancelled = false;
