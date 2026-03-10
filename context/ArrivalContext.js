@@ -249,10 +249,23 @@ export function ArrivalProvider({ children }) {
 
     console.log("[Arrival] ✅ Arrived at:", spot.name, "| spotId:", spotId);
 
-    // ── 0. Increment visitCount (physical arrival only) ────
+    // ── 0. Increment visitCount (physical arrival only, once per user) ────
+    // ✅ Auth token is sent so server can check if user already visited
     try {
-      await fetch(`${BASE_URL}/api/spots/${spotId}/visit`, { method: "PATCH" });
-      console.log("[Visit] ✅ Incremented visitCount for:", spot.name);
+      const token    = await getToken();
+      const visitRes = await fetch(`${BASE_URL}/api/spots/${spotId}/visit`, {
+        method:  "PATCH",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization:  `Bearer ${token}`,
+        },
+      });
+      const visitData = await safeJson(visitRes);
+      if (visitData?.alreadyVisited) {
+        console.log("[Visit] ⚠️ Already visited:", spot.name, "— count not incremented");
+      } else {
+        console.log("[Visit] ✅ visitCount incremented for:", spot.name, "→", visitData?.visitCount);
+      }
     } catch (e) {
       console.warn("[Visit] Failed to increment visitCount:", e);
     }
@@ -378,9 +391,9 @@ export function ArrivalProvider({ children }) {
       </Modal>
 
       {/* Badge Banner */}
-      <Modal visible={showBadgeBanner && !!pendingBadge} transparent animationType="none" statusBarTranslucent onRequestClose={dismissBadgeBanner}>
-        <TouchableOpacity style={styles.badgeBackdrop} activeOpacity={1} onPress={dismissBadgeBanner}>
-          <TouchableOpacity activeOpacity={1} onPress={() => {}}>
+      <Modal visible={showBadgeBanner && !!pendingBadge} transparent animationType="none" statusBarTranslucent onRequestClose={() => {}}>
+        <View style={styles.badgeBackdrop} pointerEvents="box-none">
+          <View>
             <Animated.View style={[styles.badgeBanner, { transform: [{ translateY: badgeTranslateY }] }]}>
               <View style={styles.bannerLeft}>
                 {pendingBadge?.image ? (
@@ -404,8 +417,8 @@ export function ArrivalProvider({ children }) {
                 </TouchableOpacity>
               </View>
             </Animated.View>
-          </TouchableOpacity>
-        </TouchableOpacity>
+          </View>
+        </View>
       </Modal>
     </ArrivalContext.Provider>
   );
