@@ -9,6 +9,7 @@ import {
   Image,
   Alert,
   ScrollView,
+  RefreshControl,
 } from "react-native";
 
 import { createDrawerNavigator } from "@react-navigation/drawer";
@@ -16,7 +17,7 @@ import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import { Feather } from "@expo/vector-icons";
 import Carousel from "react-native-reanimated-carousel";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useReviews } from "../context/ReviewContext";
 import { useUser } from "@clerk/clerk-expo";
@@ -183,6 +184,7 @@ function HomeContent() {
   const [topSpots, setTopSpots]     = useState([]);
   const [loading, setLoading]       = useState(true);
   const [topLoading, setTopLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
 
   const getSpotRating = (spot) => {
     const reviewCount = getReviewCount(spot._id);
@@ -229,13 +231,16 @@ function HomeContent() {
       });
   }, []);
 
-  // Fetch top visited spots
+  // Fetch top visited spots — loaded once on mount, refresh via pull-to-refresh
   useEffect(() => {
     setTopLoading(true);
     fetch(`https://libotbackend.onrender.com/api/spots/top/visited`)
       .then((res) => res.json())
       .then((data) => {
-        if (data.success) setTopSpots(data.spots);
+        if (data.success) {
+          const visited = data.spots.filter((s) => (s.visitCount ?? 0) > 0);
+          setTopSpots(visited);
+        }
         setTopLoading(false);
       })
       .catch((err) => {
@@ -244,8 +249,33 @@ function HomeContent() {
       });
   }, []);
 
+  const onRefresh = useCallback(() => {
+    setRefreshing(true);
+    Promise.all([
+      fetch('https://libotbackend.onrender.com/api/spots')
+        .then((res) => res.json())
+        .then((data) => { if (data.success) setSpots(data.spots); })
+        .catch((err) => console.error('Refresh spots error:', err)),
+      fetch('https://libotbackend.onrender.com/api/spots/top/visited')
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.success) {
+            const visited = data.spots.filter((s) => (s.visitCount ?? 0) > 0);
+            setTopSpots(visited);
+          }
+        })
+        .catch((err) => console.error('Refresh top spots error:', err)),
+    ]).finally(() => setRefreshing(false));
+  }, []);
+
   return (
-    <ScrollView style={styles.tabScreen} showsVerticalScrollIndicator={false}>
+    <ScrollView
+      style={styles.tabScreen}
+      showsVerticalScrollIndicator={false}
+      refreshControl={
+        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={["#8b4440"]} tintColor="#8b4440" />
+      }
+    >
       {/* CAROUSEL */}
       <View style={styles.recommendedTextContainer}>
         <Text style={styles.recommendedText}>Recommended</Text>
