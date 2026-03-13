@@ -19,10 +19,8 @@ import {
 import { useNavigation } from "@react-navigation/native";
 import { Feather } from "@expo/vector-icons";
 import { useAuth } from "@clerk/clerk-expo";
-import * as FileSystem from "expo-file-system/legacy";
-import * as Sharing from "expo-sharing";
 
-const { width, height } = Dimensions.get("window");
+const { width } = Dimensions.get("window");
 const CARD_SIZE = (width - 60) / 3;
 const BASE_URL  = "https://libotbackend.onrender.com";
 
@@ -30,10 +28,10 @@ export default function BadgeScreen() {
   const navigation   = useNavigation();
   const { getToken } = useAuth();
 
-  const [badges, setBadges]           = useState([]);
-  const [loading, setLoading]         = useState(true);
-  const [refreshing, setRefreshing]   = useState(false);
-  const [error, setError]             = useState(null);
+  const [badges, setBadges]               = useState([]);
+  const [loading, setLoading]             = useState(true);
+  const [refreshing, setRefreshing]       = useState(false);
+  const [error, setError]                 = useState(null);
   const [selectedBadge, setSelectedBadge] = useState(null);
   const [modalVisible, setModalVisible]   = useState(false);
 
@@ -130,38 +128,23 @@ export default function BadgeScreen() {
     });
   };
 
+  /* ── Share handler (no native module needed) ── */
   const handleShare = async () => {
     if (!selectedBadge) return;
     try {
-      if (selectedBadge.image) {
-        const cleanUrl = selectedBadge.image.split("?")[0];
-        const rawExt   = cleanUrl.split(".").pop()?.toLowerCase();
-        const ext      = ["jpg", "jpeg", "png", "webp", "gif"].includes(rawExt) ? rawExt : "jpg";
-        const mimeType = ext === "png" ? "image/png" : "image/jpeg";
-        const localUri = `${FileSystem.cacheDirectory}badge_${selectedBadge.spotId}.${ext}`;
+      const message = selectedBadge.description
+        ? `🏅 I just earned the "${selectedBadge.name}" badge!\n\n${selectedBadge.description}\n\nDiscover history with Libot!`
+        : `🏅 I just earned the "${selectedBadge.name}" badge on Libot! Discover history around you!`;
 
-        console.log("[Share] Downloading image from:", selectedBadge.image);
-        const download = await FileSystem.downloadAsync(selectedBadge.image, localUri);
-        console.log("[Share] Download result:", download);
-
-        console.log("[Share] Sharing file at:", download.uri);
-        await Sharing.shareAsync(download.uri, {
-          mimeType,
-          dialogTitle: `Share "${selectedBadge.name}" badge`,
-          UTI: ext === "png" ? "public.png" : "public.jpeg",
-        });
-        return;
-      }
+      await Share.share({
+        title: `Badge: ${selectedBadge.name}`,
+        message: selectedBadge.image
+          ? `${message}\n\n${selectedBadge.image}`
+          : message,
+      });
     } catch (e) {
-      console.warn("[Share] Image share failed:", e);
+      console.warn("[Share] Share failed:", e);
     }
-
-    // Fallback: text-only
-    const message = selectedBadge.description
-      ? `🏅 I just earned the "${selectedBadge.name}" badge!\n\n${selectedBadge.description}\n\nDiscover history with Libot!`
-      : `🏅 I just earned the "${selectedBadge.name}" badge on Libot! Discover history around you!`;
-
-    await Share.share({ title: `Badge: ${selectedBadge.name}`, message });
   };
 
   /* ── Loading ── */
