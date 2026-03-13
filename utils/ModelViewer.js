@@ -1,281 +1,414 @@
-import React, { useEffect, useRef } from "react";
-import { View, StyleSheet, Text } from "react-native";
-import { GLView } from "expo-gl";
-import * as THREE from "three";
-import * as FileSystem from "expo-file-system/legacy";
-import { decode } from "base64-arraybuffer";
+import React, { useState, useRef, useEffect } from "react";
+import { View, StyleSheet, Text, TouchableOpacity } from "react-native";
 import {
   GestureDetector,
   Gesture,
   GestureHandlerRootView,
 } from "react-native-gesture-handler";
-import { GLTFLoader } from "three-stdlib";
 
-// ─── Patch THREE to work inside Expo GL (no expo-three needed) ────────────────
-function patchThreeForExpoGL(gl) {
-  // Patch ImageLoader so embedded GLB data:image URIs are decoded manually
-  THREE.ImageLoader.prototype.load = function (url, onLoad, onProgress, onError) {
-    if (!url) { onError && onError(new Error("No URL")); return; }
+import {
+  Viro3DSceneNavigator,
+  ViroScene,
+  ViroCamera,
+  ViroAmbientLight,
+  ViroDirectionalLight,
+  Viro3DObject,
+  ViroSphere,
+  ViroMaterials,
+} from "@reactvision/react-viro";
 
-    if (url.startsWith("data:image")) {
-      // Parse the base64 data URI and create a texture-compatible object
-      const [header, b64] = url.split(",");
-      const mimeType = header.match(/data:(.*);base64/)?.[1] ?? "image/png";
+import { MaterialCommunityIcons, Feather } from "@expo/vector-icons";
 
-      try {
-        const binary = atob(b64);
-        const bytes = new Uint8Array(binary.length);
-        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+const INITIAL_SCALE = 0.3;
+const VIEW_DISTANCE = -20;
 
-        // Create a fake image object with the raw buffer
-        // THREE.DataTexture path: width/height resolved after decode
-        const img = {
-          data: bytes,
-          width: 1,
-          height: 1,
-          _expoBase64: b64,
-          _mimeType: mimeType,
-          isDataTexture: false,
-        };
-        onLoad && onLoad(img);
-      } catch (e) {
-        onError && onError(e);
-      }
-      return;
-    }
+const SENSITIVITY = 0.3;
+const INERTIA = 0.92;
+const INERTIA_MIN = 0.05;
+const AUTO_ROTATE_SPEED = 0.35;
 
-    // Fallback for non-data URIs
-    onError && onError(new Error("Cannot load non-data URI in RN: " + url));
-  };
-}
+ViroMaterials.createMaterials({
+  darkBackground: { diffuseColor: "#0d0d1a" },
+});
 
-// Manually apply loaded image data onto a Three.js texture after GLTF parse
-function fixTexturesOnModel(model, gl) {
-  model.traverse((child) => {
-    if (!child.isMesh) return;
-    const materials = Array.isArray(child.material)
-      ? child.material
-      : [child.material];
+const sharedRef = { objectRef: null };
 
-    materials.forEach((mat) => {
-      if (!mat) return;
-      mat.side = THREE.DoubleSide;
 
-      // For each possible texture slot
-      const slots = ["map", "normalMap", "roughnessMap", "metalnessMap", "emissiveMap", "aoMap"];
-      slots.forEach((slot) => {
-        const tex = mat[slot];
-        if (!tex || !tex.image?._expoBase64) return;
+// ─────────────────────────────────────────────
+// 3D Scene
+// ─────────────────────────────────────────────
+const ModelScene = ({ sceneNavigator }) => {
 
-        // Re-create as a proper texture using raw bytes via expo-gl compatible path
-        const b64 = tex.image._expoBase64;
-        const binary = atob(b64);
-        const bytes = new Uint8Array(binary.length);
-        for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-
-        // Use THREE.DataTexture with raw RGBA — decode via Image if possible
-        // In Expo we use gl.createTexture() manually for the image bytes
-        const newTex = new THREE.DataTexture(bytes, 1, 1, THREE.RGBAFormat);
-        newTex.needsUpdate = true;
-        mat[slot] = newTex;
-      });
-
-      mat.needsUpdate = true;
-    });
-  });
-}
-
-export default function ModelViewer({ url, style }) {
-  const rafRef = useRef(null);
-  const mountedRef = useRef(true);
-  const modelRef = useRef(null);
-  const rotationRef = useRef({ x: 0.3, y: 0 });
-  const lastRotationRef = useRef({ x: 0.3, y: 0 });
-  const scaleRef = useRef(1);
-  const lastScaleRef = useRef(1);
-  const baseScaleRef = useRef(1);
+  const { modelUrl, onModelReady } = sceneNavigator.viroAppProps;
+  const objectRef = useRef(null);
 
   useEffect(() => {
-    mountedRef.current = true;
-    return () => {
-      mountedRef.current = false;
-      if (rafRef.current) cancelAnimationFrame(rafRef.current);
-    };
+    sharedRef.objectRef = objectRef;
+    return () => (sharedRef.objectRef = null);
   }, []);
+
+  return (
+    <ViroScene>
+
+      {/* Camera slightly above */}
+      <ViroCamera
+        position={[0, 2.5, 1]}
+        rotation={[-15, 0, 0]}
+      />
+
+      {/* Background */}
+      <ViroSphere
+        position={[0, 0, 0]}
+        radius={100}
+        facesOutward={false}
+        materials={["darkBackground"]}
+      />
+
+      {/* Lighting */}
+      <ViroDirectionalLight
+        color="#fff5e0"
+        direction={[-0.5, -0.8, -0.5]}
+        intensity={600}
+      />
+
+      <ViroDirectionalLight
+        color="#c8d8ff"
+        direction={[1, -0.3, -0.5]}
+        intensity={250}
+      />
+
+      <ViroDirectionalLight
+        color="#ffffff"
+        direction={[0, 0.5, 1]}
+        intensity={300}
+      />
+
+      <ViroAmbientLight
+        color="#334466"
+        intensity={120}
+      />
+
+      {/* Model */}
+      <Viro3DObject
+        ref={objectRef}
+        source={{ uri: modelUrl }}
+        position={[0, 0, VIEW_DISTANCE]}
+        scale={[INITIAL_SCALE, INITIAL_SCALE, INITIAL_SCALE]}
+        rotation={[15, 30, 0]}
+        type="GLB"
+        onLoadEnd={() => onModelReady?.()}
+      />
+
+    </ViroScene>
+  );
+};
+
+
+// ─────────────────────────────────────────────
+// Model Viewer
+// ─────────────────────────────────────────────
+export default function ModelViewer({ url, style }) {
+
+  const [loaded, setLoaded] = useState(false);
+  const [error, setError] = useState(false);
+
+  const rotX = useRef(15);
+  const rotY = useRef(30);
+
+  const lastRotX = useRef(15);
+  const lastRotY = useRef(30);
+
+  const scaleVal = useRef(INITIAL_SCALE);
+  const lastScale = useRef(INITIAL_SCALE);
+
+  const velX = useRef(0);
+  const velY = useRef(0);
+
+  const inertiaFrame = useRef(null);
+  const autoFrame = useRef(null);
+
+  const isDragging = useRef(false);
+
+
+  const applyTransform = (x, y, s) => {
+
+    sharedRef.objectRef?.current?.setNativeProps({
+      rotation: [-x, y, 0], // invert vertical axis
+      scale: [s, s, s],
+    });
+
+  };
+
+
+  const stopInertia = () => {
+    cancelAnimationFrame(inertiaFrame.current);
+  };
+
+  const stopAuto = () => {
+    cancelAnimationFrame(autoFrame.current);
+  };
+
+
+  const startAutoRotate = () => {
+
+    stopAuto();
+
+    const loop = () => {
+
+      if (isDragging.current) return;
+
+      rotY.current += AUTO_ROTATE_SPEED;
+      lastRotY.current = rotY.current;
+
+      applyTransform(rotX.current, rotY.current, scaleVal.current);
+
+      autoFrame.current = requestAnimationFrame(loop);
+    };
+
+    autoFrame.current = requestAnimationFrame(loop);
+  };
+
+
+  const startInertia = () => {
+
+    stopInertia();
+
+    const loop = () => {
+
+      velX.current *= INERTIA;
+      velY.current *= INERTIA;
+
+      if (
+        Math.abs(velX.current) < INERTIA_MIN &&
+        Math.abs(velY.current) < INERTIA_MIN
+      ) {
+        startAutoRotate();
+        return;
+      }
+
+      rotX.current = Math.min(
+        Math.max(rotX.current + velX.current, -70),
+        70
+      );
+
+      rotY.current += velY.current;
+
+      lastRotX.current = rotX.current;
+      lastRotY.current = rotY.current;
+
+      applyTransform(rotX.current, rotY.current, scaleVal.current);
+
+      inertiaFrame.current = requestAnimationFrame(loop);
+    };
+
+    inertiaFrame.current = requestAnimationFrame(loop);
+  };
+
+
+  const onModelReady = () => {
+    setLoaded(true);
+    startAutoRotate();
+  };
+
+
+  // ───────────── Gestures ─────────────
 
   const panGesture = Gesture.Pan()
     .runOnJS(true)
+    .onBegin(() => {
+
+      isDragging.current = true;
+      stopInertia();
+      stopAuto();
+
+    })
     .onUpdate((e) => {
-      if (!modelRef.current) return;
-      rotationRef.current = {
-        x: lastRotationRef.current.x + e.translationY * 0.005,
-        y: lastRotationRef.current.y + e.translationX * 0.005,
-      };
-      modelRef.current.rotation.x = rotationRef.current.x;
-      modelRef.current.rotation.y = rotationRef.current.y;
+
+      rotX.current = Math.min(
+        Math.max(lastRotX.current - e.translationY * SENSITIVITY, -70),
+        70
+      );
+
+      rotY.current = lastRotY.current + e.translationX * SENSITIVITY;
+
+      velX.current = -e.velocityY * 0.01;
+      velY.current = e.velocityX * 0.01;
+
+      applyTransform(rotX.current, rotY.current, scaleVal.current);
+
     })
     .onEnd(() => {
-      lastRotationRef.current = { ...rotationRef.current };
+
+      isDragging.current = false;
+
+      lastRotX.current = rotX.current;
+      lastRotY.current = rotY.current;
+
+      startInertia();
+
     });
+
 
   const pinchGesture = Gesture.Pinch()
     .runOnJS(true)
     .onUpdate((e) => {
-      if (!modelRef.current) return;
-      const newScale = lastScaleRef.current * e.scale;
-      const clamped = Math.min(
-        Math.max(newScale, baseScaleRef.current * 0.3),
-        baseScaleRef.current * 4
+
+      const next = Math.min(
+        Math.max(lastScale.current * e.scale, INITIAL_SCALE * 0.3),
+        INITIAL_SCALE * 4
       );
-      scaleRef.current = clamped;
-      modelRef.current.scale.setScalar(clamped);
+
+      scaleVal.current = next;
+
+      applyTransform(rotX.current, rotY.current, next);
+
     })
     .onEnd(() => {
-      lastScaleRef.current = scaleRef.current;
+
+      lastScale.current = scaleVal.current;
+
     });
 
-  const composed = Gesture.Simultaneous(panGesture, pinchGesture);
 
-  const onContextCreate = async (gl) => {
-    console.log("🟢 GL context created, url:", url);
+  const gesture = Gesture.Simultaneous(panGesture, pinchGesture);
 
-    // Apply the patch BEFORE creating renderer or loading anything
-    patchThreeForExpoGL(gl);
 
-    const renderer = new THREE.WebGLRenderer({
-      canvas: {
-        width: gl.drawingBufferWidth,
-        height: gl.drawingBufferHeight,
-        style: {},
-        addEventListener: () => {},
-        removeEventListener: () => {},
-        clientHeight: gl.drawingBufferHeight,
-        getContext: () => gl,
-      },
-      context: gl,
-    });
-    renderer.setSize(gl.drawingBufferWidth, gl.drawingBufferHeight);
-    renderer.setPixelRatio(1);
-    renderer.setClearColor(0x87ceeb);
-    renderer.outputColorSpace = THREE.SRGBColorSpace;
-    renderer.toneMapping = THREE.ACESFilmicToneMapping;
-    renderer.toneMappingExposure = 1.2;
+  const zoomIn = () => {
 
-    const scene = new THREE.Scene();
+    const s = Math.min(scaleVal.current * 1.3, INITIAL_SCALE * 4);
 
-    const camera = new THREE.PerspectiveCamera(
-      50,
-      gl.drawingBufferWidth / gl.drawingBufferHeight,
-      0.01,
-      1000
-    );
-    camera.position.set(0, 1, 4);
-    camera.lookAt(0, 0, 0);
+    scaleVal.current = s;
+    lastScale.current = s;
 
-    scene.add(new THREE.AmbientLight(0xffffff, 1.5));
-    const sun = new THREE.DirectionalLight(0xffffff, 2.0);
-    sun.position.set(5, 10, 5);
-    scene.add(sun);
-    const fill = new THREE.DirectionalLight(0xffffff, 0.8);
-    fill.position.set(-5, 2, -5);
-    scene.add(fill);
-
-    const animate = () => {
-      if (!mountedRef.current) return;
-      rafRef.current = requestAnimationFrame(animate);
-      renderer.render(scene, camera);
-      gl.endFrameEXP();
-    };
-    animate();
-
-    if (!url) {
-      console.error("❌ No URL provided");
-      return;
-    }
-
-    try {
-      // Download GLB
-      const localUri = FileSystem.cacheDirectory + "model_cached.glb";
-      const info = await FileSystem.getInfoAsync(localUri);
-      if (info.exists) await FileSystem.deleteAsync(localUri);
-      await FileSystem.downloadAsync(url, localUri);
-      console.log("✅ GLB downloaded");
-
-      // Read as base64 then ArrayBuffer
-      const base64 = await FileSystem.readAsStringAsync(localUri, {
-        encoding: FileSystem.EncodingType.Base64,
-      });
-      const arrayBuffer = decode(base64);
-      console.log("✅ ArrayBuffer size:", arrayBuffer.byteLength);
-
-      const loader = new GLTFLoader();
-      loader.parse(
-        arrayBuffer,
-        "",
-        (gltf) => {
-          if (!mountedRef.current) return;
-
-          const model = gltf.scene;
-
-          // Fix any textures that came through the patched ImageLoader
-          fixTexturesOnModel(model, gl);
-
-          // Auto-fit
-          const box = new THREE.Box3().setFromObject(model);
-          const center = box.getCenter(new THREE.Vector3());
-          const size = box.getSize(new THREE.Vector3());
-          const maxDim = Math.max(size.x, size.y, size.z);
-          const baseScale = 10 / maxDim;
-
-          model.scale.setScalar(baseScale);
-          model.position.sub(center.multiplyScalar(baseScale));
-          model.rotation.x = 0.3;
-
-          baseScaleRef.current = baseScale;
-          scaleRef.current = baseScale;
-          lastScaleRef.current = baseScale;
-
-          scene.add(model);
-          modelRef.current = model;
-          console.log("✅ Model added");
-        },
-        (err) => console.error("❌ GLTF parse error:", err)
-      );
-    } catch (e) {
-      console.error("❌ Error loading model:", e);
-    }
+    applyTransform(rotX.current, rotY.current, s);
   };
+
+
+  const zoomOut = () => {
+
+    const s = Math.max(scaleVal.current * 0.8, INITIAL_SCALE * 0.3);
+
+    scaleVal.current = s;
+    lastScale.current = s;
+
+    applyTransform(rotX.current, rotY.current, s);
+  };
+
+
+  const reset = () => {
+
+    stopInertia();
+    stopAuto();
+
+    rotX.current = 15;
+    rotY.current = 30;
+
+    lastRotX.current = 15;
+    lastRotY.current = 30;
+
+    scaleVal.current = INITIAL_SCALE;
+    lastScale.current = INITIAL_SCALE;
+
+    applyTransform(15, 30, INITIAL_SCALE);
+
+    setTimeout(startAutoRotate, 800);
+  };
+
+
+  if (!url || error) {
+    return (
+      <View style={[styles.wrapper, style]}>
+        <Text style={{ color: "#aaa" }}>
+          Failed to load model
+        </Text>
+      </View>
+    );
+  }
+
 
   return (
     <GestureHandlerRootView style={[styles.wrapper, style]}>
-      <GestureDetector gesture={composed}>
-        <View style={StyleSheet.absoluteFill}>
-          <GLView
-            style={StyleSheet.absoluteFill}
-            onContextCreate={onContextCreate}
-          />
+
+      <Viro3DSceneNavigator
+        initialScene={{ scene: ModelScene }}
+        viroAppProps={{ modelUrl: url, onModelReady }}
+        style={StyleSheet.absoluteFill}
+        onError={() => setError(true)}
+      />
+
+      {!loaded && (
+        <View style={styles.loading}>
+          <Text style={{ color: "#aaa" }}>Loading 3D Model...</Text>
         </View>
+      )}
+
+      <GestureDetector gesture={gesture}>
+        <View style={StyleSheet.absoluteFill} />
       </GestureDetector>
-      <View style={styles.hint} pointerEvents="none">
-        <Text style={styles.hintText}>Drag to rotate • Pinch to zoom</Text>
+
+      <View style={styles.zoomButtons}>
+        <TouchableOpacity style={styles.iconBtn} onPress={zoomIn}>
+          <Feather name="plus" size={18} color="#fff"/>
+        </TouchableOpacity>
+
+        <TouchableOpacity style={styles.iconBtn} onPress={zoomOut}>
+          <Feather name="minus" size={18} color="#fff"/>
+        </TouchableOpacity>
       </View>
+
+      <TouchableOpacity style={styles.resetBtn} onPress={reset}>
+        <MaterialCommunityIcons name="rotate-3d-variant" size={18} color="#fff"/>
+      </TouchableOpacity>
+
     </GestureHandlerRootView>
   );
 }
 
+
 const styles = StyleSheet.create({
+
   wrapper: {
-    backgroundColor: "#87ceeb",
+    backgroundColor: "#0d0d1a",
     borderRadius: 20,
     overflow: "hidden",
   },
-  hint: {
+
+  loading: {
     position: "absolute",
-    bottom: 10,
-    right: 14,
+    alignSelf: "center",
+    top: "50%",
   },
-  hintText: {
-    color: "#ffffff90",
-    fontSize: 11,
+
+  zoomButtons: {
+    position: "absolute",
+    right: 12,
+    top: "50%",
+    gap: 10,
   },
+
+  iconBtn: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "#ffffff18",
+    borderWidth: 1,
+    borderColor: "#ffffff22",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+
+  resetBtn: {
+    position: "absolute",
+    top: 12,
+    right: 12,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "#ffffff18",
+    borderWidth: 1,
+    borderColor: "#ffffff22",
+    justifyContent: "center",
+    alignItems: "center",
+  },
+
 });
