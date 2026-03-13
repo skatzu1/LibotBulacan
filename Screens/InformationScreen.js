@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -6,8 +6,8 @@ import {
   TouchableOpacity,
   StyleSheet,
   Dimensions,
-  ScrollView,
 } from "react-native";
+import { useIsFocused } from "@react-navigation/native";
 import { Feather } from "@expo/vector-icons";
 import { FontAwesome5, MaterialCommunityIcons } from "@expo/vector-icons";
 import { useBookmark } from "../context/BookmarkContext";
@@ -16,10 +16,28 @@ import ModelViewer from "../utils/ModelViewer";
 const { width } = Dimensions.get("window");
 
 export default function InformationScreen({ route, navigation }) {
-  const { spot } = route.params;
+  const spot = route?.params?.spot;
+
   const [activeTab, setActiveTab] = useState("Information");
   const [show3D, setShow3D]       = useState(false);
   const { isBookmarked, toggleBookmark } = useBookmark();
+  const isFocused = useIsFocused();
+
+  // Kill the 3D viewer as soon as we navigate away so Viro doesn't bleed through
+  useEffect(() => {
+    if (!isFocused) setShow3D(false);
+  }, [isFocused]);
+
+  if (!spot) {
+    return (
+      <View style={styles.errorContainer}>
+        <Text style={styles.errorText}>No spot data found.</Text>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+          <Text style={styles.backButtonText}>Go Back</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   const spotIsBookmarked = isBookmarked(spot._id || spot.id);
 
@@ -41,14 +59,16 @@ export default function InformationScreen({ route, navigation }) {
         </TouchableOpacity>
       </View>
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+      {/* Content */}
+      <View style={styles.content}>
 
         {/* Title */}
         <Text style={styles.title}>{spot.name}</Text>
 
         {/* Image / 3D view */}
         <View style={styles.imageContainer}>
-          {show3D && spot.modelUrl ? (
+          {/* Only mount ModelViewer when show3D is true AND screen is focused */}
+          {show3D && spot.modelUrl && isFocused ? (
             <ModelViewer url={spot.modelUrl} style={styles.image} />
           ) : (
             <Image source={{ uri: spot.image }} style={styles.image} />
@@ -75,7 +95,7 @@ export default function InformationScreen({ route, navigation }) {
 
         {/* Tabs */}
         <View style={styles.tabsContainer}>
-          {["History", "Information", "Recommendations"].map((tab) => (
+          {["Information", "History"].map((tab) => (
             <TouchableOpacity
               key={tab}
               style={[styles.tab, activeTab === tab && styles.activeTab]}
@@ -83,7 +103,7 @@ export default function InformationScreen({ route, navigation }) {
               activeOpacity={0.8}
             >
               <Text style={[styles.tabText, activeTab === tab && styles.activeTabText]}>
-                {tab === "Recommendations" ? "Tips" : tab}
+                {tab}
               </Text>
             </TouchableOpacity>
           ))}
@@ -105,27 +125,17 @@ export default function InformationScreen({ route, navigation }) {
                   {spot.entranceFee || "Free"}
                 </Text>
               </View>
-              {spot.description && (
-                <Text style={styles.descriptionText}>{spot.description}</Text>
-              )}
             </>
           )}
 
           {activeTab === "History" && (
             <Text style={styles.descriptionText}>
-              {spot.history || "Historical information coming soon..."}
-            </Text>
-          )}
-
-          {activeTab === "Recommendations" && (
-            <Text style={styles.descriptionText}>
-              {spot.recommendations || "Recommendations coming soon..."}
+              {spot.description || "Description coming soon..."}
             </Text>
           )}
         </View>
 
-        <View style={{ height: 120 }} />
-      </ScrollView>
+      </View>
 
       {/* Fixed bottom buttons */}
       <View style={styles.bottomBar}>
@@ -138,8 +148,7 @@ export default function InformationScreen({ route, navigation }) {
             <View style={{ flexDirection: "row", alignItems: "center" }}>
               <Feather name="camera" size={15} color="#fff" />
               <Text style={[styles.buttonText, { marginLeft: 6 }]}>AR</Text>
-              </View>
-
+            </View>
           </TouchableOpacity>
 
           <TouchableOpacity
@@ -181,8 +190,27 @@ const styles = StyleSheet.create({
     backgroundColor: "#fff",
     paddingTop: 50,
   },
-
-  // ── Header ──
+  errorContainer: {
+    flex: 1,
+    justifyContent: "center",
+    alignItems: "center",
+    gap: 16,
+    backgroundColor: "#fff",
+  },
+  errorText: {
+    fontSize: 16,
+    color: "#7a5a58",
+  },
+  backButton: {
+    backgroundColor: "#6b4b45",
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 12,
+  },
+  backButtonText: {
+    color: "#fff",
+    fontWeight: "700",
+  },
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -195,10 +223,10 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-
-  scrollContent: { paddingHorizontal: 20 },
-
-  // ── Title ──
+  content: {
+    flex: 1,
+    paddingHorizontal: 20,
+  },
   title: {
     fontSize: 24,
     fontWeight: "700",
@@ -206,8 +234,6 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     color: "#4a2e2c",
   },
-
-  // ── Image ──
   imageContainer: {
     alignItems: "center",
     marginBottom: 20,
@@ -232,8 +258,6 @@ const styles = StyleSheet.create({
     fontWeight: "600",
     fontSize: 14,
   },
-
-  // ── Tabs ──
   tabsContainer: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -261,13 +285,10 @@ const styles = StyleSheet.create({
   activeTabText: {
     color: "#fff",
   },
-
-  // ── Info card ──
   infoCard: {
     backgroundColor: "#faf5f4",
     borderRadius: 16,
     padding: 16,
-    minHeight: 120,
     borderWidth: 1,
     borderColor: "#f0e0de",
   },
@@ -286,10 +307,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#7a5a58",
     lineHeight: 21,
-    marginTop: 8,
   },
-
-  // ── Bottom bar ──
   bottomBar: {
     paddingHorizontal: 20,
     paddingTop: 10,

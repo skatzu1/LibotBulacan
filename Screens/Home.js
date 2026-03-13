@@ -12,7 +12,7 @@ import {
   RefreshControl,
 } from "react-native";
 
-import { createDrawerNavigator } from "@react-navigation/drawer";
+import { createDrawerNavigator, DrawerContentScrollView, DrawerItem } from "@react-navigation/drawer";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import { Feather } from "@expo/vector-icons";
@@ -32,6 +32,71 @@ const { width } = Dimensions.get("window");
 
 const Drawer = createDrawerNavigator();
 const BottomTab = createBottomTabNavigator();
+
+/* -------------------------------------------------------------------------- */
+/*                         CUSTOM DRAWER CONTENT                              */
+/* -------------------------------------------------------------------------- */
+function CustomDrawerContent(props) {
+  const { navigation } = props;
+
+  return (
+    <DrawerContentScrollView {...props} contentContainerStyle={styles.drawerContainer}>
+      <Text style={styles.drawerHeading}>Menu</Text>
+
+      <DrawerItem
+        label="Home"
+        icon={({ color }) => <Feather name="home" size={20} color={color} />}
+        onPress={() => navigation.navigate("HomeSide")}
+        labelStyle={styles.drawerLabel}
+        inactiveTintColor="#3a2a28"
+      />
+
+      <DrawerItem
+        label="Profile"
+        icon={({ color }) => <Feather name="user" size={20} color={color} />}
+        onPress={() => navigation.navigate("Profile")}
+        labelStyle={styles.drawerLabel}
+        inactiveTintColor="#3a2a28"
+      />
+
+      <Text style={styles.drawerSection}>Explore</Text>
+
+      <DrawerItem
+        label="AR Experience"
+        icon={({ color }) => <Feather name="camera" size={20} color={color} />}
+        onPress={() => navigation.navigate("ARSpotSelect")}
+        labelStyle={styles.drawerLabel}
+        inactiveTintColor="#3a2a28"
+      />
+
+      <DrawerItem
+        label="Missions"
+        icon={({ color }) => <Feather name="flag" size={20} color={color} />}
+        onPress={() => navigation.navigate("MissionsSpotSelect")}
+        labelStyle={styles.drawerLabel}
+        inactiveTintColor="#3a2a28"
+      />
+
+      <DrawerItem
+        label="Navigate to Spot"
+        icon={({ color }) => <Feather name="navigation" size={20} color={color} />}
+        onPress={() => navigation.navigate("TrackSpotSelect")}
+        labelStyle={styles.drawerLabel}
+        inactiveTintColor="#3a2a28"
+      />
+
+      <View style={styles.drawerDivider} />
+
+      <DrawerItem
+        label="Logout"
+        icon={({ color }) => <Feather name="log-out" size={20} color={color} />}
+        onPress={() => navigation.navigate("Logout")}
+        labelStyle={[styles.drawerLabel, { color: "#c0392b" }]}
+        inactiveTintColor="#c0392b"
+      />
+    </DrawerContentScrollView>
+  );
+}
 
 /* -------------------------------------------------------------------------- */
 /*                            BOTTOM TABS STYLE                               */
@@ -195,10 +260,9 @@ function HomeContent() {
     navigation.navigate("InformationScreen", { spot });
   };
 
-  // ── Include visitCount in sliderData ──
   const sliderData =
     spots.length > 0
-      ? spots.slice(0, 5).map(
+      ? spots.slice(0, 14).map(
           ({ _id, image, name, description, location, rating, modelUrl, visitCount }, index) => {
             const reviewCount   = getReviewCount(_id);
             const displayRating = reviewCount > 0 ? getAverageRating(_id) : 0;
@@ -216,7 +280,6 @@ function HomeContent() {
         )
       : [];
 
-  // Fetch all spots for carousel
   useEffect(() => {
     setLoading(true);
     fetch(`https://libotbackend.onrender.com/api/spots`)
@@ -231,7 +294,6 @@ function HomeContent() {
       });
   }, []);
 
-  // Fetch top visited spots — loaded once on mount, refresh via pull-to-refresh
   useEffect(() => {
     setTopLoading(true);
     fetch(`https://libotbackend.onrender.com/api/spots/top/visited`)
@@ -273,10 +335,14 @@ function HomeContent() {
       style={styles.tabScreen}
       showsVerticalScrollIndicator={false}
       refreshControl={
-        <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={["#8b4440"]} tintColor="#8b4440" />
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={onRefresh}
+          colors={["#8b4440"]}
+          tintColor="#8b4440"
+        />
       }
     >
-      {/* CAROUSEL */}
       <View style={styles.recommendedTextContainer}>
         <Text style={styles.recommendedText}>Recommended</Text>
       </View>
@@ -322,7 +388,6 @@ function HomeContent() {
                       </Text>
                     </View>
                   </View>
-                  {/* Rating badge — top right */}
                   <View style={styles.carouselRating}>
                     <MaterialIcons name="star" size={12} color="#FFD700" />
                     <Text style={styles.carouselRatingText}>
@@ -345,7 +410,6 @@ function HomeContent() {
         )}
       </View>
 
-      {/* TOP PLACES SECTION */}
       <View style={styles.sectionHeader}>
         <Text style={styles.sectionTitle}>Top Places visited this week</Text>
         <TouchableOpacity>
@@ -423,6 +487,7 @@ function HomeContent() {
 export default function HomeDrawer() {
   return (
     <Drawer.Navigator
+      drawerContent={(props) => <CustomDrawerContent {...props} />}
       screenOptions={{
         headerShown: false,
         drawerStyle: { backgroundColor: "#dbbcb7" },
@@ -445,7 +510,11 @@ function LogoutScreen() {
   useFocusEffect(
     React.useCallback(() => {
       Alert.alert("Logout", "Are you sure you want to logout?", [
-        { text: "Cancel", style: "cancel" },
+        {
+          text: "Cancel",
+          style: "cancel",
+          onPress: () => navigation.navigate("HomeSide"), // ← go back on cancel
+        },
         {
           text: "Log Out",
           onPress: async () => {
@@ -549,4 +618,11 @@ const styles = StyleSheet.create({
   tabItem:          { alignItems: "center", justifyContent: "center", flex: 1 },
   loadingContainer: { height: 100, justifyContent: "center", alignItems: "center" },
   loadingText:      { fontSize: 14, color: "#888", textAlign: "center" },
+
+  // ── Drawer styles ──
+  drawerContainer:  { flex: 1, paddingTop: 40, paddingHorizontal: 8 },
+  drawerHeading:    { fontSize: 22, fontWeight: "700", color: "#3a2a28", paddingHorizontal: 16, marginBottom: 8 },
+  drawerSection:    { fontSize: 11, fontWeight: "700", color: "#8b5550", letterSpacing: 1.2, paddingHorizontal: 16, marginTop: 20, marginBottom: 4 },
+  drawerLabel:      { fontSize: 15, fontWeight: "500" },
+  drawerDivider:    { height: 1, backgroundColor: "rgba(90,74,74,0.2)", marginHorizontal: 16, marginVertical: 12 },
 });

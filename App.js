@@ -11,7 +11,7 @@ import 'react-native-reanimated';
 import { ReviewProvider } from './context/ReviewContext';
 import { AuthProvider } from './context/AuthContext';
 import { BookmarkProvider } from './context/BookmarkContext';
-import { ArrivalProvider } from './context/ArrivalContext'; // ✅ ADD THIS
+import { ArrivalProvider } from './context/ArrivalContext';
 import { tokenCache } from './utils/tokenCache';
 import { setupClerkInterceptor } from './api';
 
@@ -35,6 +35,9 @@ import Mission from './Screens/Mission';
 import MissionsScreen from './Screens/MissionsScreen';
 import BadgeScreen from './Screens/BadgeScreen';
 import PreviousTripsScreen from './Screens/PreviousTripScreen';
+import ARSpotSelect from './Screens/ARspotSelect';           // ← NEW
+import MissionsSpotSelect from './Screens/MissionsSpotSelect'; // ← NEW
+import TrackSpotSelect from './Screens/TrackSpotSelect';       // ← NEW
 
 const CLERK_PUBLISHABLE_KEY = 'pk_test_cHJpbWUtY2hpY2tlbi0yNS5jbGVyay5hY2NvdW50cy5kZXYk';
 
@@ -74,7 +77,7 @@ function AppNavigator() {
     <AuthProvider>
       <ReviewProvider>
         <BookmarkProvider>
-          <ArrivalProvider> 
+          <ArrivalProvider>
             <NavigationContainer>
               <Stack.Navigator screenOptions={{ headerShown: false }}>
                 {isSignedIn ? (
@@ -93,6 +96,10 @@ function AppNavigator() {
                     <Stack.Screen name="Track" component={Track} />
                     <Stack.Screen name="Badges" component={BadgeScreen} />
                     <Stack.Screen name="PreviousTrips" component={PreviousTripsScreen} />
+                    {/* ── Spot selector screens (one per feature) ── */}
+                    <Stack.Screen name="ARSpotSelect" component={ARSpotSelect} />
+                    <Stack.Screen name="MissionsSpotSelect" component={MissionsSpotSelect} />
+                    <Stack.Screen name="TrackSpotSelect" component={TrackSpotSelect} />
                   </>
                 ) : (
                   <>
@@ -113,7 +120,7 @@ function AppNavigator() {
                 )}
               </Stack.Navigator>
             </NavigationContainer>
-          </ArrivalProvider> 
+          </ArrivalProvider>
         </BookmarkProvider>
       </ReviewProvider>
     </AuthProvider>
