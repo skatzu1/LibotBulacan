@@ -1,0 +1,96 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      body { overflow: hidden; background: black; }
+      #loader {
+        position: absolute; inset: 0; z-index: 999;
+        background: rgba(0,0,0,0.85);
+        display: flex; flex-direction: column;
+        align-items: center; justify-content: center; gap: 12px;
+      }
+      #loader p { color: white; font-family: sans-serif; font-size: 16px; }
+      #hint {
+        position: absolute; bottom: 0; width: 100%;
+        padding: 20px; background: rgba(0,0,0,0.75);
+        color: white; font-family: sans-serif;
+        font-size: 15px; text-align: center; z-index: 10;
+      }
+    </style>
+
+    <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
+    <script src="https://raw.githack.com/AR-js-org/AR.js/3.4.7/three.js/build/ar-threex-location-only.js"></script>
+    <script src="https://raw.githack.com/AR-js-org/AR.js/3.4.7/aframe/build/aframe-ar.js"></script>
+  </head>
+  <body>
+
+    <div id="loader">
+      <p>Acquiring GPS signal...</p>
+    </div>
+
+    <div id="hint">
+      Walk outside and point your camera around to see the 3D model
+    </div>
+
+    <a-scene
+      vr-mode-ui="enabled: false"
+      arjs="sourceType: webcam; videoTexture: true; debugUIEnabled: false"
+      renderer="antialias: true; alpha: true"
+      loading-screen="enabled: false"
+    >
+      <a-assets>
+        <!-- Your existing .glb file, hosted on your server or CDN -->
+        <a-asset-item
+          id="question-mark"
+          src="https://your-cdn.com/question_mark.glb"
+        ></a-asset-item>
+      </a-assets>
+
+      <a-camera gps-new-camera="gpsMinDistance: 5"></a-camera>
+
+      <!--
+        Replace lat/lng with a coordinate ~0.001 degrees from your location.
+        scale="10 10 10" is a starting point — adjust to taste.
+        Your Viro scale was [0.3, 0.3, 0.3] in meters, AR.js scale works differently.
+      -->
+      <a-entity
+        id="ar-model"
+        gltf-model="#question-mark"
+        scale="10 10 10"
+        rotation="0 0 0"
+        gps-new-entity-place="latitude: 14.81320530816006; longitude:121.03689928343634"
+      ></a-entity>
+    </a-scene>
+
+    <script>
+      // Hide loader once GPS is ready and scene is running
+      document.querySelector('a-scene').addEventListener('loaded', () => {
+        navigator.geolocation.getCurrentPosition(() => {
+          document.getElementById('loader').style.display = 'none';
+        }, (err) => {
+          document.getElementById('loader').querySelector('p').textContent =
+            'GPS error: ' + err.message;
+        }, { enableHighAccuracy: true });
+      });
+
+      // Listen for config injected from React Native
+      window.addEventListener('message', (e) => {
+        try {
+          const data = JSON.parse(e.data);
+          if (data.type === 'AR_CONFIG') {
+            const entity = document.getElementById('ar-model');
+            entity.setAttribute('gps-new-entity-place',
+              `latitude: ${data.latitude}; longitude: ${data.longitude}`
+            );
+            if (data.modelUrl) {
+              entity.setAttribute('gltf-model', data.modelUrl);
+            }
+          }
+        } catch (_) {}
+      });
+    </script>
+  </body>
+</html>
