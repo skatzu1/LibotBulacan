@@ -1,96 +1,73 @@
-import React, { Component } from "react";
-import { StyleSheet, View, Text, TouchableOpacity } from "react-native";
+import React, { useEffect, useRef } from 'react';
 import {
-  ViroARSceneNavigator,
-  ViroARScene,
-  ViroARPlane,
-  Viro3DObject,
-  ViroAmbientLight,
-  ViroSpotLight,
-  ViroNode,
-} from "@reactvision/react-viro";
+  View,
+  Text,
+  TouchableOpacity,
+  StyleSheet,
+  Platform,
+  PermissionsAndroid,
+  Alert,
+} from 'react-native';
+import { WebView } from 'react-native-webview';
 
-/* =========================================================
-   AR SCENE
-========================================================= */
-class SimpleARScene extends Component {
-  state = {
-    planeFound: false,
-    anchorPosition: null,
+const AR_URL = 'https://ar-web-lemon.vercel.app/ar.html'; // ← your hosted ar.html
+const AR_CONFIG = {
+  latitude: 14.1234,    // ← replace with your real GPS coords
+  longitude: 121.5678,
+  modelUrl: 'https://ar-web-lemon.vercel.app/question_mark.glb', // ← your hosted .glb
+};
+
+export default function ARScreen({ navigation }) {  // ← kept your original name
+  const webviewRef = useRef(null);
+
+  useEffect(() => {
+    requestPermissions();
+  }, []);
+
+  const requestPermissions = async () => {
+    if (Platform.OS === 'android') {
+      const granted = await PermissionsAndroid.requestMultiple([
+        PermissionsAndroid.PERMISSIONS.CAMERA,
+        PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
+      ]);
+      const allGranted = Object.values(granted).every(
+        (v) => v === PermissionsAndroid.RESULTS.GRANTED
+      );
+      if (!allGranted) {
+        Alert.alert('Permissions required', 'Camera and location are needed for AR.');
+      }
+    }
   };
 
-  onAnchorFound = (anchor) => {
-    console.log("Plane detected!", anchor);
-    this.setState({
-      planeFound: true,
-      anchorPosition: anchor.position ?? [0, -0.5, -1.5],
-    });
+  const onWebViewLoad = () => {
+    const script = `
+      window.dispatchEvent(new MessageEvent('message', {
+        data: JSON.stringify({
+          type: 'AR_CONFIG',
+          latitude: ${AR_CONFIG.latitude},
+          longitude: ${AR_CONFIG.longitude},
+          modelUrl: '${AR_CONFIG.modelUrl}'
+        })
+      }));
+      true;
+    `;
+    webviewRef.current?.injectJavaScript(script);
   };
 
-  render() {
-    const { planeFound, anchorPosition } = this.state;
-
-    return (
-      <ViroARScene>
-        <ViroAmbientLight color="#ffffff" intensity={500} />
-        <ViroSpotLight
-          innerAngle={5}
-          outerAngle={90}
-          direction={[0, -1, -0.2]}
-          position={[0, 3, 1]}
-          color="#ffffff"
-          intensity={1000}
-        />
-
-        {/* Once a plane is found, place the model at that plane's position */}
-        {planeFound && anchorPosition && (
-          <ViroNode position={anchorPosition}>
-            <Viro3DObject
-              source={require("../assets/models/question_mark.glb")}
-              type="GLB"
-              position={[0, 0, 0]}
-              scale={[0.3, 0.3, 0.3]}
-              rotation={[0, 0, 0]}
-              onLoadStart={() => console.log("Loading model...")}
-              onLoadEnd={() => console.log("Model loaded!")}
-              onError={(e) => console.warn("Model error:", e)}
-            />
-          </ViroNode>
-        )}
-
-        {/* Keep scanning until a plane is found */}
-        {!planeFound && (
-          <ViroARPlane
-            minHeight={0.1}
-            minWidth={0.1}
-            alignment="Horizontal"
-            onAnchorFound={this.onAnchorFound}
-          />
-        )}
-      </ViroARScene>
-    );
-  }
-}
-
-/* =========================================================
-   MAIN SCREEN
-========================================================= */
-export default function SimpleARScreen({ navigation }) {
   return (
     <View style={styles.container}>
-      <ViroARSceneNavigator
-        style={styles.arNavigator}
-        autofocus={true}
-        worldAlignment="Gravity"
-        initialScene={{ scene: SimpleARScene }}
+      <WebView
+        ref={webviewRef}
+        source={{ uri: AR_URL }}
+        style={styles.webview}
+        onLoad={onWebViewLoad}
+        mediaPlaybackRequiresUserAction={false}
+        allowsInlineMediaPlayback={true}
+        geolocationEnabled={true}
+        originWhitelist={['*']}
+        allowsProtectedMedia={true}
+        backgroundColor="black"
       />
-
-      <View style={styles.hint}>
-        <Text style={styles.hintText}>
-          Point your camera at a flat surface to reveal the 3D model
-        </Text>
-      </View>
-
       {navigation && (
         <TouchableOpacity
           style={styles.backButton}
@@ -104,27 +81,18 @@ export default function SimpleARScreen({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "black" },
-  arNavigator: { flex: 1 },
-  hint: {
-    position: "absolute",
-    bottom: 0,
-    width: "100%",
-    padding: 20,
-    backgroundColor: "rgba(0,0,0,0.75)",
-    alignItems: "center",
-  },
-  hintText: { color: "white", fontSize: 15, textAlign: "center", lineHeight: 22 },
+  container: { flex: 1, backgroundColor: 'black' },
+  webview: { flex: 1 },
   backButton: {
-    position: "absolute",
+    position: 'absolute',
     top: 50,
     left: 20,
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: "rgba(0,0,0,0.6)",
-    justifyContent: "center",
-    alignItems: "center",
+    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
-  backButtonText: { color: "white", fontSize: 28, fontWeight: "bold" },
+  backButtonText: { color: 'white', fontSize: 28, fontWeight: 'bold' },
 });
