@@ -12,13 +12,15 @@ import {
   ActivityIndicator,
   RefreshControl,
   Modal,
-  Share,
+  // Share, — replaced by react-native-share
   StatusBar,
   Pressable,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { Feather } from "@expo/vector-icons";
 import { useAuth } from "@clerk/clerk-expo";
+import { captureRef } from "react-native-view-shot";
+import RNShare from "react-native-share";
 
 const { width } = Dimensions.get("window");
 const CARD_SIZE = (width - 60) / 3;
@@ -34,13 +36,15 @@ export default function BadgeScreen() {
   const [error, setError]                 = useState(null);
   const [selectedBadge, setSelectedBadge] = useState(null);
   const [modalVisible, setModalVisible]   = useState(false);
+  const [sharing, setSharing]             = useState(false);
 
-  // Modal animation values
   const modalOpacity   = useRef(new Animated.Value(0)).current;
   const modalScale     = useRef(new Animated.Value(0.85)).current;
   const modalTranslate = useRef(new Animated.Value(40)).current;
+  const fadeAnims      = useRef([]).current;
 
-  const fadeAnims = useRef([]).current;
+  // Ref for the hidden shareable badge card
+  const shareCardRef = useRef(null);
 
   /* ── Fetch badges ── */
   const loadBadges = async () => {
@@ -99,55 +103,53 @@ export default function BadgeScreen() {
     modalTranslate.setValue(40);
 
     Animated.parallel([
-      Animated.timing(modalOpacity, {
-        toValue: 1, duration: 300, useNativeDriver: true,
-      }),
-      Animated.spring(modalScale, {
-        toValue: 1, tension: 120, friction: 9, useNativeDriver: true,
-      }),
-      Animated.timing(modalTranslate, {
-        toValue: 0, duration: 300, useNativeDriver: true,
-      }),
+      Animated.timing(modalOpacity, { toValue: 1, duration: 300, useNativeDriver: true }),
+      Animated.spring(modalScale, { toValue: 1, tension: 120, friction: 9, useNativeDriver: true }),
+      Animated.timing(modalTranslate, { toValue: 0, duration: 300, useNativeDriver: true }),
     ]).start();
   };
 
   const closeBadge = () => {
     Animated.parallel([
-      Animated.timing(modalOpacity, {
-        toValue: 0, duration: 200, useNativeDriver: true,
-      }),
-      Animated.timing(modalScale, {
-        toValue: 0.9, duration: 200, useNativeDriver: true,
-      }),
-      Animated.timing(modalTranslate, {
-        toValue: 30, duration: 200, useNativeDriver: true,
-      }),
+      Animated.timing(modalOpacity, { toValue: 0, duration: 200, useNativeDriver: true }),
+      Animated.timing(modalScale, { toValue: 0.9, duration: 200, useNativeDriver: true }),
+      Animated.timing(modalTranslate, { toValue: 30, duration: 200, useNativeDriver: true }),
     ]).start(() => {
       setModalVisible(false);
       setSelectedBadge(null);
     });
   };
 
-  /* ── Share handler (no native module needed) ── */
+  /* ── Share as PNG ── */
   const handleShare = async () => {
-    if (!selectedBadge) return;
+    if (!selectedBadge || !shareCardRef.current) return;
     try {
-      const message = selectedBadge.description
-        ? `🏅 I just earned the "${selectedBadge.name}" badge!\n\n${selectedBadge.description}\n\nDiscover history with Libot!`
-        : `🏅 I just earned the "${selectedBadge.name}" badge on Libot! Discover history around you!`;
+      setSharing(true);
 
-      await Share.share({
-        title: `Badge: ${selectedBadge.name}`,
-        message: selectedBadge.image
-          ? `${message}\n\n${selectedBadge.image}`
-          : message,
+      // Capture the hidden share card as a transparent PNG file
+      const uri = await captureRef(shareCardRef, {
+        format: "png",
+        quality: 1,
+        result: "tmpfile",
+      });
+
+      // react-native-share shares the actual image file on both iOS and Android
+      await RNShare.open({
+        title: `${selectedBadge.name} Badge`,
+        url: uri,                    // file:// path to the captured PNG
+        type: "image/png",
+        message: `🏅 I just earned the "${selectedBadge.name}" badge on Libot! Discover Bulacan\'s history!`,
+        failOnCancel: false,
       });
     } catch (e) {
-      console.warn("[Share] Share failed:", e);
+      if (e?.message !== "User did not share") {
+        console.warn("[Share] Failed:", e);
+      }
+    } finally {
+      setSharing(false);
     }
   };
 
-  /* ── Loading ── */
   if (loading) {
     return (
       <View style={styles.centered}>
@@ -160,6 +162,22 @@ export default function BadgeScreen() {
   return (
     <View style={styles.container}>
       <StatusBar barStyle="dark-content" />
+
+      {/* ── Hidden shareable badge card (captured as PNG) ── */}
+      {/* Positioned off-screen so it's invisible to the user */}
+      <View style={styles.offscreen}>
+        <View ref={shareCardRef} style={styles.shareCard} collapsable={false}>
+          {selectedBadge?.image && (
+            <Image
+              source={{ uri: selectedBadge.image }}
+              style={styles.shareCardImage}
+              resizeMode="contain"
+            />
+          )}
+          <Text style={styles.shareCardName}>{selectedBadge?.name}</Text>
+          <Text style={styles.shareCardSub}>Libot · Bulacan Heritage Explorer</Text>
+        </View>
+      </View>
 
       {/* Header */}
       <View style={styles.header}>
@@ -191,7 +209,6 @@ export default function BadgeScreen() {
           </TouchableOpacity>
         )}
 
-        {/* Empty state */}
         {!error && badges.length === 0 && (
           <View style={styles.emptyState}>
             <Text style={styles.emptyEmoji}>🏅</Text>
@@ -202,7 +219,6 @@ export default function BadgeScreen() {
           </View>
         )}
 
-        {/* Badge grid */}
         {badges.length > 0 && (
           <View style={styles.grid}>
             {badges.map((badge, index) => (
@@ -218,7 +234,11 @@ export default function BadgeScreen() {
                   <View style={styles.badgeCard}>
                     <View style={styles.iconCircle}>
                       {badge.image ? (
-                        <Image source={{ uri: badge.image }} style={styles.badgeImage} />
+                        <Image
+                          source={{ uri: badge.image }}
+                          style={styles.badgeImage}
+                          resizeMode="contain"
+                        />
                       ) : (
                         <Feather name="award" size={26} color="#6b4b45" />
                       )}
@@ -226,11 +246,7 @@ export default function BadgeScreen() {
                         <Feather name="check-circle" size={16} color="#6b4b45" />
                       </View>
                     </View>
-
-                    <Text style={styles.badgeName} numberOfLines={3}>
-                      {badge.name}
-                    </Text>
-
+                    <Text style={styles.badgeName} numberOfLines={3}>{badge.name}</Text>
                     {badge.claimedAt && (
                       <Text style={styles.claimedDate}>
                         {new Date(badge.claimedAt).toLocaleDateString("en-PH", {
@@ -264,32 +280,27 @@ export default function BadgeScreen() {
               styles.modalCard,
               {
                 opacity: modalOpacity,
-                transform: [
-                  { scale: modalScale },
-                  { translateY: modalTranslate },
-                ],
+                transform: [{ scale: modalScale }, { translateY: modalTranslate }],
               },
             ]}
           >
-            {/* Close button */}
             <TouchableOpacity style={styles.modalClose} onPress={closeBadge}>
               <Feather name="x" size={20} color="#7a5a58" />
             </TouchableOpacity>
 
-            {/* Badge image / icon */}
             <View style={styles.modalIconRing}>
               <View style={styles.modalIconInner}>
                 {selectedBadge?.image ? (
                   <Image
                     source={{ uri: selectedBadge.image }}
                     style={styles.modalBadgeImage}
+                    resizeMode="contain"
                   />
                 ) : (
                   <Feather name="award" size={52} color="#6b4b45" />
                 )}
               </View>
 
-              {/* Sparkle dots */}
               {[...Array(6)].map((_, i) => {
                 const angle = (i / 6) * 2 * Math.PI;
                 const r = 68;
@@ -298,26 +309,20 @@ export default function BadgeScreen() {
                     key={i}
                     style={[
                       styles.sparkleDot,
-                      {
-                        left: 70 + r * Math.cos(angle) - 4,
-                        top:  70 + r * Math.sin(angle) - 4,
-                      },
+                      { left: 70 + r * Math.cos(angle) - 4, top: 70 + r * Math.sin(angle) - 4 },
                     ]}
                   />
                 );
               })}
             </View>
 
-            {/* Earned label */}
             <View style={styles.earnedPill}>
               <Feather name="check-circle" size={11} color="#fff" style={{ marginRight: 4 }} />
               <Text style={styles.earnedPillText}>Badge Earned</Text>
             </View>
 
-            {/* Badge name */}
             <Text style={styles.modalBadgeName}>{selectedBadge?.name}</Text>
 
-            {/* Description */}
             {selectedBadge?.description ? (
               <Text style={styles.modalDescription}>{selectedBadge.description}</Text>
             ) : (
@@ -326,7 +331,6 @@ export default function BadgeScreen() {
               </Text>
             )}
 
-            {/* Claimed date */}
             {selectedBadge?.claimedAt && (
               <View style={styles.modalDateRow}>
                 <Feather name="calendar" size={12} color="#b0908c" />
@@ -339,13 +343,23 @@ export default function BadgeScreen() {
               </View>
             )}
 
-            {/* Divider */}
             <View style={styles.divider} />
 
-            {/* Share button */}
-            <TouchableOpacity style={styles.shareButton} onPress={handleShare} activeOpacity={0.82}>
-              <Feather name="share-2" size={17} color="#fff" style={{ marginRight: 8 }} />
-              <Text style={styles.shareButtonText}>Share This Badge</Text>
+            {/* Share button — captures share card as PNG */}
+            <TouchableOpacity
+              style={[styles.shareButton, sharing && { opacity: 0.7 }]}
+              onPress={handleShare}
+              activeOpacity={0.82}
+              disabled={sharing}
+            >
+              {sharing ? (
+                <ActivityIndicator size="small" color="#fff" style={{ marginRight: 8 }} />
+              ) : (
+                <Feather name="share-2" size={17} color="#fff" style={{ marginRight: 8 }} />
+              )}
+              <Text style={styles.shareButtonText}>
+                {sharing ? "Preparing..." : "Share This Badge"}
+              </Text>
             </TouchableOpacity>
           </Animated.View>
         </Animated.View>
@@ -359,6 +373,40 @@ const styles = StyleSheet.create({
   centered:    { flex: 1, justifyContent: "center", alignItems: "center", backgroundColor: "#f7cfc9" },
   loadingText: { marginTop: 12, fontSize: 14, color: "#7a5a58", fontWeight: "500" },
 
+  // ── Hidden share card (off-screen, captured as PNG) ──
+  offscreen: {
+    position: "absolute",
+    top: -2000,  // off-screen
+    left: 0,
+  },
+  shareCard: {
+    width: 400,
+    alignItems: "center",
+    paddingVertical: 40,
+    paddingHorizontal: 40,
+    backgroundColor: "transparent", // ✅ transparent background for PNG
+  },
+  shareCardImage: {
+    width: 200,
+    height: 200,
+    backgroundColor: "transparent",
+  },
+  shareCardName: {
+    fontSize: 26,
+    fontWeight: "800",
+    color: "#3a1f1d",
+    textAlign: "center",
+    marginTop: 16,
+    lineHeight: 32,
+  },
+  shareCardSub: {
+    fontSize: 14,
+    color: "#6b4b45",
+    marginTop: 8,
+    fontWeight: "600",
+    letterSpacing: 0.3,
+  },
+
   // ── Header ──
   header: {
     flexDirection: "row",
@@ -369,17 +417,11 @@ const styles = StyleSheet.create({
   },
   backButton:  { width: 40, height: 40, justifyContent: "center", alignItems: "flex-start" },
   headerTitle: { fontSize: 20, fontWeight: "700", color: "#4a2e2c" },
-  countBadge:  {
-    backgroundColor: "#6b4b45",
-    borderRadius: 20,
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-  },
-  countText: { color: "#fff", fontWeight: "700", fontSize: 13 },
+  countBadge:  { backgroundColor: "#6b4b45", borderRadius: 20, paddingHorizontal: 12, paddingVertical: 4 },
+  countText:   { color: "#fff", fontWeight: "700", fontSize: 13 },
 
   scrollContent: { paddingHorizontal: 20, paddingTop: 15 },
 
-  // ── Error ──
   errorBanner: {
     backgroundColor: "#fde8e6",
     borderRadius: 12,
@@ -392,13 +434,11 @@ const styles = StyleSheet.create({
   errorText: { fontSize: 13, color: "#c0392b", fontWeight: "600", textAlign: "center" },
   retryText: { fontSize: 12, color: "#c0392b", marginTop: 4 },
 
-  // ── Empty state ──
   emptyState:    { alignItems: "center", marginTop: 60, paddingHorizontal: 30 },
   emptyEmoji:    { fontSize: 56, marginBottom: 14 },
   emptyTitle:    { fontSize: 18, fontWeight: "700", color: "#4a2e2c", marginBottom: 6 },
   emptySubtitle: { fontSize: 13, color: "#7a5a58", textAlign: "center", lineHeight: 19 },
 
-  // ── Badge grid ──
   grid:           { flexDirection: "row", flexWrap: "wrap", justifyContent: "space-between" },
   badgeWrapper:   { width: CARD_SIZE, marginBottom: 16 },
   badgeTouchable: { flex: 1 },
@@ -415,18 +455,15 @@ const styles = StyleSheet.create({
     minHeight: 120,
   },
   iconCircle: {
-    width: 56,
-    height: 56,
-    borderRadius: 28,
-    backgroundColor: "#faf5f4",
+    width: 60,
+    height: 60,
     justifyContent: "center",
     alignItems: "center",
     marginBottom: 8,
-    borderWidth: 2,
-    borderColor: "#f0e0de",
     position: "relative",
+    backgroundColor: "transparent",
   },
-  badgeImage:   { width: 44, height: 44, borderRadius: 22, resizeMode: "cover" },
+  badgeImage:   { width: 56, height: 56, backgroundColor: "transparent" },
   checkOverlay: {
     position: "absolute",
     bottom: -4,
@@ -448,16 +485,13 @@ const styles = StyleSheet.create({
     textAlign: "center",
   },
 
-  // ── Modal ──
   modalOverlay: {
     flex: 1,
     backgroundColor: "rgba(40, 20, 18, 0.65)",
     justifyContent: "center",
     alignItems: "center",
   },
-  modalBackdrop: {
-    ...StyleSheet.absoluteFillObject,
-  },
+  modalBackdrop: { ...StyleSheet.absoluteFillObject },
   modalCard: {
     width: width - 48,
     backgroundColor: "#fff",
@@ -483,8 +517,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-
-  // Sparkle ring
   modalIconRing: {
     width: 140,
     height: 140,
@@ -494,25 +526,16 @@ const styles = StyleSheet.create({
     position: "relative",
   },
   modalIconInner: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: "#faf0ef",
+    width: 110,
+    height: 110,
     justifyContent: "center",
     alignItems: "center",
-    borderWidth: 3,
-    borderColor: "#f0d8d5",
-    shadowColor: "#6b4b45",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.15,
-    shadowRadius: 10,
-    elevation: 6,
+    backgroundColor: "transparent",
   },
   modalBadgeImage: {
-    width: 84,
-    height: 84,
-    borderRadius: 42,
-    resizeMode: "cover",
+    width: 110,
+    height: 110,
+    backgroundColor: "transparent",
   },
   sparkleDot: {
     position: "absolute",
@@ -522,8 +545,6 @@ const styles = StyleSheet.create({
     backgroundColor: "#e8b4ae",
     opacity: 0.7,
   },
-
-  // Earned pill
   earnedPill: {
     flexDirection: "row",
     alignItems: "center",
@@ -533,13 +554,7 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     marginBottom: 12,
   },
-  earnedPillText: {
-    color: "#fff",
-    fontSize: 11,
-    fontWeight: "700",
-    letterSpacing: 0.3,
-  },
-
+  earnedPillText: { color: "#fff", fontSize: 11, fontWeight: "700", letterSpacing: 0.3 },
   modalBadgeName: {
     fontSize: 20,
     fontWeight: "800",
@@ -564,26 +579,14 @@ const styles = StyleSheet.create({
     fontStyle: "italic",
     marginBottom: 10,
   },
-
-  modalDateRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginTop: 2,
-    marginBottom: 4,
-  },
-  modalDate: {
-    fontSize: 11,
-    color: "#b0908c",
-    fontWeight: "500",
-  },
-
+  modalDateRow: { flexDirection: "row", alignItems: "center", marginTop: 2, marginBottom: 4 },
+  modalDate:    { fontSize: 11, color: "#b0908c", fontWeight: "500" },
   divider: {
     width: "100%",
     height: 1,
     backgroundColor: "#f0e0de",
     marginVertical: 20,
   },
-
   shareButton: {
     flexDirection: "row",
     alignItems: "center",
@@ -599,10 +602,5 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     elevation: 6,
   },
-  shareButtonText: {
-    color: "#fff",
-    fontSize: 15,
-    fontWeight: "700",
-    letterSpacing: 0.2,
-  },
+  shareButtonText: { color: "#fff", fontSize: 15, fontWeight: "700", letterSpacing: 0.2 },
 });
