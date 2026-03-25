@@ -10,14 +10,14 @@ import {
 } from 'react-native';
 import { WebView } from 'react-native-webview';
 
-const AR_URL = 'https://ar-web-lemon.vercel.app/ar.html'; // ← your hosted ar.html
+const AR_URL = 'https://ar-web-lemon.vercel.app/ar.html';
 const AR_CONFIG = {
-  latitude: 14.1234,    // ← replace with your real GPS coords
-  longitude: 121.5678,
-  modelUrl: 'https://ar-web-lemon.vercel.app/question_mark.glb', // ← your hosted .glb
+  latitude: 14.81320530816006,
+  longitude: 121.03689928343634,
+  modelUrl: 'https://ar-web-lemon.vercel.app/question_mark.glb',
 };
 
-export default function ARScreen({ navigation }) {  // ← kept your original name
+export default function ARScreen({ navigation }) {
   const webviewRef = useRef(null);
 
   useEffect(() => {
@@ -54,6 +54,15 @@ export default function ARScreen({ navigation }) {  // ← kept your original na
     webviewRef.current?.injectJavaScript(script);
   };
 
+  const onMessage = (event) => {
+    try {
+      const data = JSON.parse(event.nativeEvent.data);
+      if (data.type === 'COLLECTED') {
+        console.log('Score:', data.score);
+      }
+    } catch (_) {}
+  };
+
   return (
     <View style={styles.container}>
       <WebView
@@ -61,6 +70,7 @@ export default function ARScreen({ navigation }) {  // ← kept your original na
         source={{ uri: AR_URL }}
         style={styles.webview}
         onLoad={onWebViewLoad}
+        onMessage={onMessage}          // ← this was the missing line
         mediaPlaybackRequiresUserAction={false}
         allowsInlineMediaPlayback={true}
         geolocationEnabled={true}
