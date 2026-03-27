@@ -1,37 +1,169 @@
-<!doctype html>
+<!DOCTYPE html>
 <html>
-    <head>
-        <meta charset="utf-8" />
-        <meta http-equiv="X-UA-Compatible" content="IE=edge" />
-        <script src="https://aframe.io/releases/1.0.4/aframe.min.js"></script>
-        <script src="https://unpkg.com/aframe-look-at-component@0.8.0/dist/aframe-look-at-component.min.js"></script>
-        <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar-nft.js"></script>
-        <script src="https://raw.githack.com/donmccurdy/aframe-extras/master/dist/aframe-extras.loaders.min.js"></script>
-    </head>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <style>
+      * { margin: 0; padding: 0; box-sizing: border-box; }
+      body { overflow: hidden; background: black; }
+      #loader {
+        position: absolute; inset: 0; z-index: 999;
+        background: rgba(0,0,0,0.85);
+        display: flex; flex-direction: column;
+        align-items: center; justify-content: center; gap: 12px;
+      }
+      #loader p { color: white; font-family: sans-serif; font-size: 16px; }
+      #hint {
+        position: absolute; bottom: 0; width: 100%;
+        padding: 20px; background: rgba(0,0,0,0.75);
+        color: white; font-family: sans-serif;
+        font-size: 15px; text-align: center; z-index: 10;
+      }
 
-    <body style="margin: 0; overflow: hidden;">
-        <a-scene
-            renderer="logarithmicDepthBuffer: true;"
-            embedded
-            loading-screen="enabled: false;"
-            arjs="sourceType: webcam; debugUIEnabled: false;"
-        >
-            <a-assets>
-                <a-asset-item
-                    id="animated-asset"
-                    src="assets/asset.glb"
-                ></a-asset-item>
-            </a-assets>
+      /* Collect feedback toast */
+      #collect-toast {
+        position: absolute;
+        top: 40%;
+        left: 50%;
+        transform: translateX(-50%);
+        background: rgba(0, 200, 100, 0.9);
+        color: white;
+        font-family: sans-serif;
+        font-size: 20px;
+        font-weight: bold;
+        padding: 14px 28px;
+        border-radius: 30px;
+        z-index: 100;
+        display: none;
+        pointer-events: none;
+      }
+    </style>
 
-                <a-entity
-                    look-at="[gps-camera]"
-                    animation-mixer="loop: repeat"
-                    gltf-model="#animated-asset"
-                    scale="0.15245626679760138 0.15245626679760138 0.15245626679760138"
-                    gps-entity-place="latitude: #############; longitude: #############;"
-                ></a-entity>
+    <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
+    <script src="https://raw.githack.com/AR-js-org/AR.js/3.4.7/three.js/build/ar-threex-location-only.js"></script>
+    <script src="https://raw.githack.com/AR-js-org/AR.js/3.4.7/aframe/build/aframe-ar.js"></script>
+  </head>
+  <body>
 
-            <a-camera gps-camera rotation-reader></a-camera>
-        </a-scene>
-    </body>
+    <div id="loader">
+      <p>Acquiring GPS signal...</p>
+    </div>
+
+    <div id="hint">
+      Walk outside and tap the 3D model to collect it!
+    </div>
+
+    <!-- Toast shown briefly after collecting -->
+    <div id="collect-toast">✅ Collected!</div>
+
+    <a-scene
+      vr-mode-ui="enabled: false"
+      arjs="sourceType: webcam; videoTexture: true; debugUIEnabled: false"
+      renderer="antialias: true; alpha: true"
+      loading-screen="enabled: false"
+    >
+      <a-assets>
+        <a-asset-item
+          id="question-mark"
+          src="https://ar-web-lemon.vercel.app/assets/asset.glb"
+        ></a-asset-item>
+      </a-assets>
+
+      <a-camera gps-new-camera="gpsMinDistance: 5"></a-camera>
+
+      <a-entity
+        id="ar-model"
+        gltf-model="#question-mark"
+        scale="2 2 2"
+        rotation="0 0 0"
+        gps-new-entity-place="latitude: 14.81320530816006; longitude:121.03689928343634"
+        class="clickable"
+      ></a-entity>
+    </a-scene>
+
+    <script>
+      // ─── Collect Function ────────────────────────────────────────────────────
+      function collectModel(entity) {
+        if (entity.dataset.collected === 'true') return; // prevent double-collect
+        entity.dataset.collected = 'true';
+
+        // 1. Grab current placement data to send back
+        const placement = entity.getAttribute('gps-new-entity-place');
+        const modelSrc  = entity.getAttribute('gltf-model');
+
+        const payload = {
+          type: 'AR_COLLECTED',
+          modelId: entity.id,
+          modelUrl: modelSrc,
+          latitude:  placement ? placement.latitude  : null,
+          longitude: placement ? placement.longitude : null,
+          collectedAt: new Date().toISOString(),
+        };
+
+        // 2. Post message back to React Native WebView
+        if (window.ReactNativeWebView) {
+          window.ReactNativeWebView.postMessage(JSON.stringify(payload));
+        } else {
+          // Fallback for testing in a regular browser
+          window.postMessage(JSON.stringify(payload), '*');
+          console.log('[AR_COLLECTED]', payload);
+        }
+
+        // 3. Show toast feedback
+        const toast = document.getElementById('collect-toast');
+        toast.style.display = 'block';
+        setTimeout(() => { toast.style.display = 'none'; }, 1800);
+
+        // 4. Animate model out, then remove it
+        entity.setAttribute('animation', {
+          property: 'scale',
+          to: '0 0 0',
+          dur: 500,
+          easing: 'easeInQuad',
+        });
+        setTimeout(() => entity.parentNode.removeChild(entity), 550);
+      }
+
+      // ─── Tap / Click listener on the model ──────────────────────────────────
+      document.querySelector('a-scene').addEventListener('loaded', () => {
+        const entity = document.getElementById('ar-model');
+
+        // A-Frame click (works via cursor/raycaster on desktop)
+        entity.addEventListener('click', () => collectModel(entity));
+
+        // Touch tap (works directly on mobile without needing a cursor entity)
+        entity.addEventListener('touchstart', (e) => {
+          e.stopPropagation();
+          collectModel(entity);
+        });
+      });
+
+      // ─── Loader: hide once GPS is ready ─────────────────────────────────────
+      document.querySelector('a-scene').addEventListener('loaded', () => {
+        navigator.geolocation.getCurrentPosition(() => {
+          document.getElementById('loader').style.display = 'none';
+        }, (err) => {
+          document.getElementById('loader').querySelector('p').textContent =
+            'GPS error: ' + err.message;
+        }, { enableHighAccuracy: true });
+      });
+
+      // ─── React Native config injection ──────────────────────────────────────
+      window.addEventListener('message', (e) => {
+        try {
+          const data = JSON.parse(e.data);
+          if (data.type === 'AR_CONFIG') {
+            const entity = document.getElementById('ar-model');
+            if (!entity) return;
+            entity.setAttribute('gps-new-entity-place',
+              `latitude: ${data.latitude}; longitude: ${data.longitude}`
+            );
+            if (data.modelUrl) {
+              entity.setAttribute('gltf-model', data.modelUrl);
+            }
+          }
+        } catch (_) {}
+      });
+    </script>
+  </body>
 </html>
