@@ -5,6 +5,7 @@ import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { ClerkProvider, useAuth } from '@clerk/clerk-expo';
 import { ActivityIndicator, View, StyleSheet } from 'react-native';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import 'react-native-reanimated';
 
@@ -14,6 +15,7 @@ import { BookmarkProvider } from './context/BookmarkContext';
 import { ArrivalProvider } from './context/ArrivalContext';
 import { tokenCache } from './utils/tokenCache';
 import { setupClerkInterceptor } from './api';
+import {ProfileImageProvider} from "./context/ProfileImageContext";
 
 // Screens
 import WelcomePage from "./Screens/WelcomePage";
@@ -35,9 +37,10 @@ import Mission from './Screens/Mission';
 import MissionsScreen from './Screens/MissionsScreen';
 import BadgeScreen from './Screens/BadgeScreen';
 import PreviousTripsScreen from './Screens/PreviousTripScreen';
-import ARSpotSelect from './Screens/ARspotSelect';           // ← NEW
-import MissionsSpotSelect from './Screens/MissionsSpotSelect'; // ← NEW
-import TrackSpotSelect from './Screens/TrackSpotSelect';       // ← NEW
+import ARSpotSelect from './Screens/ARspotSelect';
+import MissionsSpotSelect from './Screens/MissionsSpotSelect';
+import TrackSpotSelect from './Screens/TrackSpotSelect';
+import EditProfile from './Screens/EditProfile';
 
 const CLERK_PUBLISHABLE_KEY = 'pk_test_cHJpbWUtY2hpY2tlbi0yNS5jbGVyay5hY2NvdW50cy5kZXYk';
 
@@ -74,6 +77,7 @@ function AppNavigator() {
   }
 
   return (
+    <ProfileImageProvider>
     <AuthProvider>
       <ReviewProvider>
         <BookmarkProvider>
@@ -89,6 +93,7 @@ function AppNavigator() {
                     <Stack.Screen name="Bookmark" component={Bookmark} />
                     <Stack.Screen name="ar" component={ARScreen} />
                     <Stack.Screen name="Settings" component={Settings} />
+                    <Stack.Screen name="EditProfile" component={EditProfile} />
                     <Stack.Screen name="Reviews" component={Reviews} />
                     <Stack.Screen name="Lists" component={Lists} />
                     <Stack.Screen name="Mission" component={Mission} />
@@ -96,7 +101,6 @@ function AppNavigator() {
                     <Stack.Screen name="Track" component={Track} />
                     <Stack.Screen name="Badges" component={BadgeScreen} />
                     <Stack.Screen name="PreviousTrips" component={PreviousTripsScreen} />
-                    {/* ── Spot selector screens (one per feature) ── */}
                     <Stack.Screen name="ARSpotSelect" component={ARSpotSelect} />
                     <Stack.Screen name="MissionsSpotSelect" component={MissionsSpotSelect} />
                     <Stack.Screen name="TrackSpotSelect" component={TrackSpotSelect} />
@@ -124,17 +128,20 @@ function AppNavigator() {
         </BookmarkProvider>
       </ReviewProvider>
     </AuthProvider>
+    </ProfileImageProvider>
   );
 }
 
 export default function App() {
   return (
-    <ClerkProvider
-      publishableKey={CLERK_PUBLISHABLE_KEY}
-      tokenCache={tokenCache}
-    >
-      <AppNavigator />
-    </ClerkProvider>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <ClerkProvider
+        publishableKey={CLERK_PUBLISHABLE_KEY}
+        tokenCache={tokenCache}
+      >
+        <AppNavigator />
+      </ClerkProvider>
+    </GestureHandlerRootView>
   );
 }
 

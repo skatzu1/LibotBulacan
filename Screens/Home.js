@@ -22,6 +22,7 @@ import { useAuth } from "../context/AuthContext";
 import { useReviews } from "../context/ReviewContext";
 import { useUser } from "@clerk/clerk-expo";
 import { MaterialIcons } from "@expo/vector-icons";
+import {useProfileImage} from "../context/ProfileImageContext";
 
 import Bookmark from "./Bookmark";
 import Leaderboard from "./Leaderboard";
@@ -209,9 +210,16 @@ function HomeTab() {
   const navigation = useNavigation();
   const { user: authUser } = useAuth();
   const { user: clerkUser } = useUser();
+  const { profileImage, loading } = useProfileImage();
+
+  if (loading) return null;
 
   const profilePhoto =
-    clerkUser?.imageUrl || clerkUser?.profileImageUrl || authUser?.profilePhoto;
+    profileImage ??
+    clerkUser?.imageUrl ??
+    clerkUser?.profileImageUrl ??
+    authUser?.profilePhoto ??
+    null;
 
   return (
     <View style={styles.screen}>
@@ -219,14 +227,19 @@ function HomeTab() {
         <TouchableOpacity onPress={() => navigation.toggleDrawer()}>
           <Feather name="menu" size={28} color="#4a4a4a" />
         </TouchableOpacity>
+
         <Image
           source={require("../assets/logo.png")}
           style={styles.logo}
           resizeMode="contain"
         />
+
         <TouchableOpacity onPress={() => navigation.navigate("Profile")}>
           {profilePhoto ? (
-            <Image source={{ uri: profilePhoto }} style={styles.profileImage} />
+            <Image
+              source={{ uri: profilePhoto + "?t=" + Date.now() }}
+              style={styles.profileImage}
+            />
           ) : (
             <View style={styles.profileIcon}>
               <Feather name="user" size={20} color="#fff" />
@@ -234,6 +247,7 @@ function HomeTab() {
           )}
         </TouchableOpacity>
       </View>
+
       <HomeContent />
     </View>
   );
@@ -244,7 +258,7 @@ function HomeTab() {
 /* -------------------------------------------------------------------------- */
 function HomeContent() {
   const navigation = useNavigation();
-  const { getAverageRating, getReviewCount } = useReviews();
+  const { getAverageRating } = useReviews();
   const [spots, setSpots]           = useState([]);
   const [topSpots, setTopSpots]     = useState([]);
   const [loading, setLoading]       = useState(true);
@@ -252,8 +266,7 @@ function HomeContent() {
   const [refreshing, setRefreshing] = useState(false);
 
   const getSpotRating = (spot) => {
-    const reviewCount = getReviewCount(spot._id);
-    return reviewCount > 0 ? getAverageRating(spot._id) : 0;
+    return getAverageRating(spot._id) || 0;
   };
 
   const handleSpotPress = (spot) => {
@@ -264,15 +277,13 @@ function HomeContent() {
     spots.length > 0
       ? spots.slice(0, 14).map(
           ({ _id, image, name, description, location, rating, modelUrl, visitCount }, index) => {
-            const reviewCount   = getReviewCount(_id);
-            const displayRating = reviewCount > 0 ? getAverageRating(_id) : 0;
+            const displayRating = getAverageRating(_id) || 0;
             return {
               id: _id || String(index),
               image,
               title: name,
               location,
               rating: displayRating,
-              reviewCount,
               visitCount: visitCount ?? 0,
               spot: { _id, image, name, description, location, rating, modelUrl },
             };
@@ -392,11 +403,6 @@ function HomeContent() {
                     <MaterialIcons name="star" size={12} color="#FFD700" />
                     <Text style={styles.carouselRatingText}>
                       {String(item.rating)}
-                      {item.reviewCount > 0 ? (
-                        <Text style={styles.reviewCountText}>
-                          {" "}({item.reviewCount})
-                        </Text>
-                      ) : null}
                     </Text>
                   </View>
                 </View>
@@ -424,7 +430,6 @@ function HomeContent() {
       ) : topSpots.length > 0 ? (
         topSpots.map((spot) => {
           const displayRating = getSpotRating(spot);
-          const reviewCount   = getReviewCount(spot._id);
 
           return (
             <TouchableOpacity
@@ -449,12 +454,6 @@ function HomeContent() {
                   <MaterialIcons name="star" size={12} color="#FFD700" />
                   <Text style={styles.topPlaceRatingText}>
                     {String(displayRating)}
-                    {reviewCount > 0 ? (
-                      <Text style={styles.reviewCountInCard}>
-                        {" "}({reviewCount}{" "}
-                        {reviewCount === 1 ? "review" : "reviews"})
-                      </Text>
-                    ) : null}
                   </Text>
                 </View>
                 <View style={styles.visitCountRow}>
@@ -513,7 +512,7 @@ function LogoutScreen() {
         {
           text: "Cancel",
           style: "cancel",
-          onPress: () => navigation.navigate("HomeSide"), // ← go back on cancel
+          onPress: () => navigation.navigate("HomeSide"),
         },
         {
           text: "Log Out",
@@ -582,7 +581,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12,
   },
   carouselRatingText: { color: "#4a4a4a", fontSize: 12, fontWeight: "700", marginLeft: 4 },
-  reviewCountText:    { fontSize: 10, fontWeight: "400" },
   sectionHeader: {
     width: "90%", flexDirection: "row", justifyContent: "space-between",
     alignItems: "center", marginBottom: 15, alignSelf: "center",
@@ -603,7 +601,6 @@ const styles = StyleSheet.create({
   topPlaceLocation:          { color: "#ffffff", fontSize: 12, marginLeft: 5 },
   topPlaceRating:            { flexDirection: "row", alignItems: "center", marginBottom: 4 },
   topPlaceRatingText:        { color: "#fff", fontSize: 12, fontWeight: "600", marginLeft: 5 },
-  reviewCountInCard:         { fontSize: 10, fontWeight: "400", color: "#FFD700" },
   visitCountRow:             { flexDirection: "row", alignItems: "center" },
   visitCountText:            { fontSize: 11, color: "#5a4a4a", fontWeight: "500" },
   customTabBarContainer:     { position: "absolute", bottom: 30, left: 0, right: 0, alignItems: "center" },
