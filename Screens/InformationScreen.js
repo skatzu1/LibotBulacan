@@ -23,7 +23,6 @@ export default function InformationScreen({ route, navigation }) {
   const { isBookmarked, toggleBookmark } = useBookmark();
   const isFocused = useIsFocused();
 
-  // Kill the 3D viewer as soon as we navigate away so Viro doesn't bleed through
   useEffect(() => {
     if (!isFocused) setShow3D(false);
   }, [isFocused]);
@@ -62,12 +61,10 @@ export default function InformationScreen({ route, navigation }) {
       {/* Content */}
       <View style={styles.content}>
 
-        {/* Title */}
         <Text style={styles.title}>{spot.name}</Text>
 
         {/* Image / 3D view */}
         <View style={styles.imageContainer}>
-          {/* Only mount ModelViewer when show3D is true AND screen is focused */}
           {show3D && spot.modelUrl && isFocused ? (
             <ModelViewer url={spot.modelUrl} style={styles.image} />
           ) : (
@@ -115,19 +112,14 @@ export default function InformationScreen({ route, navigation }) {
             <>
               <View style={styles.infoRow}>
                 <Feather name="clock" size={15} color="#6b4b45" />
-                <Text style={styles.infoText}>
-                  {spot.visitingHours || "6am to 10pm"}
-                </Text>
+                <Text style={styles.infoText}>{spot.visitingHours || "6am to 10pm"}</Text>
               </View>
               <View style={styles.infoRow}>
                 <Feather name="tag" size={15} color="#6b4b45" />
-                <Text style={styles.infoText}>
-                  {spot.entranceFee || "Free"}
-                </Text>
+                <Text style={styles.infoText}>{spot.entranceFee || "Free"}</Text>
               </View>
             </>
           )}
-
           {activeTab === "History" && (
             <Text style={styles.descriptionText}>
               {spot.description || "Description coming soon..."}
@@ -137,7 +129,7 @@ export default function InformationScreen({ route, navigation }) {
 
       </View>
 
-      {/* Fixed bottom buttons */}
+      {/* Bottom buttons */}
       <View style={styles.bottomBar}>
         <View style={styles.buttonRow}>
           <TouchableOpacity
@@ -197,20 +189,14 @@ const styles = StyleSheet.create({
     gap: 16,
     backgroundColor: "#fff",
   },
-  errorText: {
-    fontSize: 16,
-    color: "#7a5a58",
-  },
+  errorText:      { fontSize: 16, color: "#7a5a58" },
   backButton: {
     backgroundColor: "#6b4b45",
     paddingHorizontal: 24,
     paddingVertical: 12,
     borderRadius: 12,
   },
-  backButtonText: {
-    color: "#fff",
-    fontWeight: "700",
-  },
+  backButtonText: { color: "#fff", fontWeight: "700" },
   header: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -218,129 +204,57 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   headerButton: {
-    width: 40,
-    height: 40,
-    justifyContent: "center",
-    alignItems: "center",
+    width: 40, height: 40,
+    justifyContent: "center", alignItems: "center",
   },
-  content: {
-    flex: 1,
-    paddingHorizontal: 20,
-  },
+  content: { flex: 1, paddingHorizontal: 20 },
   title: {
-    fontSize: 24,
-    fontWeight: "700",
-    textAlign: "center",
-    marginBottom: 16,
-    color: "#4a2e2c",
+    fontSize: 24, fontWeight: "700",
+    textAlign: "center", marginBottom: 16, color: "#4a2e2c",
   },
-  imageContainer: {
-    alignItems: "center",
-    marginBottom: 20,
-  },
+  imageContainer: { alignItems: "center", marginBottom: 20 },
   image: {
-    width: width * 0.9,
-    height: 230,
-    borderRadius: 20,
-    backgroundColor: "#e8d0ce",
+    width: width * 0.9, height: 230,
+    borderRadius: 20, backgroundColor: "#e8d0ce",
   },
   toggleButton: {
-    flexDirection: "row",
-    alignItems: "center",
+    flexDirection: "row", alignItems: "center",
     backgroundColor: "#6b4b45",
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 20,
-    marginTop: 10,
+    paddingVertical: 8, paddingHorizontal: 16,
+    borderRadius: 20, marginTop: 10,
   },
-  toggleButtonText: {
-    color: "#fff",
-    fontWeight: "600",
-    fontSize: 14,
-  },
+  toggleButtonText: { color: "#fff", fontWeight: "600", fontSize: 14 },
   tabsContainer: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    marginBottom: 14,
-    gap: 8,
+    flexDirection: "row", justifyContent: "space-between",
+    marginBottom: 14, gap: 8,
   },
   tab: {
-    flex: 1,
-    paddingVertical: 10,
-    borderRadius: 20,
-    backgroundColor: "#faf5f4",
-    alignItems: "center",
-    borderWidth: 1,
-    borderColor: "#f0e0de",
+    flex: 1, paddingVertical: 10, borderRadius: 20,
+    backgroundColor: "#faf5f4", alignItems: "center",
+    borderWidth: 1, borderColor: "#f0e0de",
   },
-  activeTab: {
-    backgroundColor: "#6b4b45",
-    borderColor: "#6b4b45",
-  },
-  tabText: {
-    fontSize: 12,
-    fontWeight: "600",
-    color: "#7a5a58",
-  },
-  activeTabText: {
-    color: "#fff",
-  },
+  activeTab:     { backgroundColor: "#6b4b45", borderColor: "#6b4b45" },
+  tabText:       { fontSize: 12, fontWeight: "600", color: "#7a5a58" },
+  activeTabText: { color: "#fff" },
   infoCard: {
-    backgroundColor: "#faf5f4",
-    borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: "#f0e0de",
+    backgroundColor: "#faf5f4", borderRadius: 16,
+    padding: 16, borderWidth: 1, borderColor: "#f0e0de",
   },
-  infoRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    marginBottom: 8,
-  },
-  infoText: {
-    fontSize: 15,
-    fontWeight: "600",
-    color: "#4a2e2c",
-  },
-  descriptionText: {
-    fontSize: 14,
-    color: "#7a5a58",
-    lineHeight: 21,
-  },
+  infoRow:         { flexDirection: "row", alignItems: "center", gap: 8, marginBottom: 8 },
+  infoText:        { fontSize: 15, fontWeight: "600", color: "#4a2e2c" },
+  descriptionText: { fontSize: 14, color: "#7a5a58", lineHeight: 21 },
   bottomBar: {
-    paddingHorizontal: 20,
-    paddingTop: 10,
-    paddingBottom: 30,
-    backgroundColor: "#fff",
-    borderTopWidth: 1,
-    borderTopColor: "#f0e0de",
+    paddingHorizontal: 20, paddingTop: 10, paddingBottom: 30,
+    backgroundColor: "#fff", borderTopWidth: 1, borderTopColor: "#f0e0de",
   },
-  buttonRow: {
-    flexDirection: "row",
-    marginBottom: 10,
-    gap: 8,
-  },
+  buttonRow:    { flexDirection: "row", marginBottom: 10, gap: 8 },
   smallButton: {
-    flex: 1,
-    backgroundColor: "#6b4b45",
-    paddingVertical: 13,
-    borderRadius: 12,
-    alignItems: "center",
-    justifyContent: "center",
-    flexDirection: "row",
+    flex: 1, backgroundColor: "#6b4b45", paddingVertical: 13,
+    borderRadius: 12, alignItems: "center", justifyContent: "center", flexDirection: "row",
   },
   missionButton: {
-    backgroundColor: "#4a2e2c",
-    paddingVertical: 15,
-    borderRadius: 12,
-    alignItems: "center",
-    flexDirection: "row",
-    justifyContent: "center",
+    backgroundColor: "#4a2e2c", paddingVertical: 15, borderRadius: 12,
+    alignItems: "center", flexDirection: "row", justifyContent: "center",
   },
-  buttonText: {
-    color: "#fff",
-    fontWeight: "700",
-    fontSize: 14,
-  },
+  buttonText: { color: "#fff", fontWeight: "700", fontSize: 14 },
 });

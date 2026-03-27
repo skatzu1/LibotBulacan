@@ -13,6 +13,7 @@ import { FontAwesome5 } from "@expo/vector-icons";
 import { useBookmark } from "../context/BookmarkContext";
 import { useUser } from "@clerk/clerk-expo";
 import { useAuth } from "../context/AuthContext";
+import { useProfileImage } from "../context/ProfileImageContext";
 
 export default function Bookmark() {
   const navigation    = useNavigation();
@@ -20,8 +21,9 @@ export default function Bookmark() {
   const { user: clerkUser } = useUser();
   const { user: authUser }  = useAuth();
 
-  const profilePhoto =
-    clerkUser?.imageUrl || clerkUser?.profileImageUrl || authUser?.profilePhoto;
+  const { profileImage } = useProfileImage();
+    const profilePhoto = profileImage;
+  
 
   const BookmarkCard = ({ item }) => (
     <TouchableOpacity

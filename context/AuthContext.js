@@ -6,12 +6,11 @@ import { authAPI } from '../api';
 const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
-  const [user, setUser] = useState(null);         // Logged-in user
-  const [loading, setLoading] = useState(true);   // Loading state for startup
-  const [error, setError] = useState(null);       // Any login/register errors
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
   const clerk = useClerk();
 
-  // Check login status when app starts
   useEffect(() => {
     checkLoginStatus();
   }, []);
@@ -22,9 +21,9 @@ export const AuthProvider = ({ children }) => {
       if (token) {
         const response = await authAPI.verifyToken();
         if (response.success && response.user) {
-          setUser(response.user);  // User is logged in
+          setUser(response.user);
         } else {
-          await AsyncStorage.removeItem('userToken'); // Token invalid, remove it
+          await AsyncStorage.removeItem('userToken');
         }
       }
     } catch (err) {
@@ -35,22 +34,18 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // LOGIN function
+  // LOGIN
   const login = async (email, password) => {
     try {
       setError(null);
       const response = await authAPI.login(email, password);
-
       if (response.success && response.token) {
-        await AsyncStorage.setItem('userToken', response.token); // Store JWT
-        setUser(response.user); // Store user in context
+        await AsyncStorage.setItem('userToken', response.token);
+        setUser(response.user);
         return { success: true };
       }
-
-      // If backend returns error
       setError(response.message || 'Invalid credentials');
       return { success: false, message: response.message || 'Invalid credentials' };
-
     } catch (err) {
       const errorMessage = err?.response?.data?.message || err.message || 'Login failed';
       setError(errorMessage);
@@ -58,24 +53,20 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // REGISTER function (optional, keeps JWT flow consistent)
+  // REGISTER
   const register = async (email, password, name) => {
     try {
       setError(null);
-      // Support backend expecting separate name fields
       const [firstName, ...lastNameParts] = (name || '').trim().split(' ');
       const lastName = lastNameParts.join(' ');
       const response = await authAPI.register({ email, password, firstName, lastName });
-
       if (response.success && response.token) {
         await AsyncStorage.setItem('userToken', response.token);
         setUser(response.user);
         return { success: true };
       }
-
       setError(response.message || 'Registration failed');
       return { success: false, message: response.message || 'Registration failed' };
-
     } catch (err) {
       const errorMessage = err?.response?.data?.message || err.message || 'Registration failed';
       setError(errorMessage);
@@ -83,10 +74,33 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // LOGOUT function
+  // UPDATE PROFILE
+  // Expects: { displayName, username, email, phone, bio, photoURL, currentPassword?, newPassword? }
+  const updateProfile = async (profileData) => {
+    try {
+      setError(null);
+      const response = await authAPI.updateProfile(profileData);
+
+      if (response.success && response.user) {
+        // Merge updated fields into the current user state
+        setUser((prev) => ({ ...prev, ...response.user }));
+        return { success: true };
+      }
+
+      const message = response.message || 'Failed to update profile';
+      setError(message);
+      return { success: false, message };
+    } catch (err) {
+      const errorMessage = err?.response?.data?.message || err.message || 'Failed to update profile';
+      setError(errorMessage);
+      // Re-throw so EditProfile can catch it and show an Alert
+      throw new Error(errorMessage);
+    }
+  };
+
+  // LOGOUT
   const logout = async () => {
     try {
-      // If Clerk is available, sign out the Clerk session as well
       try {
         if (clerk && typeof clerk.signOut === 'function') {
           await clerk.signOut();
@@ -102,13 +116,14 @@ export const AuthProvider = ({ children }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, register, logout, loading, error }}>
+    <AuthContext.Provider
+      value={{ user, login, register, logout, updateProfile, loading, error }}
+    >
       {children}
     </AuthContext.Provider>
   );
 };
 
-// Custom hook to use AuthContext
 export const useAuth = () => {
   const context = useContext(AuthContext);
   if (!context) {
