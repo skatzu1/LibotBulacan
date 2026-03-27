@@ -12,8 +12,8 @@ import { WebView } from 'react-native-webview';
 
 const AR_URL = 'https://ar-web-lemon.vercel.app/index.html';
 const AR_CONFIG = {
-  latitude: 14.81320530816006,
-  longitude: 121.03689928343634,
+  latitude: 14.842130648363545,
+  longitude: 121.0456681417146,
   modelUrl: 'https://ar-web-lemon.vercel.app/assets/asset.glb',
 };
 
