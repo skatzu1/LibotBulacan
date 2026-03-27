@@ -64,13 +64,7 @@ export default function Lists() {
 
       if (spots.length > 0) {
         setDestinations(spots.map((spot) => ({
-          _id:             spot._id,
-          name:            spot.name,
-          image:           spot.image,
-          description:     spot.description,
-          coordinates:     spot.coordinates,
-          category:        spot.category,
-          location:        spot.location,
+          ...spot, // ✅ spreads ALL fields — modelUrl, Badge, categories, coordinates, etc.
           visitingHours:   spot.visitingHours   || "6am to 10pm",
           entranceFee:     spot.entranceFee     || "Free",
           history:         spot.history         || "Historical information coming soon...",
@@ -120,6 +114,16 @@ export default function Lists() {
               <Text style={styles.locationText}>{item.location}</Text>
             </View>
           )}
+          {/* Show category tags if the spot has multiple categories */}
+          {Array.isArray(item.categories) && item.categories.length > 1 && (
+            <View style={styles.tagsRow}>
+              {item.categories.map((cat) => (
+                <View key={cat} style={styles.tag}>
+                  <Text style={styles.tagText}>{cat}</Text>
+                </View>
+              ))}
+            </View>
+          )}
         </View>
       </TouchableOpacity>
     );
@@ -152,7 +156,6 @@ export default function Lists() {
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
-
         {/* Info bar */}
         <View style={styles.infoContainer}>
           <Text style={styles.infoText}>
@@ -308,6 +311,23 @@ const styles = StyleSheet.create({
   locationText: {
     fontSize: 13,
     color: "#7a5a58",
+  },
+  tagsRow: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 4,
+    marginTop: 6,
+  },
+  tag: {
+    backgroundColor: "#f0e0de",
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 10,
+  },
+  tagText: {
+    fontSize: 10,
+    color: "#8b4440",
+    fontWeight: "600",
   },
 
   // ── Empty state ──
