@@ -11,20 +11,11 @@ import {
 } from 'react-native';
 import { WebView } from 'react-native-webview';
 
-<<<<<<< HEAD
 // ─── Config ──────────────────────────────────────────────────────────────────
 const AR_URL  = 'https://ar-web-lemon.vercel.app/index.html';
-const API_URL = 'https://your-api.com/ar-locations';
-=======
-const AR_URL = 'https://ar-web-lemon.vercel.app/index.html';
-const AR_CONFIG = {
-  latitude: 14.842130648363545,
-  longitude: 121.0456681417146,
-  modelUrl: 'https://ar-web-lemon.vercel.app/assets/asset.glb',
-};
->>>>>>> 7dd6b22c8e3bb0eed0e406f8a29804f150ff0311
+const API_URL = 'https://your-api.com/ar-locations'; // 🔁 Replace with your real API URL
 
-// ──────────────────────
+// ─── Helper: map raw API landmark → normalized AR location ───────────────────
 //
 //  API shape per landmark:
 //  {
@@ -38,11 +29,19 @@ const AR_CONFIG = {
 //    Badge:            "https://...",
 //    visitCount:       0,
 //  }
+//
+//  Rules:
+//   • Use modelCoordinates for the 3D model's spawn position
+//   • If modelCoordinates is missing or null → return null (will be filtered out)
+//   • modelUrl is shared across all landmarks (same GLB model)
+//
 function mapLandmarkToARLocation(item) {
   const mc = item.modelCoordinates;
 
+  // Skip landmark if modelCoordinates is absent or incomplete
   if (!mc || mc.lat == null || mc.lng == null) return null;
 
+  // Skip landmark if modelUrl is missing
   if (!item.modelUrl) return null;
 
   return {
@@ -51,6 +50,7 @@ function mapLandmarkToARLocation(item) {
     modelUrl:    item.modelUrl,
     latitude:    mc.lat,   // ← model spawns HERE, not at landmark coordinates
     longitude:   mc.lng,
+    // Keep landmark coords for reference (not used by AR scene)
     landmarkLat: item.coordinates?.lat ?? null,
     landmarkLng: item.coordinates?.lng ?? null,
   };
