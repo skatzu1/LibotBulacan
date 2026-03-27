@@ -71,7 +71,13 @@ const Settings = ({ navigation }) => {
         {/* Account section */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Account</Text>
-          <MenuItem icon="user"  title="Edit profile"   onPress={() => console.log("Edit profile")} />
+          {/* ← navigates to EditProfile */}
+          <MenuItem
+            icon="user"
+            title="Edit profile"
+            onPress={() => navigation.navigate("EditProfile")}
+
+          />
           <MenuItem icon="shield" title="Security"      onPress={() => console.log("Security")} />
           <MenuItem icon="bell"   title="Notifications" onPress={() => console.log("Notifications")} />
           <MenuItem icon="lock"   title="Privacy"       onPress={() => console.log("Privacy")} />
@@ -80,16 +86,16 @@ const Settings = ({ navigation }) => {
         {/* Support & About section */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Support & About</Text>
-          <MenuItem icon="help-circle" title="Help & Support"    onPress={() => console.log("Help & Support")} />
-          <MenuItem icon="info"        title="About us"          onPress={() => console.log("About us")} />
+          <MenuItem icon="help-circle" title="Help & Support"     onPress={() => console.log("Help & Support")} />
+          <MenuItem icon="info"        title="About us"           onPress={() => console.log("About us")} />
           <MenuItem icon="file-text"   title="Terms and Policies" onPress={() => console.log("Terms and Policies")} />
         </View>
 
         {/* Actions section */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Actions</Text>
-          <MenuItem icon="flag"     title="Report a problem" onPress={() => console.log("Report a problem")} />
-          <MenuItem icon="user-plus" title="Add account"     onPress={() => console.log("Add account")} />
+          <MenuItem icon="flag"      title="Report a problem" onPress={() => console.log("Report a problem")} />
+          <MenuItem icon="user-plus" title="Add account"      onPress={() => console.log("Add account")} />
 
           <TouchableOpacity
             style={styles.menuItem}

@@ -3,6 +3,8 @@ import { useNavigation } from "@react-navigation/native";
 import { Feather } from "@expo/vector-icons";
 import { useUser } from "@clerk/clerk-expo";
 import { useAuth } from "../context/AuthContext";
+import { useProfileImage } from "../context/ProfileImageContext";
+
 
 const { width } = Dimensions.get("window");
 
@@ -11,8 +13,8 @@ export default function Categories() {
   const { user: clerkUser } = useUser();
   const { user: authUser }  = useAuth();
 
-  const profilePhoto =
-    clerkUser?.imageUrl || clerkUser?.profileImageUrl || authUser?.profilePhoto;
+  const { profileImage } = useProfileImage();
+  const profilePhoto = profileImage;
 
   const categories = [
     { _id: 1, name: "Religious",  backendCategory: "Religious",  image: "https://res.cloudinary.com/dcls9ayhn/image/upload/v1770858981/images_uxnf6s.jpg",      icon: "users"  },
