@@ -14,7 +14,7 @@ import { Feather } from "@expo/vector-icons";
 
 const STATUS_BAR_HEIGHT = Platform.OS === "android" ? StatusBar.currentHeight ?? 24 : 50;
 
-function ARSpotSelect({ navigation }) {
+function MissionsSpotSelect({ navigation }) {
   const [spots, setSpots] = useState([]);
   const [loading, setLoading] = useState(true);
 
@@ -35,19 +35,19 @@ function ARSpotSelect({ navigation }) {
           <Feather name="chevron-left" size={26} color="#3a2a28" />
         </TouchableOpacity>
         <View>
-          <Text style={styles.headerTitle}>AR Experience</Text>
-          <Text style={styles.headerSub}>Choose a spot to view in AR</Text>
+          <Text style={styles.headerTitle}>Missions</Text>
+          <Text style={styles.headerSub}>Choose a spot to start missions</Text>
         </View>
       </View>
 
       <View style={styles.badge}>
-        <Feather name="camera" size={14} color="#fff" />
-        <Text style={styles.badgeText}>Augmented Reality</Text>
+        <Feather name="flag" size={14} color="#fff" />
+        <Text style={styles.badgeText}>Daily Missions</Text>
       </View>
 
       {loading ? (
         <View style={styles.centered}>
-          <ActivityIndicator size="large" color="#8b4440" />
+          <ActivityIndicator size="large" color="#6b4b45" />
           <Text style={styles.loadingText}>Loading spots...</Text>
         </View>
       ) : (
@@ -59,7 +59,7 @@ function ARSpotSelect({ navigation }) {
           renderItem={({ item }) => (
             <TouchableOpacity
               style={styles.card}
-              onPress={() => navigation.navigate("ar", { spot: item })}
+              onPress={() => navigation.navigate("Missions", { spot: item })}
               activeOpacity={0.85}
             >
               <Image
@@ -77,7 +77,7 @@ function ARSpotSelect({ navigation }) {
                 </View>
               </View>
               <View style={styles.actionBtn}>
-                <Feather name="camera" size={18} color="#fff" />
+                <Feather name="flag" size={18} color="#fff" />
               </View>
             </TouchableOpacity>
           )}
@@ -87,7 +87,7 @@ function ARSpotSelect({ navigation }) {
   );
 }
 
-export default ARSpotSelect;
+export default MissionsSpotSelect;
 
 const styles = StyleSheet.create({
   screen:      { flex: 1, backgroundColor: "#f7cfc9", paddingTop: STATUS_BAR_HEIGHT },
@@ -95,7 +95,7 @@ const styles = StyleSheet.create({
   backBtn:     { padding: 4 },
   headerTitle: { fontSize: 22, fontWeight: "700", color: "#3a2a28" },
   headerSub:   { fontSize: 13, color: "#8b5550", marginTop: 2 },
-  badge:       { flexDirection: "row", alignItems: "center", alignSelf: "flex-start", marginHorizontal: 16, marginBottom: 16, paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20, gap: 6, backgroundColor: "#8b4440" },
+  badge:       { flexDirection: "row", alignItems: "center", alignSelf: "flex-start", marginHorizontal: 16, marginBottom: 16, paddingHorizontal: 14, paddingVertical: 6, borderRadius: 20, gap: 6, backgroundColor: "#6b4b45" },
   badgeText:   { color: "#fff", fontSize: 13, fontWeight: "600" },
   centered:    { flex: 1, justifyContent: "center", alignItems: "center" },
   loadingText: { marginTop: 12, fontSize: 14, color: "#888" },
@@ -106,5 +106,5 @@ const styles = StyleSheet.create({
   cardName:    { fontSize: 15, fontWeight: "700", color: "#3a2a28", marginBottom: 5 },
   locationRow: { flexDirection: "row", alignItems: "center", gap: 4 },
   locationText:{ fontSize: 12, color: "#8b5550" },
-  actionBtn:   { width: 44, height: 44, borderRadius: 22, marginRight: 12, backgroundColor: "#8b4440", justifyContent: "center", alignItems: "center" },
+  actionBtn:   { width: 44, height: 44, borderRadius: 22, marginRight: 12, backgroundColor: "#6b4b45", justifyContent: "center", alignItems: "center" },
 });
