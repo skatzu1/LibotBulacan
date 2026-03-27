@@ -1,108 +1,25 @@
-import React, { useEffect, useRef } from 'react';
-import {
-  View,
-  Text,
-  TouchableOpacity,
-  StyleSheet,
-  Platform,
-  PermissionsAndroid,
-  Alert,
-} from 'react-native';
+import React from 'react';
+import { View, StyleSheet } from 'react-native';
 import { WebView } from 'react-native-webview';
 
-const AR_URL = 'https://ar-web-lemon.vercel.app/ar.html';
-const AR_CONFIG = {
-  latitude: 14.81320530816006,
-  longitude: 121.03689928343634,
-  modelUrl: 'https://ar-web-lemon.vercel.app/question_mark.glb',
-};
-
-export default function ARScreen({ navigation }) {
-  const webviewRef = useRef(null);
-
-  useEffect(() => {
-    requestPermissions();
-  }, []);
-
-  const requestPermissions = async () => {
-    if (Platform.OS === 'android') {
-      const granted = await PermissionsAndroid.requestMultiple([
-        PermissionsAndroid.PERMISSIONS.CAMERA,
-        PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
-      ]);
-      const allGranted = Object.values(granted).every(
-        (v) => v === PermissionsAndroid.RESULTS.GRANTED
-      );
-      if (!allGranted) {
-        Alert.alert('Permissions required', 'Camera and location are needed for AR.');
-      }
-    }
-  };
-
-  const onWebViewLoad = () => {
-    const script = `
-      window.dispatchEvent(new MessageEvent('message', {
-        data: JSON.stringify({
-          type: 'AR_CONFIG',
-          latitude: ${AR_CONFIG.latitude},
-          longitude: ${AR_CONFIG.longitude},
-          modelUrl: '${AR_CONFIG.modelUrl}'
-        })
-      }));
-      true;
-    `;
-    webviewRef.current?.injectJavaScript(script);
-  };
-
-  const onMessage = (event) => {
-    try {
-      const data = JSON.parse(event.nativeEvent.data);
-      if (data.type === 'COLLECTED') {
-        console.log('Score:', data.score);
-      }
-    } catch (_) {}
-  };
-
+export default function ARScreen() {
   return (
     <View style={styles.container}>
       <WebView
-        ref={webviewRef}
-        source={{ uri: AR_URL }}
-        style={styles.webview}
-        onLoad={onWebViewLoad}
-        onMessage={onMessage}          // ← this was the missing line
+        source={{ uri: 'https://ar-web-lemon.vercel.app/index.html' }}
+        style={{ flex: 1 }}
+        javaScriptEnabled
+        domStorageEnabled
+        geolocationEnabled
         mediaPlaybackRequiresUserAction={false}
-        allowsInlineMediaPlayback={true}
-        geolocationEnabled={true}
-        originWhitelist={['*']}
-        allowsProtectedMedia={true}
-        backgroundColor="black"
+        allowsInlineMediaPlayback
       />
-      {navigation && (
-        <TouchableOpacity
-          style={styles.backButton}
-          onPress={() => navigation.goBack()}
-        >
-          <Text style={styles.backButtonText}>←</Text>
-        </TouchableOpacity>
-      )}
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: 'black' },
-  webview: { flex: 1 },
-  backButton: {
-    position: 'absolute',
-    top: 50,
-    left: 20,
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: 'rgba(0,0,0,0.6)',
-    justifyContent: 'center',
-    alignItems: 'center',
+  container: {
+    flex: 1,
   },
-  backButtonText: { color: 'white', fontSize: 28, fontWeight: 'bold' },
 });
