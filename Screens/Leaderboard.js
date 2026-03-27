@@ -13,13 +13,15 @@ import { useNavigation } from "@react-navigation/native";
 import { Feather } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useUser, useAuth } from "@clerk/clerk-expo";
+import { useProfileImage } from "../context/ProfileImageContext";
 
 const BASE_URL = "https://libotbackend.onrender.com";
 
 export default function Leaderboard() {
-  const navigation              = useNavigation();
+  const navigation                    = useNavigation();
   const { user: clerkUser, isLoaded } = useUser();
-  const { getToken }            = useAuth();
+  const { getToken }                  = useAuth();
+  const { profileImage }              = useProfileImage();
 
   const [allUsers, setAllUsers]     = useState([]);
   const [loading, setLoading]       = useState(true);
@@ -72,7 +74,8 @@ export default function Leaderboard() {
         if (idx >= 0) {
           serverUsers[idx] = {
             ...serverUsers[idx],
-            avatar: clerkUser.imageUrl || clerkUser.profileImageUrl || serverUsers[idx].avatar,
+            // ✅ profileImage from context is the source of truth (Cloudinary URL)
+            avatar: profileImage || clerkUser.imageUrl || clerkUser.profileImageUrl || serverUsers[idx].avatar,
             isMe: true,
           };
           await AsyncStorage.setItem("userPoints", String(serverUsers[idx].points)).catch(() => {});
@@ -95,6 +98,16 @@ export default function Leaderboard() {
     if (!isLoaded) return;
     buildLeaderboard();
   }, [isLoaded]);
+
+  // ✅ Re-run whenever profileImage changes (e.g. after EditProfile saves)
+  useEffect(() => {
+    if (!isLoaded) return;
+    setAllUsers((prev) =>
+      prev.map((u) =>
+        u.isMe ? { ...u, avatar: profileImage || u.avatar } : u
+      )
+    );
+  }, [profileImage]);
 
   useEffect(() => {
     const unsubscribe = navigation.addListener("focus", () => {
@@ -176,10 +189,10 @@ export default function Leaderboard() {
   }
 
   /* ── Main render ── */
-  const topThree       = allUsers.slice(0, 3);
-  const podiumOrder    = [topThree[1], topThree[0], topThree[2]].filter(Boolean);
+  const topThree        = allUsers.slice(0, 3);
+  const podiumOrder     = [topThree[1], topThree[0], topThree[2]].filter(Boolean);
   const podiumPositions = [2, 1, 3];
-  const otherUsers     = allUsers.slice(3);
+  const otherUsers      = allUsers.slice(3);
 
   return (
     <View style={styles.container}>

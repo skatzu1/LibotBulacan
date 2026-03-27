@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
   TextInput, Alert, ActivityIndicator, Image,
@@ -58,7 +58,7 @@ async function uploadImageToCloudinary(localUri, token) {
 export default function EditProfile({ navigation }) {
   const { user: clerkUser, isLoaded } = useUser();
   const { getToken } = useAuth();
- const { profileImage, setProfileImage } = useProfileImage();
+  const { profileImage, setProfileImage } = useProfileImage();
 
   const [firstName, setFirstName] = useState("");
   const [lastName, setLastName] = useState("");
@@ -73,21 +73,38 @@ export default function EditProfile({ navigation }) {
   const [saving, setSaving] = useState(false);
   const [pickingImage, setPickingImage] = useState(false);
 
+  // ── Track original values to detect changes ──
+  const [originalFirstName, setOriginalFirstName] = useState("");
+  const [originalLastName, setOriginalLastName] = useState("");
+
   const hasPassword = clerkUser?.passwordEnabled ?? false;
   const isGoogleUser = !hasPassword;
 
   useEffect(() => {
     if (isLoaded && clerkUser) {
-      setFirstName(clerkUser.firstName || "");
-      setLastName(clerkUser.lastName || "");
+      const fn = clerkUser.firstName || "";
+      const ln = clerkUser.lastName  || "";
+      setFirstName(fn);
+      setLastName(ln);
+      setOriginalFirstName(fn);
+      setOriginalLastName(ln);
       setAvatar(
-  profileImage ||
-  clerkUser.imageUrl ||
-  clerkUser.profileImageUrl ||
-  null
-);
+        profileImage ||
+        clerkUser.imageUrl ||
+        clerkUser.profileImageUrl ||
+        null
+      );
     }
   }, [isLoaded, clerkUser]);
+
+  // ── Determine if anything has changed ──
+  const hasChanges = useMemo(() => {
+    const nameChanged    = firstName.trim() !== originalFirstName.trim() ||
+                           lastName.trim()  !== originalLastName.trim();
+    const avatarChanged  = !!newLocalAvatar;
+    const passwordFilled = !!(pwNew || pwConfirm || pwCurrent);
+    return nameChanged || avatarChanged || passwordFilled;
+  }, [firstName, lastName, originalFirstName, originalLastName, newLocalAvatar, pwNew, pwConfirm, pwCurrent]);
 
   const handlePickAvatar = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
@@ -148,7 +165,7 @@ export default function EditProfile({ navigation }) {
       // 4. Save everything to DB (Cloudinary URL, not Clerk URL)
       const body = {
         firstName: firstName.trim(),
-        lastName: lastName.trim(),
+        lastName:  lastName.trim(),
         ...(finalImageUrl ? { profileImage: finalImageUrl } : {}),
       };
 
@@ -196,7 +213,7 @@ export default function EditProfile({ navigation }) {
 
   const fullName = `${firstName} ${lastName}`.trim() || "User";
   const initials = fullName.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase();
-  const email = clerkUser?.primaryEmailAddress?.emailAddress || "";
+  const email    = clerkUser?.primaryEmailAddress?.emailAddress || "";
 
   if (!isLoaded) {
     return (
@@ -205,6 +222,9 @@ export default function EditProfile({ navigation }) {
       </View>
     );
   }
+
+  // ── Save button is disabled when saving OR no changes made ──
+  const saveDisabled = saving || !hasChanges;
 
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
@@ -215,10 +235,14 @@ export default function EditProfile({ navigation }) {
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Edit Profile</Text>
           <TouchableOpacity
-            style={[styles.saveButton, saving && styles.saveButtonDisabled]}
-            onPress={handleSave} disabled={saving}
+            style={[styles.saveButton, saveDisabled && styles.saveButtonDisabled]}
+            onPress={handleSave}
+            disabled={saveDisabled}
           >
-            {saving ? <ActivityIndicator color="#fff" size="small" /> : <Text style={styles.saveButtonText}>Save</Text>}
+            {saving
+              ? <ActivityIndicator color="#fff" size="small" />
+              : <Text style={[styles.saveButtonText, saveDisabled && styles.saveButtonTextDisabled]}>Save</Text>
+            }
           </TouchableOpacity>
         </View>
 
@@ -234,7 +258,10 @@ export default function EditProfile({ navigation }) {
                   </View>
                 )}
                 <View style={styles.avatarBadge}>
-                  {pickingImage ? <ActivityIndicator size="small" color="#fff" /> : <Feather name="camera" size={14} color="#fff" />}
+                  {pickingImage
+                    ? <ActivityIndicator size="small" color="#fff" />
+                    : <Feather name="camera" size={14} color="#fff" />
+                  }
                 </View>
               </View>
             </TouchableOpacity>
@@ -252,7 +279,7 @@ export default function EditProfile({ navigation }) {
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Personal Info</Text>
             <Field label="First Name" icon="user" value={firstName} onChangeText={setFirstName} placeholder="First name" />
-            <Field label="Last Name" icon="user" value={lastName} onChangeText={setLastName} placeholder="Last name" />
+            <Field label="Last Name"  icon="user" value={lastName}  onChangeText={setLastName}  placeholder="Last name"  />
             <Field label="Email (read-only)" icon="mail" value={email} placeholder="—" editable={false} />
           </View>
 
@@ -264,15 +291,15 @@ export default function EditProfile({ navigation }) {
                   <Feather name="info" size={15} color="#6b4b45" style={{ marginRight: 8, marginTop: 1 }} />
                   <Text style={styles.infoBannerText}>You registered with Google. Set a password to also log in with your email and password.</Text>
                 </View>
-                <Field label="New Password" icon="lock" value={pwNew} onChangeText={setPwNew} placeholder="At least 8 characters" showToggle toggleVisible={showNew} onToggle={() => setShowNew(!showNew)} />
-                <Field label="Confirm Password" icon="check-circle" value={pwConfirm} onChangeText={setPwConfirm} placeholder="Repeat password" showToggle toggleVisible={showConfirm} onToggle={() => setShowConfirm(!showConfirm)} />
+                <Field label="New Password"     icon="lock"         value={pwNew}     onChangeText={setPwNew}     placeholder="At least 8 characters" showToggle toggleVisible={showNew}     onToggle={() => setShowNew(!showNew)}         />
+                <Field label="Confirm Password" icon="check-circle" value={pwConfirm} onChangeText={setPwConfirm} placeholder="Repeat password"        showToggle toggleVisible={showConfirm} onToggle={() => setShowConfirm(!showConfirm)} />
               </>
             ) : (
               <>
                 <Text style={styles.sectionNote}>Leave blank to keep your current password.</Text>
-                <Field label="Current Password" icon="lock" value={pwCurrent} onChangeText={setPwCurrent} placeholder="Enter current password" showToggle toggleVisible={showCurrent} onToggle={() => setShowCurrent(!showCurrent)} />
-                <Field label="New Password" icon="key" value={pwNew} onChangeText={setPwNew} placeholder="At least 8 characters" showToggle toggleVisible={showNew} onToggle={() => setShowNew(!showNew)} />
-                <Field label="Confirm New Password" icon="check-circle" value={pwConfirm} onChangeText={setPwConfirm} placeholder="Repeat new password" showToggle toggleVisible={showConfirm} onToggle={() => setShowConfirm(!showConfirm)} />
+                <Field label="Current Password"     icon="lock"         value={pwCurrent} onChangeText={setPwCurrent} placeholder="Enter current password" showToggle toggleVisible={showCurrent} onToggle={() => setShowCurrent(!showCurrent)} />
+                <Field label="New Password"         icon="key"          value={pwNew}     onChangeText={setPwNew}     placeholder="At least 8 characters"  showToggle toggleVisible={showNew}     onToggle={() => setShowNew(!showNew)}         />
+                <Field label="Confirm New Password" icon="check-circle" value={pwConfirm} onChangeText={setPwConfirm} placeholder="Repeat new password"     showToggle toggleVisible={showConfirm} onToggle={() => setShowConfirm(!showConfirm)} />
               </>
             )}
           </View>
@@ -301,11 +328,12 @@ const styles = StyleSheet.create({
   container:  { flex: 1, backgroundColor: "#fff", paddingTop: 50 },
   centered:   { justifyContent: "center", alignItems: "center" },
   header: { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 20, marginBottom: 8 },
-  backButton:         { width: 40, height: 40, justifyContent: "center", alignItems: "flex-start" },
-  headerTitle:        { fontSize: 20, fontWeight: "700", color: "#4a2e2c" },
-  saveButton:         { backgroundColor: "#6b4b45", paddingHorizontal: 18, paddingVertical: 8, borderRadius: 20, minWidth: 60, alignItems: "center" },
-  saveButtonDisabled: { opacity: 0.6 },
-  saveButtonText:     { color: "#fff", fontWeight: "700", fontSize: 14 },
+  backButton:             { width: 40, height: 40, justifyContent: "center", alignItems: "flex-start" },
+  headerTitle:            { fontSize: 20, fontWeight: "700", color: "#4a2e2c" },
+  saveButton:             { backgroundColor: "#6b4b45", paddingHorizontal: 18, paddingVertical: 8, borderRadius: 20, minWidth: 60, alignItems: "center" },
+  saveButtonDisabled:     { backgroundColor: "#d4bfbd" },
+  saveButtonText:         { color: "#fff", fontWeight: "700", fontSize: 14 },
+  saveButtonTextDisabled: { color: "#f0e8e7" },
   scrollContent: { paddingHorizontal: 20 },
   avatarSection:           { alignItems: "center", paddingVertical: 24 },
   profilePhotoWrapper:     { width: 100, height: 100, borderRadius: 50, overflow: "hidden", backgroundColor: "#6b4b45", justifyContent: "center", alignItems: "center", position: "relative" },

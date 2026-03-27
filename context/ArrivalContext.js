@@ -19,7 +19,7 @@ import {
 } from "react-native";
 import * as Location from "expo-location";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { useAuth } from "@clerk/clerk-expo";
+import { useAuth, useUser } from "@clerk/clerk-expo";
 import { Feather } from "@expo/vector-icons";
 
 const BASE_URL              = "https://libotbackend.onrender.com";
@@ -75,6 +75,7 @@ export function useArrival() {
 
 export function ArrivalProvider({ children }) {
   const { getToken, isSignedIn } = useAuth();
+  const { user: clerkUser }      = useUser();
 
   const [activeSpot, setActiveSpotState] = useState(null);
   const [allSpots, setAllSpots]          = useState([]);
@@ -93,11 +94,46 @@ export function ArrivalProvider({ children }) {
   const [showBadgeBanner, setShowBadgeBanner] = useState(false);
   const badgeTranslateY = useRef(new Animated.Value(-200)).current;
 
-  const locationSub   = useRef(null);
-  const arrivedSpots  = useRef(new Set());
-  const activeSpotRef = useRef(null);
+  const locationSub      = useRef(null);
+  const arrivedSpots     = useRef(new Set());
+  const activeSpotRef    = useRef(null);
+  const currentUserIdRef = useRef(null); // tracks who owns the current session state
 
   useEffect(() => { activeSpotRef.current = activeSpot; }, [activeSpot]);
+
+  /* ─────────────────────────────────────────────────────────────────────────
+     RESET ALL PER-USER IN-MEMORY STATE WHEN THE LOGGED-IN USER CHANGES.
+
+     Root cause of the bug: `arrivedSpots` is a module-level ref that
+     persists for the entire JS runtime. When account A visits spot X,
+     spot X's ID is added to the Set. When you then log in as account B
+     (without fully restarting the app), the Set still contains spot X,
+     so account B's arrival is silently swallowed — no badge, no points,
+     no visit recorded. Same issue applied to the badge AsyncStorage key.
+  ───────────────────────────────────────────────────────────────────────── */
+  useEffect(() => {
+    const newUserId = clerkUser?.id ?? null;
+    if (newUserId === currentUserIdRef.current) return; // same user, nothing to do
+
+    console.log(
+      "[Arrival] 🔄 User changed:",
+      currentUserIdRef.current, "→", newUserId,
+      "— resetting arrivedSpots, activeSpot, spots cache"
+    );
+
+    // 1. Clear the dedup Set so the new user can trigger arrivals
+    arrivedSpots.current = new Set();
+
+    // 2. Clear active spot (belongs to previous user)
+    setActiveSpotState(null);
+    activeSpotRef.current = null;
+
+    // 3. Invalidate spots cache so it re-fetches for new user context
+    allSpotsRef.current    = [];
+    spotsFetchedAt.current = 0;
+
+    currentUserIdRef.current = newUserId;
+  }, [clerkUser?.id]);
 
   /* ── Fetch all spots ── */
   const fetchAllSpots = useCallback(async () => {
@@ -131,7 +167,7 @@ export function ArrivalProvider({ children }) {
 
   useEffect(() => {
     if (isSignedIn) fetchAllSpots();
-  }, [isSignedIn]);
+  }, [isSignedIn, fetchAllSpots]);
 
   /* ── Active spot ── */
   const setActiveSpot = useCallback(async (spot) => {
@@ -146,7 +182,9 @@ export function ArrivalProvider({ children }) {
     activeSpotRef.current = null;
   }, []);
 
+  // Only restore active spot when signed in
   useEffect(() => {
+    if (!isSignedIn) return;
     const restore = async () => {
       try {
         const raw = await AsyncStorage.getItem(ACTIVE_SPOT_KEY);
@@ -159,7 +197,7 @@ export function ArrivalProvider({ children }) {
       } catch (_) {}
     };
     restore();
-  }, []);
+  }, [isSignedIn]);
 
   /* ── Points popup animation ── */
   const triggerPointsPopup = useCallback((earned, total) => {
@@ -226,21 +264,22 @@ export function ArrivalProvider({ children }) {
       if (!res.ok || !data.success) { console.warn("[Badge] Claim failed:", data?.message); return; }
       console.log("[Badge] ✅ Saved:", JSON.stringify(data.claimed));
 
+      // ✅ Per-user key prevents account A's badge claims blocking account B
       try {
-        const raw = await AsyncStorage.getItem("claimedSpotIds");
+        const cacheKey = `claimedSpotIds_${currentUserIdRef.current}`;
+        const raw = await AsyncStorage.getItem(cacheKey);
         const ids = raw ? JSON.parse(raw) : [];
         if (!ids.includes(badge.spotId))
-          await AsyncStorage.setItem("claimedSpotIds", JSON.stringify([...ids, badge.spotId]));
+          await AsyncStorage.setItem(cacheKey, JSON.stringify([...ids, badge.spotId]));
       } catch (_) {}
 
     } catch (e) { console.error("[Badge] Claim error:", e); }
   }, [pendingBadge, dismissBadgeBanner, getToken]);
 
-  /* ─────────────────────────────────────────────────────────
+  /* ─────────────────────────────────────────────────────────────────────────
      AWARD REWARDS
      Called when user physically arrives within 50m of a spot.
-     visitCount is incremented here — NOT on card tap.
-  ───────────────────────────────────────────────────────── */
+  ───────────────────────────────────────────────────────────────────────── */
   const awardRewards = useCallback(async (spot) => {
     const spotId = String(spot._id ?? "").trim();
     if (!spotId) return;
@@ -249,8 +288,7 @@ export function ArrivalProvider({ children }) {
 
     console.log("[Arrival] ✅ Arrived at:", spot.name, "| spotId:", spotId);
 
-    // ── 0. Increment visitCount (physical arrival only, once per user) ────
-    // ✅ Auth token is sent so server can check if user already visited
+    // ── 0. Increment visitCount ────────────────────────────────────────────
     try {
       const token    = await getToken();
       const visitRes = await fetch(`${BASE_URL}/api/spots/${spotId}/visit`, {
@@ -270,7 +308,7 @@ export function ArrivalProvider({ children }) {
       console.warn("[Visit] Failed to increment visitCount:", e);
     }
 
-    // ── 1. Points ──────────────────────────────────────────
+    // ── 1. Points ──────────────────────────────────────────────────────────
     let pointsJustEarned = false;
     try {
       const token = await getToken();
@@ -289,7 +327,7 @@ export function ArrivalProvider({ children }) {
       }
     } catch (e) { console.warn("[Points] Error:", e); }
 
-    // ── 2. Badge ───────────────────────────────────────────
+    // ── 2. Badge ───────────────────────────────────────────────────────────
     try {
       const cachedSpot  = allSpotsRef.current.find((s) => String(s._id) === spotId);
       let badgeImageUrl = cachedSpot?.Badge ?? cachedSpot?.badge?.image ?? null;
@@ -309,8 +347,10 @@ export function ArrivalProvider({ children }) {
 
       console.log("[Badge] Badge URL:", badgeImageUrl);
 
+      // ✅ Per-user badge cache key
+      const cacheKey = `claimedSpotIds_${currentUserIdRef.current}`;
       try {
-        const raw       = await AsyncStorage.getItem("claimedSpotIds");
+        const raw       = await AsyncStorage.getItem(cacheKey);
         const cachedIds = raw ? JSON.parse(raw) : [];
         if (cachedIds.includes(spotId)) { console.log("[Badge] Already claimed (cache)"); return; }
       } catch (_) {}
@@ -369,7 +409,7 @@ export function ArrivalProvider({ children }) {
       locationSub.current?.remove();
       locationSub.current = null;
     };
-  }, [isSignedIn]);
+  }, [isSignedIn, checkArrival]);
 
   return (
     <ArrivalContext.Provider value={{ activeSpot, setActiveSpot, clearActiveSpot, allSpots }}>
