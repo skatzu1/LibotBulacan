@@ -13,7 +13,7 @@ import { WebView } from 'react-native-webview';
 
 // ─── Config ──────────────────────────────────────────────────────────────────
 const AR_URL  = 'https://ar-web-lemon.vercel.app/index.html';
-const API_URL = 'https://your-api.com/ar-locations'; // 🔁 Replace with your real API URL
+const API_URL = 'https://libotbackend.onrender.com/api/spots';
 
 // ─── Helper: map raw API landmark → normalized AR location ───────────────────
 //
