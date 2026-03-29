@@ -15,26 +15,6 @@ import { WebView } from 'react-native-webview';
 const AR_URL  = 'https://ar-web-lemon.vercel.app/index.html';
 const API_URL = 'https://libotbackend.onrender.com/api/spots';
 
-// ─── Helper: map raw API landmark → normalized AR location ───────────────────
-//
-//  API shape per landmark:
-//  {
-//    _id:              { $oid: "..." },
-//    name:             "Barasoain Church",
-//    description:      "...",
-//    image:            "https://...",
-//    coordinates:      { lat: 14.846306, lng: 120.812528 },  ← landmark GPS
-//    modelUrl:         "https://res.cloudinary.com/.../model.glb",
-//    modelCoordinates: { lat: 14.846320, lng: 120.812545 },  ← model spawn GPS
-//    Badge:            "https://...",
-//    visitCount:       0,
-//  }
-//
-//  Rules:
-//   • Use modelCoordinates for the 3D model's spawn position
-//   • If modelCoordinates is missing or null → return null (will be filtered out)
-//   • modelUrl is shared across all landmarks (same GLB model)
-//
 function mapLandmarkToARLocation(item) {
   const mc = item.modelCoordinates;
 
