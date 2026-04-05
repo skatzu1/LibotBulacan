@@ -11,14 +11,24 @@ import {
 } from 'react-native';
 import { WebView } from 'react-native-webview';
 
-// ─── Config ──────────────────────────────────────────────────────────────────
 const AR_URL  = 'https://ar-web-lemon.vercel.app/index.html';
 const API_URL = 'https://libotbackend.onrender.com/api/spots';
 
+// ─── Raw Data Example ───────────────────
+//  {
+//    _id:              { $oid: "..." },
+//    name:             "Barasoain Church",
+//    description:      "...",
+//    image:            "https://...",
+//    coordinates:      { lat: 14.846306, lng: 120.812528 },  ← landmark GPS
+//    modelUrl:         "https://res.cloudinary.com/.../model.glb",
+//    modelCoordinates: { lat: 14.846320, lng: 120.812545 },  ← model spawn GPS
+//    Badge:            "https://...",
+//    visitCount:       0,
+//  }
 function mapLandmarkToARLocation(item) {
   const mc = item.modelCoordinates;
 
-  // Skip landmark if modelCoordinates is absent or incomplete
   if (!mc || mc.lat == null || mc.lng == null) return null;
 
   // Skip landmark if modelUrl is missing
@@ -28,9 +38,8 @@ function mapLandmarkToARLocation(item) {
     id:          item._id?.$oid ?? String(item._id) ?? item.name,
     name:        item.name ?? 'Unknown',
     modelUrl:    item.modelUrl,
-    latitude:    mc.lat,   // ← model spawns HERE, not at landmark coordinates
+    latitude:    mc.lat,
     longitude:   mc.lng,
-    // Keep landmark coords for reference (not used by AR scene)
     landmarkLat: item.coordinates?.lat ?? null,
     landmarkLng: item.coordinates?.lng ?? null,
   };
@@ -81,12 +90,25 @@ export default function ARScreen({ navigation }) {
     }
   };
 
-  // ─── Fetch landmarks from API ─────────────────────────────────────────────
+  // ─── Fetch ─────────────────────────────────────────────
   const fetchLocations = async () => {
     try {
       const res = await fetch(API_URL);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const raw = await res.json();
+      const json = await res.json();
+
+      // API may return a plain array OR a wrapped object e.g. { data: [...] }
+      const raw = Array.isArray(json)        ? json
+                : Array.isArray(json.data)   ? json.data
+                : Array.isArray(json.spots)  ? json.spots
+                : Array.isArray(json.result) ? json.result
+                : null;
+
+      if (!raw) {
+        throw new Error(
+          `Unexpected API shape — got keys: ${JSON.stringify(Object.keys(json))}`
+        );
+      }
 
       // Map + filter: only landmarks with valid modelCoordinates & modelUrl survive
       const mapped = raw.map(mapLandmarkToARLocation).filter(Boolean);
