@@ -38,8 +38,8 @@ function mapLandmarkToARLocation(item) {
     id:          item._id?.$oid ?? String(item._id) ?? item.name,
     name:        item.name ?? 'Unknown',
     modelUrl:    item.modelUrl,
-    latitude:    parseFloat(mc.lat),
-    longitude:   parseFloat(mc.lng),
+    latitude:    (mc.lat),
+    longitude:   (mc.lng),
     landmarkLat: item.coordinates?.lat ?? null,
     landmarkLng: item.coordinates?.lng ?? null,
   };
