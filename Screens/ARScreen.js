@@ -7,10 +7,9 @@ import {
   Platform,
   PermissionsAndroid,
   ActivityIndicator,
-  Animated,
 } from 'react-native';
 import { WebView } from 'react-native-webview';
-import * as Location from 'expo-location';
+import * as Location from 'expo-location'; // ← Expo-compatible geolocation
 
 // ─── Config ──────────────────────────────────────────────────────────────────
 const AR_URL       = 'https://ar-web-lemon.vercel.app/index.html';
@@ -59,14 +58,8 @@ export default function ARScreen({ navigation }) {
 
   const [locations,   setLocations]   = useState([]);
   const [fetchError,  setFetchError]  = useState(null);
-  const [score,       setScore]       = useState(0);
-  const [collected,   setCollected]   = useState([]);
-  const [total,       setTotal]       = useState(0);
   const [outOfRange,  setOutOfRange]  = useState(false);
-  const [rangeChecked, setRangeChecked] = useState(false); // Fix #3: track if check ran
-
-  const toastOpacity = useRef(new Animated.Value(0)).current;
-  const toastScale   = useRef(new Animated.Value(0.8)).current;
+  const [rangeChecked, setRangeChecked] = useState(false);
 
   // ─── Permissions ───────────────────────────────────────────────────────────
   useEffect(() => { requestPermissions(); }, []);
@@ -84,6 +77,7 @@ export default function ARScreen({ navigation }) {
         }
       }
 
+      // Location permission via expo-location (Expo-compatible, iOS + Android)
       const { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== 'granted') {
         setPermissionError('Location permission is required for AR.');
@@ -118,7 +112,6 @@ export default function ARScreen({ navigation }) {
 
       const mapped = raw.map(mapLandmarkToARLocation).filter(Boolean);
       setLocations(mapped);
-      setTotal(mapped.length);
 
       if (mapped.length === 0) {
         setFetchError('No landmarks with modelCoordinates found.');
@@ -143,15 +136,18 @@ export default function ARScreen({ navigation }) {
     webviewRef.current.injectJavaScript(script);
   }, []);
 
+  // Fix #4: inject as soon as webview loads (don't wait for arReady)
   const onWebViewLoad = useCallback(() => {
     setWebviewLoaded(true);
     if (locations.length) injectLocations(locations);
   }, [locations, injectLocations]);
 
+  // Re-inject if locations arrive after webview loaded
   useEffect(() => {
     if (webviewLoaded && locations.length) injectLocations(locations);
   }, [locations, webviewLoaded, injectLocations]);
 
+  // Fix #5: if WebView never sends AR_READY, auto-show AR after 10s timeout
   useEffect(() => {
     if (!webviewLoaded) return;
     const timer = setTimeout(() => {
@@ -160,7 +156,7 @@ export default function ARScreen({ navigation }) {
     return () => clearTimeout(timer);
   }, [webviewLoaded]);
 
-  // ─── Range check ──────────────────────────────────────
+  // ─── Range check using expo-location ──────────────────────────────────────
   const checkRange = useCallback(async (locs) => {
     setRangeChecked(false);
     try {
@@ -183,6 +179,8 @@ export default function ARScreen({ navigation }) {
     }
   }, []);
 
+  // Fix #7: run range check as soon as permissions + locations are ready
+  // (don't gate on arReady — that's what was causing the deadlock)
   useEffect(() => {
     if (permissionsGranted && locations.length && !rangeChecked) {
       checkRange(locations);
@@ -193,37 +191,11 @@ export default function ARScreen({ navigation }) {
   const onMessage = useCallback((event) => {
     try {
       const data = JSON.parse(event.nativeEvent.data);
-
       if (data.type === 'AR_READY') {
         setArReady(true);
       }
-
-      if (data.type === 'AR_COLLECTED') {
-        const { modelId } = data;
-        setCollected((prev) => {
-          if (prev.includes(modelId)) return prev;
-          const next = [...prev, modelId];
-          setScore(next.length * 10);
-          showScoreToast();
-          return next;
-        });
-      }
     } catch (_) {}
   }, []);
-
-  // ─── Score toast ────────────────────────────────────────────────────────────
-  const showScoreToast = () => {
-    toastOpacity.setValue(0);
-    toastScale.setValue(0.8);
-    Animated.parallel([
-      Animated.timing(toastOpacity, { toValue: 1, duration: 200, useNativeDriver: true }),
-      Animated.spring(toastScale,   { toValue: 1, friction: 5,   useNativeDriver: true }),
-    ]).start(() => {
-      setTimeout(() => {
-        Animated.timing(toastOpacity, { toValue: 0, duration: 400, useNativeDriver: true }).start();
-      }, 1200);
-    });
-  };
 
   // ─── Permission error ───────────────────────────────────────────────────────
   if (permissionError) {
@@ -240,6 +212,7 @@ export default function ARScreen({ navigation }) {
   }
 
   // ─── Decide what loading overlay to show ────────────────────────────────────
+  // Fix #8: show out-of-range BEFORE arReady, as a gate; show spinner while checking
   const showLoadingOverlay = !arReady && permissionsGranted;
   const showOutOfRange     = rangeChecked && outOfRange;
   const showSpinner        = !rangeChecked || (!arReady && !outOfRange);
@@ -248,12 +221,12 @@ export default function ARScreen({ navigation }) {
   return (
     <View style={styles.container}>
 
-      {/* AR WebView */}
+      {/* AR WebView — fills entire screen edge-to-edge */}
       {permissionsGranted && (
         <WebView
           ref={webviewRef}
           source={{ uri: AR_URL }}
-          style={styles.webview}
+          style={StyleSheet.absoluteFill}
           onLoad={onWebViewLoad}
           onMessage={onMessage}
           mediaPlaybackRequiresUserAction={false}
@@ -299,40 +272,6 @@ export default function ARScreen({ navigation }) {
         </View>
       )}
 
-      {/* HUD */}
-      {arReady && (
-        <View style={styles.hud}>
-          <View style={styles.scoreBox}>
-            <Text style={styles.scoreLabel}>SCORE</Text>
-            <Text style={styles.scoreValue}>{score}</Text>
-          </View>
-          <View style={styles.progressBox}>
-            <Text style={styles.progressLabel}>
-              {collected.length} / {total} collected
-            </Text>
-            <View style={styles.progressBar}>
-              <View
-                style={[
-                  styles.progressFill,
-                  { width: total > 0 ? `${(collected.length / total) * 100}%` : '0%' },
-                ]}
-              />
-            </View>
-          </View>
-        </View>
-      )}
-
-      {/* Score toast */}
-      <Animated.View
-        style={[
-          styles.scoreToast,
-          { opacity: toastOpacity, transform: [{ scale: toastScale }] },
-        ]}
-        pointerEvents="none"
-      >
-        <Text style={styles.scoreToastText}>+10 pts 🎉</Text>
-      </Animated.View>
-
       {/* Back button */}
       {navigation && (
         <TouchableOpacity
@@ -349,7 +288,6 @@ export default function ARScreen({ navigation }) {
 // ─── Styles ───────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: 'black' },
-  webview:   { flex: 1 },
 
   loadingOverlay: {
     ...StyleSheet.absoluteFillObject,
@@ -375,43 +313,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 32, borderRadius: 24,
   },
   retryText: { color: '#000', fontWeight: '700', fontSize: 15 },
-
-  hud: {
-    position: 'absolute', top: 0, left: 0, right: 0,
-    paddingTop: Platform.OS === 'ios' ? 54 : 36,
-    paddingHorizontal: 20,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-  },
-  scoreBox: {
-    backgroundColor: 'rgba(0,0,0,0.65)',
-    borderRadius: 14, paddingVertical: 8, paddingHorizontal: 16,
-    alignItems: 'center',
-    borderWidth: 1, borderColor: 'rgba(0,255,136,0.3)',
-  },
-  scoreLabel: { color: '#00ff88', fontSize: 10, fontWeight: '700', letterSpacing: 2 },
-  scoreValue: { color: '#fff', fontSize: 26, fontWeight: '800' },
-
-  progressBox: {
-    backgroundColor: 'rgba(0,0,0,0.65)',
-    borderRadius: 14, paddingVertical: 8, paddingHorizontal: 16,
-    minWidth: 140,
-    borderWidth: 1, borderColor: 'rgba(255,255,255,0.1)',
-  },
-  progressLabel: { color: '#ccc', fontSize: 12, marginBottom: 6 },
-  progressBar: {
-    height: 6, backgroundColor: 'rgba(255,255,255,0.15)',
-    borderRadius: 3, overflow: 'hidden',
-  },
-  progressFill: { height: '100%', backgroundColor: '#00ff88', borderRadius: 3 },
-
-  scoreToast: {
-    position: 'absolute', alignSelf: 'center', top: '42%',
-    backgroundColor: 'rgba(0,255,136,0.9)',
-    paddingVertical: 12, paddingHorizontal: 28, borderRadius: 30,
-  },
-  scoreToastText: { color: '#000', fontWeight: '800', fontSize: 20 },
 
   backButton: {
     position: 'absolute',
