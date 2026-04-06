@@ -10,36 +10,37 @@ import {
   Animated,
 } from 'react-native';
 import { WebView } from 'react-native-webview';
+import * as Location from 'expo-location';
 
-const AR_URL  = 'https://ar-web-lemon.vercel.app/index.html';
-const API_URL = 'https://libotbackend.onrender.com/api/spots';
+// ─── Config ──────────────────────────────────────────────────────────────────
+const AR_URL       = 'https://ar-web-lemon.vercel.app/index.html';
+const API_URL      = 'https://libotbackend.onrender.com/api/spots';
+const RANGE_METERS = 500;
 
-// ─── Raw Data Example ───────────────────
-//  {
-//    _id:              { $oid: "..." },
-//    name:             "Barasoain Church",
-//    description:      "...",
-//    image:            "https://...",
-//    coordinates:      { lat: 14.846306, lng: 120.812528 },  ← landmark GPS
-//    modelUrl:         "https://res.cloudinary.com/.../model.glb",
-//    modelCoordinates: { lat: 14.846320, lng: 120.812545 },  ← model spawn GPS
-//    Badge:            "https://...",
-//    visitCount:       0,
-//  }
+// ─── Haversine distance ───────────────────────────────────────────────────────
+function getDistanceMeters(lat1, lng1, lat2, lng2) {
+  const R  = 6371000;
+  const φ1 = (lat1 * Math.PI) / 180;
+  const φ2 = (lat2 * Math.PI) / 180;
+  const Δφ = ((lat2 - lat1) * Math.PI) / 180;
+  const Δλ = ((lng2 - lng1) * Math.PI) / 180;
+  const a  = Math.sin(Δφ / 2) ** 2 +
+             Math.cos(φ1) * Math.cos(φ2) * Math.sin(Δλ / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
+// ─── Map API landmark → AR location ──────────────────────────────────────────
 function mapLandmarkToARLocation(item) {
-  const mc = item.modelCoordinates;
-
+  const mc = item.modelsCoordinates;
   if (!mc || mc.lat == null || mc.lng == null) return null;
-
-  // Skip landmark if modelUrl is missing
   if (!item.modelUrl) return null;
 
   return {
     id:          item._id?.$oid ?? String(item._id) ?? item.name,
     name:        item.name ?? 'Unknown',
     modelUrl:    item.modelUrl,
-    latitude:    mc.lat,
-    longitude:   mc.lng,
+    latitude:    parseFloat(mc.lat),
+    longitude:   parseFloat(mc.lng),
     landmarkLat: item.coordinates?.lat ?? null,
     landmarkLng: item.coordinates?.lng ?? null,
   };
@@ -51,53 +52,58 @@ export default function ARScreen({ navigation }) {
 
   const [permissionsGranted, setPermissionsGranted] = useState(false);
   const [permissionError,    setPermissionError]    = useState(null);
-  const [arReady,            setArReady]            = useState(false);
-  const [locations,          setLocations]          = useState([]);
-  const [fetchError,         setFetchError]         = useState(null);
-  const [score,              setScore]              = useState(0);
-  const [collected,          setCollected]          = useState([]);
-  const [total,              setTotal]              = useState(0);
+
+  // Fix #2: separate "webview loaded" from "AR scene ready"
+  const [webviewLoaded, setWebviewLoaded] = useState(false);
+  const [arReady,       setArReady]       = useState(false);
+
+  const [locations,   setLocations]   = useState([]);
+  const [fetchError,  setFetchError]  = useState(null);
+  const [score,       setScore]       = useState(0);
+  const [collected,   setCollected]   = useState([]);
+  const [total,       setTotal]       = useState(0);
+  const [outOfRange,  setOutOfRange]  = useState(false);
+  const [rangeChecked, setRangeChecked] = useState(false); // Fix #3: track if check ran
 
   const toastOpacity = useRef(new Animated.Value(0)).current;
   const toastScale   = useRef(new Animated.Value(0.8)).current;
 
-  // ─── Permissions ─────────────────────────────────────────────────────────
+  // ─── Permissions ───────────────────────────────────────────────────────────
   useEffect(() => { requestPermissions(); }, []);
 
   const requestPermissions = async () => {
-    if (Platform.OS === 'android') {
-      try {
-        const granted = await PermissionsAndroid.requestMultiple([
-          PermissionsAndroid.PERMISSIONS.CAMERA,
-          PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION,
-        ]);
-        const allGranted = Object.values(granted).every(
-          (v) => v === PermissionsAndroid.RESULTS.GRANTED
+    try {
+      // Camera permission (Android only — iOS uses Info.plist)
+      if (Platform.OS === 'android') {
+        const cameraResult = await PermissionsAndroid.request(
+          PermissionsAndroid.PERMISSIONS.CAMERA
         );
-        if (allGranted) {
-          setPermissionsGranted(true);
-          fetchLocations();
-        } else {
-          setPermissionError('Camera and location permissions are required for AR.');
+        if (cameraResult !== PermissionsAndroid.RESULTS.GRANTED) {
+          setPermissionError('Camera permission is required for AR.');
+          return;
         }
-      } catch (err) {
-        setPermissionError('Failed to request permissions: ' + err.message);
       }
-    } else {
-      // iOS handles permissions via Info.plist
+
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      if (status !== 'granted') {
+        setPermissionError('Location permission is required for AR.');
+        return;
+      }
+
       setPermissionsGranted(true);
       fetchLocations();
+    } catch (err) {
+      setPermissionError('Failed to request permissions: ' + err.message);
     }
   };
 
-  // ─── Fetch ─────────────────────────────────────────────
+  // ─── Fetch landmarks ────────────────────────────────────────────────────────
   const fetchLocations = async () => {
     try {
       const res = await fetch(API_URL);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const json = await res.json();
 
-      // API may return a plain array OR a wrapped object e.g. { data: [...] }
       const raw = Array.isArray(json)        ? json
                 : Array.isArray(json.data)   ? json.data
                 : Array.isArray(json.spots)  ? json.spots
@@ -110,21 +116,19 @@ export default function ARScreen({ navigation }) {
         );
       }
 
-      // Map + filter: only landmarks with valid modelCoordinates & modelUrl survive
       const mapped = raw.map(mapLandmarkToARLocation).filter(Boolean);
-
       setLocations(mapped);
       setTotal(mapped.length);
 
       if (mapped.length === 0) {
-        setFetchError('No landmarks have modelCoordinates set yet — add them in the backend.');
+        setFetchError('No landmarks with modelCoordinates found.');
       }
     } catch (err) {
       setFetchError('Could not load AR locations: ' + err.message);
     }
   };
 
-  // ─── Send locations to WebView ────────────────────────────────────────────
+  // ─── Inject locations into WebView ──────────────────────────────────────────
   const injectLocations = useCallback((locs) => {
     if (!locs.length || !webviewRef.current) return;
     const script = `
@@ -140,15 +144,52 @@ export default function ARScreen({ navigation }) {
   }, []);
 
   const onWebViewLoad = useCallback(() => {
+    setWebviewLoaded(true);
     if (locations.length) injectLocations(locations);
   }, [locations, injectLocations]);
 
-  // Re-inject when locations arrive after WebView already loaded
   useEffect(() => {
-    if (arReady && locations.length) injectLocations(locations);
-  }, [locations, arReady, injectLocations]);
+    if (webviewLoaded && locations.length) injectLocations(locations);
+  }, [locations, webviewLoaded, injectLocations]);
 
-  // ─── Handle messages from WebView ────────────────────────────────────────
+  useEffect(() => {
+    if (!webviewLoaded) return;
+    const timer = setTimeout(() => {
+      setArReady(true);
+    }, 10000);
+    return () => clearTimeout(timer);
+  }, [webviewLoaded]);
+
+  // ─── Range check ──────────────────────────────────────
+  const checkRange = useCallback(async (locs) => {
+    setRangeChecked(false);
+    try {
+      const pos = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.High,
+      });
+      const { latitude: uLat, longitude: uLng } = pos.coords;
+      const anyInRange = locs.some((loc) => {
+        const dLat = parseFloat(loc.landmarkLat);
+        const dLng = parseFloat(loc.landmarkLng);
+        if (isNaN(dLat) || isNaN(dLng)) return false;
+        return getDistanceMeters(uLat, uLng, dLat, dLng) <= RANGE_METERS;
+      });
+      setOutOfRange(!anyInRange);
+    } catch (_err) {
+      // GPS failed → don't block, just show AR
+      setOutOfRange(false);
+    } finally {
+      setRangeChecked(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (permissionsGranted && locations.length && !rangeChecked) {
+      checkRange(locations);
+    }
+  }, [permissionsGranted, locations, rangeChecked, checkRange]);
+
+  // ─── Messages from WebView ──────────────────────────────────────────────────
   const onMessage = useCallback((event) => {
     try {
       const data = JSON.parse(event.nativeEvent.data);
@@ -170,7 +211,7 @@ export default function ARScreen({ navigation }) {
     } catch (_) {}
   }, []);
 
-  // ─── Score toast ──────────────────────────────────────────────────────────
+  // ─── Score toast ────────────────────────────────────────────────────────────
   const showScoreToast = () => {
     toastOpacity.setValue(0);
     toastScale.setValue(0.8);
@@ -184,7 +225,7 @@ export default function ARScreen({ navigation }) {
     });
   };
 
-  // ─── Permission error screen ──────────────────────────────────────────────
+  // ─── Permission error ───────────────────────────────────────────────────────
   if (permissionError) {
     return (
       <View style={styles.errorContainer}>
@@ -198,7 +239,12 @@ export default function ARScreen({ navigation }) {
     );
   }
 
-  // ─── Main render ──────────────────────────────────────────────────────────
+  // ─── Decide what loading overlay to show ────────────────────────────────────
+  const showLoadingOverlay = !arReady && permissionsGranted;
+  const showOutOfRange     = rangeChecked && outOfRange;
+  const showSpinner        = !rangeChecked || (!arReady && !outOfRange);
+
+  // ─── Render ─────────────────────────────────────────────────────────────────
   return (
     <View style={styles.container}>
 
@@ -222,18 +268,38 @@ export default function ARScreen({ navigation }) {
         />
       )}
 
-      {/* Loading overlay */}
-      {!arReady && permissionsGranted && (
+      {/* Loading / out-of-range overlay */}
+      {showLoadingOverlay && (
         <View style={styles.loadingOverlay}>
-          <ActivityIndicator size="large" color="#00ff88" />
-          <Text style={styles.loadingText}>Acquiring GPS signal…</Text>
-          {fetchError && (
-            <Text style={styles.warnText}>⚠️ {fetchError}</Text>
+          {showOutOfRange ? (
+            <>
+              <Text style={styles.outOfRangeIcon}>📍</Text>
+              <Text style={styles.outOfRangeTitle}>You're not near any landmark</Text>
+              <Text style={styles.outOfRangeMsg}>
+                Move within {RANGE_METERS}m of a landmark to see AR models.
+              </Text>
+              <TouchableOpacity
+                style={styles.retryBtn}
+                onPress={() => checkRange(locations)}
+              >
+                <Text style={styles.retryText}>Check Again</Text>
+              </TouchableOpacity>
+            </>
+          ) : (
+            <>
+              <ActivityIndicator size="large" color="#00ff88" />
+              <Text style={styles.loadingText}>
+                {!rangeChecked ? 'Acquiring GPS signal…' : 'Loading AR scene…'}
+              </Text>
+              {fetchError && (
+                <Text style={styles.warnText}>⚠️ {fetchError}</Text>
+              )}
+            </>
           )}
         </View>
       )}
 
-      {/* HUD — score & progress */}
+      {/* HUD */}
       {arReady && (
         <View style={styles.hud}>
           <View style={styles.scoreBox}>
@@ -291,7 +357,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center', alignItems: 'center', gap: 14,
   },
   loadingText: { color: '#fff', fontSize: 16, fontWeight: '500', marginTop: 10 },
-  warnText:    { color: '#ffcc00', fontSize: 12, textAlign: 'center', paddingHorizontal: 24 },
+
+  outOfRangeIcon:  { fontSize: 52, marginBottom: 8 },
+  outOfRangeTitle: { color: '#fff', fontSize: 20, fontWeight: '700', marginBottom: 8, textAlign: 'center' },
+  outOfRangeMsg:   { color: '#aaa', fontSize: 13, textAlign: 'center', paddingHorizontal: 32, marginBottom: 24 },
+  warnText:        { color: '#ffcc00', fontSize: 12, textAlign: 'center', paddingHorizontal: 24 },
 
   errorContainer: {
     flex: 1, backgroundColor: '#0a0a0a',
