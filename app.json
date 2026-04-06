@@ -14,31 +14,25 @@
     },
     "newArchEnabled": true,
     "userInterfaceStyle": "automatic",
-    "assetBundlePatterns": [
-      "assets/**/*"
-    ],
-    "bundler": {
-      "metro": {
-        "assetExts": [
-          "glb",
-          "gltf",
-          "bin",
-          "tflite"
-        ]
-      }
-    },
+    "assetBundlePatterns": ["**/*"],
+
     "plugins": [
       "expo-router",
       "expo-font",
       "expo-asset",
       [
+        "expo-notifications",
+        {
+          "icon": "./assets/notification-icon.png",
+          "color": "#8b4440",
+          "defaultChannel": "default",
+          "largeIcon": "./assets/logo.png"
+        }
+      ],
+      [
         "@reactvision/react-viro",
         {
-          "android": {
-            "xRMode": [
-              "AR"
-            ]
-          },
+          "android": { "xRMode": ["AR"] },
           "ios": {
             "cameraUsagePermission": "Libot uses the camera for AR experiences.",
             "microphoneUsagePermission": "Libot uses your microphone for AR experiences.",
@@ -55,7 +49,8 @@
         {
           "locationAlwaysAndWhenInUsePermission": "Libot needs your location to provide navigation to tourist spots in Bulacan.",
           "locationWhenInUsePermission": "Libot needs your location to show nearby tourist attractions.",
-          "isIosBackgroundLocationEnabled": false
+          "isIosBackgroundLocationEnabled": false,
+          "isAndroidBackgroundLocationEnabled": true
         }
       ],
       [
@@ -66,13 +61,19 @@
         }
       ],
       [
-        "react-native-fast-tflite",
+        "expo-build-properties",
         {
-          "enableCoreMLDelegate": true
+          "android": {
+            "extraPropertiesEntries": {
+              "VisionCamera_enableFrameProcessors": "false"
+            },
+            "assetBundlePatterns": ["**/*"]
+          }
         }
       ],
       "react-native-vision-camera"
     ],
+
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.skatzu15.libot",
@@ -81,28 +82,21 @@
         "NSLocationWhenInUseUsageDescription": "Libot needs your location to show nearby tourist spots and provide navigation.",
         "NSLocationAlwaysAndWhenInUseUsageDescription": "Libot needs your location to show nearby tourist spots and provide navigation.",
         "NSPhotoLibraryUsageDescription": "Libot needs access to your photos for AR and mission scanning.",
-        "CFBundleURLTypes": [
-          {
-            "CFBundleURLSchemes": [
-              "libot"
-            ]
-          },
-          {
-            "CFBundleURLSchemes": [
-              "libot"
-            ]
-          }
-        ],
+        "CFBundleURLTypes": [{ "CFBundleURLSchemes": ["libot"] }],
         "NSPhotoLibraryAddUsageDescription": "Allow $(PRODUCT_NAME) to save photos",
         "NSMicrophoneUsageDescription": "Libot uses your microphone for AR experiences.",
         "ITSAppUsesNonExemptEncryption": false
       }
     },
+
     "android": {
       "permissions": [
         "android.permission.CAMERA",
         "android.permission.ACCESS_FINE_LOCATION",
         "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.ACCESS_BACKGROUND_LOCATION",
+        "android.permission.FOREGROUND_SERVICE",
+        "android.permission.FOREGROUND_SERVICE_LOCATION",
         "android.permission.INTERNET",
         "android.permission.READ_EXTERNAL_STORAGE",
         "android.permission.WRITE_EXTERNAL_STORAGE"
@@ -117,25 +111,15 @@
         {
           "action": "VIEW",
           "autoVerify": true,
-          "data": [
-            {
-              "scheme": "libot"
-            }
-          ],
-          "category": [
-            "BROWSABLE",
-            "DEFAULT"
-          ]
+          "data": [{ "scheme": "libot" }],
+          "category": ["BROWSABLE", "DEFAULT"]
         }
       ]
     },
-    "web": {
-      "favicon": "./assets/favicon.png"
-    },
+
+    "web": { "favicon": "./assets/favicon.png" },
     "extra": {
-      "eas": {
-        "projectId": "8871f3bb-c707-45ef-9e71-948afcfb7f17"
-      },
+      "eas": { "projectId": "8871f3bb-c707-45ef-9e71-948afcfb7f17" },
       "router": {}
     },
     "owner": "komiigurii"
