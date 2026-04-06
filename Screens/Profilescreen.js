@@ -20,6 +20,7 @@ import { useProfileImage } from "../context/ProfileImageContext";
 
 const BASE_URL = "https://libotbackend.onrender.com";
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
+const MODAL_SIZE = SCREEN_WIDTH * 0.82;
 
 export default function ProfileScreen() {
   const navigation                    = useNavigation();
@@ -35,7 +36,6 @@ export default function ProfileScreen() {
   const [badgeCount, setBadgeCount] = useState(0);
   const [tripCount, setTripCount]   = useState(0);
 
-  // ── Photo modal state ──
   const [photoModalVisible, setPhotoModalVisible] = useState(false);
   const scaleAnim   = useState(new Animated.Value(0))[0];
   const opacityAnim = useState(new Animated.Value(0))[0];
@@ -83,7 +83,6 @@ export default function ProfileScreen() {
     return unsubscribe;
   }, [navigation, loadStats]);
 
-  // ── Open modal with zoom-in animation ──
   const openPhotoModal = () => {
     if (!displayPhoto) return;
     setPhotoModalVisible(true);
@@ -104,7 +103,6 @@ export default function ProfileScreen() {
     ]).start();
   };
 
-  // ── Close modal with zoom-out animation ──
   const closePhotoModal = () => {
     Animated.parallel([
       Animated.spring(scaleAnim, {
@@ -124,12 +122,6 @@ export default function ProfileScreen() {
   const displayPhoto = profileImage || userInfo.profilePhoto;
 
   const fullName = userInfo.fullName;
-  const initials = fullName
-    .split(" ")
-    .map((w) => w[0])
-    .join("")
-    .slice(0, 2)
-    .toUpperCase();
 
   const menuItems = [
     {
@@ -187,7 +179,6 @@ export default function ProfileScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* ── Profile Photo (tappable) ── */}
         <View style={styles.profilePhotoContainer}>
           <TouchableOpacity
             onPress={openPhotoModal}
@@ -203,7 +194,6 @@ export default function ProfileScreen() {
                 </View>
               )}
             </View>
-            {/* Small zoom hint badge — only shown when photo exists */}
             {displayPhoto && (
               <View style={styles.zoomBadge}>
                 <Feather name="zoom-in" size={11} color="#fff" />
@@ -266,7 +256,7 @@ export default function ProfileScreen() {
         <View style={{ height: 50 }} />
       </ScrollView>
 
-      {/* ── Fullscreen Photo Modal ── */}
+      {/* ── Photo Modal ── */}
       <Modal
         visible={photoModalVisible}
         transparent
@@ -277,25 +267,24 @@ export default function ProfileScreen() {
         <TouchableWithoutFeedback onPress={closePhotoModal}>
           <Animated.View style={[styles.modalBackdrop, { opacity: opacityAnim }]}>
             <TouchableWithoutFeedback>
+              {/* Outer glow ring */}
               <Animated.View
                 style={[
-                  styles.modalContent,
+                  styles.modalRing,
                   { transform: [{ scale: scaleAnim }], opacity: opacityAnim },
                 ]}
               >
-                <Image
-                  source={{ uri: displayPhoto }}
-                  style={styles.modalImage}
-                  resizeMode="cover"
-                />
-                {/* Name label inside modal */}
-                <View style={styles.modalNameRow}>
-                  <Text style={styles.modalName}>{fullName}</Text>
+                {/* Inner photo circle */}
+                <View style={styles.modalContent}>
+                  <Image
+                    source={{ uri: displayPhoto }}
+                    style={styles.modalImage}
+                    resizeMode="cover"
+                  />
                 </View>
               </Animated.View>
             </TouchableWithoutFeedback>
 
-            {/* Close button */}
             <TouchableOpacity style={styles.modalCloseBtn} onPress={closePhotoModal}>
               <Feather name="x" size={20} color="#fff" />
             </TouchableOpacity>
@@ -306,12 +295,11 @@ export default function ProfileScreen() {
   );
 }
 
-const MODAL_SIZE = SCREEN_WIDTH * 0.82;
-
 const styles = StyleSheet.create({
   container:     { flex: 1, backgroundColor: "#fff" },
   centered:      { justifyContent: "center", alignItems: "center" },
   scrollContent: { paddingHorizontal: 20, paddingTop: 50 },
+
   header: {
     flexDirection: "row", justifyContent: "space-between",
     alignItems: "center", marginBottom: 24,
@@ -320,7 +308,6 @@ const styles = StyleSheet.create({
   headerTitle: { fontSize: 20, fontWeight: "700", color: "#4a2e2c" },
   editButton:  { width: 40, height: 40, justifyContent: "center", alignItems: "flex-end" },
 
-  // ── Avatar ──
   profilePhotoContainer: { alignItems: "center", marginBottom: 12 },
   profilePhotoWrapper: {
     width: 100, height: 100, borderRadius: 50, overflow: "hidden",
@@ -345,7 +332,8 @@ const styles = StyleSheet.create({
   statLabel:       { fontSize: 11, color: "#7a5a58", fontWeight: "500", marginBottom: 4 },
   statCount:       { fontSize: 24, color: "#4a2e2c", fontWeight: "700" },
   statCountAccent: { color: "#6b4b45" },
-  menuContainer:   { backgroundColor: "transparent" },
+
+  menuContainer: { backgroundColor: "transparent" },
   menuItem: {
     flexDirection: "row", justifyContent: "space-between", alignItems: "center",
     backgroundColor: "#faf5f4", borderRadius: 12,
@@ -366,31 +354,35 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
+  modalRing: {
+    width: MODAL_SIZE + 16,
+    height: MODAL_SIZE + 16,
+    borderRadius: (MODAL_SIZE + 16) / 2,
+    borderWidth: 3,
+    borderColor: "rgba(255,255,255,0.25)",
+    justifyContent: "center",
+    alignItems: "center",
+    shadowColor: "#fff",
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.15,
+    shadowRadius: 20,
+  },
   modalContent: {
     width: MODAL_SIZE,
-    borderRadius: 24,
+    height: MODAL_SIZE,
+    borderRadius: MODAL_SIZE / 2,
     overflow: "hidden",
-    backgroundColor: "#4a2e2c",
+    borderWidth: 4,
+    borderColor: "#fff",
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.4,
-    shadowRadius: 20,
+    shadowOpacity: 0.5,
+    shadowRadius: 24,
     elevation: 20,
   },
   modalImage: {
     width: MODAL_SIZE,
     height: MODAL_SIZE,
-  },
-  modalNameRow: {
-    paddingVertical: 14,
-    paddingHorizontal: 18,
-    backgroundColor: "#4a2e2c",
-    alignItems: "center",
-  },
-  modalName: {
-    fontSize: 16,
-    fontWeight: "700",
-    color: "#fff",
   },
   modalCloseBtn: {
     position: "absolute",

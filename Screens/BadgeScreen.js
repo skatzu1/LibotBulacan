@@ -12,7 +12,6 @@ import {
   ActivityIndicator,
   RefreshControl,
   Modal,
-  // Share, — replaced by react-native-share
   StatusBar,
   Pressable,
 } from "react-native";
@@ -61,6 +60,7 @@ export default function BadgeScreen() {
 
       setBadges(dbBadges);
 
+      // Animate badges in staggered fashion
       while (fadeAnims.length < dbBadges.length) {
         fadeAnims.push(new Animated.Value(0));
       }
@@ -264,7 +264,7 @@ export default function BadgeScreen() {
         <View style={{ height: 40 }} />
       </ScrollView>
 
-      {/* ── Badge Detail Modal ── */}
+      {/* ── Badge Detail Modal (No Claim Button) ── */}
       <Modal
         visible={modalVisible}
         transparent
@@ -288,6 +288,7 @@ export default function BadgeScreen() {
               <Feather name="x" size={20} color="#7a5a58" />
             </TouchableOpacity>
 
+            {/* Badge Icon with Sparkle Dots */}
             <View style={styles.modalIconRing}>
               <View style={styles.modalIconInner}>
                 {selectedBadge?.image ? (
@@ -301,6 +302,7 @@ export default function BadgeScreen() {
                 )}
               </View>
 
+              {/* Decorative sparkles */}
               {[...Array(6)].map((_, i) => {
                 const angle = (i / 6) * 2 * Math.PI;
                 const r = 68;
@@ -316,13 +318,16 @@ export default function BadgeScreen() {
               })}
             </View>
 
+            {/* "Badge Earned" Pill */}
             <View style={styles.earnedPill}>
               <Feather name="check-circle" size={11} color="#fff" style={{ marginRight: 4 }} />
               <Text style={styles.earnedPillText}>Badge Earned</Text>
             </View>
 
+            {/* Badge Name */}
             <Text style={styles.modalBadgeName}>{selectedBadge?.name}</Text>
 
+            {/* Badge Description */}
             {selectedBadge?.description ? (
               <Text style={styles.modalDescription}>{selectedBadge.description}</Text>
             ) : (
@@ -331,6 +336,7 @@ export default function BadgeScreen() {
               </Text>
             )}
 
+            {/* Claimed Date */}
             {selectedBadge?.claimedAt && (
               <View style={styles.modalDateRow}>
                 <Feather name="calendar" size={12} color="#b0908c" />
@@ -345,7 +351,7 @@ export default function BadgeScreen() {
 
             <View style={styles.divider} />
 
-            {/* Share button — captures share card as PNG */}
+            {/* Share Button (Only Action) */}
             <TouchableOpacity
               style={[styles.shareButton, sharing && { opacity: 0.7 }]}
               onPress={handleShare}

@@ -59,7 +59,7 @@ function MissionsSpotSelect({ navigation }) {
           renderItem={({ item }) => (
             <TouchableOpacity
               style={styles.card}
-              onPress={() => navigation.navigate("Missions", { spot: item })}
+              onPress={() => navigation.navigate("Mission", { spot: item })}
               activeOpacity={0.85}
             >
               <Image
