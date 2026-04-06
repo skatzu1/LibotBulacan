@@ -71,7 +71,7 @@ function CustomDrawerContent(props) {
       />
 
       <DrawerItem
-        label="Missions"
+        label="Mission"
         icon={({ color }) => <Feather name="flag" size={20} color={color} />}
         onPress={() => navigation.navigate("MissionsSpotSelect")}
         labelStyle={styles.drawerLabel}

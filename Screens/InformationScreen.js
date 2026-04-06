@@ -164,7 +164,7 @@ export default function InformationScreen({ route, navigation }) {
 
         <TouchableOpacity
           style={styles.missionButton}
-          onPress={() => navigation.navigate("Missions", { spot })}
+          onPress={() => navigation.navigate("Mission", { spot })}
           activeOpacity={0.85}
         >
           <FontAwesome5 name="bullseye" size={16} color="#fff" />

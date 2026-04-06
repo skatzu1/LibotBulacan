@@ -7,6 +7,8 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Dimensions,
+  Animated,
+  PanResponder,
 } from "react-native";
 import { WebView } from "react-native-webview";
 import { Feather } from "@expo/vector-icons";
@@ -15,6 +17,340 @@ import { useArrival } from "../context/ArrivalContext";
 
 const { width, height } = Dimensions.get("window");
 const BASE_URL = "https://libotbackend.onrender.com";
+
+const TERMINALS = [
+  // ── San Jose del Monte ──────────────────────────────────────────
+  {
+    id: "tungkong-mangga",
+    name: "Tungkong Mangga Terminal",
+    lat: 14.8177,
+    lng: 121.0515,
+    address: "Tungkong Mangga, San Jose del Monte, Bulacan",
+    routes: ["Tungkong Mangga – Fairview", "Tungkong Mangga – Cubao"],
+    type: "Jeepney / UV Express Terminal",
+  },
+  {
+    id: "sapang-palay",
+    name: "Sapang Palay Terminal",
+    lat: 14.8363,
+    lng: 121.0602,
+    address: "Sapang Palay Proper, San Jose del Monte, Bulacan",
+    routes: ["Sapang Palay – Monumento", "Sapang Palay – SM Fairview"],
+    type: "Jeepney Terminal",
+  },
+  {
+    id: "poblacion-sjdm",
+    name: "Poblacion Terminal (SJDM)",
+    lat: 14.8119,
+    lng: 121.0447,
+    address: "Poblacion, San Jose del Monte, Bulacan",
+    routes: ["SJDM – Monumento", "SJDM – Cubao"],
+    type: "Bus / Jeepney Terminal",
+  },
+  {
+    id: "francisco-homes",
+    name: "Francisco Homes Terminal",
+    lat: 14.8256,
+    lng: 121.0483,
+    address: "Francisco Homes, San Jose del Monte, Bulacan",
+    routes: ["Francisco Homes – Fairview", "Francisco Homes – SM City"],
+    type: "UV Express Terminal",
+  },
+  {
+    id: "muzon",
+    name: "Muzon Terminal",
+    lat: 14.7985,
+    lng: 121.0368,
+    address: "Muzon, San Jose del Monte, Bulacan",
+    routes: ["Muzon – Monumento", "Muzon – SM Fairview"],
+    type: "Jeepney Terminal",
+  },
+  {
+    id: "citihomes",
+    name: "Citihomes Terminal",
+    lat: 14.8302,
+    lng: 121.0540,
+    address: "Citihomes, San Jose del Monte, Bulacan",
+    routes: ["Citihomes – Fairview", "Citihomes – Monumento"],
+    type: "UV Express Terminal",
+  },
+  {
+    id: "graceville",
+    name: "Graceville Terminal",
+    lat: 14.8210,
+    lng: 121.0590,
+    address: "Graceville, San Jose del Monte, Bulacan",
+    routes: ["Graceville – Cubao", "Graceville – SM Fairview"],
+    type: "Jeepney Terminal",
+  },
+
+  // ── Malolos (Provincial Capital) ────────────────────────────────
+  {
+    id: "malolos-central",
+    name: "Malolos Central Terminal",
+    lat: 14.8527,
+    lng: 120.8127,
+    address: "Paseo del Congreso, Malolos City, Bulacan",
+    routes: [
+      "Malolos – Cubao (NLEX)",
+      "Malolos – Monumento",
+      "Malolos – Tuktukan",
+    ],
+    type: "Bus / Jeepney Terminal",
+  },
+  {
+    id: "malolos-north",
+    name: "Malolos North Bus Terminal",
+    lat: 14.8620,
+    lng: 120.8130,
+    address: "McArthur Highway, Malolos City, Bulacan",
+    routes: [
+      "Malolos – Baliuag (via McArthur Hwy)",
+      "Malolos – Calumpit",
+    ],
+    type: "Bus Terminal",
+  },
+
+  // ── Meycauayan ───────────────────────────────────────────────────
+  {
+    id: "meycauayan-terminal",
+    name: "Meycauayan Transport Terminal",
+    lat: 14.7356,
+    lng: 120.9604,
+    address: "Valenzuela Road, Meycauayan City, Bulacan",
+    routes: [
+      "Meycauayan – Monumento",
+      "Meycauayan – SM Fairview",
+      "Meycauayan – Cubao",
+    ],
+    type: "Jeepney / UV Express Terminal",
+  },
+  {
+    id: "malhacan",
+    name: "Malhacan Terminal",
+    lat: 14.7290,
+    lng: 120.9570,
+    address: "Malhacan, Meycauayan City, Bulacan",
+    routes: ["Malhacan – Monumento", "Malhacan – EDSA"],
+    type: "Jeepney Terminal",
+  },
+
+  // ── Marilao ──────────────────────────────────────────────────────
+  {
+    id: "marilao-terminal",
+    name: "Marilao Terminal",
+    lat: 14.7619,
+    lng: 120.9487,
+    address: "McArthur Highway, Marilao, Bulacan",
+    routes: ["Marilao – Monumento", "Marilao – SM Fairview"],
+    type: "Jeepney Terminal",
+  },
+
+  // ── Bocaue ────────────────────────────────────────────────────────
+  {
+    id: "bocaue-terminal",
+    name: "Bocaue Terminal",
+    lat: 14.7978,
+    lng: 120.9289,
+    address: "McArthur Highway, Bocaue, Bulacan",
+    routes: ["Bocaue – Monumento", "Bocaue – Malolos"],
+    type: "Jeepney Terminal",
+  },
+
+  // ── Balagtas ──────────────────────────────────────────────────────
+  {
+    id: "balagtas-terminal",
+    name: "Balagtas Terminal",
+    lat: 14.8162,
+    lng: 120.9079,
+    address: "McArthur Highway, Balagtas, Bulacan",
+    routes: ["Balagtas – Monumento", "Balagtas – Malolos"],
+    type: "Jeepney Terminal",
+  },
+
+  // ── Guiguinto ─────────────────────────────────────────────────────
+  {
+    id: "guiguinto-terminal",
+    name: "Guiguinto Terminal",
+    lat: 14.8369,
+    lng: 120.8859,
+    address: "McArthur Highway, Guiguinto, Bulacan",
+    routes: ["Guiguinto – Malolos", "Guiguinto – Monumento"],
+    type: "Jeepney Terminal",
+  },
+
+  // ── Baliuag ───────────────────────────────────────────────────────
+  {
+    id: "baliuag-terminal",
+    name: "Baliuag Terminal",
+    lat: 14.9531,
+    lng: 120.8975,
+    address: "Rizal Street, Baliuag, Bulacan",
+    routes: [
+      "Baliuag – Cubao (NLEX)",
+      "Baliuag – Malolos",
+      "Baliuag – Cabanatuan",
+    ],
+    type: "Bus / Jeepney Terminal",
+  },
+
+  // ── Plaridel ──────────────────────────────────────────────────────
+  {
+    id: "plaridel-terminal",
+    name: "Plaridel Terminal",
+    lat: 14.8851,
+    lng: 120.8594,
+    address: "McArthur Highway, Plaridel, Bulacan",
+    routes: ["Plaridel – Malolos", "Plaridel – Monumento"],
+    type: "Jeepney Terminal",
+  },
+
+  // ── Pulilan ────────────────────────────────────────────────────────
+  {
+    id: "pulilan-terminal",
+    name: "Pulilan Terminal",
+    lat: 14.9021,
+    lng: 120.8500,
+    address: "McArthur Highway, Pulilan, Bulacan",
+    routes: ["Pulilan – Malolos", "Pulilan – Baliuag"],
+    type: "Jeepney Terminal",
+  },
+
+  // ── Calumpit ───────────────────────────────────────────────────────
+  {
+    id: "calumpit-terminal",
+    name: "Calumpit Terminal",
+    lat: 14.9139,
+    lng: 120.7660,
+    address: "Rizal Street, Calumpit, Bulacan",
+    routes: ["Calumpit – Malolos", "Calumpit – Manila (via NLEX)"],
+    type: "Bus / Jeepney Terminal",
+  },
+
+  // ── Hagonoy ────────────────────────────────────────────────────────
+  {
+    id: "hagonoy-terminal",
+    name: "Hagonoy Terminal",
+    lat: 14.8334,
+    lng: 120.7333,
+    address: "Rizal Street, Hagonoy, Bulacan",
+    routes: ["Hagonoy – Malolos", "Hagonoy – Calumpit"],
+    type: "Jeepney Terminal",
+  },
+
+  // ── Bustos ─────────────────────────────────────────────────────────
+  {
+    id: "bustos-terminal",
+    name: "Bustos Terminal",
+    lat: 14.9556,
+    lng: 120.9167,
+    address: "Poblacion, Bustos, Bulacan",
+    routes: ["Bustos – Baliuag", "Bustos – Malolos"],
+    type: "Jeepney Terminal",
+  },
+
+  // ── Angat ──────────────────────────────────────────────────────────
+  {
+    id: "angat-terminal",
+    name: "Angat Terminal",
+    lat: 14.9333,
+    lng: 121.0167,
+    address: "Poblacion, Angat, Bulacan",
+    routes: ["Angat – Baliuag", "Angat – San Rafael"],
+    type: "Jeepney Terminal",
+  },
+
+  // ── Norzagaray ─────────────────────────────────────────────────────
+  {
+    id: "norzagaray-terminal",
+    name: "Norzagaray Terminal",
+    lat: 14.9000,
+    lng: 121.0500,
+    address: "Poblacion, Norzagaray, Bulacan",
+    routes: ["Norzagaray – Baliuag", "Norzagaray – Monumento"],
+    type: "Jeepney Terminal",
+  },
+
+  // ── San Ildefonso ──────────────────────────────────────────────────
+  {
+    id: "san-ildefonso-terminal",
+    name: "San Ildefonso Terminal",
+    lat: 15.0667,
+    lng: 121.0000,
+    address: "Poblacion, San Ildefonso, Bulacan",
+    routes: ["San Ildefonso – Baliuag", "San Ildefonso – Malolos"],
+    type: "Jeepney Terminal",
+  },
+
+  // ── San Miguel ─────────────────────────────────────────────────────
+  {
+    id: "san-miguel-terminal",
+    name: "San Miguel Terminal",
+    lat: 15.1333,
+    lng: 121.0167,
+    address: "Poblacion, San Miguel, Bulacan",
+    routes: [
+      "San Miguel – Baliuag",
+      "San Miguel – Cabanatuan (via Nueva Ecija)",
+    ],
+    type: "Bus / Jeepney Terminal",
+  },
+
+  // ── Dona Remedios Trinidad ─────────────────────────────────────────
+  {
+    id: "drt-terminal",
+    name: "Doña Remedios Trinidad Terminal",
+    lat: 15.0167,
+    lng: 121.1167,
+    address: "Poblacion, Doña Remedios Trinidad, Bulacan",
+    routes: ["DRT – Norzagaray", "DRT – San Ildefonso"],
+    type: "Jeepney Terminal",
+  },
+
+  // ── Obando ─────────────────────────────────────────────────────────
+  {
+    id: "obando-terminal",
+    name: "Obando Terminal",
+    lat: 14.7028,
+    lng: 120.9222,
+    address: "Poblacion, Obando, Bulacan",
+    routes: ["Obando – Meycauayan", "Obando – Monumento"],
+    type: "Jeepney Terminal",
+  },
+
+  // ── Paombong ────────────────────────────────────────────────────────
+  {
+    id: "paombong-terminal",
+    name: "Paombong Terminal",
+    lat: 14.8333,
+    lng: 120.7833,
+    address: "Poblacion, Paombong, Bulacan",
+    routes: ["Paombong – Malolos", "Paombong – Hagonoy"],
+    type: "Jeepney Terminal",
+  },
+
+  // ── Sta. Maria ──────────────────────────────────────────────────────
+  {
+    id: "sta-maria-terminal",
+    name: "Sta. Maria Terminal",
+    lat: 14.8119,
+    lng: 121.0003,
+    address: "McArthur Highway, Sta. Maria, Bulacan",
+    routes: ["Sta. Maria – Monumento", "Sta. Maria – Malolos"],
+    type: "Jeepney Terminal",
+  },
+
+  // ── Pandi ────────────────────────────────────────────────────────────
+  {
+    id: "pandi-terminal",
+    name: "Pandi Terminal",
+    lat: 14.8667,
+    lng: 120.9500,
+    address: "Poblacion, Pandi, Bulacan",
+    routes: ["Pandi – Malolos", "Pandi – Bocaue"],
+    type: "Jeepney Terminal",
+  },
+];
 
 function getSpotCoords(spot) {
   if (!spot) return null;
@@ -34,6 +370,43 @@ export default function Track({ route, navigation }) {
   const [spotData, setSpotData]           = useState(null);
   const [locationError, setLocationError] = useState(null);
   const [followMode, setFollowMode]       = useState(false);
+  const [selectedTerminal, setSelectedTerminal] = useState(null);
+
+  // Bottom sheet animation
+  const sheetAnim = useRef(new Animated.Value(0)).current;
+  const sheetVisible = useRef(false);
+
+  const showSheet = useCallback((terminal) => {
+    setSelectedTerminal(terminal);
+    sheetVisible.current = true;
+    Animated.spring(sheetAnim, {
+      toValue: 1,
+      useNativeDriver: true,
+      tension: 65,
+      friction: 11,
+    }).start();
+  }, [sheetAnim]);
+
+  const hideSheet = useCallback(() => {
+    Animated.timing(sheetAnim, {
+      toValue: 0,
+      duration: 220,
+      useNativeDriver: true,
+    }).start(() => {
+      sheetVisible.current = false;
+      setSelectedTerminal(null);
+    });
+  }, [sheetAnim]);
+
+  // Pan responder for swipe-down to dismiss
+  const panResponder = useRef(
+    PanResponder.create({
+      onMoveShouldSetPanResponder: (_, g) => g.dy > 8,
+      onPanResponderRelease: (_, g) => {
+        if (g.dy > 60) hideSheet();
+      },
+    })
+  ).current;
 
   const webViewRef           = useRef(null);
   const locationSubscription = useRef(null);
@@ -94,7 +467,7 @@ export default function Track({ route, navigation }) {
   const followModeRef = useRef(followMode);
   useEffect(() => { followModeRef.current = followMode; }, [followMode]);
 
-  /* ── Update marker via injectJavaScript — no HTML rebuild, no reload ── */
+  /* ── Update marker via injectJavaScript ── */
   const updateMarkerRef = useRef(null);
   const updateMarkerOnMap = useCallback((coords) => {
     if (!webViewRef.current || !spotData) return;
@@ -111,8 +484,20 @@ export default function Track({ route, navigation }) {
     `);
   }, [spotData]);
 
-  // Always keep ref pointing to latest callback so watcher closure never goes stale
   updateMarkerRef.current = updateMarkerOnMap;
+
+  /* ── Handle messages from WebView ── */
+  const handleWebViewMessage = useCallback((event) => {
+    try {
+      const data = JSON.parse(event.nativeEvent.data);
+      if (data.type === "terminalTapped") {
+        const terminal = TERMINALS.find((t) => t.id === data.id);
+        if (terminal) showSheet(terminal);
+      } else if (data.type === "mapTapped") {
+        if (sheetVisible.current) hideSheet();
+      }
+    } catch {}
+  }, [showSheet, hideSheet]);
 
   /* ── Location tracking ── */
   useEffect(() => {
@@ -142,7 +527,6 @@ export default function Track({ route, navigation }) {
         setUserLocation(initialCoords);
         setLoading(false);
 
-        // Send initial position to map right away
         updateMarkerRef.current?.(initialCoords);
 
         locationSubscription.current = await Location.watchPositionAsync(
@@ -182,7 +566,7 @@ export default function Track({ route, navigation }) {
     }
   }, [followMode, userLocation]);
 
-  /* ── Map HTML — depends ONLY on spotData, never rebuilds on location change ── */
+  /* ── Map HTML ── */
   const mapHTML = useMemo(() => {
     if (!spotData) return null;
     const dest = getSpotCoords(spotData);
@@ -190,6 +574,37 @@ export default function Track({ route, navigation }) {
 
     const { lat: destLat, lng: destLng } = dest;
     const spotName = (spotData.name ?? "Destination").replace(/'/g, "\\'");
+
+    // Serialize terminals for the map
+    const terminalsJson = JSON.stringify(
+      TERMINALS.map(({ id, name, lat, lng }) => ({ id, name, lat, lng }))
+    );
+
+    // Bus SVG icon — a clean top-view bus silhouette
+    // Encoded as a data URI so no external assets are needed
+    const BUS_ICON_SVG = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32' width='32' height='32'>
+      <!-- Shadow -->
+      <ellipse cx='16' cy='29' rx='9' ry='2.5' fill='rgba(0,0,0,0.25)'/>
+      <!-- Body -->
+      <rect x='5' y='5' width='22' height='20' rx='4' fill='%232c5f9e'/>
+      <!-- Roof highlight -->
+      <rect x='5' y='5' width='22' height='8' rx='4' fill='%23356bb5'/>
+      <!-- Front windshield -->
+      <rect x='8' y='6.5' width='16' height='5' rx='2' fill='%23a8d4f5' opacity='0.9'/>
+      <!-- Side windows row -->
+      <rect x='7' y='14' width='5' height='4' rx='1' fill='%23a8d4f5' opacity='0.85'/>
+      <rect x='13.5' y='14' width='5' height='4' rx='1' fill='%23a8d4f5' opacity='0.85'/>
+      <rect x='20' y='14' width='5' height='4' rx='1' fill='%23a8d4f5' opacity='0.85'/>
+      <!-- Door -->
+      <rect x='13' y='20' width='6' height='4' rx='1' fill='%231d4b80'/>
+      <!-- Wheels -->
+      <circle cx='9'  cy='24.5' r='2.5' fill='%231a1a2e'/>
+      <circle cx='23' cy='24.5' r='2.5' fill='%231a1a2e'/>
+      <circle cx='9'  cy='24.5' r='1.2' fill='%23555'/>
+      <circle cx='23' cy='24.5' r='1.2' fill='%23555'/>
+      <!-- White border ring -->
+      <rect x='5' y='5' width='22' height='20' rx='4' fill='none' stroke='white' stroke-width='1.5'/>
+    </svg>`;
 
     return `<!DOCTYPE html><html>
     <head>
@@ -216,6 +631,20 @@ export default function Track({ route, navigation }) {
           border-radius:50%; animation:spin 0.8s linear infinite;
         }
         @keyframes spin { to { transform:rotate(360deg); } }
+
+        /* Bus marker tooltip */
+        .terminal-tooltip {
+          background:#fff;
+          border:none;
+          border-radius:6px;
+          padding:4px 8px;
+          font-size:11px;
+          font-weight:600;
+          color:#1a1a2e;
+          box-shadow:0 2px 8px rgba(0,0,0,0.25);
+          white-space:nowrap;
+        }
+        .terminal-tooltip::before { display:none; }
       </style>
     </head>
     <body>
@@ -227,9 +656,10 @@ export default function Track({ route, navigation }) {
       <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
       <script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.js"></script>
       <script>
-        const DEST_LAT  = ${destLat};
-        const DEST_LNG  = ${destLng};
-        const SPOT_NAME = '${spotName}';
+        const DEST_LAT   = ${destLat};
+        const DEST_LNG   = ${destLng};
+        const SPOT_NAME  = '${spotName}';
+        const TERMINALS  = ${terminalsJson};
 
         const bulacanBounds = L.latLngBounds(
           L.latLng(14.55, 120.68),
@@ -246,7 +676,12 @@ export default function Track({ route, navigation }) {
           attribution: '© OpenStreetMap contributors', maxZoom: 19,
         }).addTo(window.map);
 
-        // ── Fetch Bulacan boundary ONCE from Overpass ──
+        // Dismiss sheet when map is tapped
+        window.map.on('click', function() {
+          window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'mapTapped' }));
+        });
+
+        // ── Bulacan boundary ──
         const overpassQuery = \`[out:json][timeout:30];
           relation["name"="Bulacan"]["admin_level"="4"];
           out geom;\`;
@@ -257,32 +692,21 @@ export default function Track({ route, navigation }) {
           .then(data => {
             const relation = data.elements[0];
             if (!relation?.members) throw new Error('No boundary');
-
             const outerRings = relation.members
               .filter(m => m.role === 'outer' && m.geometry?.length > 1)
               .map(m => m.geometry.map(pt => [pt.lat, pt.lon]));
-
             if (!outerRings.length) throw new Error('No outer rings');
-
             const merged = mergeRings(outerRings);
-
-            // Ensure closed
             const f = merged[0], l = merged[merged.length - 1];
             if (Math.abs(f[0]-l[0]) > 0.0001 || Math.abs(f[1]-l[1]) > 0.0001) merged.push(f);
-
-            // World mask with Bulacan hole
             L.polygon(
               [[ [-90,-180],[-90,180],[90,180],[90,-180],[-90,-180] ], merged],
               { fillColor:'#1a1a2e', fillOpacity:0.92, stroke:false, interactive:false }
             ).addTo(window.map);
-
-            // Bulacan border outline
             L.polyline(merged, { color:'#8b4440', weight:2.5, opacity:0.9 }).addTo(window.map);
-
             document.getElementById('loading-overlay').style.display = 'none';
           })
           .catch(() => {
-            // Fallback rectangular mask
             L.polygon(
               [[ [-90,-180],[-90,180],[90,180],[90,-180] ],
                [ [14.62,120.76],[14.62,121.28],[15.22,121.28],[15.22,120.76] ]],
@@ -291,7 +715,7 @@ export default function Track({ route, navigation }) {
             document.getElementById('loading-overlay').style.display = 'none';
           });
 
-        // ── Destination marker (static, drawn once) ──
+        // ── Destination marker ──
         const destIcon = L.divIcon({
           html: '<div style="background:#8b4440;width:30px;height:30px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);border:3px solid white;box-shadow:0 2px 5px rgba(0,0,0,0.3);"></div>',
           className:'', iconSize:[30,30], iconAnchor:[15,30]
@@ -299,11 +723,59 @@ export default function Track({ route, navigation }) {
         window.destMarker = L.marker([DEST_LAT, DEST_LNG], { icon: destIcon })
           .addTo(window.map).bindPopup(SPOT_NAME);
 
+        // ── Terminal markers — bus SVG icon ──
+        // The icon is an inline SVG bus silhouette (top-down view).
+        // iconSize [32,32], iconAnchor centres the icon on the coordinate.
+        var busIconHtml = [
+          '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">',
+            '<ellipse cx="16" cy="29" rx="9" ry="2.5" fill="rgba(0,0,0,0.25)"/>',
+            '<rect x="5" y="5" width="22" height="20" rx="4" fill="#2c5f9e"/>',
+            '<rect x="5" y="5" width="22" height="8" rx="4" fill="#356bb5"/>',
+            '<rect x="8" y="6.5" width="16" height="5" rx="2" fill="#a8d4f5" opacity="0.9"/>',
+            '<rect x="7" y="14" width="5" height="4" rx="1" fill="#a8d4f5" opacity="0.85"/>',
+            '<rect x="13.5" y="14" width="5" height="4" rx="1" fill="#a8d4f5" opacity="0.85"/>',
+            '<rect x="20" y="14" width="5" height="4" rx="1" fill="#a8d4f5" opacity="0.85"/>',
+            '<rect x="13" y="20" width="6" height="4" rx="1" fill="#1d4b80"/>',
+            '<circle cx="9" cy="24.5" r="2.5" fill="#1a1a2e"/>',
+            '<circle cx="23" cy="24.5" r="2.5" fill="#1a1a2e"/>',
+            '<circle cx="9" cy="24.5" r="1.2" fill="#555"/>',
+            '<circle cx="23" cy="24.5" r="1.2" fill="#555"/>',
+            '<rect x="5" y="5" width="22" height="20" rx="4" fill="none" stroke="white" stroke-width="1.5"/>',
+          '</svg>'
+        ].join('');
+
+        const terminalIcon = L.divIcon({
+          html: busIconHtml,
+          className: '',
+          iconSize: [32, 32],
+          iconAnchor: [16, 16],
+        });
+
+        TERMINALS.forEach(function(t) {
+          const marker = L.marker([t.lat, t.lng], { icon: terminalIcon })
+            .addTo(window.map);
+
+          // Persistent tooltip showing terminal name on hover
+          marker.bindTooltip(t.name, {
+            permanent: false,
+            direction: 'top',
+            offset: [0, -18],
+            className: 'terminal-tooltip',
+          });
+
+          marker.on('click', function(e) {
+            L.DomEvent.stopPropagation(e);
+            window.ReactNativeWebView.postMessage(
+              JSON.stringify({ type: 'terminalTapped', id: t.id })
+            );
+          });
+        });
+
+        // ── User location ──
         window.userMarker     = null;
         window.routingControl = null;
         window.mapReady       = false;
 
-        // Called once on first location update
         window.initUserLocation = function(lat, lng) {
           const userIcon = L.divIcon({
             html: \`<div style="position:relative;">
@@ -334,7 +806,6 @@ export default function Track({ route, navigation }) {
           window.mapReady = true;
         };
 
-        // Called every 3s via injectJavaScript — just moves marker, no reload
         window.updateUserLocation = function(lat, lng, follow) {
           if (!window.mapReady) {
             window.initUserLocation(lat, lng);
@@ -386,7 +857,7 @@ export default function Track({ route, navigation }) {
         }
       </script>
     </body></html>`;
-  }, [spotData]); // ← ONLY spotData — never re-runs on location change
+  }, [spotData]);
 
   /* ── Loading / Error states ── */
   if (loading || !spotData || !userLocation) {
@@ -420,6 +891,11 @@ export default function Track({ route, navigation }) {
     );
   }
 
+  const sheetTranslateY = sheetAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [300, 0],
+  });
+
   return (
     <View style={styles.container}>
       <WebView
@@ -429,6 +905,7 @@ export default function Track({ route, navigation }) {
         style={styles.map}
         javaScriptEnabled
         domStorageEnabled
+        onMessage={handleWebViewMessage}
         onError={(e) => console.error("WebView error:", e.nativeEvent)}
       />
 
@@ -450,6 +927,86 @@ export default function Track({ route, navigation }) {
         <Feather name="navigation" size={22} color={followMode ? "#fff" : "#8b4440"} />
         {followMode && <Text style={styles.centerButtonLabel}>Following</Text>}
       </TouchableOpacity>
+
+      {/* Terminal Place Sheet */}
+      {selectedTerminal && (
+        <>
+          {/* Scrim — tap to dismiss */}
+          <TouchableOpacity
+            style={styles.scrim}
+            activeOpacity={1}
+            onPress={hideSheet}
+          />
+          <Animated.View
+            style={[styles.sheet, { transform: [{ translateY: sheetTranslateY }] }]}
+            {...panResponder.panHandlers}
+          >
+            {/* Drag handle */}
+            <View style={styles.sheetHandle} />
+
+            {/* Terminal icon + name */}
+            <View style={styles.sheetHeader}>
+              <View style={styles.sheetIconWrap}>
+                {/* Bus icon in the sheet header */}
+                <Feather name="truck" size={20} color="#fff" />
+              </View>
+              <View style={styles.sheetTitleBlock}>
+                <Text style={styles.sheetName} numberOfLines={2}>
+                  {selectedTerminal.name}
+                </Text>
+                <Text style={styles.sheetType}>{selectedTerminal.type}</Text>
+              </View>
+              <TouchableOpacity style={styles.sheetClose} onPress={hideSheet}>
+                <Feather name="x" size={18} color="#888" />
+              </TouchableOpacity>
+            </View>
+
+            {/* Address */}
+            <View style={styles.sheetRow}>
+              <Feather name="map-pin" size={15} color="#8b4440" style={styles.sheetRowIcon} />
+              <Text style={styles.sheetRowText}>{selectedTerminal.address}</Text>
+            </View>
+
+            {/* Routes */}
+            <View style={styles.sheetDivider} />
+            <Text style={styles.sheetSectionLabel}>Routes served</Text>
+            {selectedTerminal.routes.map((r, i) => (
+              <View key={i} style={styles.sheetRow}>
+                <Feather name="arrow-right-circle" size={15} color="#2c5f9e" style={styles.sheetRowIcon} />
+                <Text style={styles.sheetRowText}>{r}</Text>
+              </View>
+            ))}
+
+            {/* Actions */}
+            <View style={styles.sheetActions}>
+              <TouchableOpacity
+                style={[styles.sheetActionBtn, styles.sheetActionPrimary]}
+                activeOpacity={0.85}
+                onPress={() => {
+                  hideSheet();
+                  webViewRef.current?.injectJavaScript(`
+                    (function(){
+                      try { window.map.setView([${selectedTerminal.lat}, ${selectedTerminal.lng}], 16, { animate: true }); }
+                      catch(e){}
+                    })(); true;
+                  `);
+                }}
+              >
+                <Feather name="crosshair" size={16} color="#fff" />
+                <Text style={styles.sheetActionPrimaryText}>Show on map</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.sheetActionBtn, styles.sheetActionSecondary]}
+                activeOpacity={0.85}
+                onPress={hideSheet}
+              >
+                <Text style={styles.sheetActionSecondaryText}>Dismiss</Text>
+              </TouchableOpacity>
+            </View>
+          </Animated.View>
+        </>
+      )}
     </View>
   );
 }
@@ -546,5 +1103,131 @@ const styles = StyleSheet.create({
     color: "#fff",
     fontSize: 14,
     fontWeight: "700",
+  },
+
+  // ── Bottom sheet ──
+  scrim: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+  },
+  sheet: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    backgroundColor: "#fff",
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    paddingHorizontal: 20,
+    paddingBottom: 36,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: -3 },
+    shadowOpacity: 0.12,
+    shadowRadius: 10,
+    elevation: 20,
+  },
+  sheetHandle: {
+    alignSelf: "center",
+    width: 40,
+    height: 4,
+    borderRadius: 2,
+    backgroundColor: "#ddd",
+    marginTop: 10,
+    marginBottom: 16,
+  },
+  sheetHeader: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    marginBottom: 14,
+    gap: 12,
+  },
+  sheetIconWrap: {
+    width: 44,
+    height: 44,
+    borderRadius: 10,
+    backgroundColor: "#2c5f9e",
+    alignItems: "center",
+    justifyContent: "center",
+    flexShrink: 0,
+  },
+  sheetTitleBlock: {
+    flex: 1,
+  },
+  sheetName: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#1a1a2e",
+    lineHeight: 22,
+  },
+  sheetType: {
+    fontSize: 13,
+    color: "#777",
+    marginTop: 2,
+  },
+  sheetClose: {
+    padding: 4,
+    flexShrink: 0,
+  },
+  sheetDivider: {
+    height: 1,
+    backgroundColor: "#f0f0f0",
+    marginVertical: 12,
+  },
+  sheetSectionLabel: {
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#aaa",
+    textTransform: "uppercase",
+    letterSpacing: 0.8,
+    marginBottom: 8,
+  },
+  sheetRow: {
+    flexDirection: "row",
+    alignItems: "flex-start",
+    gap: 8,
+    marginBottom: 8,
+  },
+  sheetRowIcon: {
+    marginTop: 1,
+    flexShrink: 0,
+  },
+  sheetRowText: {
+    fontSize: 14,
+    color: "#333",
+    flex: 1,
+    lineHeight: 20,
+  },
+  sheetActions: {
+    flexDirection: "row",
+    gap: 10,
+    marginTop: 18,
+  },
+  sheetActionBtn: {
+    flex: 1,
+    paddingVertical: 13,
+    borderRadius: 12,
+    alignItems: "center",
+    justifyContent: "center",
+    flexDirection: "row",
+    gap: 6,
+  },
+  sheetActionPrimary: {
+    backgroundColor: "#8b4440",
+  },
+  sheetActionPrimaryText: {
+    color: "#fff",
+    fontSize: 14,
+    fontWeight: "700",
+  },
+  sheetActionSecondary: {
+    backgroundColor: "#f2f2f2",
+  },
+  sheetActionSecondaryText: {
+    color: "#555",
+    fontSize: 14,
+    fontWeight: "600",
   },
 });
