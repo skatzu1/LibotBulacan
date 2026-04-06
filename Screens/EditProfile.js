@@ -35,7 +35,6 @@ const Field = ({ label, icon, value, onChangeText, placeholder, keyboardType,
   </View>
 );
 
-// Upload image to Cloudinary via your backend
 async function uploadImageToCloudinary(localUri, token) {
   const formData = new FormData();
   formData.append("file", {
@@ -52,7 +51,7 @@ async function uploadImageToCloudinary(localUri, token) {
 
   if (!res.ok) throw new Error("Image upload failed");
   const data = await res.json();
-  return data.url; // Cloudinary URL
+  return data.url;
 }
 
 export default function EditProfile({ navigation }) {
@@ -73,7 +72,6 @@ export default function EditProfile({ navigation }) {
   const [saving, setSaving] = useState(false);
   const [pickingImage, setPickingImage] = useState(false);
 
-  // ── Track original values to detect changes ──
   const [originalFirstName, setOriginalFirstName] = useState("");
   const [originalLastName, setOriginalLastName] = useState("");
 
@@ -88,16 +86,16 @@ export default function EditProfile({ navigation }) {
       setLastName(ln);
       setOriginalFirstName(fn);
       setOriginalLastName(ln);
+
+      // Prioritize Cloudinary URL from context over Clerk's default imageUrl
       setAvatar(
         profileImage ||
         clerkUser.imageUrl ||
-        clerkUser.profileImageUrl ||
         null
       );
     }
-  }, [isLoaded, clerkUser]);
+  }, [isLoaded, clerkUser]); // ← profileImage intentionally excluded to avoid loop
 
-  // ── Determine if anything has changed ──
   const hasChanges = useMemo(() => {
     const nameChanged    = firstName.trim() !== originalFirstName.trim() ||
                            lastName.trim()  !== originalLastName.trim();
@@ -143,7 +141,7 @@ export default function EditProfile({ navigation }) {
     try {
       const token = await getToken();
 
-      // 1. Upload image to Cloudinary first (real persistent URL)
+      // 1. Upload new image to Cloudinary if picked
       let finalImageUrl = null;
       if (newLocalAvatar) {
         finalImageUrl = await uploadImageToCloudinary(newLocalAvatar, token);
@@ -156,17 +154,24 @@ export default function EditProfile({ navigation }) {
       // 3. Update password if provided
       if (pwNew) {
         if (isGoogleUser) {
-          await clerkUser.updatePassword({ newPassword: pwNew });
+          await clerkUser.updatePassword({
+            newPassword: pwNew,
+            signOutOfOtherSessions: false,
+          });
         } else {
-          await clerkUser.updatePassword({ currentPassword: pwCurrent, newPassword: pwNew });
+          await clerkUser.updatePassword({
+            currentPassword: pwCurrent,
+            newPassword: pwNew,
+            signOutOfOtherSessions: false,
+          });
         }
       }
 
-      // 4. Save everything to DB (Cloudinary URL, not Clerk URL)
+      // 4. Save to DB — always send current image URL to prevent revert to Clerk default
       const body = {
         firstName: firstName.trim(),
         lastName:  lastName.trim(),
-        ...(finalImageUrl ? { profileImage: finalImageUrl } : {}),
+        profileImage: finalImageUrl || profileImage || clerkUser.imageUrl || null,
       };
 
       const dbRes = await fetch(`${BASE_URL}/api/users/me`, {
@@ -178,10 +183,13 @@ export default function EditProfile({ navigation }) {
       const dbData = await dbRes.json();
       console.log("[EditProfile] DB response:", dbData);
 
-      // 5. Update context so Home + Profile show new image instantly
+      // 5. Update context so all screens show new image instantly
       if (finalImageUrl) {
         setProfileImage(finalImageUrl);
       }
+
+      // 6. Reload Clerk user so auth state reflects any changes (e.g. new password)
+      await clerkUser.reload();
 
       Alert.alert(
         "Success",
@@ -223,7 +231,6 @@ export default function EditProfile({ navigation }) {
     );
   }
 
-  // ── Save button is disabled when saving OR no changes made ──
   const saveDisabled = saving || !hasChanges;
 
   return (
