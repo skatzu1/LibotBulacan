@@ -8,6 +8,7 @@ import {
   Image,
   ActivityIndicator,
   RefreshControl,
+  Dimensions,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { Feather } from "@expo/vector-icons";
@@ -15,7 +16,18 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useUser, useAuth } from "@clerk/clerk-expo";
 import { useProfileImage } from "../context/ProfileImageContext";
 
-const BASE_URL = "https://libotbackend.onrender.com";
+const BASE_URL      = "https://libotbackend.onrender.com";
+const { width: SW } = Dimensions.get("window");
+
+// Podium config
+const PODIUM = {
+  1: { blockH: 100, avatarSz: 72, blockColor: "#c87965", order: 1 },
+  2: { blockH: 72,  avatarSz: 58, blockColor: "#a07870", order: 0 },
+  3: { blockH: 56,  avatarSz: 54, blockColor: "#c4a49f", order: 2 },
+};
+
+const fmtPts = (n) =>
+  n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n);
 
 export default function Leaderboard() {
   const navigation                    = useNavigation();
@@ -27,14 +39,11 @@ export default function Leaderboard() {
   const [loading, setLoading]       = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError]           = useState(null);
+  const isFetching                  = useRef(false);
 
-  const isFetching = useRef(false);
-
-  /* ── Fetch leaderboard ── */
   const buildLeaderboard = async (isRefresh = false) => {
     if (isFetching.current) return;
     isFetching.current = true;
-
     if (isRefresh) setRefreshing(true);
     else setLoading(true);
     setError(null);
@@ -44,19 +53,14 @@ export default function Leaderboard() {
       const res   = await fetch(`${BASE_URL}/api/users`, {
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
       });
-
       const ct = res.headers.get("content-type") ?? "";
-      if (!res.ok || !ct.includes("application/json")) {
-        setError("Could not reach the server.");
-        return;
-      }
+      if (!res.ok || !ct.includes("application/json")) { setError("Could not reach the server."); return; }
 
       const data = await res.json();
       const list = Array.isArray(data) ? data : Array.isArray(data.users) ? data.users : null;
+      if (!list) { setError("Unexpected response."); return; }
 
-      if (!list) { setError("Unexpected response from server."); return; }
-
-      let serverUsers = list.map((u) => ({
+      let users = list.map((u) => ({
         id:          u._id,
         clerkUserId: u.clerkUserId,
         name:
@@ -70,20 +74,19 @@ export default function Leaderboard() {
       }));
 
       if (clerkUser?.id) {
-        const idx = serverUsers.findIndex((u) => u.clerkUserId === clerkUser.id);
+        const idx = users.findIndex((u) => u.clerkUserId === clerkUser.id);
         if (idx >= 0) {
-          serverUsers[idx] = {
-            ...serverUsers[idx],
-            // ✅ profileImage from context is the source of truth (Cloudinary URL)
-            avatar: profileImage || clerkUser.imageUrl || clerkUser.profileImageUrl || serverUsers[idx].avatar,
+          users[idx] = {
+            ...users[idx],
+            avatar: profileImage || clerkUser.imageUrl || clerkUser.profileImageUrl || users[idx].avatar,
             isMe: true,
           };
-          await AsyncStorage.setItem("userPoints", String(serverUsers[idx].points)).catch(() => {});
+          AsyncStorage.setItem("userPoints", String(users[idx].points)).catch(() => {});
         }
       }
 
-      serverUsers.sort((a, b) => b.points - a.points || a.name.localeCompare(b.name));
-      setAllUsers(serverUsers);
+      users.sort((a, b) => b.points - a.points || a.name.localeCompare(b.name));
+      setAllUsers(users);
     } catch (e) {
       console.warn("Leaderboard error:", e);
       setError("Failed to load leaderboard.");
@@ -94,304 +97,320 @@ export default function Leaderboard() {
     }
   };
 
+  useEffect(() => { if (!isLoaded) return; buildLeaderboard(); }, [isLoaded]);
   useEffect(() => {
     if (!isLoaded) return;
-    buildLeaderboard();
-  }, [isLoaded]);
-
-  // ✅ Re-run whenever profileImage changes (e.g. after EditProfile saves)
-  useEffect(() => {
-    if (!isLoaded) return;
-    setAllUsers((prev) =>
-      prev.map((u) =>
-        u.isMe ? { ...u, avatar: profileImage || u.avatar } : u
-      )
-    );
+    setAllUsers((prev) => prev.map((u) => u.isMe ? { ...u, avatar: profileImage || u.avatar } : u));
   }, [profileImage]);
-
   useEffect(() => {
-    const unsubscribe = navigation.addListener("focus", () => {
-      if (isLoaded) buildLeaderboard();
-    });
-    return unsubscribe;
+    const unsub = navigation.addListener("focus", () => { if (isLoaded) buildLeaderboard(); });
+    return unsub;
   }, [navigation, isLoaded]);
 
-  /* ── Avatar ── */
-  const renderAvatar = (user, size = "normal") => {
-    const dim      = size === "winner" ? 85 : size === "small" ? 40 : 70;
-    const radius   = dim / 2;
-    const iconSize = size === "winner" ? 35 : size === "small" ? 18 : 30;
-    const bg       = user.isMe ? "#6b4b45" : "#7a5a58";
-
-    if (user.avatar) {
-      return (
-        <Image source={{ uri: user.avatar }} style={{ width: dim, height: dim, borderRadius: radius }} />
-      );
-    }
+  const Avatar = ({ user, size }) => {
+    if (user.avatar)
+      return <Image source={{ uri: user.avatar }} style={{ width: size, height: size, borderRadius: size / 2 }} />;
     return (
-      <View style={{ width: dim, height: dim, borderRadius: radius, backgroundColor: bg, justifyContent: "center", alignItems: "center" }}>
-        <Feather name="user" size={iconSize} color="#fff" />
+      <View style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: user.isMe ? "#6b4b45" : "#a07870", justifyContent: "center", alignItems: "center" }}>
+        <Feather name="user" size={size * 0.4} color="#fff" />
       </View>
     );
   };
 
-  /* ── Loading / error / empty ── */
   if (!isLoaded || loading) {
     return (
-      <View style={[styles.container, styles.centered]}>
+      <View style={[styles.fullScreen, styles.centered]}>
         <ActivityIndicator size="large" color="#6b4b45" />
-        <Text style={styles.loadingText}>Loading leaderboard...</Text>
+        <Text style={styles.loadingText}>Loading leaderboard…</Text>
       </View>
     );
   }
 
-  if (error) {
-    return (
-      <View style={styles.container}>
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-            <Feather name="chevron-left" size={24} color="#4a2e2c" />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Leaderboard</Text>
-          <View style={{ width: 40 }} />
-        </View>
-        <View style={styles.centered}>
-          <Text style={styles.emptyEmoji}>⚠️</Text>
-          <Text style={styles.emptyTitle}>Something went wrong</Text>
-          <Text style={styles.emptySubtitle}>{error}</Text>
-          <TouchableOpacity style={styles.retryButton} onPress={() => buildLeaderboard()}>
+  const ErrorOrEmpty = ({ emoji, title, sub, retry }) => (
+    <View style={styles.fullScreen}>
+      <View style={styles.hero}>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+          <Feather name="chevron-left" size={24} color="#fff" />
+        </TouchableOpacity>
+        <Text style={styles.heroTitle}>Leaderboard</Text>
+      </View>
+      <View style={styles.centered}>
+        <Text style={{ fontSize: 48, marginBottom: 12 }}>{emoji}</Text>
+        <Text style={styles.emptyTitle}>{title}</Text>
+        <Text style={styles.emptySub}>{sub}</Text>
+        {retry && (
+          <TouchableOpacity style={styles.retryBtn} onPress={retry}>
             <Text style={styles.retryText}>Retry</Text>
           </TouchableOpacity>
-        </View>
+        )}
       </View>
-    );
-  }
+    </View>
+  );
 
-  if (allUsers.length === 0) {
-    return (
-      <View style={styles.container}>
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-            <Feather name="chevron-left" size={24} color="#4a2e2c" />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Leaderboard</Text>
-          <View style={{ width: 40 }} />
-        </View>
-        <View style={styles.centered}>
-          <Text style={styles.emptyEmoji}>🏆</Text>
-          <Text style={styles.emptyTitle}>No rankings yet</Text>
-          <Text style={styles.emptySubtitle}>
-            Visit locations to earn points and appear on the leaderboard!
-          </Text>
-        </View>
-      </View>
-    );
-  }
+  if (error) return <ErrorOrEmpty emoji="⚠️" title="Something went wrong" sub={error} retry={() => buildLeaderboard()} />;
+  if (allUsers.length === 0) return <ErrorOrEmpty emoji="🏆" title="No rankings yet" sub="Visit locations to earn points!" />;
 
-  /* ── Main render ── */
-  const topThree        = allUsers.slice(0, 3);
-  const podiumOrder     = [topThree[1], topThree[0], topThree[2]].filter(Boolean);
-  const podiumPositions = [2, 1, 3];
-  const otherUsers      = allUsers.slice(3);
+  // podium: visual order is [2nd, 1st, 3rd]
+  const top3      = allUsers.slice(0, 3);
+  const restUsers = allUsers.slice(3);
+  const podiumVisual = [top3[1], top3[0], top3[2]]; // left=2nd, center=1st, right=3rd
+  const podiumRanks  = [2, 1, 3];
 
   return (
-    <View style={styles.container}>
+    <View style={styles.fullScreen}>
 
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <Feather name="chevron-left" size={24} color="#4a2e2c" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>Leaderboard</Text>
-        <View style={{ width: 40 }} />
-      </View>
+      {/* ─── Hero ─── */}
+      <View style={styles.hero}>
+        {/* Sunburst rays */}
+        <View style={StyleSheet.absoluteFill} pointerEvents="none">
+          {Array.from({ length: 16 }).map((_, i) => (
+            <View key={i} style={[styles.ray, { transform: [{ rotate: `${i * 22.5}deg` }] }]} />
+          ))}
+        </View>
 
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.scrollContent}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={() => buildLeaderboard(true)}
-            tintColor="#6b4b45"
-            colors={["#6b4b45"]}
-          />
-        }
-      >
-        <Text style={styles.totalLabel}>
-          {allUsers.length} player{allUsers.length !== 1 ? "s" : ""} ranked
-        </Text>
+        {/* Nav */}
+        <View style={styles.heroNav}>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
+            <Feather name="chevron-left" size={24} color="#fff" />
+          </TouchableOpacity>
+          <Text style={styles.heroTitle}>Leaderboard</Text>
+          <View style={{ width: 40 }} />
+        </View>
 
-        {/* Top 3 podium */}
-        <View style={styles.podiumContainer}>
-          {podiumOrder.map((user, index) => {
-            if (!user) return null;
-            const position = podiumPositions[index];
-            const isWinner = position === 1;
+        {/* Podium */}
+        <View style={styles.podiumRow}>
+          {podiumVisual.map((user, i) => {
+            if (!user) return <View key={i} style={{ flex: 1 }} />;
+            const rank = podiumRanks[i];
+            const cfg  = PODIUM[rank];
             return (
-              <View key={user.id} style={[styles.podiumItem, isWinner && styles.winnerItem]}>
-                {isWinner && (
-                  <View style={styles.crownContainer}>
-                    <Text style={styles.crown}>👑</Text>
-                  </View>
-                )}
-                <View style={styles.avatarContainer}>
-                  {renderAvatar(user, isWinner ? "winner" : "normal")}
-                  {isWinner ? (
-                    <View style={styles.winnerBadge}>
-                      <Text style={styles.winnerBadgeText}>1</Text>
-                    </View>
-                  ) : (
-                    <View style={[styles.rankBadge, position === 2 ? styles.rank2Badge : styles.rank3Badge]}>
-                      <Text style={styles.rankBadgeText}>{position}</Text>
-                    </View>
-                  )}
+              <View key={user.id} style={styles.podiumCol}>
+
+                {/* Crown above 1st */}
+                {rank === 1 && <Text style={styles.crown}>👑</Text>}
+
+                {/* Floating avatar */}
+                <View style={[
+                  styles.avatarRing,
+                  rank === 1 && styles.avatarRingGold,
+                  user.isMe && styles.avatarRingMe,
+                ]}>
+                  <Avatar user={user} size={cfg.avatarSz} />
                 </View>
-                <Text
-                  style={[styles.podiumName, isWinner && styles.winnerName, user.isMe && styles.meName]}
-                  numberOfLines={1}
-                >
-                  {user.name}{user.isMe ? " (You)" : ""}
+
+                {/* Name */}
+                <Text style={[styles.podiumName, user.isMe && styles.meColor]} numberOfLines={1}>
+                  {user.name}{user.isMe ? "\n(You)" : ""}
                 </Text>
-                <Text style={styles.podiumPts}>{user.points} pts</Text>
+
+                {/* Pts */}
+                <Text style={styles.podiumPts}>
+                  <Feather name="thumbs-up" size={10} color="rgba(255,255,255,0.7)" />{" "}{fmtPts(user.points)}
+                </Text>
+
+                {/* Block */}
+                <View style={[styles.podiumBlock, { height: cfg.blockH, backgroundColor: cfg.blockColor }]}>
+                  <Text style={styles.podiumNum}>{rank}</Text>
+                </View>
               </View>
             );
           })}
         </View>
+      </View>
 
-        {/* Ranked list */}
-        {otherUsers.length > 0 && (
-          <View style={styles.rankedList}>
-            {otherUsers.map((user, index) => (
-              <View key={user.id} style={[styles.rankItem, user.isMe && styles.rankItemMe]}>
-                <View style={styles.rankLeft}>
-                  <Text style={styles.rankNumber}>{index + 4}</Text>
-                  <View style={styles.rankAvatarWrap}>
-                    {renderAvatar(user, "small")}
-                  </View>
-                  <Text style={[styles.rankName, user.isMe && styles.meName]} numberOfLines={1}>
-                    {user.name}{user.isMe ? " (You)" : ""}
-                  </Text>
-                </View>
-                <Text style={styles.rankPts}>{user.points} pts</Text>
+      {/* ─── White card ─── */}
+      <View style={styles.card}>
+        <ScrollView
+          showsVerticalScrollIndicator={false}
+          contentContainerStyle={styles.listContent}
+          refreshControl={
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={() => buildLeaderboard(true)}
+              tintColor="#6b4b45"
+              colors={["#6b4b45"]}
+            />
+          }
+        >
+          {restUsers.map((user, idx) => (
+            <View key={user.id} style={[styles.row, user.isMe && styles.rowMe]}>
+              {user.isMe && <View style={styles.rowAccent} />}
+              <Text style={styles.rowRank}>{idx + 4}</Text>
+              <View style={styles.rowAvatarWrap}>
+                <Avatar user={user} size={42} />
               </View>
-            ))}
-          </View>
-        )}
+              <Text style={[styles.rowName, user.isMe && styles.meColor]} numberOfLines={1}>
+                {user.name}{user.isMe ? " (You)" : ""}
+              </Text>
+              <View style={styles.rowPtsWrap}>
+                <Feather name="thumbs-up" size={13} color="#b0908c" />
+                <Text style={styles.rowPts}>{fmtPts(user.points)}</Text>
+              </View>
+            </View>
+          ))}
 
-        <View style={{ height: 50 }} />
-      </ScrollView>
+          {restUsers.length === 0 && (
+            <Text style={styles.topThreeOnly}>Only the top 3 so far! 🎉</Text>
+          )}
+        </ScrollView>
+      </View>
     </View>
   );
 }
 
-const styles = StyleSheet.create({
-  container:   { flex: 1, backgroundColor: "#f7cfc9", paddingTop: 50 },
-  centered:    { flex: 1, justifyContent: "center", alignItems: "center", paddingHorizontal: 30 },
-  loadingText: { marginTop: 12, fontSize: 14, color: "#7a5a58", fontWeight: "500" },
+const HERO_BG = "#8B5E58";
 
-  // ── Header ──
-  header: {
+const styles = StyleSheet.create({
+  fullScreen: { flex: 1, backgroundColor: "#fff" },
+  centered:   { flex: 1, justifyContent: "center", alignItems: "center", paddingHorizontal: 30 },
+  loadingText: { marginTop: 12, fontSize: 14, color: "#7a5a58" },
+
+  // ── Hero ──
+  hero: {
+    backgroundColor: HERO_BG,
+    overflow: "hidden",
+    paddingBottom: 0,
+  },
+
+  ray: {
+    position: "absolute",
+    alignSelf: "center",
+    top: "50%",
+    width: SW * 2,
+    height: 1.5,
+    backgroundColor: "rgba(255,255,255,0.07)",
+  },
+
+  heroNav: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
     paddingHorizontal: 20,
-    marginBottom: 10,
+    paddingTop: 54,
+    paddingBottom: 20,
   },
-  backButton:  { width: 40, height: 40, justifyContent: "center", alignItems: "flex-start" },
-  headerTitle: { fontSize: 20, fontWeight: "700", color: "#4a2e2c" },
-
-  scrollContent: { paddingHorizontal: 20, paddingTop: 10 },
-  totalLabel: {
-    fontSize: 12,
-    color: "#7a5a58",
-    fontWeight: "500",
-    textAlign: "center",
-    marginBottom: 20,
-  },
-
-  // ── Empty / error ──
-  emptyEmoji:    { fontSize: 56, marginBottom: 14 },
-  emptyTitle:    { fontSize: 18, fontWeight: "700", color: "#4a2e2c", marginBottom: 6, textAlign: "center" },
-  emptySubtitle: { fontSize: 13, color: "#7a5a58", textAlign: "center", lineHeight: 19 },
-  retryButton: {
-    marginTop: 20,
-    backgroundColor: "#6b4b45",
-    paddingHorizontal: 28,
-    paddingVertical: 10,
-    borderRadius: 20,
-  },
-  retryText: { color: "#fff", fontWeight: "700", fontSize: 14 },
+  backBtn:   { width: 40, height: 40, justifyContent: "center" },
+  heroTitle: { fontSize: 20, fontWeight: "700", color: "#fff" },
 
   // ── Podium ──
-  podiumContainer: {
+  podiumRow: {
     flexDirection: "row",
-    justifyContent: "center",
     alignItems: "flex-end",
-    marginBottom: 30,
-    gap: 12,
+    paddingHorizontal: 16,
+    gap: 6,
   },
-  podiumItem:   { alignItems: "center", flex: 1 },
-  winnerItem:   { marginBottom: 18 },
-  crownContainer: { marginBottom: 4 },
-  crown:        { fontSize: 32 },
-  avatarContainer: { position: "relative", marginBottom: 8 },
-  winnerBadge: {
-    position: "absolute",
-    bottom: -5,
-    alignSelf: "center",
-    backgroundColor: "#f4c542",
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    justifyContent: "center",
-    alignItems: "center",
-    borderWidth: 2.5,
-    borderColor: "#f7cfc9",
-  },
-  winnerBadgeText: { color: "#4a2e2c", fontSize: 14, fontWeight: "800" },
-  rankBadge: {
-    position: "absolute",
-    bottom: -5,
-    alignSelf: "center",
-    width: 24,
-    height: 24,
-    borderRadius: 12,
-    justifyContent: "center",
-    alignItems: "center",
-    borderWidth: 2,
-    borderColor: "#f7cfc9",
-  },
-  rank2Badge:      { backgroundColor: "#a8a8a8" },
-  rank3Badge:      { backgroundColor: "#cd7f32" },
-  rankBadgeText:   { color: "#fff", fontSize: 11, fontWeight: "800" },
-  podiumName:      { fontSize: 13, fontWeight: "600", color: "#4a2e2c", marginBottom: 2, textAlign: "center" },
-  winnerName:      { fontSize: 14, fontWeight: "700" },
-  meName:          { color: "#6b4b45" },
-  podiumPts:       { fontSize: 11, color: "#7a5a58", fontWeight: "500" },
+  podiumCol: { flex: 1, alignItems: "center" },
 
-  // ── Ranked list ──
-  rankedList: { marginBottom: 10 },
-  rankItem: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    backgroundColor: "#fff",
-    borderRadius: 12,
-    paddingVertical: 11,
-    paddingHorizontal: 14,
-    marginBottom: 8,
-    borderWidth: 1,
-    borderColor: "#f0e0de",
+  crown: { fontSize: 24, marginBottom: 2 },
+
+  avatarRing: {
+    borderRadius: 999,
+    borderWidth: 2.5,
+    borderColor: "rgba(255,255,255,0.35)",
+    marginBottom: 6,
+    // small shadow
+    shadowColor: "#000",
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 3 },
+    elevation: 4,
   },
-  rankItemMe: {
-    borderColor: "#6b4b45",
-    borderWidth: 1.5,
+  avatarRingGold: { borderColor: "#f4d490" },
+  avatarRingMe:   { borderColor: "#fff" },
+
+  podiumName: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#fff",
+    textAlign: "center",
+    marginBottom: 2,
+    maxWidth: SW / 3 - 20,
+  },
+  podiumPts: {
+    fontSize: 11,
+    color: "rgba(255,255,255,0.7)",
+    marginBottom: 6,
+  },
+
+  podiumBlock: {
+    width: "100%",
+    borderTopLeftRadius: 8,
+    borderTopRightRadius: 8,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  podiumNum: {
+    fontSize: 28,
+    fontWeight: "800",
+    color: "rgba(255,255,255,0.9)",
+  },
+
+  // ── White card ──
+  card: {
+    flex: 1,
+    backgroundColor: "#fff",
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    marginTop: -24,         // overlaps the hero bottom
+    paddingTop: 20,
+    paddingHorizontal: 20,
+    shadowColor: "#000",
+    shadowOpacity: 0.07,
+    shadowRadius: 10,
+    shadowOffset: { width: 0, height: -4 },
+    elevation: 8,
+  },
+  listContent: { paddingBottom: 40 },
+
+  // ── Rows ──
+  row: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 10,
+    paddingHorizontal: 6,
+    marginBottom: 4,
+    borderRadius: 12,
+    overflow: "hidden",
+  },
+  rowMe: {
     backgroundColor: "#faf5f4",
   },
-  rankLeft:      { flexDirection: "row", alignItems: "center", flex: 1 },
-  rankNumber:    { fontSize: 15, fontWeight: "700", color: "#6b4b45", width: 30, textAlign: "center" },
-  rankAvatarWrap: { marginRight: 11 },
-  rankName:      { fontSize: 15, fontWeight: "500", color: "#4a2e2c", flex: 1 },
-  rankPts:       { fontSize: 13, color: "#7a5a58", fontWeight: "600" },
+  rowAccent: {
+    position: "absolute",
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: 4,
+    backgroundColor: "#6b4b45",
+    borderRadius: 4,
+  },
+  rowRank: {
+    width: 30,
+    fontSize: 15,
+    fontWeight: "700",
+    color: "#7a5a58",
+    textAlign: "center",
+  },
+  rowAvatarWrap: {
+    marginRight: 12,
+    borderRadius: 21,
+    overflow: "hidden",
+  },
+  rowName: {
+    flex: 1,
+    fontSize: 15,
+    fontWeight: "500",
+    color: "#4a2e2c",
+  },
+  meColor: { color: "#6b4b45", fontWeight: "700" },
+  rowPtsWrap: { flexDirection: "row", alignItems: "center", gap: 4 },
+  rowPts:     { fontSize: 13, color: "#7a5a58", fontWeight: "600" },
+
+  topThreeOnly: { textAlign: "center", color: "#a07870", fontSize: 13, marginTop: 20 },
+
+  // ── Empty/error ──
+  emptyTitle: { fontSize: 18, fontWeight: "700", color: "#4a2e2c", marginBottom: 6, textAlign: "center" },
+  emptySub:   { fontSize: 13, color: "#7a5a58", textAlign: "center", lineHeight: 20 },
+  retryBtn:   { marginTop: 20, backgroundColor: "#6b4b45", paddingHorizontal: 28, paddingVertical: 10, borderRadius: 20 },
+  retryText:  { color: "#fff", fontWeight: "700", fontSize: 14 },
 });

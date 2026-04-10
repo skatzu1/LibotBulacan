@@ -22,16 +22,17 @@ import { useAuth } from "../context/AuthContext";
 import { useReviews } from "../context/ReviewContext";
 import { useUser } from "@clerk/clerk-expo";
 import { MaterialIcons } from "@expo/vector-icons";
-import {useProfileImage} from "../context/ProfileImageContext";
+import { useProfileImage } from "../context/ProfileImageContext";
 
-import Bookmark from "./Bookmark";
-import Leaderboard from "./Leaderboard";
-import Categories from "./Categories";
+import Bookmark      from "./Bookmark";
+import Leaderboard   from "./Leaderboard";
+import Categories    from "./Categories";
 import ProfileScreen from "./Profilescreen";
 
-const { width } = Dimensions.get("window");
+const { width, height } = Dimensions.get("window");
+const HERO_H            = height * 0.40;
 
-const Drawer = createDrawerNavigator();
+const Drawer    = createDrawerNavigator();
 const BottomTab = createBottomTabNavigator();
 
 /* -------------------------------------------------------------------------- */
@@ -39,90 +40,40 @@ const BottomTab = createBottomTabNavigator();
 /* -------------------------------------------------------------------------- */
 function CustomDrawerContent(props) {
   const { navigation } = props;
-
   return (
     <DrawerContentScrollView {...props} contentContainerStyle={styles.drawerContainer}>
       <Text style={styles.drawerHeading}>Menu</Text>
 
-      <DrawerItem
-        label="Home"
-        icon={({ color }) => <Feather name="home" size={20} color={color} />}
-        onPress={() => navigation.navigate("HomeSide")}
-        labelStyle={styles.drawerLabel}
-        inactiveTintColor="#3a2a28"
-      />
-
-      <DrawerItem
-        label="Profile"
-        icon={({ color }) => <Feather name="user" size={20} color={color} />}
-        onPress={() => navigation.navigate("Profile")}
-        labelStyle={styles.drawerLabel}
-        inactiveTintColor="#3a2a28"
-      />
+      <DrawerItem label="Home"    icon={({ color }) => <Feather name="home"      size={20} color={color} />} onPress={() => navigation.navigate("HomeSide")}           labelStyle={styles.drawerLabel} inactiveTintColor="#3a2a28" />
+      <DrawerItem label="Profile" icon={({ color }) => <Feather name="user"      size={20} color={color} />} onPress={() => navigation.navigate("Profile")}            labelStyle={styles.drawerLabel} inactiveTintColor="#3a2a28" />
 
       <Text style={styles.drawerSection}>Explore</Text>
 
-      <DrawerItem
-        label="AR Experience"
-        icon={({ color }) => <Feather name="camera" size={20} color={color} />}
-        onPress={() => navigation.navigate("ARSpotSelect")}
-        labelStyle={styles.drawerLabel}
-        inactiveTintColor="#3a2a28"
-      />
-
-      <DrawerItem
-        label="Mission"
-        icon={({ color }) => <Feather name="flag" size={20} color={color} />}
-        onPress={() => navigation.navigate("MissionsSpotSelect")}
-        labelStyle={styles.drawerLabel}
-        inactiveTintColor="#3a2a28"
-      />
-
-      <DrawerItem
-        label="Navigate to Spot"
-        icon={({ color }) => <Feather name="navigation" size={20} color={color} />}
-        onPress={() => navigation.navigate("TrackSpotSelect")}
-        labelStyle={styles.drawerLabel}
-        inactiveTintColor="#3a2a28"
-      />
+      <DrawerItem label="AR Experience"    icon={({ color }) => <Feather name="camera"    size={20} color={color} />} onPress={() => navigation.navigate("ARSpotSelect")}       labelStyle={styles.drawerLabel} inactiveTintColor="#3a2a28" />
+      <DrawerItem label="Mission"          icon={({ color }) => <Feather name="flag"       size={20} color={color} />} onPress={() => navigation.navigate("MissionsSpotSelect")} labelStyle={styles.drawerLabel} inactiveTintColor="#3a2a28" />
+      <DrawerItem label="Navigate to Spot" icon={({ color }) => <Feather name="navigation" size={20} color={color} />} onPress={() => navigation.navigate("TrackSpotSelect")}    labelStyle={styles.drawerLabel} inactiveTintColor="#3a2a28" />
 
       <View style={styles.drawerDivider} />
 
-      <DrawerItem
-        label="Logout"
-        icon={({ color }) => <Feather name="log-out" size={20} color={color} />}
-        onPress={() => navigation.navigate("Logout")}
-        labelStyle={[styles.drawerLabel, { color: "#c0392b" }]}
-        inactiveTintColor="#c0392b"
-      />
+      <DrawerItem label="Logout" icon={({ color }) => <Feather name="log-out" size={20} color={color} />} onPress={() => navigation.navigate("Logout")} labelStyle={[styles.drawerLabel, { color: "#c0392b" }]} inactiveTintColor="#c0392b" />
     </DrawerContentScrollView>
   );
 }
 
 /* -------------------------------------------------------------------------- */
-/*                            BOTTOM TABS STYLE                               */
+/*                            CUSTOM BOTTOM TAB                               */
 /* -------------------------------------------------------------------------- */
 function CustomTabBar({ state, descriptors, navigation }) {
   return (
-    <View style={styles.customTabBarContainer}>
-      <View style={styles.customTabBar}>
+    <View style={styles.tabBarWrap}>
+      <View style={styles.tabBar}>
         {state.routes.map((route, index) => {
           const { options } = descriptors[route.key];
-          const isFocused = state.index === index;
+          const isFocused   = state.index === index;
 
           const onPress = () => {
-            const event = navigation.emit({
-              type: "tabPress",
-              target: route.key,
-              canPreventDefault: true,
-            });
-            if (!isFocused && !event.defaultPrevented) {
-              navigation.navigate(route.name);
-            }
-          };
-
-          const onLongPress = () => {
-            navigation.emit({ type: "tabLongPress", target: route.key });
+            const event = navigation.emit({ type: "tabPress", target: route.key, canPreventDefault: true });
+            if (!isFocused && !event.defaultPrevented) navigation.navigate(route.name);
           };
 
           return (
@@ -130,18 +81,16 @@ function CustomTabBar({ state, descriptors, navigation }) {
               key={route.key}
               accessibilityRole="button"
               accessibilityState={isFocused ? { selected: true } : {}}
-              accessibilityLabel={options.tabBarAccessibilityLabel}
-              testID={options.tabBarTestID}
               onPress={onPress}
-              onLongPress={onLongPress}
+              onLongPress={() => navigation.emit({ type: "tabLongPress", target: route.key })}
               style={styles.tabItem}
             >
-              {options.tabBarIcon &&
-                options.tabBarIcon({
-                  focused: isFocused,
-                  color: isFocused ? "#f7cfc9" : "#ffffff",
-                  size: 24,
-                })}
+              {isFocused && <View style={styles.tabActiveDot} />}
+              {options.tabBarIcon?.({
+                focused: isFocused,
+                color:   isFocused ? "#6b4b45" : "#b0a09e",
+                size:    22,
+              })}
             </TouchableOpacity>
           );
         })}
@@ -151,7 +100,7 @@ function CustomTabBar({ state, descriptors, navigation }) {
 }
 
 /* -------------------------------------------------------------------------- */
-/*                         BOTTOM TABS FUNCTION                               */
+/*                            BOTTOM TABS NAV                                 */
 /* -------------------------------------------------------------------------- */
 function HomeBottomTabs() {
   return (
@@ -159,46 +108,10 @@ function HomeBottomTabs() {
       tabBar={(props) => <CustomTabBar {...props} />}
       screenOptions={{ headerShown: false }}
     >
-      <BottomTab.Screen
-        name="HomeScreen"
-        component={HomeTab}
-        options={{
-          tabBarLabel: "HomeScreen",
-          tabBarIcon: ({ color }) => (
-            <Feather name="home" size={24} color={color} />
-          ),
-        }}
-      />
-      <BottomTab.Screen
-        name="Categories"
-        component={Categories}
-        options={{
-          tabBarLabel: "Categories",
-          tabBarIcon: ({ color }) => (
-            <Feather name="grid" size={24} color={color} />
-          ),
-        }}
-      />
-      <BottomTab.Screen
-        name="Bookmark"
-        component={Bookmark}
-        options={{
-          tabBarLabel: "Bookmark",
-          tabBarIcon: ({ color }) => (
-            <Feather name="bookmark" size={24} color={color} />
-          ),
-        }}
-      />
-      <BottomTab.Screen
-        name="Leaderboard"
-        component={Leaderboard}
-        options={{
-          tabBarLabel: "Leaderboard",
-          tabBarIcon: ({ color }) => (
-            <Feather name="award" size={24} color={color} />
-          ),
-        }}
-      />
+      <BottomTab.Screen name="HomeScreen"  component={HomeTab}     options={{ tabBarIcon: ({ color }) => <Feather name="home"     size={22} color={color} /> }} />
+      <BottomTab.Screen name="Categories"  component={Categories}  options={{ tabBarIcon: ({ color }) => <Feather name="grid"     size={22} color={color} /> }} />
+      <BottomTab.Screen name="Bookmark"    component={Bookmark}    options={{ tabBarIcon: ({ color }) => <Feather name="bookmark" size={22} color={color} /> }} />
+      <BottomTab.Screen name="Leaderboard" component={Leaderboard} options={{ tabBarIcon: ({ color }) => <Feather name="award"    size={22} color={color} /> }} />
     </BottomTab.Navigator>
   );
 }
@@ -207,9 +120,9 @@ function HomeBottomTabs() {
 /*                               HOME SCREEN                                  */
 /* -------------------------------------------------------------------------- */
 function HomeTab() {
-  const navigation = useNavigation();
-  const { user: authUser } = useAuth();
-  const { user: clerkUser } = useUser();
+  const navigation                = useNavigation();
+  const { user: authUser }        = useAuth();
+  const { user: clerkUser }       = useUser();
   const { profileImage, loading } = useProfileImage();
 
   if (loading) return null;
@@ -222,33 +135,8 @@ function HomeTab() {
     null;
 
   return (
-    <View style={styles.screen}>
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.toggleDrawer()}>
-          <Feather name="menu" size={28} color="#4a4a4a" />
-        </TouchableOpacity>
-
-        <Image
-          source={require("../assets/logo.png")}
-          style={styles.logo}
-          resizeMode="contain"
-        />
-
-        <TouchableOpacity onPress={() => navigation.navigate("Profile")}>
-          {profilePhoto ? (
-            <Image
-              source={{ uri: profilePhoto + "?t=" + Date.now() }}
-              style={styles.profileImage}
-            />
-          ) : (
-            <View style={styles.profileIcon}>
-              <Feather name="user" size={20} color="#fff" />
-            </View>
-          )}
-        </TouchableOpacity>
-      </View>
-
-      <HomeContent />
+    <View style={{ flex: 1, backgroundColor: "#fff" }}>
+      <HomeContent profilePhoto={profilePhoto} navigation={navigation} />
     </View>
   );
 }
@@ -256,226 +144,206 @@ function HomeTab() {
 /* -------------------------------------------------------------------------- */
 /*                              HOME CONTENT                                  */
 /* -------------------------------------------------------------------------- */
-function HomeContent() {
-  const navigation = useNavigation();
-  const { getAverageRating } = useReviews();
+function HomeContent({ profilePhoto, navigation }) {
+  const { getAverageRating }        = useReviews();
   const [spots, setSpots]           = useState([]);
   const [topSpots, setTopSpots]     = useState([]);
   const [loading, setLoading]       = useState(true);
   const [topLoading, setTopLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(0);
 
-  const getSpotRating = (spot) => {
-    return getAverageRating(spot._id) || 0;
-  };
+  const handleSpotPress = (spot) => navigation.navigate("InformationScreen", { spot });
 
-  const handleSpotPress = (spot) => {
-    navigation.navigate("InformationScreen", { spot });
-  };
+  const sliderData = spots.slice(0, 8).map(
+    ({ _id, image, name, description, location, rating, modelUrl, visitCount }, i) => ({
+      id:          _id || String(i),
+      image,
+      title:       name,
+      location:    location || "Philippines",
+      description: description || "",
+      rating:      getAverageRating(_id) || 0,
+      visitCount:  visitCount ?? 0,
+      spot:        { _id, image, name, description, location, rating, modelUrl },
+    })
+  );
 
-  const sliderData =
-    spots.length > 0
-      ? spots.slice(0, 14).map(
-          ({ _id, image, name, description, location, rating, modelUrl, visitCount }, index) => {
-            const displayRating = getAverageRating(_id) || 0;
-            return {
-              id: _id || String(index),
-              image,
-              title: name,
-              location,
-              rating: displayRating,
-              visitCount: visitCount ?? 0,
-              spot: { _id, image, name, description, location, rating, modelUrl },
-            };
-          }
-        )
-      : [];
+  const activeSpot = sliderData[activeIndex] ?? null;
 
   useEffect(() => {
-    setLoading(true);
-    fetch(`https://libotbackend.onrender.com/api/spots`)
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.success) setSpots(data.spots);
-        setLoading(false);
-      })
-      .catch((err) => {
-        console.error("Error fetching spots:", err);
-        setLoading(false);
-      });
+    fetch("https://libotbackend.onrender.com/api/spots")
+      .then((r) => r.json())
+      .then((d) => { if (d.success) setSpots(d.spots); })
+      .catch(console.error)
+      .finally(() => setLoading(false));
   }, []);
 
   useEffect(() => {
-    setTopLoading(true);
-    fetch(`https://libotbackend.onrender.com/api/spots/top/visited`)
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.success) {
-          const visited = data.spots.filter((s) => (s.visitCount ?? 0) > 0);
-          setTopSpots(visited);
-        }
-        setTopLoading(false);
+    fetch("https://libotbackend.onrender.com/api/spots/top/visited")
+      .then((r) => r.json())
+      .then((d) => {
+        if (d.success) setTopSpots(d.spots.filter((s) => (s.visitCount ?? 0) > 0));
       })
-      .catch((err) => {
-        console.error("Error fetching top spots:", err);
-        setTopLoading(false);
-      });
+      .catch(console.error)
+      .finally(() => setTopLoading(false));
   }, []);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
     Promise.all([
-      fetch('https://libotbackend.onrender.com/api/spots')
-        .then((res) => res.json())
-        .then((data) => { if (data.success) setSpots(data.spots); })
-        .catch((err) => console.error('Refresh spots error:', err)),
-      fetch('https://libotbackend.onrender.com/api/spots/top/visited')
-        .then((res) => res.json())
-        .then((data) => {
-          if (data.success) {
-            const visited = data.spots.filter((s) => (s.visitCount ?? 0) > 0);
-            setTopSpots(visited);
-          }
-        })
-        .catch((err) => console.error('Refresh top spots error:', err)),
-    ]).finally(() => setRefreshing(false));
+      fetch("https://libotbackend.onrender.com/api/spots").then((r) => r.json()).then((d) => { if (d.success) setSpots(d.spots); }),
+      fetch("https://libotbackend.onrender.com/api/spots/top/visited").then((r) => r.json()).then((d) => {
+        if (d.success) setTopSpots(d.spots.filter((s) => (s.visitCount ?? 0) > 0));
+      }),
+    ]).catch(console.error).finally(() => setRefreshing(false));
   }, []);
 
   return (
     <ScrollView
-      style={styles.tabScreen}
+      style={h.scroll}
       showsVerticalScrollIndicator={false}
-      refreshControl={
-        <RefreshControl
-          refreshing={refreshing}
-          onRefresh={onRefresh}
-          colors={["#8b4440"]}
-          tintColor="#8b4440"
-        />
-      }
+      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#6b4b45" colors={["#6b4b45"]} />}
     >
-      <View style={styles.recommendedTextContainer}>
-        <Text style={styles.recommendedText}>Recommended</Text>
-      </View>
-      <View style={styles.carouselContainer}>
-        {loading ? (
-          <View style={styles.loadingContainer}>
-            <Text style={styles.loadingText}>Loading spots...</Text>
+      {/* ─────────────── HERO ─────────────── */}
+      <View style={h.heroWrap}>
+        {loading || sliderData.length === 0 ? (
+          <View style={h.heroPlaceholder}>
+            <Text style={{ color: "rgba(255,255,255,0.6)" }}>Loading…</Text>
           </View>
-        ) : sliderData.length > 0 ? (
+        ) : (
           <Carousel
             width={width}
-            height={250}
+            height={HERO_H}
             data={sliderData}
             loop
             autoPlay
-            mode="parallax"
             autoPlayInterval={4000}
-            scrollAnimationDuration={1000}
+            scrollAnimationDuration={900}
+            onProgressChange={(_, abs) =>
+              setActiveIndex(Math.round(abs) % sliderData.length)
+            }
             renderItem={({ item }) => (
-              <TouchableOpacity
-                onPress={() => handleSpotPress(item.spot)}
-                style={styles.carouselCard}
-              >
-                <Image
-                  source={{ uri: item.image, cache: "force-cache" }}
-                  style={styles.carouselImage}
-                  resizeMode="cover"
-                />
-                <View style={styles.carouselOverlay}>
-                  <Text style={styles.carouselTitle}>{item.title}</Text>
-                  <View style={styles.carouselLocationContainer}>
-                    <Feather name="map-pin" size={12} color="#ffffff" />
-                    <Text style={styles.carouselLocation}>
-                      {item.location || "Philippines"}
-                    </Text>
-                  </View>
-                  <View style={styles.carouselBottomRow}>
-                    <View style={styles.carouselVisitRow}>
-                      <Feather name="eye" size={11} color="#f7cfc9" />
-                      <Text style={styles.carouselVisitText}>
-                        {" "}{item.visitCount}{" "}
-                        {item.visitCount === 1 ? "visit" : "visits"}
-                      </Text>
-                    </View>
-                  </View>
-                  <View style={styles.carouselRating}>
-                    <MaterialIcons name="star" size={12} color="#FFD700" />
-                    <Text style={styles.carouselRatingText}>
-                      {String(item.rating)}
-                    </Text>
-                  </View>
-                </View>
-              </TouchableOpacity>
+              <Image
+                source={{ uri: item.image }}
+                style={h.heroImage}
+                resizeMode="cover"
+              />
             )}
           />
-        ) : (
-          <View style={styles.loadingContainer}>
-            <Text style={styles.loadingText}>No spots available</Text>
+        )}
+
+        {/* Floating header */}
+        <View style={h.heroHeader}>
+          <TouchableOpacity style={h.menuBtn} onPress={() => navigation.toggleDrawer()}>
+            <View style={h.menuLine} />
+            <View style={[h.menuLine, { width: 14 }]} />
+            <View style={h.menuLine} />
+          </TouchableOpacity>
+
+          <TouchableOpacity onPress={() => navigation.navigate("Profile")} style={h.avatarWrap}>
+            {profilePhoto ? (
+              <Image source={{ uri: profilePhoto }} style={h.avatar} />
+            ) : (
+              <View style={[h.avatar, h.avatarFallback]}>
+                <Feather name="user" size={18} color="#fff" />
+              </View>
+            )}
+            <View style={h.onlineDot} />
+          </TouchableOpacity>
+        </View>
+
+        {/* Pagination dots */}
+        {sliderData.length > 0 && (
+          <View style={h.dotsRow}>
+            {sliderData.map((_, i) => (
+              <View key={i} style={[h.dot, i === activeIndex && h.dotActive]} />
+            ))}
           </View>
         )}
       </View>
 
-      <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>Top Places visited this week</Text>
-        <TouchableOpacity>
-          <Text style={styles.viewAll}>View All</Text>
-        </TouchableOpacity>
-      </View>
+      {/* ─────────────── SPOT INFO CARD ─────────────── */}
+      {activeSpot && (
+        <View style={h.infoCard}>
+          <View style={h.infoRow}>
+            <Text style={h.spotName} numberOfLines={1}>{activeSpot.title}</Text>
+            <View style={h.visitsBadge}>
+              <Feather name="eye" size={12} color="#6b4b45" />
+              <Text style={h.visitsText}> {activeSpot.visitCount} visits</Text>
+            </View>
+          </View>
 
-      {topLoading ? (
-        <View style={styles.loadingContainer}>
-          <Text style={styles.loadingText}>Loading top places...</Text>
-        </View>
-      ) : topSpots.length > 0 ? (
-        topSpots.map((spot) => {
-          const displayRating = getSpotRating(spot);
+          <View style={h.infoRow}>
+            <View style={h.locationRow}>
+              <Feather name="map-pin" size={13} color="#6b4b45" />
+              <Text style={h.locationText}>{activeSpot.location}</Text>
+            </View>
+            <View style={h.starsRow}>
+              {[1, 2, 3, 4, 5].map((s) => (
+                <MaterialIcons
+                  key={s}
+                  name="star"
+                  size={14}
+                  color={s <= Math.round(activeSpot.rating) ? "#f4c542" : "#e0d0ce"}
+                />
+              ))}
+            </View>
+          </View>
 
-          return (
-            <TouchableOpacity
-              key={spot._id}
-              style={styles.topPlaceCard}
-              onPress={() => handleSpotPress(spot)}
-            >
-              <Image
-                source={{ uri: spot.image, cache: "force-cache" }}
-                style={styles.topPlaceImage}
-                resizeMode="cover"
-              />
-              <View style={styles.topPlaceInfo}>
-                <Text style={styles.topPlaceTitle}>{spot.name}</Text>
-                <View style={styles.topPlaceLocationContainer}>
-                  <Feather name="map-pin" size={12} color="#ffffff" />
-                  <Text style={styles.topPlaceLocation}>
-                    {spot.location || "Philippines"}
-                  </Text>
-                </View>
-                <View style={styles.topPlaceRating}>
-                  <MaterialIcons name="star" size={12} color="#FFD700" />
-                  <Text style={styles.topPlaceRatingText}>
-                    {String(displayRating)}
-                  </Text>
-                </View>
-                <View style={styles.visitCountRow}>
-                  <Feather name="eye" size={11} color="#5a4a4a" />
-                  <Text style={styles.visitCountText}>
-                    {" "}{spot.visitCount ?? 0}{" "}
-                    {spot.visitCount === 1 ? "visit" : "visits"}
-                  </Text>
-                </View>
-              </View>
-            </TouchableOpacity>
-          );
-        })
-      ) : (
-        <View style={styles.loadingContainer}>
-          <Text style={styles.loadingText}>
-            No visits yet — be the first to explore!
-          </Text>
+          {activeSpot.description ? (
+            <Text style={h.description} numberOfLines={3}>
+              {activeSpot.description}
+            </Text>
+          ) : null}
+
+          <TouchableOpacity
+            style={h.exploreBtn}
+            onPress={() => handleSpotPress(activeSpot.spot)}
+          >
+            <Text style={h.exploreBtnText}>Explore Spot</Text>
+            <Feather name="arrow-right" size={15} color="#fff" />
+          </TouchableOpacity>
         </View>
       )}
 
-      <View style={{ height: 150 }} />
+      {/* ─────────────── TOP CITIES ─────────────── */}
+      <View style={h.section}>
+        <Text style={h.sectionTitle}>Top Cities</Text>
+        {topLoading ? (
+          <View style={h.loadingBox}><Text style={h.loadingText}>Loading…</Text></View>
+        ) : topSpots.length === 0 ? (
+          <Text style={h.emptyText}>No visits yet — be the first to explore!</Text>
+        ) : (
+          <View style={h.grid}>
+            {topSpots.map((spot, i) => (
+              <TouchableOpacity
+                key={spot._id}
+                style={[h.gridCard, i === 0 && h.gridCardWide]}
+                onPress={() => handleSpotPress(spot)}
+                activeOpacity={0.88}
+              >
+                <Image source={{ uri: spot.image }} style={h.gridImg} resizeMode="cover" />
+                <View style={h.gridOverlay} />
+                <View style={h.gridInfoWrap}>
+                  <Text style={h.gridName} numberOfLines={1}>{spot.name}</Text>
+                  <View style={h.gridMeta}>
+                    <View style={h.gridRatingRow}>
+                      <MaterialIcons name="star" size={11} color="#f4c542" />
+                      <Text style={h.gridRatingText}>{getAverageRating(spot._id) || 0}</Text>
+                    </View>
+                    <View style={h.gridVisitRow}>
+                      <Feather name="eye" size={10} color="rgba(255,255,255,0.8)" />
+                      <Text style={h.gridVisitText}> {spot.visitCount ?? 0}</Text>
+                    </View>
+                  </View>
+                </View>
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
+      </View>
+
+      <View style={{ height: 160 }} />
     </ScrollView>
   );
 }
@@ -487,14 +355,11 @@ export default function HomeDrawer() {
   return (
     <Drawer.Navigator
       drawerContent={(props) => <CustomDrawerContent {...props} />}
-      screenOptions={{
-        headerShown: false,
-        drawerStyle: { backgroundColor: "#dbbcb7" },
-      }}
+      screenOptions={{ headerShown: false, drawerStyle: { backgroundColor: "#dbbcb7" } }}
     >
       <Drawer.Screen name="HomeSide" component={HomeBottomTabs} />
-      <Drawer.Screen name="Profile" component={ProfileScreen} />
-      <Drawer.Screen name="Logout" component={LogoutScreen} />
+      <Drawer.Screen name="Profile"  component={ProfileScreen} />
+      <Drawer.Screen name="Logout"   component={LogoutScreen} />
     </Drawer.Navigator>
   );
 }
@@ -509,27 +374,15 @@ function LogoutScreen() {
   useFocusEffect(
     React.useCallback(() => {
       Alert.alert("Logout", "Are you sure you want to logout?", [
-        {
-          text: "Cancel",
-          style: "cancel",
-          onPress: () => navigation.navigate("HomeSide"),
-        },
-        {
-          text: "Log Out",
-          onPress: async () => {
-            try {
-              await logout();
-              navigation.replace("Login");
-            } catch (error) {
-              Alert.alert("Error", "Failed to log out. Please try again.");
-            }
+        { text: "Cancel",  style: "cancel",     onPress: () => navigation.navigate("HomeSide") },
+        { text: "Log Out", style: "destructive", onPress: async () => {
+            try { await logout(); navigation.replace("Login"); }
+            catch { Alert.alert("Error", "Failed to log out. Please try again."); }
           },
-          style: "destructive",
         },
       ]);
     }, [])
   );
-
   return null;
 }
 
@@ -537,89 +390,129 @@ function LogoutScreen() {
 /*                                  STYLES                                    */
 /* -------------------------------------------------------------------------- */
 const styles = StyleSheet.create({
-  screen:    { flex: 1, backgroundColor: "#ffffff", paddingTop: 50 },
-  tabScreen: { flex: 1, backgroundColor: "#ffffff" },
-  header: {
-    width: "90%",
+  drawerContainer: { flex: 1, paddingTop: 40, paddingHorizontal: 8 },
+  drawerHeading:   { fontSize: 22, fontWeight: "700", color: "#3a2a28", paddingHorizontal: 16, marginBottom: 8 },
+  drawerSection:   { fontSize: 11, fontWeight: "700", color: "#8b5550", letterSpacing: 1.2, paddingHorizontal: 16, marginTop: 20, marginBottom: 4 },
+  drawerLabel:     { fontSize: 15, fontWeight: "500" },
+  drawerDivider:   { height: 1, backgroundColor: "rgba(90,74,74,0.2)", marginHorizontal: 16, marginVertical: 12 },
+
+  tabBarWrap: {
+    position: "absolute",
+    bottom: 0, left: 0, right: 0,
+    alignItems: "center",
+    paddingBottom: 24,
+    backgroundColor: "transparent",
+  },
+  tabBar: {
+    flexDirection: "row",
+    backgroundColor: "#fff",
+    borderRadius: 32,
+    height: 64,
+    width: width * 0.82,
+    alignItems: "center",
+    justifyContent: "space-around",
+    paddingHorizontal: 16,
+    shadowColor: "#4a2e2c",
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.12,
+    shadowRadius: 20,
+    elevation: 12,
+  },
+  tabItem: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    height: "100%",
+  },
+  tabActiveDot: {
+    position: "absolute",
+    top: 8,
+    width: 4, height: 4,
+    borderRadius: 2,
+    backgroundColor: "#6b4b45",
+  },
+});
+
+const h = StyleSheet.create({
+  scroll: { flex: 1, backgroundColor: "#fff" },
+
+  heroWrap: {
+    width: "100%",
+    height: HERO_H,
+    backgroundColor: "#c4a49f",
+    borderBottomLeftRadius: 28,
+    borderBottomRightRadius: 28,
+    overflow: "hidden",
+  },
+  heroPlaceholder: { flex: 1, justifyContent: "center", alignItems: "center" },
+  heroImage:       { width: "100%", height: HERO_H },
+
+  heroHeader: {
+    position: "absolute",
+    top: 0, left: 0, right: 0,
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 20,
-    alignSelf: "center",
+    paddingTop: 54,
+    paddingHorizontal: 22,
+    paddingBottom: 10,
   },
-  logo:        { width: 50, height: 50 },
-  profileIcon: {
-    width: 40, height: 40, borderRadius: 20,
-    backgroundColor: "#4a4a4a",
-    justifyContent: "center", alignItems: "center",
-  },
-  profileImage: { width: 40, height: 40, borderRadius: 20, backgroundColor: "#4a4a4a" },
-  recommendedTextContainer: { marginTop: 15, width: "90%", alignSelf: "center" },
-  recommendedText: { fontSize: 16, fontWeight: "600", color: "#4a4a4a" },
-  carouselContainer: { width: "100%", alignItems: "center", marginBottom: 20, height: 250 },
-  carouselCard: {
-    flex: 1, borderRadius: 20, overflow: "hidden", marginHorizontal: 10,
-    backgroundColor: "#fff",
-    shadowColor: "#000", shadowOpacity: 0.2, shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 }, elevation: 5,
-  },
-  carouselImage:   { width: "100%", height: "100%", backgroundColor: "#e0e0e0" },
-  carouselOverlay: {
-    position: "absolute", bottom: 0, left: 0, right: 0,
-    padding: 15, backgroundColor: "rgba(0,0,0,0.4)",
-  },
-  carouselTitle:             { color: "#fff", fontSize: 18, fontWeight: "700", marginBottom: 5 },
-  carouselLocationContainer: { flexDirection: "row", alignItems: "center", marginBottom: 5 },
-  carouselLocation:          { color: "#fff", fontSize: 12, marginLeft: 5 },
-  carouselBottomRow:         { flexDirection: "row", alignItems: "center", marginTop: 2 },
-  carouselVisitRow:          { flexDirection: "row", alignItems: "center" },
-  carouselVisitText:         { fontSize: 11, color: "#f7cfc9", fontWeight: "500" },
-  carouselRating: {
-    flexDirection: "row", alignItems: "center",
-    position: "absolute", top: 15, right: 15,
-    backgroundColor: "rgba(255,255,255,0.9)",
-    paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12,
-  },
-  carouselRatingText: { color: "#4a4a4a", fontSize: 12, fontWeight: "700", marginLeft: 4 },
-  sectionHeader: {
-    width: "90%", flexDirection: "row", justifyContent: "space-between",
-    alignItems: "center", marginBottom: 15, alignSelf: "center",
-  },
-  sectionTitle: { fontSize: 16, fontWeight: "600", color: "#4a4a4a" },
-  viewAll:      { color: "#ffffff", fontWeight: "600", fontSize: 14 },
-  topPlaceCard: {
-    flexDirection: "row", backgroundColor: "#f7cfc9",
-    borderRadius: 16, padding: 12, width: "90%",
-    alignSelf: "center", marginBottom: 15,
-    shadowColor: "#000", shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.2, shadowRadius: 5, elevation: 5,
-  },
-  topPlaceImage:             { width: 80, height: 80, borderRadius: 12, marginRight: 15 },
-  topPlaceInfo:              { flex: 1, justifyContent: "center" },
-  topPlaceTitle:             { color: "#fff", fontSize: 16, fontWeight: "700", marginBottom: 4 },
-  topPlaceLocationContainer: { flexDirection: "row", alignItems: "center", marginBottom: 4 },
-  topPlaceLocation:          { color: "#ffffff", fontSize: 12, marginLeft: 5 },
-  topPlaceRating:            { flexDirection: "row", alignItems: "center", marginBottom: 4 },
-  topPlaceRatingText:        { color: "#fff", fontSize: 12, fontWeight: "600", marginLeft: 5 },
-  visitCountRow:             { flexDirection: "row", alignItems: "center" },
-  visitCountText:            { fontSize: 11, color: "#5a4a4a", fontWeight: "500" },
-  customTabBarContainer:     { position: "absolute", bottom: 30, left: 0, right: 0, alignItems: "center" },
-  customTabBar: {
-    flexDirection: "row", height: 70, borderRadius: 35,
-    backgroundColor: "#5a4a4a", paddingHorizontal: 20,
-    alignItems: "center", justifyContent: "space-around",
-    width: width * 0.85,
-    shadowColor: "#000", shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.3, shadowRadius: 15, elevation: 10,
-  },
-  tabItem:          { alignItems: "center", justifyContent: "center", flex: 1 },
-  loadingContainer: { height: 100, justifyContent: "center", alignItems: "center" },
-  loadingText:      { fontSize: 14, color: "#888", textAlign: "center" },
+  menuBtn:  { gap: 5, justifyContent: "center" },
+  menuLine: { width: 22, height: 2.5, backgroundColor: "#fff", borderRadius: 2 },
 
-  // ── Drawer styles ──
-  drawerContainer:  { flex: 1, paddingTop: 40, paddingHorizontal: 8 },
-  drawerHeading:    { fontSize: 22, fontWeight: "700", color: "#3a2a28", paddingHorizontal: 16, marginBottom: 8 },
-  drawerSection:    { fontSize: 11, fontWeight: "700", color: "#8b5550", letterSpacing: 1.2, paddingHorizontal: 16, marginTop: 20, marginBottom: 4 },
-  drawerLabel:      { fontSize: 15, fontWeight: "500" },
-  drawerDivider:    { height: 1, backgroundColor: "rgba(90,74,74,0.2)", marginHorizontal: 16, marginVertical: 12 },
+  avatarWrap:    { position: "relative" },
+  avatar:        { width: 42, height: 42, borderRadius: 21, borderWidth: 2.5, borderColor: "#fff" },
+  avatarFallback:{ backgroundColor: "rgba(107,75,69,0.8)", justifyContent: "center", alignItems: "center" },
+  onlineDot: {
+    position: "absolute",
+    bottom: 1, right: 1,
+    width: 11, height: 11,
+    borderRadius: 6,
+    backgroundColor: "#6b4b45",
+    borderWidth: 2, borderColor: "#fff",
+  },
+
+  dotsRow:   { position: "absolute", bottom: 14, right: 18, flexDirection: "row", gap: 5, alignItems: "center" },
+  dot:       { width: 6, height: 6, borderRadius: 3, backgroundColor: "rgba(255,255,255,0.45)" },
+  dotActive: { width: 18, height: 6, borderRadius: 3, backgroundColor: "#fff" },
+
+  infoCard:     { paddingHorizontal: 22, paddingTop: 20, paddingBottom: 6 },
+  infoRow:      { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 6 },
+  spotName:     { fontSize: 22, fontWeight: "800", color: "#2e1c1a", flex: 1, marginRight: 8 },
+  visitsBadge:  { flexDirection: "row", alignItems: "center", backgroundColor: "#faf5f4", paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 },
+  visitsText:   { fontSize: 12, color: "#6b4b45", fontWeight: "600" },
+  locationRow:  { flexDirection: "row", alignItems: "center", gap: 4 },
+  locationText: { fontSize: 13, color: "#6b4b45", fontWeight: "600" },
+  starsRow:     { flexDirection: "row", gap: 2 },
+  description:  { fontSize: 13, color: "#7a6a68", lineHeight: 20, marginTop: 8, marginBottom: 14 },
+  exploreBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 8,
+    backgroundColor: "#6b4b45",
+    paddingVertical: 13,
+    borderRadius: 24,
+    marginTop: 4,
+  },
+  exploreBtnText: { color: "#fff", fontWeight: "700", fontSize: 14 },
+
+  section:      { paddingHorizontal: 22, marginTop: 24 },
+  sectionTitle: { fontSize: 17, fontWeight: "700", color: "#2e1c1a", marginBottom: 14 },
+  loadingBox:   { height: 80, justifyContent: "center", alignItems: "center" },
+  loadingText:  { color: "#aaa", fontSize: 13 },
+  emptyText:    { color: "#aaa", fontSize: 13, textAlign: "center" },
+
+  grid:         { flexDirection: "row", flexWrap: "wrap", gap: 10 },
+  gridCard:     { width: (width - 54) / 2, height: 140, borderRadius: 18, overflow: "hidden", backgroundColor: "#e8d0ce" },
+  gridCardWide: { width: "100%", height: 175 },
+  gridImg:      { width: "100%", height: "100%", position: "absolute" },
+  gridOverlay:  { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.3)" },
+  gridInfoWrap: { position: "absolute", bottom: 0, left: 0, right: 0, padding: 12, backgroundColor: "rgba(0,0,0,0.25)" },
+  gridName:     { fontSize: 14, fontWeight: "700", color: "#fff", marginBottom: 4 },
+  gridMeta:     { flexDirection: "row", alignItems: "center", gap: 10 },
+  gridRatingRow:{ flexDirection: "row", alignItems: "center", gap: 2 },
+  gridRatingText:{ fontSize: 11, fontWeight: "700", color: "#fff" },
+  gridVisitRow: { flexDirection: "row", alignItems: "center" },
+  gridVisitText:{ fontSize: 11, color: "rgba(255,255,255,0.85)", fontWeight: "500" },
 });
