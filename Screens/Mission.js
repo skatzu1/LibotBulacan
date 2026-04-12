@@ -301,7 +301,6 @@ export default function Mission({ navigation, route }) {
               <Text style={[styles.statusTitle, { color: config.accentColor }]}>
                 Verified
               </Text>
-              <Text style={styles.confidence}>{confidence}% confidence</Text>
               {capturedImage && (
                 <Image source={{ uri: capturedImage }} style={styles.preview} />
               )}
@@ -328,7 +327,6 @@ export default function Mission({ navigation, route }) {
               <Text style={[styles.statusTitle, { color: '#c62828' }]}>
                 Not recognized
               </Text>
-              <Text style={styles.confidence}>{confidence}% confidence</Text>
               <Text style={styles.statusDesc}>
                 Make sure the {config.product} label is clearly visible and well-lit.
               </Text>
@@ -475,7 +473,6 @@ const styles = StyleSheet.create({
   },
   statusTitle: { fontSize: 20, fontWeight: '700', color: '#3a2a28', marginBottom: 6, textAlign: 'center' },
   statusDesc: { fontSize: 13, color: '#888', textAlign: 'center', marginBottom: 20, lineHeight: 20 },
-  confidence: { fontSize: 12, color: '#aaa', marginBottom: 12 },
   preview: { width: 200, height: 200, borderRadius: 10, marginBottom: 16 },
 
   primaryBtn: {
