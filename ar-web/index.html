@@ -33,6 +33,17 @@
         z-index: 100; display: none; pointer-events: none;
       }
 
+      #already-toast {
+        position: absolute;
+        top: 40%; left: 50%;
+        transform: translateX(-50%);
+        background: rgba(180,100,0,0.9);
+        color: white; font-family: sans-serif;
+        font-size: 16px; font-weight: bold;
+        padding: 12px 24px; border-radius: 30px;
+        z-index: 100; display: none; pointer-events: none;
+      }
+
       #gps-error {
         position: absolute; top: 0; left: 0; right: 0;
         background: rgba(255, 60, 60, 0.9);
@@ -53,10 +64,9 @@
     </div>
 
     <div id="gps-error"></div>
-
-    <div id="hint">Walk outside and tap the 3D model to collect it!</div>
-
+    <div id="hint">Walk to a landmark and tap the 3D model to collect it!</div>
     <div id="collect-toast">✅ Collected!</div>
+    <div id="already-toast">Already collected!</div>
 
     <a-scene
       id="ar-scene"
@@ -67,15 +77,42 @@
     >
       <a-assets id="ar-assets"></a-assets>
       <a-camera gps-new-camera="gpsMinDistance: 5"></a-camera>
-      <!-- Models are injected dynamically via spawnModels() -->
     </a-scene>
 
     <script>
-      const collectedIds = new Set();
+      // ─── State ──────────────────────────────────────────────────────────────
+      // IDs collected during THIS session (prevents double-tap in same session)
+      const sessionCollected = new Set();
 
-      // ─── Spawn all models received from ─────────────────────────
-      // Each loc: { id, latitude, longitude, modelUrl }
-      // latitude/longitude come from modelCoordinates.lat/lng in your API
+      // IDs that were already collected BEFORE this session (sent via AR_CONFIG)
+      // These are filtered out on the React Native side before injection,
+      // but we keep a local guard here as a safety net.
+      const previouslyCollected = new Set();
+
+      // All spawned entities keyed by ID
+      const spawnedEntities = {};
+
+      // ─── Haversine (mirrors native side for client-side double-check) ────────
+      function getDistanceMeters(lat1, lng1, lat2, lng2) {
+        const R  = 6371000;
+        const p1 = (lat1 * Math.PI) / 180;
+        const p2 = (lat2 * Math.PI) / 180;
+        const dp = ((lat2 - lat1) * Math.PI) / 180;
+        const dl = ((lng2 - lng1) * Math.PI) / 180;
+        const a  = Math.sin(dp/2)**2 + Math.cos(p1)*Math.cos(p2)*Math.sin(dl/2)**2;
+        return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+      }
+
+      // ─── Show toast helper ───────────────────────────────────────────────────
+      function showToast(id, duration = 1800) {
+        const el = document.getElementById(id);
+        el.style.display = 'block';
+        setTimeout(() => { el.style.display = 'none'; }, duration);
+      }
+
+      // ─── Spawn 3-D models ────────────────────────────────────────────────────
+      // Receives only nearby, uncollected locations from ARScreen.js.
+      // Each loc: { id, name, latitude, longitude, modelUrl, landmarkLat, landmarkLng }
       function spawnModels(locations) {
         if (!Array.isArray(locations) || !locations.length) return;
 
@@ -83,16 +120,22 @@
         const assets = document.getElementById('ar-assets');
 
         locations.forEach((loc) => {
-          const { id, latitude, longitude, modelUrl } = loc;
+          const { id, latitude, longitude, modelUrl, name } = loc;
           if (!id || latitude == null || longitude == null || !modelUrl) return;
 
-          // Register asset so A-Frame can preload the GLB
+          // Don't spawn duplicates if AR_CONFIG fires more than once
+          if (spawnedEntities[id]) return;
+
+          // Don't spawn anything already collected in a previous session
+          if (previouslyCollected.has(id)) return;
+
+          // Register asset for A-Frame preloading
           const assetItem = document.createElement('a-asset-item');
           assetItem.setAttribute('id', `asset-${id}`);
           assetItem.setAttribute('src', modelUrl);
           assets.appendChild(assetItem);
 
-          // Create the AR entity placed at modelCoordinates
+          // AR entity pinned to modelCoordinates
           const entity = document.createElement('a-entity');
           entity.setAttribute('id', `model-${id}`);
           entity.setAttribute('gltf-model', `#asset-${id}`);
@@ -102,35 +145,56 @@
             `latitude: ${latitude}; longitude: ${longitude}`
           );
           entity.classList.add('clickable');
-          entity.dataset.locationId = id;
+          entity.dataset.locationId  = id;
+          entity.dataset.locationName = name ?? '';
 
           // Tap / click to collect
-          entity.addEventListener('click', () => collectModel(entity, loc));
+          entity.addEventListener('click',      () => tryCollect(entity, loc));
           entity.addEventListener('touchstart', (e) => {
             e.stopPropagation();
-            collectModel(entity, loc);
+            tryCollect(entity, loc);
           });
 
           scene.appendChild(entity);
+          spawnedEntities[id] = entity;
         });
+      }
+
+      // ─── Attempt to collect a model ──────────────────────────────────────────
+      function tryCollect(entity, loc) {
+        const lid = entity.dataset.locationId;
+
+        // Guard: already collected in previous sessions
+        if (previouslyCollected.has(lid)) {
+          showToast('already-toast');
+          return;
+        }
+
+        // Guard: already collected this session
+        if (sessionCollected.has(lid)) {
+          showToast('already-toast');
+          return;
+        }
+
+        sessionCollected.add(lid);
+        collectModel(entity, loc);
       }
 
       // ─── Collect a model ─────────────────────────────────────────────────────
       function collectModel(entity, loc) {
         const lid = entity.dataset.locationId;
-        if (collectedIds.has(lid)) return; // prevent double-collect
-        collectedIds.add(lid);
 
         const payload = {
           type:        'AR_COLLECTED',
           modelId:     lid,
+          modelName:   loc.name ?? '',
           modelUrl:    loc.modelUrl,
           latitude:    loc.latitude,
           longitude:   loc.longitude,
           collectedAt: new Date().toISOString(),
         };
 
-        // Post back to React Native WebView
+        // Notify React Native — ARScreen.js will persist to backend
         if (window.ReactNativeWebView) {
           window.ReactNativeWebView.postMessage(JSON.stringify(payload));
         } else {
@@ -138,12 +202,9 @@
           console.log('[AR_COLLECTED]', payload);
         }
 
-        // Show toast
-        const toast = document.getElementById('collect-toast');
-        toast.style.display = 'block';
-        setTimeout(() => { toast.style.display = 'none'; }, 1800);
+        showToast('collect-toast');
 
-        // Animate model out then remove it from the scene
+        // Animate model away then remove it
         entity.setAttribute('animation', {
           property: 'scale',
           to:       '0 0 0',
@@ -152,28 +213,36 @@
         });
         setTimeout(() => {
           if (entity.parentNode) entity.parentNode.removeChild(entity);
+          delete spawnedEntities[lid];
         }, 550);
       }
 
-      // ─── Receive AR_CONFIG from React Native ─────────────────────────────────
-      // ARScreen.js sends: { type: 'AR_CONFIG', locations: [...] }
+      // ─── Receive messages from React Native / ARScreen.js ────────────────────
+      // Expected message types:
+      //   AR_CONFIG  { type, locations: [...], collectedIds: [...] }
       window.addEventListener('message', (e) => {
         try {
           const data = JSON.parse(e.data);
-          if (data.type === 'AR_CONFIG' && Array.isArray(data.locations)) {
-            spawnModels(data.locations);
+
+          if (data.type === 'AR_CONFIG') {
+            // Mark previously collected IDs so we can guard against them
+            if (Array.isArray(data.collectedIds)) {
+              data.collectedIds.forEach((id) => previouslyCollected.add(id));
+            }
+            // Spawn only what React Native decided is eligible
+            if (Array.isArray(data.locations)) {
+              spawnModels(data.locations);
+            }
           }
         } catch (_) {}
       });
 
-      // ─── GPS loader + AR_READY signal ────────────────────────────────────────
+      // ─── GPS ready → hide loader → signal AR_READY ───────────────────────────
       document.getElementById('ar-scene').addEventListener('loaded', () => {
         navigator.geolocation.getCurrentPosition(
           () => {
-            // Hide loader once GPS is confirmed
             document.getElementById('loader').style.display = 'none';
 
-            // Tell React Native the AR scene is ready to receive locations
             const msg = JSON.stringify({ type: 'AR_READY' });
             if (window.ReactNativeWebView) {
               window.ReactNativeWebView.postMessage(msg);
@@ -185,7 +254,7 @@
             document.getElementById('loader-text').textContent =
               'GPS error: ' + err.message;
             const banner = document.getElementById('gps-error');
-            banner.textContent = '⚠️ ' + err.message;
+            banner.textContent  = '⚠️ ' + err.message;
             banner.style.display = 'block';
           },
           { enableHighAccuracy: true }
