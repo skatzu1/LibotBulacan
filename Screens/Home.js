@@ -232,13 +232,25 @@ function HomeContent({ profilePhoto, navigation }) {
           />
         )}
 
-        {/* Floating header */}
+        {/* Dark gradient overlay at bottom of hero */}
+        <View style={h.heroGradient} />
+
+        {/* Floating header — menu | logo | avatar */}
         <View style={h.heroHeader}>
           <TouchableOpacity style={h.menuBtn} onPress={() => navigation.toggleDrawer()}>
             <View style={h.menuLine} />
             <View style={[h.menuLine, { width: 14 }]} />
             <View style={h.menuLine} />
           </TouchableOpacity>
+
+          {/* ── LOGO ── */}
+          <View style={h.logoWrap}>
+            <Image
+              source={require("../assets/logo.png")}
+              style={h.logo}
+              resizeMode="contain"
+            />
+          </View>
 
           <TouchableOpacity onPress={() => navigation.navigate("Profile")} style={h.avatarWrap}>
             {profilePhoto ? (
@@ -259,6 +271,18 @@ function HomeContent({ profilePhoto, navigation }) {
               <View key={i} style={[h.dot, i === activeIndex && h.dotActive]} />
             ))}
           </View>
+        )}
+
+        {/* ── EXPLORE BUTTON overlaid on hero ── */}
+        {activeSpot && (
+          <TouchableOpacity
+            style={h.heroExploreBtn}
+            onPress={() => handleSpotPress(activeSpot.spot)}
+            activeOpacity={0.85}
+          >
+            <Text style={h.heroExploreBtnText}>Explore Spot</Text>
+            <Feather name="arrow-right" size={14} color="#fff" />
+          </TouchableOpacity>
         )}
       </View>
 
@@ -289,20 +313,7 @@ function HomeContent({ profilePhoto, navigation }) {
               ))}
             </View>
           </View>
-
-          {activeSpot.description ? (
-            <Text style={h.description} numberOfLines={3}>
-              {activeSpot.description}
-            </Text>
-          ) : null}
-
-          <TouchableOpacity
-            style={h.exploreBtn}
-            onPress={() => handleSpotPress(activeSpot.spot)}
-          >
-            <Text style={h.exploreBtnText}>Explore Spot</Text>
-            <Feather name="arrow-right" size={15} color="#fff" />
-          </TouchableOpacity>
+          {/* description removed */}
         </View>
       )}
 
@@ -440,12 +451,22 @@ const h = StyleSheet.create({
     width: "100%",
     height: HERO_H,
     backgroundColor: "#c4a49f",
-    borderBottomLeftRadius: 28,
-    borderBottomRightRadius: 28,
+    borderBottomLeftRadius: 1,
+    borderBottomRightRadius: 1,
     overflow: "hidden",
   },
   heroPlaceholder: { flex: 1, justifyContent: "center", alignItems: "center" },
   heroImage:       { width: "100%", height: HERO_H },
+
+  // Dark gradient at bottom of hero so button/dots are readable
+  heroGradient: {
+    position: "absolute",
+    bottom: 0, left: 0, right: 0,
+    height: HERO_H * 0.45,
+    backgroundColor: "transparent",
+    // RN doesn't support CSS gradients natively — use expo-linear-gradient if you want a true gradient
+    // For now this gives a solid dark fade effect via the button/dots contrast
+  },
 
   heroHeader: {
     position: "absolute",
@@ -460,6 +481,22 @@ const h = StyleSheet.create({
   menuBtn:  { gap: 5, justifyContent: "center" },
   menuLine: { width: 22, height: 2.5, backgroundColor: "#fff", borderRadius: 2 },
 
+  // Logo — centered between menu and avatar
+  logoWrap: {
+  backgroundColor: "#fff",
+  width: 40,
+  height: 40,
+  justifyContent: "center",
+  alignItems: "center",
+  borderWidth: 1,
+  borderColor: "#ddd",
+  borderRadius: 8,
+  },
+  logo: {
+    height: 40,
+    width: 100,
+  },
+
   avatarWrap:    { position: "relative" },
   avatar:        { width: 42, height: 42, borderRadius: 21, borderWidth: 2.5, borderColor: "#fff" },
   avatarFallback:{ backgroundColor: "rgba(107,75,69,0.8)", justifyContent: "center", alignItems: "center" },
@@ -472,11 +509,32 @@ const h = StyleSheet.create({
     borderWidth: 2, borderColor: "#fff",
   },
 
-  dotsRow:   { position: "absolute", bottom: 14, right: 18, flexDirection: "row", gap: 5, alignItems: "center" },
+  dotsRow:   { position: "absolute", bottom: 56, left: 150, flexDirection: "row", gap: 5, alignItems: "center" },
   dot:       { width: 6, height: 6, borderRadius: 3, backgroundColor: "rgba(255,255,255,0.45)" },
   dotActive: { width: 18, height: 6, borderRadius: 3, backgroundColor: "#fff" },
 
-  infoCard:     { paddingHorizontal: 22, paddingTop: 20, paddingBottom: 6 },
+  // Explore button overlaid on hero image
+  heroExploreBtn: {
+    position: "absolute",
+    bottom: 10,
+    right: 22,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    backgroundColor: "#6b4b45",
+    paddingVertical: 10,
+    paddingHorizontal: 18,
+    borderRadius: 24,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.25,
+    shadowRadius: 6,
+    elevation: 6,
+  },
+  heroExploreBtnText: { color: "#fff", fontWeight: "700", fontSize: 13 },
+
+  // Info card — name + location + stars only (no description, no button)
+  infoCard:     { paddingHorizontal: 22, paddingTop: 18, paddingBottom: 6 },
   infoRow:      { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 6 },
   spotName:     { fontSize: 22, fontWeight: "800", color: "#2e1c1a", flex: 1, marginRight: 8 },
   visitsBadge:  { flexDirection: "row", alignItems: "center", backgroundColor: "#faf5f4", paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 },
@@ -484,20 +542,8 @@ const h = StyleSheet.create({
   locationRow:  { flexDirection: "row", alignItems: "center", gap: 4 },
   locationText: { fontSize: 13, color: "#6b4b45", fontWeight: "600" },
   starsRow:     { flexDirection: "row", gap: 2 },
-  description:  { fontSize: 13, color: "#7a6a68", lineHeight: 20, marginTop: 8, marginBottom: 14 },
-  exploreBtn: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: 8,
-    backgroundColor: "#6b4b45",
-    paddingVertical: 13,
-    borderRadius: 24,
-    marginTop: 4,
-  },
-  exploreBtnText: { color: "#fff", fontWeight: "700", fontSize: 14 },
 
-  section:      { paddingHorizontal: 22, marginTop: 24 },
+  section:      { paddingHorizontal: 22, marginTop: 20 },
   sectionTitle: { fontSize: 17, fontWeight: "700", color: "#2e1c1a", marginBottom: 14 },
   loadingBox:   { height: 80, justifyContent: "center", alignItems: "center" },
   loadingText:  { color: "#aaa", fontSize: 13 },

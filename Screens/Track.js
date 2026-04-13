@@ -32,8 +32,8 @@ const TERMINALS = [
   {
     id: "sapang-palay",
     name: "Sapang Palay Terminal",
-    lat: 14.8363,
-    lng: 121.0602,
+    lat: 14.858674515574878,
+    lng: 121.04835828892935,
     address: "Sapang Palay Proper, San Jose del Monte, Bulacan",
     routes: ["Sapang Palay – Monumento", "Sapang Palay – SM Fairview"],
     type: "Jeepney Terminal",
@@ -50,8 +50,8 @@ const TERMINALS = [
   {
     id: "francisco-homes",
     name: "Francisco Homes Terminal",
-    lat: 14.8256,
-    lng: 121.0483,
+    lat: 14.80829344106687,
+    lng: 121.0583295834346,
     address: "Francisco Homes, San Jose del Monte, Bulacan",
     routes: ["Francisco Homes – Fairview", "Francisco Homes – SM City"],
     type: "UV Express Terminal",
@@ -59,8 +59,8 @@ const TERMINALS = [
   {
     id: "muzon",
     name: "Muzon Terminal",
-    lat: 14.7985,
-    lng: 121.0368,
+    lat: 14.802447335462507,
+    lng: 121.03468287944305,
     address: "Muzon, San Jose del Monte, Bulacan",
     routes: ["Muzon – Monumento", "Muzon – SM Fairview"],
     type: "Jeepney Terminal",
