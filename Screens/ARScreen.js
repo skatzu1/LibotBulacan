@@ -7,19 +7,18 @@ import {
   Platform,
   PermissionsAndroid,
   ActivityIndicator,
+  Modal,
 } from 'react-native';
 import { WebView } from 'react-native-webview';
 import * as Location from 'expo-location';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useAuth } from '../context/AuthContext'; // adjust path as needed
+import { useAuth } from '../context/AuthContext';
 
 // ─── Config ───────────────────────────────────────────────────────────────────
-const AR_URL        = 'https://ar-web-lemon.vercel.app/index.html';
-const API_URL       = 'https://libotbackend.onrender.com/api/spots';
-// POST   /api/collections        { spotId }   → save collection
-// GET    /api/collections        → [{ spotId, collectedAt }]
-const COLLECT_URL   = 'https://libotbackend.onrender.com/api/collections';
-const RANGE_METERS  = 500; // must be within 500 m of landmark to see its model
+const AR_URL       = 'https://ar-web-lemon.vercel.app/index.html';
+const API_URL      = 'https://libotbackend.onrender.com/api/spots';
+const COLLECT_URL  = 'https://libotbackend.onrender.com/api/collections';
+const RANGE_METERS = 500;
 
 // ─── Haversine distance ────────────────────────────────────────────────────────
 function getDistanceMeters(lat1, lng1, lat2, lng2) {
@@ -35,9 +34,6 @@ function getDistanceMeters(lat1, lng1, lat2, lng2) {
 }
 
 // ─── Map API spot → AR location object ────────────────────────────────────────
-// Both modelsCoordinates and coordinates are plain numbers in the DB.
-// We use coordinates for the range check and modelsCoordinates for AR
-// placement, falling back to the other if either is missing.
 function mapLandmarkToARLocation(item) {
   if (!item.modelUrl) return null;
 
@@ -65,7 +61,7 @@ function mapLandmarkToARLocation(item) {
 // ─── Component ────────────────────────────────────────────────────────────────
 export default function ARScreen({ navigation }) {
   const webviewRef = useRef(null);
-  const { user }   = useAuth(); // { _id, token, … }
+  const { user }   = useAuth();
 
   const [permissionsGranted, setPermissionsGranted] = useState(false);
   const [permissionError,    setPermissionError]    = useState(null);
@@ -73,17 +69,14 @@ export default function ARScreen({ navigation }) {
   const [webviewLoaded, setWebviewLoaded] = useState(false);
   const [arReady,       setArReady]       = useState(false);
 
-  // All landmark locations from API
   const [locations,  setLocations]  = useState([]);
-  // Only the ones within RANGE_METERS of the user
   const [nearbyLocs, setNearbyLocs] = useState([]);
 
   const [fetchError,   setFetchError]   = useState(null);
-  const [outOfRange,   setOutOfRange]   = useState(false);
-  const [rangeChecked, setRangeChecked] = useState(false);
-
-  // IDs already collected by this user (loaded from backend on mount)
   const [collectedIds, setCollectedIds] = useState(new Set());
+
+  // Info modal — shown once on open
+  const [showInfoModal, setShowInfoModal] = useState(true);
 
   // ─── Auth header helper ──────────────────────────────────────────────────────
   const authHeaders = useCallback(async () => {
@@ -114,7 +107,6 @@ export default function ARScreen({ navigation }) {
         return;
       }
       setPermissionsGranted(true);
-      // Kick off both fetches in parallel
       fetchLocations();
       fetchCollectedIds();
     } catch (err) {
@@ -122,7 +114,7 @@ export default function ARScreen({ navigation }) {
     }
   };
 
-  // ─── Fetch landmarks from API ─────────────────────────────────────────────────
+  // ─── Fetch landmarks ──────────────────────────────────────────────────────────
   const fetchLocations = async () => {
     try {
       const res  = await fetch(API_URL);
@@ -145,64 +137,48 @@ export default function ARScreen({ navigation }) {
     }
   };
 
-  // ─── Fetch already-collected IDs for this user ────────────────────────────────
+  // ─── Fetch collected IDs ──────────────────────────────────────────────────────
   const fetchCollectedIds = async () => {
-    if (!user) return; // not logged in → nothing to load
+    if (!user) return;
     try {
       const headers = await authHeaders();
       const res     = await fetch(COLLECT_URL, { headers });
-      if (!res.ok) return; // silently ignore — don't block AR
-      const json = await res.json();
+      if (!res.ok) return;
+      const json  = await res.json();
       const items = Array.isArray(json)      ? json
                   : Array.isArray(json.data) ? json.data
                   : [];
       setCollectedIds(new Set(items.map((i) => i.spotId ?? i._id ?? String(i))));
-    } catch (_) {
-      // Non-critical — if this fails, the user may re-see already-collected models.
-      // They simply can't re-collect them (backend will reject the duplicate).
-    }
+    } catch (_) {}
   };
 
-  // ─── Range check: filter to nearby landmarks ──────────────────────────────────
+  // ─── Range check ─────────────────────────────────────────────────────────────
   const checkRange = useCallback(async (locs) => {
-    setRangeChecked(false);
     try {
       const pos = await Location.getCurrentPositionAsync({
         accuracy: Location.Accuracy.High,
       });
       const { latitude: uLat, longitude: uLng } = pos.coords;
-
       const nearby = locs.filter((loc) => {
-        // landmarkLat/Lng are guaranteed floats from mapLandmarkToARLocation
         if (isNaN(loc.landmarkLat) || isNaN(loc.landmarkLng)) return false;
         return getDistanceMeters(uLat, uLng, loc.landmarkLat, loc.landmarkLng) <= RANGE_METERS;
       });
-
       setNearbyLocs(nearby);
-      setOutOfRange(nearby.length === 0);
     } catch (_) {
-      // GPS failed → fall back to showing all locations
       setNearbyLocs(locs);
-      setOutOfRange(false);
-    } finally {
-      setRangeChecked(true);
     }
   }, []);
 
-  // Run range check once we have permissions + locations
   useEffect(() => {
-    if (permissionsGranted && locations.length && !rangeChecked) {
+    if (permissionsGranted && locations.length) {
       checkRange(locations);
     }
-  }, [permissionsGranted, locations, rangeChecked, checkRange]);
+  }, [permissionsGranted, locations, checkRange]);
 
-  // ─── Inject ONLY nearby, uncollected locations into the WebView ──────────────
+  // ─── Inject locations into WebView ───────────────────────────────────────────
   const injectLocations = useCallback((locs, alreadyCollected) => {
     if (!webviewRef.current) return;
-
-    // Strip out anything the user has already collected
     const fresh = locs.filter((l) => !alreadyCollected.has(l.id));
-
     const script = `
       window.dispatchEvent(new MessageEvent('message', {
         data: JSON.stringify({
@@ -217,27 +193,25 @@ export default function ARScreen({ navigation }) {
 
   const onWebViewLoad = useCallback(() => {
     setWebviewLoaded(true);
-    // Inject whatever we have at load time (may be empty if still fetching)
     if (nearbyLocs.length) injectLocations(nearbyLocs, collectedIds);
   }, [nearbyLocs, collectedIds, injectLocations]);
 
-  // Re-inject whenever nearby locations or collected IDs update after load
   useEffect(() => {
     if (webviewLoaded && nearbyLocs.length) {
       injectLocations(nearbyLocs, collectedIds);
     }
   }, [nearbyLocs, collectedIds, webviewLoaded, injectLocations]);
 
-  // Safety timeout: show AR after 10 s even if AR_READY never fires
+  // Safety timeout
   useEffect(() => {
     if (!webviewLoaded) return;
     const timer = setTimeout(() => setArReady(true), 10000);
     return () => clearTimeout(timer);
   }, [webviewLoaded]);
 
-  // ─── Save a collected model to the backend ────────────────────────────────────
+  // ─── Save collection ──────────────────────────────────────────────────────────
   const saveCollection = useCallback(async (modelId) => {
-    if (!user) return; // not logged in → skip persistence
+    if (!user) return;
     try {
       const headers = await authHeaders();
       await fetch(COLLECT_URL, {
@@ -245,24 +219,18 @@ export default function ARScreen({ navigation }) {
         headers,
         body:    JSON.stringify({ spotId: modelId }),
       });
-      // Update local set so a re-inject won't show the model again
       setCollectedIds((prev) => new Set([...prev, modelId]));
-    } catch (_) {
-      // Non-critical — collected state is already tracked in the WebView
-    }
+    } catch (_) {}
   }, [user, authHeaders]);
 
   // ─── Messages from WebView ────────────────────────────────────────────────────
   const onMessage = useCallback((event) => {
     try {
       const data = JSON.parse(event.nativeEvent.data);
-
       if (data.type === 'AR_READY') {
         setArReady(true);
-        // Now that AR is ready, inject locations (in case they arrived first)
         if (nearbyLocs.length) injectLocations(nearbyLocs, collectedIds);
       }
-
       if (data.type === 'AR_COLLECTED') {
         saveCollection(data.modelId);
       }
@@ -282,11 +250,6 @@ export default function ARScreen({ navigation }) {
       </View>
     );
   }
-
-  // ─── Overlay logic ────────────────────────────────────────────────────────────
-  // Show overlay until AR is confirmed ready
-  const showLoadingOverlay = !arReady && permissionsGranted;
-  const showOutOfRange     = rangeChecked && outOfRange;
 
   // ─── Render ───────────────────────────────────────────────────────────────────
   return (
@@ -312,41 +275,40 @@ export default function ARScreen({ navigation }) {
         />
       )}
 
-      {/* Loading / out-of-range overlay */}
-      {showLoadingOverlay && (
+      {/* Loading overlay */}
+      {!arReady && permissionsGranted && (
         <View style={styles.loadingOverlay}>
-          {showOutOfRange ? (
-            <>
-              <Text style={styles.outOfRangeIcon}>📍</Text>
-              <Text style={styles.outOfRangeTitle}>
-                No landmarks nearby
-              </Text>
-              <Text style={styles.outOfRangeMsg}>
-                Move within {RANGE_METERS} m of a landmark to see AR models.
-              </Text>
-              <TouchableOpacity
-                style={styles.retryBtn}
-                onPress={() => {
-                  setRangeChecked(false);
-                  checkRange(locations);
-                }}
-              >
-                <Text style={styles.retryText}>Check Again</Text>
-              </TouchableOpacity>
-            </>
-          ) : (
-            <>
-              <ActivityIndicator size="large" color="#00ff88" />
-              <Text style={styles.loadingText}>
-                {!rangeChecked ? 'Acquiring GPS signal…' : 'Loading AR scene…'}
-              </Text>
-              {fetchError && (
-                <Text style={styles.warnText}>⚠️ {fetchError}</Text>
-              )}
-            </>
+          <ActivityIndicator size="large" color="#00ff88" />
+          <Text style={styles.loadingText}>Loading AR scene…</Text>
+          {fetchError && (
+            <Text style={styles.warnText}>⚠️ {fetchError}</Text>
           )}
         </View>
       )}
+
+      {/* One-time info modal */}
+      <Modal
+        visible={showInfoModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowInfoModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalCard}>
+            <Text style={styles.modalIcon}>📍</Text>
+            <Text style={styles.modalTitle}>AR Mode Active</Text>
+            <Text style={styles.modalMsg}>
+              3D models will only appear when you are within range of a selected landmark area.
+            </Text>
+            <TouchableOpacity
+              style={styles.modalBtn}
+              onPress={() => setShowInfoModal(false)}
+            >
+              <Text style={styles.modalBtnText}>Got it</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
 
       {/* Back button */}
       {navigation && (
@@ -357,6 +319,7 @@ export default function ARScreen({ navigation }) {
           <Text style={styles.backButtonText}>←</Text>
         </TouchableOpacity>
       )}
+
     </View>
   );
 }
@@ -373,20 +336,43 @@ const styles = StyleSheet.create({
     gap: 14,
   },
   loadingText: { color: '#fff', fontSize: 16, fontWeight: '500', marginTop: 10 },
-
-  outOfRangeIcon:  { fontSize: 52, marginBottom: 8 },
-  outOfRangeTitle: {
-    color: '#fff', fontSize: 20, fontWeight: '700',
-    marginBottom: 8, textAlign: 'center',
-  },
-  outOfRangeMsg: {
-    color: '#aaa', fontSize: 13, textAlign: 'center',
-    paddingHorizontal: 32, marginBottom: 24,
-  },
   warnText: {
     color: '#ffcc00', fontSize: 12, textAlign: 'center', paddingHorizontal: 24,
   },
 
+  // ─── Info modal ───────────────────────────────────────────────────────────────
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.75)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalCard: {
+    backgroundColor: '#1a1a1a',
+    borderRadius: 16,
+    paddingVertical: 32,
+    paddingHorizontal: 28,
+    marginHorizontal: 32,
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: 'rgba(255,255,255,0.1)',
+  },
+  modalIcon:  { fontSize: 44, marginBottom: 14 },
+  modalTitle: {
+    color: '#fff', fontSize: 18, fontWeight: '700',
+    marginBottom: 10, textAlign: 'center',
+  },
+  modalMsg: {
+    color: '#aaa', fontSize: 13, textAlign: 'center',
+    lineHeight: 20, marginBottom: 28, paddingHorizontal: 8,
+  },
+  modalBtn: {
+    backgroundColor: '#00ff88',
+    paddingVertical: 12, paddingHorizontal: 48, borderRadius: 24,
+  },
+  modalBtnText: { color: '#000', fontWeight: '700', fontSize: 15 },
+
+  // ─── Error screen ─────────────────────────────────────────────────────────────
   errorContainer: {
     flex: 1, backgroundColor: '#0a0a0a',
     justifyContent: 'center', alignItems: 'center', padding: 32,
@@ -401,6 +387,7 @@ const styles = StyleSheet.create({
   },
   retryText: { color: '#000', fontWeight: '700', fontSize: 15 },
 
+  // ─── Back button ──────────────────────────────────────────────────────────────
   backButton: {
     position: 'absolute',
     top: Platform.OS === 'ios' ? 54 : 36,
