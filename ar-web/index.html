@@ -2,7 +2,7 @@
 <html>
   <head>
     <meta charset="utf-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1", user-scalable=no />
     <style>
       * { margin: 0; padding: 0; box-sizing: border-box; }
       body { overflow: hidden; background: black; }
@@ -14,6 +14,14 @@
         align-items: center; justify-content: center; gap: 12px;
       }
       #loader p { color: white; font-family: sans-serif; font-size: 16px; }
+      .spinner {
+        width: 40px; height: 40px;
+        border: 3px solid rgba(255,255,255,0.2);
+        border-top-color: #00ff88;
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+      }
+      @keyframes spin { to { transform: rotate(360deg); } }
 
       #hint {
         position: absolute; bottom: 0; width: 100%;
@@ -33,17 +41,6 @@
         z-index: 100; display: none; pointer-events: none;
       }
 
-      #already-toast {
-        position: absolute;
-        top: 40%; left: 50%;
-        transform: translateX(-50%);
-        background: rgba(180,100,0,0.9);
-        color: white; font-family: sans-serif;
-        font-size: 16px; font-weight: bold;
-        padding: 12px 24px; border-radius: 30px;
-        z-index: 100; display: none; pointer-events: none;
-      }
-
       #gps-error {
         position: absolute; top: 0; left: 0; right: 0;
         background: rgba(255, 60, 60, 0.9);
@@ -51,8 +48,22 @@
         text-align: center; padding: 10px 16px;
         z-index: 200; display: none;
       }
+
+      #debug {
+        position: absolute; bottom: 70px; left: 0; right: 0;
+        background: rgba(0,0,0,0.6); color: #0f0;
+        font-family: monospace; font-size: 11px;
+        padding: 6px 10px; z-index: 300; text-align: center;
+      }
     </style>
 
+    <!--
+      CRITICAL SCRIPT ORDER:
+      1. A-Frame first
+      2. ar-threex-location-only.js  <- registers the THREE.js location components
+      3. aframe-ar.js                <- registers gps-new-camera / gps-new-entity-place
+      All three must be version 3.4.7 and loaded in this exact order.
+    -->
     <script src="https://aframe.io/releases/1.6.0/aframe.min.js"></script>
     <script src="https://raw.githack.com/AR-js-org/AR.js/3.4.7/three.js/build/ar-threex-location-only.js"></script>
     <script src="https://raw.githack.com/AR-js-org/AR.js/3.4.7/aframe/build/aframe-ar.js"></script>
@@ -60,141 +71,122 @@
 
   <body>
     <div id="loader">
+      <div class="spinner"></div>
       <p id="loader-text">Acquiring GPS signal...</p>
     </div>
 
     <div id="gps-error"></div>
-    <div id="hint">Walk to a landmark and tap the 3D model to collect it!</div>
-    <div id="collect-toast">✅ Collected!</div>
-    <div id="already-toast">Already collected!</div>
+    <div id="hint">Point your camera around - tap a model to collect it!</div>
+    <div id="collect-toast">Collected!</div>
+    <div id="debug">Waiting for GPS...</div>
 
     <a-scene
       id="ar-scene"
       vr-mode-ui="enabled: false"
       arjs="sourceType: webcam; videoTexture: true; debugUIEnabled: false"
-      renderer="antialias: true; alpha: true"
+      renderer="antialias: true; alpha: true; logarithmicDepthBuffer: true"
       loading-screen="enabled: false"
+      embedded
     >
-      <a-assets id="ar-assets"></a-assets>
-      <a-camera gps-new-camera="gpsMinDistance: 5"></a-camera>
+      <a-light type="ambient" color="#ffffff" intensity="1.0"></a-light>
+      <a-light type="directional" color="#ffffff" intensity="0.8"
+         position="1 4 2"></a-light>
+      <a-camera
+        id="ar-camera"
+        gps-new-camera="gpsMinDistance: 5"
+        rotation-reader
+        raycaster="objects: [gltf-model]; far: 100"
+        cursor="fuse: false; rayOrigin: mouse"
+      ></a-camera>
     </a-scene>
 
     <script>
-      // ─── State ──────────────────────────────────────────────────────────────
-      // IDs collected during THIS session (prevents double-tap in same session)
-      const sessionCollected = new Set();
+      const collectedIds = new Set();
+      let   pendingLocs  = null;
+      let   gpsReady     = false;
 
-      // IDs that were already collected BEFORE this session (sent via AR_CONFIG)
-      // These are filtered out on the React Native side before injection,
-      // but we keep a local guard here as a safety net.
-      const previouslyCollected = new Set();
-
-      // All spawned entities keyed by ID
-      const spawnedEntities = {};
-
-      // ─── Haversine (mirrors native side for client-side double-check) ────────
-      function getDistanceMeters(lat1, lng1, lat2, lng2) {
-        const R  = 6371000;
-        const p1 = (lat1 * Math.PI) / 180;
-        const p2 = (lat2 * Math.PI) / 180;
-        const dp = ((lat2 - lat1) * Math.PI) / 180;
-        const dl = ((lng2 - lng1) * Math.PI) / 180;
-        const a  = Math.sin(dp/2)**2 + Math.cos(p1)*Math.cos(p2)*Math.sin(dl/2)**2;
-        return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+      function dbg(msg) {
+        const el = document.getElementById('debug');
+        if (el) el.textContent = msg;
+        console.log('[AR]', msg);
       }
 
-      // ─── Show toast helper ───────────────────────────────────────────────────
-      function showToast(id, duration = 1800) {
-        const el = document.getElementById(id);
-        el.style.display = 'block';
-        setTimeout(() => { el.style.display = 'none'; }, duration);
-      }
-
-      // ─── Spawn 3-D models ────────────────────────────────────────────────────
-      // Receives only nearby, uncollected locations from ARScreen.js.
-      // Each loc: { id, name, latitude, longitude, modelUrl, landmarkLat, landmarkLng }
+      // ----------------------------------------------------------------
+      // spawnModels
+      // KEY FIX: gltf-model must live on a CHILD entity, not the same
+      // element that has gps-new-entity-place. Putting both attributes
+      // on the same element causes AR.js to silently drop the model.
+      // ----------------------------------------------------------------
       function spawnModels(locations) {
-        if (!Array.isArray(locations) || !locations.length) return;
+        if (!Array.isArray(locations) || !locations.length) {
+          dbg('No locations to spawn.');
+          return;
+        }
 
-        const scene  = document.getElementById('ar-scene');
-        const assets = document.getElementById('ar-assets');
+        const scene = document.getElementById('ar-scene');
+        let count = 0;
 
         locations.forEach((loc) => {
           const { id, latitude, longitude, modelUrl, name } = loc;
-          if (!id || latitude == null || longitude == null || !modelUrl) return;
 
-          // Don't spawn duplicates if AR_CONFIG fires more than once
-          if (spawnedEntities[id]) return;
+          if (!id || latitude == null || longitude == null || !modelUrl) {
+            console.warn('[AR] Skipping invalid loc:', loc);
+            return;
+          }
+          if (collectedIds.has(id)) return;
 
-          // Don't spawn anything already collected in a previous session
-          if (previouslyCollected.has(id)) return;
+          // Remove stale entity if re-injected
+          const old = document.getElementById('gps-' + id);
+          if (old) old.parentNode.removeChild(old);
 
-          // Register asset for A-Frame preloading
-          const assetItem = document.createElement('a-asset-item');
-          assetItem.setAttribute('id', `asset-${id}`);
-          assetItem.setAttribute('src', modelUrl);
-          assets.appendChild(assetItem);
+          // --- GPS wrapper (parent) ---
+          const wrapper = document.createElement('a-entity');
+          wrapper.setAttribute('id', 'gps-' + id);
+          wrapper.setAttribute('gps-new-entity-place', 'latitude: ' + latitude + '; longitude: ' + longitude);
+          wrapper.setAttribute('look-at', '[gps-new-camera]');
+          wrapper.dataset.locationId = id;
 
-          // AR entity pinned to modelCoordinates
-          const entity = document.createElement('a-entity');
-          entity.setAttribute('id', `model-${id}`);
-          entity.setAttribute('gltf-model', `#asset-${id}`);
-          entity.setAttribute('scale', '2 2 2');
-          entity.setAttribute('rotation', '0 0 0');
-          entity.setAttribute('gps-new-entity-place',
-            `latitude: ${latitude}; longitude: ${longitude}`
+          // --- Model child ---
+          const modelEl = document.createElement('a-entity');
+          modelEl.setAttribute('gltf-model', modelUrl);
+          modelEl.setAttribute('scale', '2 2 2');
+          modelEl.setAttribute('position', '0 1 0');
+          modelEl.setAttribute('rotation', '0 0 0');
+          // Slow spin so the model is always visible from any angle
+          modelEl.setAttribute('animation',
+            'property: rotation; to: 0 360 0; loop: true; dur: 8000; easing: linear'
           );
-          entity.classList.add('clickable');
-          entity.dataset.locationId  = id;
-          entity.dataset.locationName = name ?? '';
 
-          // Tap / click to collect
-          entity.addEventListener('click',      () => tryCollect(entity, loc));
-          entity.addEventListener('touchstart', (e) => {
+          // Tap to collect
+          modelEl.addEventListener('click', function(e) {
             e.stopPropagation();
-            tryCollect(entity, loc);
+            collectModel(wrapper, loc);
           });
 
-          scene.appendChild(entity);
-          spawnedEntities[id] = entity;
+          wrapper.appendChild(modelEl);
+          scene.appendChild(wrapper);
+          count++;
+          dbg('Placed ' + count + '/' + locations.length + ': ' + (name || id));
         });
       }
 
-      // ─── Attempt to collect a model ──────────────────────────────────────────
-      function tryCollect(entity, loc) {
-        const lid = entity.dataset.locationId;
+      // ----------------------------------------------------------------
+      // collectModel
+      // ----------------------------------------------------------------
+      function collectModel(wrapperEl, loc) {
+        var lid = wrapperEl.dataset.locationId;
+        if (collectedIds.has(lid)) return;
+        collectedIds.add(lid);
 
-        // Guard: already collected in previous sessions
-        if (previouslyCollected.has(lid)) {
-          showToast('already-toast');
-          return;
-        }
-
-        // Guard: already collected this session
-        if (sessionCollected.has(lid)) {
-          showToast('already-toast');
-          return;
-        }
-
-        sessionCollected.add(lid);
-        collectModel(entity, loc);
-      }
-
-      // ─── Collect a model ─────────────────────────────────────────────────────
-      function collectModel(entity, loc) {
-        const lid = entity.dataset.locationId;
-
-        const payload = {
+        var payload = {
           type:        'AR_COLLECTED',
           modelId:     lid,
-          modelName:   loc.name ?? '',
           modelUrl:    loc.modelUrl,
           latitude:    loc.latitude,
           longitude:   loc.longitude,
           collectedAt: new Date().toISOString(),
         };
 
-        // Notify React Native — ARScreen.js will persist to backend
         if (window.ReactNativeWebView) {
           window.ReactNativeWebView.postMessage(JSON.stringify(payload));
         } else {
@@ -202,63 +194,98 @@
           console.log('[AR_COLLECTED]', payload);
         }
 
-        showToast('collect-toast');
+        var toast = document.getElementById('collect-toast');
+        toast.style.display = 'block';
+        setTimeout(function() { toast.style.display = 'none'; }, 1800);
 
-        // Animate model away then remove it
-        entity.setAttribute('animation', {
-          property: 'scale',
-          to:       '0 0 0',
-          dur:      500,
-          easing:   'easeInQuad',
-        });
-        setTimeout(() => {
-          if (entity.parentNode) entity.parentNode.removeChild(entity);
-          delete spawnedEntities[lid];
+        // Animate out the child model, then remove wrapper
+        var modelEl = wrapperEl.querySelector('[gltf-model]');
+        if (modelEl) {
+          modelEl.setAttribute('animation__collect',
+            'property: scale; to: 0 0 0; dur: 500; easing: easeInQuad'
+          );
+        }
+        setTimeout(function() {
+          if (wrapperEl.parentNode) wrapperEl.parentNode.removeChild(wrapperEl);
         }, 550);
       }
 
-      // ─── Receive messages from React Native / ARScreen.js ────────────────────
-      // Expected message types:
-      //   AR_CONFIG  { type, locations: [...], collectedIds: [...] }
-      window.addEventListener('message', (e) => {
-        try {
-          const data = JSON.parse(e.data);
+      // ----------------------------------------------------------------
+      // signalReady — tells React Native the AR scene is ready
+      // ----------------------------------------------------------------
+      function signalReady() {
+        var msg = JSON.stringify({ type: 'AR_READY' });
+        if (window.ReactNativeWebView) {
+          window.ReactNativeWebView.postMessage(msg);
+        } else {
+          window.postMessage(msg, '*');
+        }
+        dbg('AR_READY sent to React Native');
+      }
 
-          if (data.type === 'AR_CONFIG') {
-            // Mark previously collected IDs so we can guard against them
-            if (Array.isArray(data.collectedIds)) {
-              data.collectedIds.forEach((id) => previouslyCollected.add(id));
-            }
-            // Spawn only what React Native decided is eligible
-            if (Array.isArray(data.locations)) {
-              spawnModels(data.locations);
-            }
+      // ----------------------------------------------------------------
+      // Receive AR_CONFIG from React Native
+      // postMessage may arrive before or after GPS is ready — handle both
+      // ----------------------------------------------------------------
+      window.addEventListener('message', function(e) {
+        var data;
+        try { data = JSON.parse(e.data); } catch (_) { return; }
+
+        if (data.type === 'AR_CONFIG' && Array.isArray(data.locations)) {
+          dbg('AR_CONFIG received: ' + data.locations.length + ' loc(s)');
+          if (gpsReady) {
+            spawnModels(data.locations);
+          } else {
+            pendingLocs = data.locations;
+            dbg('Queued — waiting for GPS fix');
           }
-        } catch (_) {}
+        }
       });
 
-      // ─── GPS ready → hide loader → signal AR_READY ───────────────────────────
-      document.getElementById('ar-scene').addEventListener('loaded', () => {
-        navigator.geolocation.getCurrentPosition(
-          () => {
-            document.getElementById('loader').style.display = 'none';
+      // ----------------------------------------------------------------
+      // Wait for real GPS lock via gps-camera-update-position event.
+      // This is more reliable than the scene 'loaded' event because
+      // AR.js needs an actual GPS fix before entity placement works.
+      // ----------------------------------------------------------------
+      document.getElementById('ar-scene').addEventListener('loaded', function() {
+        dbg('Scene loaded — waiting for GPS fix...');
 
-            const msg = JSON.stringify({ type: 'AR_READY' });
-            if (window.ReactNativeWebView) {
-              window.ReactNativeWebView.postMessage(msg);
-            } else {
-              window.postMessage(msg, '*');
+        var cam = document.getElementById('ar-camera');
+
+        cam.addEventListener('gps-camera-update-position', function(e) {
+          if (gpsReady) return;
+          gpsReady = true;
+
+          var lat = e.detail.position.latitude;
+          var lng = e.detail.position.longitude;
+          document.getElementById('loader').style.display = 'none';
+          dbg('GPS OK: ' + lat.toFixed(5) + ', ' + lng.toFixed(5));
+
+          signalReady();
+
+          if (pendingLocs) {
+            spawnModels(pendingLocs);
+            pendingLocs = null;
+          }
+        });
+
+        // Safety fallback: if GPS never fires (e.g. indoors / simulator)
+        // unblock the app after 8 seconds
+        setTimeout(function() {
+          if (!gpsReady) {
+            gpsReady = true;
+            document.getElementById('loader').style.display = 'none';
+            var errEl = document.getElementById('gps-error');
+            errEl.textContent = 'GPS signal unavailable — models may not appear in correct positions.';
+            errEl.style.display = 'block';
+            dbg('GPS timeout — forcing ready state');
+            signalReady();
+            if (pendingLocs) {
+              spawnModels(pendingLocs);
+              pendingLocs = null;
             }
-          },
-          (err) => {
-            document.getElementById('loader-text').textContent =
-              'GPS error: ' + err.message;
-            const banner = document.getElementById('gps-error');
-            banner.textContent  = '⚠️ ' + err.message;
-            banner.style.display = 'block';
-          },
-          { enableHighAccuracy: true }
-        );
+          }
+        }, 8000);
       });
     </script>
   </body>
