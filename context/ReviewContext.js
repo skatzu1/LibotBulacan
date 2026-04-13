@@ -9,7 +9,6 @@ export const ReviewProvider = ({ children }) => {
   const { getToken } = useAuth();
   const [reviewsBySpot, setReviewsBySpot] = useState({});
 
-  // ✅ Fetch all spots then prefetch reviews for each on app start
   useEffect(() => {
     const prefetchAllReviews = async () => {
       try {
@@ -41,18 +40,28 @@ export const ReviewProvider = ({ children }) => {
   const addReview = useCallback(async (locationId, rating, comment) => {
     try {
       const token = await getToken();
-      await fetch("https://libotbackend.onrender.com/api/reviews", {
+      const res = await fetch("https://libotbackend.onrender.com/api/reviews", {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ locationId, rating, comment })
+        body: JSON.stringify({ spotId: locationId, rating, comment }) // ✅ fixed key
       });
-      fetchReviews(locationId);
+
+      const data = await res.json();
+      if (!data.success) {
+        console.error("❌ Review failed:", data.message);
+        return;
+      }
+
+      await fetchReviews(locationId);
     } catch (err) {
       console.error("❌ Error adding review:", err);
     }
-  }, [getToken]);
+  }, [getToken, fetchReviews]);
 
-  const getReviewsForSpot = useCallback((locationId) => reviewsBySpot[locationId] || [], [reviewsBySpot]);
+  const getReviewsForSpot = useCallback(
+    (locationId) => reviewsBySpot[locationId] || [],
+    [reviewsBySpot]
+  );
 
   const getAverageRating = useCallback((locationId) => {
     const reviews = reviewsBySpot[locationId] || [];
@@ -61,7 +70,10 @@ export const ReviewProvider = ({ children }) => {
     return (sum / reviews.length).toFixed(1);
   }, [reviewsBySpot]);
 
-  const getReviewCount = useCallback((locationId) => (reviewsBySpot[locationId] || []).length, [reviewsBySpot]);
+  const getReviewCount = useCallback(
+    (locationId) => (reviewsBySpot[locationId] || []).length,
+    [reviewsBySpot]
+  );
 
   return (
     <ReviewContext.Provider value={{
