@@ -264,7 +264,7 @@ export default function BadgeScreen() {
         <View style={{ height: 40 }} />
       </ScrollView>
 
-      {/* ── Badge Detail Modal (No Claim Button) ── */}
+      {/* ── Badge Detail Modal ── */}
       <Modal
         visible={modalVisible}
         transparent
@@ -351,7 +351,7 @@ export default function BadgeScreen() {
 
             <View style={styles.divider} />
 
-            {/* Share Button (Only Action) */}
+            {/* Share Button */}
             <TouchableOpacity
               style={[styles.shareButton, sharing && { opacity: 0.7 }]}
               onPress={handleShare}
@@ -382,7 +382,7 @@ const styles = StyleSheet.create({
   // ── Hidden share card (off-screen, captured as PNG) ──
   offscreen: {
     position: "absolute",
-    top: -2000,  // off-screen
+    top: -2000,
     left: 0,
   },
   shareCard: {
@@ -390,7 +390,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingVertical: 40,
     paddingHorizontal: 40,
-    backgroundColor: "transparent", // ✅ transparent background for PNG
+    backgroundColor: "transparent",
   },
   shareCardImage: {
     width: 200,

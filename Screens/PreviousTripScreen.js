@@ -45,12 +45,12 @@ export default function PreviousTripsScreen() {
 
     try {
       const token = await getToken();
-      const res   = await fetch(`${BASE_URL}/api/users/me/visited`, {
+      const res   = await fetch(`${BASE_URL}/api/visitlogs`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) throw new Error(`Server error: ${res.status}`);
       const data = await res.json();
-      setVisited(Array.isArray(data.visited) ? data.visited : []);
+      setVisited(Array.isArray(data) ? data : data.visited || []);
       hasLoaded.current = true;
     } catch (e) {
       console.warn("PreviousTrips load error:", e);

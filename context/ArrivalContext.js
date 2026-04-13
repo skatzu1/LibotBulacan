@@ -118,7 +118,6 @@ async function handleBackgroundArrival(coords) {
         await AsyncStorage.setItem("arrivedSpotsReturn", JSON.stringify(arrivedReturn));
       }
 
-      // ✅ Always send system notification, message differs by visit type
       await Notifications.scheduleNotificationAsync({
         content: {
           title: isFirstVisit ? "🏅 You arrived!" : "📍 Welcome back!",
@@ -158,7 +157,6 @@ async function setupNotifications() {
 
     Notifications.setNotificationHandler({
       handleNotification: async () => ({
-        shouldShowBanner:  true,
         shouldShowBanner: true,
         shouldPlaySound:  true,
         shouldSetBadge:   true,
@@ -231,6 +229,9 @@ export function ArrivalProvider({ children }) {
   const badgeOpacity    = useRef(new Animated.Value(0)).current;
 
   const locationSub      = useRef(null);
+  // In-memory only — intentionally resets on every app restart.
+  // Purpose: prevent duplicate triggers within the same session only.
+  // Cross-session "already claimed" detection is handled by claimedSpotIds in AsyncStorage.
   const arrivedSpots     = useRef(new Set());
   const activeSpotRef    = useRef(null);
   const currentUserIdRef = useRef(null);
@@ -276,7 +277,6 @@ export function ArrivalProvider({ children }) {
       appStateDebounce.current = setTimeout(async () => {
         const prevState = appStateRef.current;
 
-        // Going to background
         if (
           (nextState === "inactive" || nextState === "background") &&
           prevState === "active"
@@ -315,7 +315,6 @@ export function ArrivalProvider({ children }) {
           }
         }
 
-        // Returning to foreground
         if (nextState === "active" && prevState !== "active") {
           try {
             const isRunning = await Location.hasStartedLocationUpdatesAsync(
@@ -355,6 +354,7 @@ export function ArrivalProvider({ children }) {
     AsyncStorage.removeItem("arrivedSpotsFirst");
     AsyncStorage.removeItem("arrivedSpotsReturn");
 
+    // Reset in-memory session dedup set on user change
     arrivedSpots.current     = new Set();
     setActiveSpotState(null);
     activeSpotRef.current    = null;
@@ -468,39 +468,16 @@ export function ArrivalProvider({ children }) {
   }, [badgeTranslateY, badgeOpacity]);
 
   // ─────────────────────────────────────────
-  // Save badge to DB
-  // ─────────────────────────────────────────
-  const saveBadge = useCallback(async (badge) => {
-    try {
-      const token = await getToken();
-      if (!token) { console.warn("[Badge] No token"); return; }
-
-      const res  = await fetch(`${BASE_URL}/api/users/badges`, {
-        method:  "PATCH",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body:    JSON.stringify({ spotId: badge.spotId }),
-      });
-      const data = await safeJson(res);
-      if (!data || !res.ok || !data.success) { console.warn("[Badge] Save failed:", data?.message); return; }
-
-      console.log("[Badge] ✅ Auto-saved:", JSON.stringify(data.claimed));
-
-      const cacheKey = `claimedSpotIds_${currentUserIdRef.current}`;
-      try {
-        const raw = await AsyncStorage.getItem(cacheKey);
-        const ids = raw ? JSON.parse(raw) : [];
-        if (!ids.includes(badge.spotId))
-          await AsyncStorage.setItem(cacheKey, JSON.stringify([...ids, badge.spotId]));
-      } catch (_) {}
-    } catch (e) { console.error("[Badge] Save error:", e); }
-  }, [getToken]);
-
-  // ─────────────────────────────────────────
   // Award rewards (foreground)
   // ─────────────────────────────────────────
   const awardRewards = useCallback(async (spot) => {
     const spotId = String(spot._id ?? "").trim();
-    if (!spotId || arrivedSpots.current.has(spotId)) return;
+    if (!spotId) return;
+
+    // In-memory dedup only — prevents the same spot firing twice within one session.
+    // Intentionally resets on app restart so claimedSpotIds can determine
+    // first-visit vs return-visit correctly on every launch.
+    if (arrivedSpots.current.has(spotId)) return;
     arrivedSpots.current.add(spotId);
 
     console.log("[Arrival] ✅ Arrived at:", spot.name, "| spotId:", spotId);
@@ -533,14 +510,30 @@ export function ArrivalProvider({ children }) {
       }
     } catch (e) { console.warn("[Points] Error:", e); }
 
+    // Visit Log
+    try {
+      const token = await getToken();
+      await fetch(`${BASE_URL}/api/visitlogs`, {
+        method:  "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body:    JSON.stringify({ spotId }),
+      });
+      console.log("[VisitLog] ✅ Logged visit for:", spot.name);
+    } catch (e) { console.warn("[VisitLog] Failed:", e); }
+
     // Badge
     try {
       const cacheKey  = `claimedSpotIds_${currentUserIdRef.current}`;
       const cachedRaw = await AsyncStorage.getItem(cacheKey);
       const cachedIds = cachedRaw ? JSON.parse(cachedRaw) : [];
+
+      // isFirstVisit is the sole source of truth for first vs return visit.
+      // It reads from AsyncStorage so it correctly survives app restarts.
       const isFirstVisit = !cachedIds.includes(spotId);
 
-      // ✅ Always send system notification
+      console.log("[Badge Debug] cachedIds:", cachedIds, "| spotId:", spotId, "| isFirstVisit:", isFirstVisit);
+
+      // Send notification regardless of first/return visit
       await Notifications.scheduleNotificationAsync({
         content: {
           title: isFirstVisit ? "🏅 You arrived!" : "📍 Welcome back!",
@@ -552,45 +545,43 @@ export function ArrivalProvider({ children }) {
         trigger: null,
       });
 
-      // ✅ In-app banner only on first visit
       if (!isFirstVisit) {
-        console.log("[Badge] Return visit — system notif sent, no in-app banner");
+        console.log("[Badge] Return visit — no in-app banner");
         return;
       }
 
-      // Verify against DB before showing in-app banner
-      const token      = await getToken();
-      const meRes      = await fetch(`${BASE_URL}/api/users/me`, { headers: { Authorization: `Bearer ${token}` } });
-      const meData     = await safeJson(meRes);
-      const alreadyInDB = (meData?.user?.badges ?? []).some((b) => String(b.spotId) === spotId);
+      // First visit — call backend to look up and save the badge
+      const token = await getToken();
+      const res   = await fetch(`${BASE_URL}/api/users/badges`, {
+        method:  "PATCH",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body:    JSON.stringify({ spotId }),
+      });
+      const data = await safeJson(res);
 
-      if (alreadyInDB) {
-        if (!cachedIds.includes(spotId))
-          await AsyncStorage.setItem(cacheKey, JSON.stringify([...cachedIds, spotId]));
-        console.log("[Badge] Already in DB — system notif sent, no in-app banner");
+      // Write claimedSpotIds cache immediately after any response —
+      // whether success, alreadyOwned, or no badge configured.
+      // This is the key cross-session guard and must happen before any early returns.
+      if (!cachedIds.includes(spotId)) {
+        await AsyncStorage.setItem(cacheKey, JSON.stringify([...cachedIds, spotId]));
+      }
+
+      if (!data?.success) {
+        console.log("[Badge] No badge configured for this spot:", data?.message);
         return;
       }
 
-      // ✅ Genuinely first visit — get badge and show in-app banner
-      const cachedSpot  = allSpotsRef.current.find((s) => String(s._id) === spotId);
-      let badgeImageUrl = cachedSpot?.Badge ?? cachedSpot?.badge?.image ?? null;
-      let spotName      = cachedSpot?.name  ?? spot.name;
-
-      if (!cachedSpot) {
-        const spotRes  = await fetch(`${BASE_URL}/api/spots/${spotId}`);
-        const spotJson = await safeJson(spotRes);
-        const fresh    = spotJson?.spot;
-        if (fresh) { badgeImageUrl = fresh.Badge ?? fresh.badge?.image ?? null; spotName = fresh.name; }
+      if (data.alreadyOwned) {
+        console.log("[Badge] Already owned — cache updated, no banner");
+        return;
       }
 
-      if (!badgeImageUrl) { console.log("[Badge] No badge image for:", spotName); return; }
-
-      const badge = { spotId, name: spotName, image: badgeImageUrl };
-      await saveBadge(badge);
-      setTimeout(() => triggerBadgeBanner(badge), pointsJustEarned ? 1500 : 0);
+      // New badge claimed — show banner using data from backend
+      console.log("[Badge] ✅ Claimed:", data.claimed?.name);
+      setTimeout(() => triggerBadgeBanner(data.claimed), pointsJustEarned ? 1500 : 0);
 
     } catch (e) { console.error("[Badge] Error:", e); }
-  }, [getToken, triggerPointsPopup, triggerBadgeBanner, saveBadge]);
+  }, [getToken, triggerPointsPopup, triggerBadgeBanner]);
 
   // ─────────────────────────────────────────
   // Foreground location watcher
