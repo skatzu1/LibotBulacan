@@ -50,7 +50,7 @@ export default function PreviousTripsScreen() {
       });
       if (!res.ok) throw new Error(`Server error: ${res.status}`);
       const data = await res.json();
-      setVisited(Array.isArray(data) ? data : data.visited || []);
+      setVisited(Array.isArray(data?.visited) ? data.visited : []);
       hasLoaded.current = true;
     } catch (e) {
       console.warn("PreviousTrips load error:", e);

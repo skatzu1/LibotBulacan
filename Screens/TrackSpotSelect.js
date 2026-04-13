@@ -36,14 +36,9 @@ function TrackSpotSelect({ navigation }) {
         </TouchableOpacity>
         <View>
           <Text style={styles.headerTitle}>Navigate</Text>
-          <Text style={styles.headerSub}>Choose a spot to get directions</Text>
         </View>
       </View>
 
-      <View style={styles.badge}>
-        <Feather name="navigation" size={14} color="#fff" />
-        <Text style={styles.badgeText}>GPS Navigation</Text>
-      </View>
 
       {loading ? (
         <View style={styles.centered}>
