@@ -134,14 +134,12 @@ export default function ProfileScreen() {
       id: 2,
       icon: "map-pin",
       title: "Previous Trips",
-      badge: tripCount > 0 ? `${tripCount} spots` : null,
       onPress: () => navigation.navigate("PreviousTrips"),
     },
     {
       id: 3,
       icon: "award",
       title: "Badges",
-      badge: badgeCount > 0 ? `${badgeCount} earned` : null,
       onPress: () => navigation.navigate("Badges"),
     },
     {

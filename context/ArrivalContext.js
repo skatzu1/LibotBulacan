@@ -229,9 +229,6 @@ export function ArrivalProvider({ children }) {
   const badgeOpacity    = useRef(new Animated.Value(0)).current;
 
   const locationSub      = useRef(null);
-  // In-memory only — intentionally resets on every app restart.
-  // Purpose: prevent duplicate triggers within the same session only.
-  // Cross-session "already claimed" detection is handled by claimedSpotIds in AsyncStorage.
   const arrivedSpots     = useRef(new Set());
   const activeSpotRef    = useRef(null);
   const currentUserIdRef = useRef(null);
@@ -243,7 +240,32 @@ export function ArrivalProvider({ children }) {
   useEffect(() => { activeSpotRef.current = activeSpot; }, [activeSpot]);
 
   // ─────────────────────────────────────────
-  // 1. On sign-in: request permissions + setup notifs
+  // Sync claimedSpotIds cache from backend on sign-in.
+  // This ensures the local cache always reflects what the DB actually has,
+  // so clearing DB records also clears the effective "already visited" state.
+  // ─────────────────────────────────────────
+  const syncClaimedCache = useCallback(async (userId, token) => {
+    try {
+      const res  = await fetch(`${BASE_URL}/api/users/claimed-spots`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (!res.ok) {
+        console.warn("[Cache Sync] Failed, status:", res.status);
+        return;
+      }
+      const data = await safeJson(res);
+      if (Array.isArray(data?.spotIds)) {
+        const cacheKey = `claimedSpotIds_${userId}`;
+        await AsyncStorage.setItem(cacheKey, JSON.stringify(data.spotIds));
+        console.log("[Cache Sync] ✅ Synced", data.spotIds.length, "claimed spots from backend");
+      }
+    } catch (e) {
+      console.warn("[Cache Sync] Error:", e.message);
+    }
+  }, []);
+
+  // ─────────────────────────────────────────
+  // 1. On sign-in: request permissions + setup notifs + sync cache
   // ─────────────────────────────────────────
   useEffect(() => {
     if (!isSignedIn) return;
@@ -251,6 +273,11 @@ export function ArrivalProvider({ children }) {
     const init = async () => {
       await setupNotifications();
       hasLocationPerms.current = await requestAllLocationPermissions();
+
+      // Sync cache so local state matches DB
+      const token  = await getToken();
+      const userId = clerkUser?.id;
+      if (token && userId) await syncClaimedCache(userId, token);
     };
 
     init();
@@ -354,7 +381,6 @@ export function ArrivalProvider({ children }) {
     AsyncStorage.removeItem("arrivedSpotsFirst");
     AsyncStorage.removeItem("arrivedSpotsReturn");
 
-    // Reset in-memory session dedup set on user change
     arrivedSpots.current     = new Set();
     setActiveSpotState(null);
     activeSpotRef.current    = null;
@@ -474,43 +500,57 @@ export function ArrivalProvider({ children }) {
     const spotId = String(spot._id ?? "").trim();
     if (!spotId) return;
 
-    // In-memory dedup only — prevents the same spot firing twice within one session.
-    // Intentionally resets on app restart so claimedSpotIds can determine
-    // first-visit vs return-visit correctly on every launch.
     if (arrivedSpots.current.has(spotId)) return;
     arrivedSpots.current.add(spotId);
 
     console.log("[Arrival] ✅ Arrived at:", spot.name, "| spotId:", spotId);
 
-    // visitCount
+    // ── Determine first vs return visit ───────────────────────────────────
+    // Cache is the fast path. Backend is the source of truth —
+    // the cache is synced from backend on every sign-in so they stay in sync.
+    const cacheKey     = `claimedSpotIds_${currentUserIdRef.current}`;
+    const cachedRaw    = await AsyncStorage.getItem(cacheKey);
+    const cachedIds    = cachedRaw ? JSON.parse(cachedRaw) : [];
+    const isFirstVisit = !cachedIds.includes(spotId);
+
+    console.log("[Arrival] isFirstVisit:", isFirstVisit, "| spotId:", spotId);
+
+    // Write cache immediately on first visit — crash-safe guard
+    if (isFirstVisit) {
+      await AsyncStorage.setItem(cacheKey, JSON.stringify([...cachedIds, spotId]));
+    }
+
+    // ── Visit count (every visit) ──────────────────────────────────────────
     try {
-      const token = await getToken();
+      const token    = await getToken();
       const visitRes = await fetch(`${BASE_URL}/api/spots/${spotId}/visit`, {
-        method: "PATCH",
+        method:  "PATCH",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
       });
       const visitData = await safeJson(visitRes);
       console.log("[Visit]", visitData?.alreadyVisited ? "⚠️ Already visited" : `✅ visitCount → ${visitData?.visitCount}`);
     } catch (e) { console.warn("[Visit] Failed:", e); }
 
-    // Points
+    // ── Points (first visit only) ──────────────────────────────────────────
     let pointsJustEarned = false;
-    try {
-      const token = await getToken();
-      const res   = await fetch(`${BASE_URL}/api/users/points`, {
-        method:  "PATCH",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body:    JSON.stringify({ spotId }),
-      });
-      const data = await safeJson(res);
-      if (res.ok && data?.success && !data.alreadyAwarded) {
-        pointsJustEarned = true;
-        await AsyncStorage.setItem("userPoints", String(data.points));
-        triggerPointsPopup(POINTS_PER_VISIT, data.points);
-      }
-    } catch (e) { console.warn("[Points] Error:", e); }
+    if (isFirstVisit) {
+      try {
+        const token = await getToken();
+        const res   = await fetch(`${BASE_URL}/api/users/points`, {
+          method:  "PATCH",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body:    JSON.stringify({ spotId }),
+        });
+        const data = await safeJson(res);
+        if (res.ok && data?.success && !data.alreadyAwarded) {
+          pointsJustEarned = true;
+          await AsyncStorage.setItem("userPoints", String(data.points));
+          triggerPointsPopup(POINTS_PER_VISIT, data.points);
+        }
+      } catch (e) { console.warn("[Points] Error:", e); }
+    }
 
-    // Visit Log
+    // ── Visit log (every visit) ────────────────────────────────────────────
     try {
       const token = await getToken();
       await fetch(`${BASE_URL}/api/visitlogs`, {
@@ -521,36 +561,25 @@ export function ArrivalProvider({ children }) {
       console.log("[VisitLog] ✅ Logged visit for:", spot.name);
     } catch (e) { console.warn("[VisitLog] Failed:", e); }
 
-    // Badge
+    // ── Notification (every visit) ─────────────────────────────────────────
+    await Notifications.scheduleNotificationAsync({
+      content: {
+        title: isFirstVisit ? "🏅 You arrived!" : "📍 Welcome back!",
+        body: isFirstVisit
+          ? `You've reached ${spot.name}! Open Libot to claim your badge.`
+          : `You've arrived at ${spot.name}. Open Libot Bulacan to explore!`,
+        data: { spotId, spotName: spot.name, isFirstVisit },
+      },
+      trigger: null,
+    });
+
+    if (!isFirstVisit) {
+      console.log("[Badge] Return visit — no points, no badge");
+      return;
+    }
+
+    // ── Badge (first visit only) ───────────────────────────────────────────
     try {
-      const cacheKey  = `claimedSpotIds_${currentUserIdRef.current}`;
-      const cachedRaw = await AsyncStorage.getItem(cacheKey);
-      const cachedIds = cachedRaw ? JSON.parse(cachedRaw) : [];
-
-      // isFirstVisit is the sole source of truth for first vs return visit.
-      // It reads from AsyncStorage so it correctly survives app restarts.
-      const isFirstVisit = !cachedIds.includes(spotId);
-
-      console.log("[Badge Debug] cachedIds:", cachedIds, "| spotId:", spotId, "| isFirstVisit:", isFirstVisit);
-
-      // Send notification regardless of first/return visit
-      await Notifications.scheduleNotificationAsync({
-        content: {
-          title: isFirstVisit ? "🏅 You arrived!" : "📍 Welcome back!",
-          body: isFirstVisit
-            ? `You've reached ${spot.name}! Open Libot to claim your badge.`
-            : `You've arrived at ${spot.name}. Open Libot Bulacan to explore!`,
-          data: { spotId, spotName: spot.name, isFirstVisit },
-        },
-        trigger: null,
-      });
-
-      if (!isFirstVisit) {
-        console.log("[Badge] Return visit — no in-app banner");
-        return;
-      }
-
-      // First visit — call backend to look up and save the badge
       const token = await getToken();
       const res   = await fetch(`${BASE_URL}/api/users/badges`, {
         method:  "PATCH",
@@ -559,24 +588,16 @@ export function ArrivalProvider({ children }) {
       });
       const data = await safeJson(res);
 
-      // Write claimedSpotIds cache immediately after any response —
-      // whether success, alreadyOwned, or no badge configured.
-      // This is the key cross-session guard and must happen before any early returns.
-      if (!cachedIds.includes(spotId)) {
-        await AsyncStorage.setItem(cacheKey, JSON.stringify([...cachedIds, spotId]));
-      }
-
       if (!data?.success) {
         console.log("[Badge] No badge configured for this spot:", data?.message);
         return;
       }
 
       if (data.alreadyOwned) {
-        console.log("[Badge] Already owned — cache updated, no banner");
+        console.log("[Badge] Already owned — no banner");
         return;
       }
 
-      // New badge claimed — show banner using data from backend
       console.log("[Badge] ✅ Claimed:", data.claimed?.name);
       setTimeout(() => triggerBadgeBanner(data.claimed), pointsJustEarned ? 1500 : 0);
 
