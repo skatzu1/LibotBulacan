@@ -18,9 +18,9 @@ import { useAuth } from '../context/AuthContext';
 const AR_URL       = 'https://ar-web-lemon.vercel.app/index.html';
 const API_URL      = 'https://libotbackend.onrender.com/api/spots';
 const COLLECT_URL  = 'https://libotbackend.onrender.com/api/collections';
-const RANGE_METERS = 500;
+const RANGE_METERS = 999999; // TODO: set back to 500 for production
 
-// ─── Haversine distance ────────────────────────────────────────────────────────
+// ─── Haversine distance ───────────────────────────────────────────────────────
 function getDistanceMeters(lat1, lng1, lat2, lng2) {
   const R  = 6371000;
   const φ1 = (lat1 * Math.PI) / 180;
@@ -33,29 +33,41 @@ function getDistanceMeters(lat1, lng1, lat2, lng2) {
   return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-// ─── Map API spot → AR location object ────────────────────────────────────────
+// ─── Map API spot → AR location object ───────────────────────────────────────
 function mapLandmarkToARLocation(item) {
-  if (!item.modelUrl) return null;
+  const rawUrl =
+    item.ARModelUrl    ||
+    item.AR3DModelURL  ||
+    item.arModelUrl    ||
+    '';
+  const modelUrl = typeof rawUrl === 'string' ? rawUrl.trim() : '';
+  if (!modelUrl) return [];
 
   const mc = item.modelsCoordinates;
   const co = item.coordinates;
 
-  const arLat    = mc?.lat ?? co?.lat;
-  const arLng    = mc?.lng ?? co?.lng;
-  const rangeLat = co?.lat ?? arLat;
-  const rangeLng = co?.lng ?? arLng;
+  const mcArr = Array.isArray(mc) ? mc : (mc ? [mc] : []);
+  const fallback = co ? [co] : [];
+  const coordList = mcArr.length ? mcArr : fallback;
 
-  if (arLat == null || arLng == null) return null;
+  const rangeLat = parseFloat(co?.lat);
+  const rangeLng = parseFloat(co?.lng);
 
-  return {
-    id:          item._id?.$oid ?? String(item._id) ?? item.name,
-    name:        item.name ?? 'Unknown',
-    modelUrl:    item.modelUrl,
-    latitude:    arLat,
-    longitude:   arLng,
-    landmarkLat: rangeLat,
-    landmarkLng: rangeLng,
-  };
+  return coordList.map((coord, i) => {
+    const arLat = parseFloat(coord?.lat);
+    const arLng = parseFloat(coord?.lng);
+    if (isNaN(arLat) || isNaN(arLng)) return null;
+
+    return {
+      id:          `${String(item._id ?? item.name)}_${i}`,
+      name:        item.name ?? 'Unknown',
+      modelUrl,
+      latitude:    arLat,
+      longitude:   arLng,
+      landmarkLat: isNaN(rangeLat) ? arLat : rangeLat,
+      landmarkLng: isNaN(rangeLng) ? arLng : rangeLng,
+    };
+  }).filter(Boolean);
 }
 
 // ─── Component ────────────────────────────────────────────────────────────────
@@ -75,10 +87,9 @@ export default function ARScreen({ navigation }) {
   const [fetchError,   setFetchError]   = useState(null);
   const [collectedIds, setCollectedIds] = useState(new Set());
 
-  // Info modal — shown once on open
   const [showInfoModal, setShowInfoModal] = useState(true);
 
-  // ─── Auth header helper ──────────────────────────────────────────────────────
+  // ─── Auth header helper ───────────────────────────────────────────────────
   const authHeaders = useCallback(async () => {
     const token = await AsyncStorage.getItem('userToken');
     return {
@@ -87,7 +98,7 @@ export default function ARScreen({ navigation }) {
     };
   }, []);
 
-  // ─── Permissions ─────────────────────────────────────────────────────────────
+  // ─── Permissions ─────────────────────────────────────────────────────────
   useEffect(() => { requestPermissions(); }, []);
 
   const requestPermissions = async () => {
@@ -114,7 +125,7 @@ export default function ARScreen({ navigation }) {
     }
   };
 
-  // ─── Fetch landmarks ──────────────────────────────────────────────────────────
+  // ─── Fetch landmarks ──────────────────────────────────────────────────────
   const fetchLocations = async () => {
     try {
       const res  = await fetch(API_URL);
@@ -129,15 +140,17 @@ export default function ARScreen({ navigation }) {
 
       if (!raw) throw new Error(`Unexpected API shape — keys: ${Object.keys(json)}`);
 
-      const mapped = raw.map(mapLandmarkToARLocation).filter(Boolean);
+      const mapped = raw.flatMap(mapLandmarkToARLocation);
+      console.log('[AR] Total spots from API:', raw.length, '| With AR model:', mapped.length);
+      console.log('[AR] Mapped spots:', JSON.stringify(mapped));
       setLocations(mapped);
-      if (!mapped.length) setFetchError('No landmarks with model coordinates found.');
+      if (!mapped.length) setFetchError('No AR models found. Check ARModelUrl field in DB.');
     } catch (err) {
       setFetchError('Could not load AR locations: ' + err.message);
     }
   };
 
-  // ─── Fetch collected IDs ──────────────────────────────────────────────────────
+  // ─── Fetch collected IDs ──────────────────────────────────────────────────
   const fetchCollectedIds = async () => {
     if (!user) return;
     try {
@@ -152,7 +165,7 @@ export default function ARScreen({ navigation }) {
     } catch (_) {}
   };
 
-  // ─── Range check ─────────────────────────────────────────────────────────────
+  // ─── Range check ─────────────────────────────────────────────────────────
   const checkRange = useCallback(async (locs) => {
     try {
       const pos = await Location.getCurrentPositionAsync({
@@ -163,8 +176,11 @@ export default function ARScreen({ navigation }) {
         if (isNaN(loc.landmarkLat) || isNaN(loc.landmarkLng)) return false;
         return getDistanceMeters(uLat, uLng, loc.landmarkLat, loc.landmarkLng) <= RANGE_METERS;
       });
+      console.log('[AR] Nearby spots within range:', nearby.length, 'of', locs.length);
       setNearbyLocs(nearby);
     } catch (_) {
+      // If location check fails, show all locations
+      console.log('[AR] Location check failed — showing all', locs.length, 'spots');
       setNearbyLocs(locs);
     }
   }, []);
@@ -175,41 +191,65 @@ export default function ARScreen({ navigation }) {
     }
   }, [permissionsGranted, locations, checkRange]);
 
-  // ─── Inject locations into WebView ───────────────────────────────────────────
+  // ─── Inject locations into WebView ───────────────────────────────────────
+  // ✅ FIX: Use injectJavaScript to call window.receiveARConfig directly.
+  // The window.postMessage / dispatchEvent approach is unreliable in React
+  // Native WebView because the injected JS runs in a different context.
+  // Calling a pre-defined global function is the most reliable method.
   const injectLocations = useCallback((locs, alreadyCollected) => {
     if (!webviewRef.current) return;
+
     const fresh = locs.filter((l) => !alreadyCollected.has(l.id));
+    if (!fresh.length) return;
+
+    const locJson = JSON.stringify(fresh);
+
+    // Primary: call the global function defined in the HTML
     const script = `
-      window.dispatchEvent(new MessageEvent('message', {
-        data: JSON.stringify({
-          type: 'AR_CONFIG',
-          locations: ${JSON.stringify(fresh)}
-        })
-      }));
+      (function() {
+        try {
+          if (typeof window.receiveARConfig === 'function') {
+            window.receiveARConfig(${locJson});
+          } else {
+            // Fallback: dispatch a MessageEvent
+            window.dispatchEvent(new MessageEvent('message', {
+              data: JSON.stringify({ type: 'AR_CONFIG', locations: ${locJson} })
+            }));
+          }
+        } catch(e) {
+          console.error('[ARScreen inject error]', e);
+        }
+      })();
       true;
     `;
+
     webviewRef.current.injectJavaScript(script);
   }, []);
 
+  // ─── WebView load handler ─────────────────────────────────────────────────
   const onWebViewLoad = useCallback(() => {
     setWebviewLoaded(true);
-    if (nearbyLocs.length) injectLocations(nearbyLocs, collectedIds);
-  }, [nearbyLocs, collectedIds, injectLocations]);
+    // Don't inject here — wait for AR_READY signal from the scene
+    // to ensure A-Frame and GPS are fully initialised first.
+  }, []);
 
+  // ─── Inject when both arReady + nearbyLocs are available ─────────────────
   useEffect(() => {
-    if (webviewLoaded && nearbyLocs.length) {
+    if (arReady && nearbyLocs.length) {
       injectLocations(nearbyLocs, collectedIds);
     }
-  }, [nearbyLocs, collectedIds, webviewLoaded, injectLocations]);
+  }, [arReady, nearbyLocs, collectedIds, injectLocations]);
 
-  // Safety timeout
+  // Safety timeout: mark AR ready after 12s even if AR_READY never arrives
   useEffect(() => {
     if (!webviewLoaded) return;
-    const timer = setTimeout(() => setArReady(true), 10000);
+    const timer = setTimeout(() => {
+      setArReady(true);
+    }, 12000);
     return () => clearTimeout(timer);
   }, [webviewLoaded]);
 
-  // ─── Save collection ──────────────────────────────────────────────────────────
+  // ─── Save collection to backend ──────────────────────────────────────────
   const saveCollection = useCallback(async (modelId) => {
     if (!user) return;
     try {
@@ -223,21 +263,26 @@ export default function ARScreen({ navigation }) {
     } catch (_) {}
   }, [user, authHeaders]);
 
-  // ─── Messages from WebView ────────────────────────────────────────────────────
+  // ─── Messages from WebView ────────────────────────────────────────────────
   const onMessage = useCallback((event) => {
     try {
       const data = JSON.parse(event.nativeEvent.data);
+
       if (data.type === 'AR_READY') {
         setArReady(true);
-        if (nearbyLocs.length) injectLocations(nearbyLocs, collectedIds);
+        // Inject immediately on AR_READY — this is the most reliable timing
+        if (nearbyLocs.length) {
+          injectLocations(nearbyLocs, collectedIds);
+        }
       }
+
       if (data.type === 'AR_COLLECTED') {
         saveCollection(data.modelId);
       }
     } catch (_) {}
   }, [nearbyLocs, collectedIds, injectLocations, saveCollection]);
 
-  // ─── Permission error screen ──────────────────────────────────────────────────
+  // ─── Permission error screen ──────────────────────────────────────────────
   if (permissionError) {
     return (
       <View style={styles.errorContainer}>
@@ -251,7 +296,7 @@ export default function ARScreen({ navigation }) {
     );
   }
 
-  // ─── Render ───────────────────────────────────────────────────────────────────
+  // ─── Render ───────────────────────────────────────────────────────────────
   return (
     <View style={styles.container}>
 
@@ -269,6 +314,9 @@ export default function ARScreen({ navigation }) {
           originWhitelist={['*']}
           allowsProtectedMedia={true}
           backgroundColor="black"
+          // ✅ Required for Android: allows WebView to access camera & location
+          androidLayerType="hardware"
+          mixedContentMode="always"
           onError={(e) =>
             setFetchError('WebView error: ' + e.nativeEvent.description)
           }
@@ -340,7 +388,6 @@ const styles = StyleSheet.create({
     color: '#ffcc00', fontSize: 12, textAlign: 'center', paddingHorizontal: 24,
   },
 
-  // ─── Info modal ───────────────────────────────────────────────────────────────
   modalOverlay: {
     flex: 1,
     backgroundColor: 'rgba(0,0,0,0.75)',
@@ -372,7 +419,6 @@ const styles = StyleSheet.create({
   },
   modalBtnText: { color: '#000', fontWeight: '700', fontSize: 15 },
 
-  // ─── Error screen ─────────────────────────────────────────────────────────────
   errorContainer: {
     flex: 1, backgroundColor: '#0a0a0a',
     justifyContent: 'center', alignItems: 'center', padding: 32,
@@ -387,7 +433,6 @@ const styles = StyleSheet.create({
   },
   retryText: { color: '#000', fontWeight: '700', fontSize: 15 },
 
-  // ─── Back button ──────────────────────────────────────────────────────────────
   backButton: {
     position: 'absolute',
     top: Platform.OS === 'ios' ? 54 : 36,
