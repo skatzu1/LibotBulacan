@@ -35,15 +35,10 @@ function MissionsSpotSelect({ navigation }) {
           <Feather name="chevron-left" size={26} color="#3a2a28" />
         </TouchableOpacity>
         <View>
-          <Text style={styles.headerTitle}>Missions</Text>
-          <Text style={styles.headerSub}>Choose a spot to start missions</Text>
+          <Text style={styles.headerTitle}>Bakit List</Text>
         </View>
       </View>
 
-      <View style={styles.badge}>
-        <Feather name="flag" size={14} color="#fff" />
-        <Text style={styles.badgeText}>Daily Missions</Text>
-      </View>
 
       {loading ? (
         <View style={styles.centered}>

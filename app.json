@@ -14,8 +14,9 @@
     },
     "newArchEnabled": true,
     "userInterfaceStyle": "automatic",
-    "assetBundlePatterns": ["**/*"],
-
+    "assetBundlePatterns": [
+      "**/*"
+    ],
     "plugins": [
       "expo-router",
       "expo-font",
@@ -32,7 +33,11 @@
       [
         "@reactvision/react-viro",
         {
-          "android": { "xRMode": ["AR"] },
+          "android": {
+            "xRMode": [
+              "AR"
+            ]
+          },
           "ios": {
             "cameraUsagePermission": "Libot uses the camera for AR experiences.",
             "microphoneUsagePermission": "Libot uses your microphone for AR experiences.",
@@ -67,13 +72,14 @@
             "extraPropertiesEntries": {
               "VisionCamera_enableFrameProcessors": "false"
             },
-            "assetBundlePatterns": ["**/*"]
+            "assetBundlePatterns": [
+              "**/*"
+            ]
           }
         }
       ],
       "react-native-vision-camera"
     ],
-
     "ios": {
       "supportsTablet": true,
       "bundleIdentifier": "com.skatzu15.libot",
@@ -82,13 +88,18 @@
         "NSLocationWhenInUseUsageDescription": "Libot needs your location to show nearby tourist spots and provide navigation.",
         "NSLocationAlwaysAndWhenInUseUsageDescription": "Libot needs your location to show nearby tourist spots and provide navigation.",
         "NSPhotoLibraryUsageDescription": "Libot needs access to your photos for AR and mission scanning.",
-        "CFBundleURLTypes": [{ "CFBundleURLSchemes": ["libot"] }],
+        "CFBundleURLTypes": [
+          {
+            "CFBundleURLSchemes": [
+              "libot"
+            ]
+          }
+        ],
         "NSPhotoLibraryAddUsageDescription": "Allow $(PRODUCT_NAME) to save photos",
         "NSMicrophoneUsageDescription": "Libot uses your microphone for AR experiences.",
         "ITSAppUsesNonExemptEncryption": false
       }
     },
-
     "android": {
       "permissions": [
         "android.permission.CAMERA",
@@ -111,16 +122,26 @@
         {
           "action": "VIEW",
           "autoVerify": true,
-          "data": [{ "scheme": "libot" }],
-          "category": ["BROWSABLE", "DEFAULT"]
+          "data": [
+            {
+              "scheme": "libot"
+            }
+          ],
+          "category": [
+            "BROWSABLE",
+            "DEFAULT"
+          ]
         }
       ]
     },
-
-    "web": { "favicon": "./assets/favicon.png" },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
     "extra": {
-      "eas": { "projectId": "8871f3bb-c707-45ef-9e71-948afcfb7f17" },
-      "router": {}
+      "router": {},
+      "eas": {
+        "projectId": "ce019b8b-d9d3-49c7-be10-9f3624a80041"
+      }
     },
     "owner": "komiigurii"
   }

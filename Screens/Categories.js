@@ -5,7 +5,6 @@ import { useUser } from "@clerk/clerk-expo";
 import { useAuth } from "../context/AuthContext";
 import { useProfileImage } from "../context/ProfileImageContext";
 
-
 const { width } = Dimensions.get("window");
 
 export default function Categories() {
@@ -32,14 +31,17 @@ export default function Categories() {
           <Feather name="chevron-left" size={26} color="#4a2e2c" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>Explore</Text>
-        <TouchableOpacity onPress={() => navigation.navigate("Profile")}>
+
+        {/* Avatar — matches home screen */}
+        <TouchableOpacity onPress={() => navigation.navigate("Profile")} style={styles.avatarWrap}>
           {profilePhoto ? (
-            <Image source={{ uri: profilePhoto }} style={styles.profileImage} />
+            <Image source={{ uri: profilePhoto }} style={styles.avatar} />
           ) : (
-            <View style={styles.profileIcon}>
-              <Feather name="user" size={20} color="#fff" />
+            <View style={[styles.avatar, styles.avatarFallback]}>
+              <Feather name="user" size={18} color="#fff" />
             </View>
           )}
+          <View style={styles.onlineDot} />
         </TouchableOpacity>
       </View>
 
@@ -119,19 +121,33 @@ const styles = StyleSheet.create({
     fontWeight: "700",
     color: "#4a2e2c",
   },
-  profileIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: "#6b4b45",
+
+  // ── Avatar (matches home screen) ──
+  avatarWrap: {
+    position: "relative",
+  },
+  avatar: {
+  width: 42,
+  height: 42,
+  borderRadius: 21,
+  borderWidth: 2.5,
+  borderColor: "#e8d0ce", // ← was "#fff", now visible on white bg
+},
+  avatarFallback: {
+    backgroundColor: "rgba(107,75,69,0.8)",
     justifyContent: "center",
     alignItems: "center",
   },
-  profileImage: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
+  onlineDot: {
+    position: "absolute",
+    bottom: 1,
+    right: 1,
+    width: 11,
+    height: 11,
+    borderRadius: 6,
     backgroundColor: "#6b4b45",
+    borderWidth: 2,
+    borderColor: "#fff",
   },
 
   scrollView:    { flex: 1 },

@@ -17,72 +17,70 @@ export function ProfileImageProvider({ children }) {
 
   const { getToken, isSignedIn, userId } = useAuth();
 
-  // 🔥 Unique key per user (IMPORTANT for multi-account)
-  const STORAGE_KEY = `profileImage_${userId}`;
+  const STORAGE_KEY = userId ? `profileImage_${userId}` : null;
 
-  // ✅ Load from AsyncStorage FIRST (instant UI, no flicker)
   const loadFromStorage = useCallback(async () => {
-    if (!userId) return;
-
+    if (!STORAGE_KEY) return;
     try {
       const saved = await AsyncStorage.getItem(STORAGE_KEY);
-      if (saved) {
-        setProfileImageState(saved);
-      }
+      if (saved) setProfileImageState(saved);
     } catch (e) {
-      console.log("Storage load error:", e);
+      console.log("[ProfileImage] Storage load error:", e);
     }
-  }, [STORAGE_KEY, userId]);
+  }, [STORAGE_KEY]);
 
-  // ✅ Fetch from backend (source of truth)
   const fetchProfileImage = useCallback(async () => {
-    if (!isSignedIn) return;
-
+    if (!isSignedIn || !STORAGE_KEY) return;
     try {
       const token = await getToken();
       const res = await fetch(`${BASE_URL}/api/users/me`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-
       if (!res.ok) return;
-
       const data = await res.json();
       const backendImage = data?.user?.profileImage;
-
       if (backendImage) {
         setProfileImageState(backendImage);
-
-        // 🔥 Sync to storage
         await AsyncStorage.setItem(STORAGE_KEY, backendImage);
       }
     } catch (e) {
-      console.log("Fetch error:", e);
+      console.log("[ProfileImage] Fetch error:", e);
     } finally {
       setLoading(false);
     }
   }, [isSignedIn, getToken, STORAGE_KEY]);
 
-  // ✅ Set image (used after upload)
-  const setProfileImage = async (imageUrl) => {
+  // Called after upload — updates state + storage + DB
+  const setProfileImage = useCallback(async (imageUrl) => {
+    if (!imageUrl) return;
     try {
       setProfileImageState(imageUrl);
-      await AsyncStorage.setItem(STORAGE_KEY, imageUrl);
+      if (STORAGE_KEY) {
+        await AsyncStorage.setItem(STORAGE_KEY, imageUrl);
+      }
+      const token = await getToken();
+      await fetch(`${BASE_URL}/api/users/me`, {
+        method: "PATCH",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ profileImage: imageUrl }),
+      });
     } catch (e) {
-      console.log("Save error:", e);
+      console.log("[ProfileImage] Save error:", e);
     }
-  };
+  }, [getToken, STORAGE_KEY]);
 
-  // 🔄 Load + Fetch flow
   useEffect(() => {
     if (!userId) return;
-
+    setLoading(true);
     (async () => {
-      await loadFromStorage();  // ⚡ instant
-      await fetchProfileImage(); // 🔄 sync with backend
+      await loadFromStorage();
+      await fetchProfileImage();
     })();
-  }, [userId, loadFromStorage, fetchProfileImage]);
+  }, [userId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // 🔥 Clear on logout (VERY IMPORTANT)
   useEffect(() => {
     if (!isSignedIn) {
       setProfileImageState(null);
@@ -92,7 +90,7 @@ export function ProfileImageProvider({ children }) {
 
   return (
     <ProfileImageContext.Provider
-      value={{ profileImage, setProfileImage, loading }}
+      value={{ profileImage, setProfileImage, fetchProfileImage, loading }}
     >
       {children}
     </ProfileImageContext.Provider>

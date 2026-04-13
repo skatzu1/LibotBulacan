@@ -451,8 +451,8 @@ const h = StyleSheet.create({
     width: "100%",
     height: HERO_H,
     backgroundColor: "#c4a49f",
-    borderBottomLeftRadius: 1,
-    borderBottomRightRadius: 1,
+    borderBottomLeftRadius: 30,
+    borderBottomRightRadius: 30,
     overflow: "hidden",
   },
   heroPlaceholder: { flex: 1, justifyContent: "center", alignItems: "center" },
@@ -468,16 +468,17 @@ const h = StyleSheet.create({
     // For now this gives a solid dark fade effect via the button/dots contrast
   },
 
-  heroHeader: {
-    position: "absolute",
-    top: 0, left: 0, right: 0,
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    paddingTop: 54,
-    paddingHorizontal: 22,
-    paddingBottom: 10,
-  },
+  // AFTER
+heroHeader: {
+  position: "absolute",
+  top: 0, left: 0, right: 0,
+  flexDirection: "row",
+  justifyContent: "space-between",
+  alignItems: "center",
+  paddingTop: 50,
+  paddingHorizontal: 20,
+  paddingBottom: 10,
+},
   menuBtn:  { gap: 5, justifyContent: "center" },
   menuLine: { width: 22, height: 2.5, backgroundColor: "#fff", borderRadius: 2 },
 

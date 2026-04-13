@@ -37,19 +37,19 @@ export default function InformationScreen({ route, navigation }) {
   const [newRating, setNewRating]           = useState(0);
   const [newReview, setNewReview]           = useState("");
   const [showStarPicker, setShowStarPicker] = useState(false);
+  const [refreshKey, setRefreshKey]         = useState(0);
 
   const inputRef = useRef(null);
 
-  const { isBookmarked, toggleBookmark }                                                 = useBookmark();
-  const { getReviewsForSpot, addReview, getAverageRating, getReviewCount, fetchReviews } = useReviews();
-  const { fetchMissions, getMissionsForSpot }                                             = useMissions();
+  const { isBookmarked, toggleBookmark }                                                   = useBookmark();
+  const { getReviewsForSpot, addReview, getAverageRating, getReviewCount, fetchReviews }   = useReviews();
+  const { fetchMissions, getMissionsForSpot, completedMissions }                           = useMissions();
   const isFocused = useIsFocused();
 
   useEffect(() => {
     if (!isFocused) setShow3D(false);
   }, [isFocused]);
 
-  // ✅ Fixed: stable spot._id dep, not the whole context function
   useEffect(() => {
     if (spot?._id) {
       fetchReviews(spot._id);
@@ -69,16 +69,23 @@ export default function InformationScreen({ route, navigation }) {
   }
 
   const spotIsBookmarked = isBookmarked(spot._id || spot.id);
-  const reviews           = getReviewsForSpot(spot._id);
-  const averageRating     = getAverageRating(spot._id) || "0.0";
-  const reviewCount       = getReviewCount(spot._id);
-  const missions          = getMissionsForSpot(spot._id);
-  const isReviewsTab      = activeTab === "Reviews";
+  const reviews          = getReviewsForSpot(spot._id);
+  const averageRating    = getAverageRating(spot._id) || "0.0";
+  const reviewCount      = getReviewCount(spot._id);
+  const missions         = getMissionsForSpot(spot._id);
+  const isReviewsTab     = activeTab === "Reviews";
+
+  // Progress helpers
+  const completedCount = missions.filter(
+    (m) => completedMissions?.includes(m._id)
+  ).length;
+  const totalCount     = missions.length;
+  const progressRatio  = totalCount > 0 ? completedCount / totalCount : 0;
 
   const tabs = [
-    { key: "Overview",   label: "Overview",   icon: "book-open" },
-    { key: "BucketList", label: "Bucket List", icon: "list"      },
-    { key: "Reviews",    label: "Reviews",     icon: "star"      },
+    { key: "Overview",   label: "Overview",    icon: "book-open" },
+    { key: "BucketList", label: "Bakit List",  icon: "list"      },
+    { key: "Reviews",    label: "Reviews",      icon: "star"      },
   ];
 
   const StarRating = ({ rating, size = 14 }) => (
@@ -97,6 +104,11 @@ export default function InformationScreen({ route, navigation }) {
     setNewReview("");
     setShowStarPicker(false);
     inputRef.current?.blur();
+  };
+
+  const handleBookmarkToggle = async () => {
+    await toggleBookmark(spot);
+    setRefreshKey(prev => prev + 1);
   };
 
   const ReviewCard = ({ review }) => (
@@ -122,37 +134,53 @@ export default function InformationScreen({ route, navigation }) {
     </View>
   );
 
-  // MissionCard — no change needed, already passes full mission object
-const MissionCard = ({ mission, index }) => {
-  const config = MISSION_CONFIG[mission.type] || MISSION_CONFIG.checkin;
-  return (
-    <TouchableOpacity
-      style={styles.missionCard}
-      onPress={() => navigation.navigate("Mission", { spot, mission })}  // ✅ passes full mission
-      activeOpacity={0.85}
-    >
-      <View style={[styles.missionBadge, { backgroundColor: config.color }]}>
-        <Text style={styles.missionBadgeNum}>{index + 1}</Text>
-      </View>
-      <View style={styles.missionCardBody}>
-        <View style={styles.missionCardTop}>
-          <Feather name={mission.icon || config.icon} size={13} color={config.color} />
-          <Text style={[styles.missionTypeLabel, { color: config.color }]}>
-            {config.label}
+  /* ── Bucket List mission row (reference style) ── */
+  const MissionRow = ({ mission, index }) => {
+    const config      = MISSION_CONFIG[mission.type] || MISSION_CONFIG.checkin;
+    const isDone      = completedMissions?.includes(mission._id);
+
+    return (
+      <TouchableOpacity
+        style={styles.missionRow}
+        onPress={() => navigation.navigate("Mission", { spot, mission })}
+        activeOpacity={0.82}
+      >
+        {/* Thumbnail */}
+        <View style={styles.missionThumbWrap}>
+          {null ? (
+  <Image source={{ uri: spot.image }} style={styles.missionThumb} resizeMode="cover" />
+) : (
+            <View style={[styles.missionThumb, { backgroundColor: "#e8d0ce", justifyContent: "center", alignItems: "center" }]}>
+              <Feather name={config.icon} size={20} color={config.color} />
+            </View>
+          )}
+          {/* Completed checkmark badge */}
+          {isDone && (
+            <View style={styles.checkBadge}>
+              <Feather name="check" size={10} color="#fff" />
+            </View>
+          )}
+        </View>
+
+        {/* Text */}
+        <View style={styles.missionRowBody}>
+          <Text style={[styles.missionRowTitle, isDone && styles.missionRowTitleDone]} numberOfLines={2}>
+            {mission.title}
+          </Text>
+          <Text style={styles.missionRowSub} numberOfLines={1}>
+            {spot.location || "Philippines"}
           </Text>
         </View>
-        <Text style={styles.missionTitle}>{mission.title}</Text>
-        <Text style={styles.missionDesc} numberOfLines={2}>{mission.description}</Text>
-      </View>
-      <View style={styles.missionCardRight}>
-        <Feather name="chevron-right" size={18} color="#c4a09d" />
-      </View>
-    </TouchableOpacity>
-  );
-};
+
+        {/* Right arrow */}
+        <Feather name="chevron-right" size={18} color="#c4a09d" style={{ marginLeft: 4 }} />
+      </TouchableOpacity>
+    );
+  };
 
   return (
     <KeyboardAvoidingView
+      key={refreshKey}
       style={styles.container}
       behavior={Platform.OS === "ios" ? "padding" : "height"}
       keyboardVerticalOffset={0}
@@ -173,7 +201,7 @@ const MissionCard = ({ mission, index }) => {
               />
             </TouchableOpacity>
           )}
-          <TouchableOpacity onPress={() => toggleBookmark(spot)} style={styles.iconBtn}>
+          <TouchableOpacity onPress={handleBookmarkToggle} style={styles.iconBtn} activeOpacity={0.7}>
             <FontAwesome5
               name="bookmark"
               size={20}
@@ -263,17 +291,36 @@ const MissionCard = ({ mission, index }) => {
           {/* ── BUCKET LIST TAB ── */}
           {activeTab === "BucketList" && (
             <>
-              
-          
               {missions.length === 0 ? (
                 <View style={styles.emptyMissions}>
                   <ActivityIndicator color="#6b4b45" />
                   <Text style={styles.emptyText}>Loading missions...</Text>
                 </View>
               ) : (
-                missions.map((mission, i) => (
-                  <MissionCard key={mission._id} mission={mission} index={i} />
-                ))
+                <>
+                  {/* Progress header */}
+                  <View style={styles.progressHeader}>
+                    <Text style={styles.progressLabel}>
+                      {completedCount} of {totalCount} complete
+                    </Text>
+                    <View style={styles.progressTrack}>
+                      <View style={[styles.progressFill, { width: `${progressRatio * 100}%` }]} />
+                    </View>
+                  </View>
+
+                  {/* Section title */}
+                  <Text style={styles.bucketSectionTitle}>On this Bakit List</Text>
+
+                  {/* Mission rows */}
+                  <View style={styles.missionList}>
+                    {missions.map((mission, i) => (
+                      <React.Fragment key={mission._id}>
+                        <MissionRow mission={mission} index={i} />
+                        {i < missions.length - 1 && <View style={styles.missionDivider} />}
+                      </React.Fragment>
+                    ))}
+                  </View>
+                </>
               )}
             </>
           )}
@@ -377,70 +424,157 @@ const MissionCard = ({ mission, index }) => {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#fff", paddingTop: 50 },
-  errorContainer: { flex: 1, justifyContent: "center", alignItems: "center", gap: 16, backgroundColor: "#fff" },
-  errorText: { fontSize: 16, color: "#7a5a58" },
-  backButton: { backgroundColor: "#6b4b45", paddingHorizontal: 24, paddingVertical: 12, borderRadius: 12 },
-  backButtonText: { color: "#fff", fontWeight: "700" },
-  topHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 12, paddingBottom: 10 },
-  headerTitle: { flex: 1, textAlign: "center", fontSize: 17, fontWeight: "700", color: "#4a2e2c", marginHorizontal: 8 },
-  headerRight: { flexDirection: "row", alignItems: "center", gap: 2 },
-  iconBtn: { width: 38, height: 38, justifyContent: "center", alignItems: "center" },
+  container:       { flex: 1, backgroundColor: "#fff", paddingTop: 50 },
+  errorContainer:  { flex: 1, justifyContent: "center", alignItems: "center", gap: 16, backgroundColor: "#fff" },
+  errorText:       { fontSize: 16, color: "#7a5a58" },
+  backButton:      { backgroundColor: "#6b4b45", paddingHorizontal: 24, paddingVertical: 12, borderRadius: 12 },
+  backButtonText:  { color: "#fff", fontWeight: "700" },
+
+  topHeader:    { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 12, paddingBottom: 10 },
+  headerTitle:  { flex: 1, textAlign: "center", fontSize: 17, fontWeight: "700", color: "#4a2e2c", marginHorizontal: 8 },
+  headerRight:  { flexDirection: "row", alignItems: "center", gap: 2 },
+  iconBtn:      { width: 38, height: 38, justifyContent: "center", alignItems: "center" },
+
   tabsContainer: { flexDirection: "row", paddingHorizontal: 16, gap: 8, marginBottom: 4 },
-  tab: { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", paddingVertical: 9, borderRadius: 20, backgroundColor: "#ffffff", borderWidth: 1, borderColor: "#f0e0de" },
-  activeTab: { backgroundColor: "#6b4b45", borderColor: "#6b4b45" },
-  tabText: { fontSize: 15, fontWeight: "600", color: "#7a5a58" },
+  tab:           { flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center", paddingVertical: 9, borderRadius: 20, backgroundColor: "#ffffff", borderWidth: 1, borderColor: "#f0e0de" },
+  activeTab:     { backgroundColor: "#6b4b45", borderColor: "#6b4b45" },
+  tabText:       { fontSize: 15, fontWeight: "600", color: "#7a5a58" },
   activeTabText: { color: "#fff" },
-  scrollView: { flex: 1 },
+
+  scrollView:    { flex: 1 },
   scrollContent: { paddingBottom: 0 },
   heroContainer: { width: width, height: 350 },
-  heroImage: { width: "100%", height: "100%" },
-  bodyPad: { paddingHorizontal: 20, paddingTop: 18 },
-  title: { fontSize: 22, fontWeight: "700", color: "#4a2e2c", marginBottom: 14 },
-  infoRow: { flexDirection: "row", alignItems: "flex-start", gap: 8, paddingVertical: 6 },
+  heroImage:     { width: "100%", height: "100%" },
+  bodyPad:       { paddingHorizontal: 20, paddingTop: 18 },
+  title:         { fontSize: 22, fontWeight: "700", color: "#4a2e2c", marginBottom: 14 },
+
+  infoRow:   { flexDirection: "row", alignItems: "flex-start", gap: 8, paddingVertical: 6 },
   infoLabel: { fontSize: 13, fontWeight: "600", color: "#7a5a58", width: 105 },
   infoValue: { fontSize: 13, fontWeight: "600", color: "#4a2e2c", flex: 1 },
-  divider: { height: 1, backgroundColor: "#f0e0de", marginVertical: 2 },
-  sectionHeading: { fontSize: 14, fontWeight: "700", color: "#4a2e2c", marginBottom: 10, marginTop: 8 },
+  divider:   { height: 1, backgroundColor: "#f0e0de", marginVertical: 2 },
+
+  sectionHeading:  { fontSize: 14, fontWeight: "700", color: "#4a2e2c", marginBottom: 10, marginTop: 8 },
   descriptionText: { fontSize: 13, color: "#7a5a58", lineHeight: 20 },
-  bucketHeader: { flexDirection: "row", alignItems: "flex-start", gap: 12, backgroundColor: "#faf5f4", borderRadius: 14, padding: 14, marginBottom: 12, borderWidth: 1, borderColor: "#f0e0de" },
-  bucketHeaderTitle: { fontSize: 15, fontWeight: "700", color: "#4a2e2c", marginBottom: 2 },
-  bucketHeaderSub: { fontSize: 12, color: "#7a5a58", lineHeight: 17 },
-  totalPointsRow: { flexDirection: "row", alignItems: "center", gap: 6, marginBottom: 14 },
-  totalPointsText: { fontSize: 13, color: "#7a5a58" },
-  missionCard: { flexDirection: "row", alignItems: "center", backgroundColor: "#faf5f4", borderRadius: 16, padding: 14, marginBottom: 12, borderWidth: 1, borderColor: "#f0e0de", gap: 12 },
-  missionBadge: { width: 38, height: 38, borderRadius: 19, justifyContent: "center", alignItems: "center" },
-  missionBadgeNum: { color: "#fff", fontWeight: "800", fontSize: 16 },
-  missionCardBody: { flex: 1 },
-  missionCardTop: { flexDirection: "row", alignItems: "center", gap: 5, marginBottom: 4 },
-  missionTypeLabel: { fontSize: 11, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.5 },
-  missionTitle: { fontSize: 14, fontWeight: "700", color: "#4a2e2c", marginBottom: 3 },
-  missionDesc: { fontSize: 12, color: "#7a5a58", lineHeight: 17 },
-  missionCardRight: { alignItems: "center" },
+
+  // ── Bucket List ──
+  progressHeader: {
+    marginBottom: 14,
+    marginTop: 4,
+  },
+  progressLabel: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#7a5a58",
+    marginBottom: 8,
+  },
+  progressTrack: {
+    height: 6,
+    backgroundColor: "#f0e0de",
+    borderRadius: 3,
+    overflow: "hidden",
+  },
+  progressFill: {
+    height: "100%",
+    backgroundColor: "#6b4b45",
+    borderRadius: 3,
+  },
+  bucketSectionTitle: {
+    fontSize: 16,
+    fontWeight: "700",
+    color: "#2e1c1a",
+    marginBottom: 12,
+  },
+  missionList: {
+    backgroundColor: "#fff",
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: "#f0e0de",
+    overflow: "hidden",
+  },
+  missionRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    gap: 12,
+    backgroundColor: "#fff",
+  },
+  missionDivider: {
+    height: 1,
+    backgroundColor: "#f0e0de",
+    marginLeft: 72,
+  },
+  missionThumbWrap: {
+    position: "relative",
+  },
+  missionThumb: {
+    width: 48,
+    height: 48,
+    borderRadius: 10,
+    backgroundColor: "#e8d0ce",
+  },
+  checkBadge: {
+    position: "absolute",
+    bottom: -3,
+    right: -3,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: "#4a7c59",
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 2,
+    borderColor: "#fff",
+  },
+  missionRowBody: {
+    flex: 1,
+    gap: 3,
+  },
+  missionRowTitle: {
+    fontSize: 14,
+    fontWeight: "700",
+    color: "#2e1c1a",
+    lineHeight: 19,
+  },
+  missionRowTitleDone: {
+    color: "#a08888",
+    textDecorationLine: "line-through",
+  },
+  missionRowSub: {
+    fontSize: 12,
+    color: "#9a7a78",
+  },
+
   emptyMissions: { alignItems: "center", paddingVertical: 32, gap: 10 },
-  ratingSummary: { backgroundColor: "#faf5f4", borderRadius: 16, padding: 20, marginBottom: 14, alignItems: "center", borderWidth: 1, borderColor: "#f0e0de" },
-  ratingBig: { fontSize: 48, fontWeight: "700", color: "#4a2e2c", marginBottom: 6 },
-  starsRow: { flexDirection: "row", gap: 3, marginBottom: 4 },
+
+  // ── Reviews ──
+  ratingSummary:   { backgroundColor: "#faf5f4", borderRadius: 16, padding: 20, marginBottom: 14, alignItems: "center", borderWidth: 1, borderColor: "#f0e0de" },
+  ratingBig:       { fontSize: 48, fontWeight: "700", color: "#4a2e2c", marginBottom: 6 },
+  starsRow:        { flexDirection: "row", gap: 3, marginBottom: 4 },
   reviewCountText: { fontSize: 13, color: "#7a5a58", marginTop: 4 },
-  reviewCard: { flexDirection: "row", alignItems: "flex-start", gap: 10, marginBottom: 14 },
-  avatar: { width: 38, height: 38, borderRadius: 19, marginTop: 2 },
-  reviewBubble: { flex: 1, backgroundColor: "#f4eeee", borderRadius: 18, paddingHorizontal: 14, paddingVertical: 10 },
-  reviewBubbleHeader: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 4 },
-  reviewAuthor: { fontSize: 13, fontWeight: "700", color: "#4a2e2c" },
-  reviewComment: { fontSize: 13, color: "#4a2e2c", lineHeight: 19 },
-  reviewDate: { fontSize: 11, color: "#b0908c", marginTop: 5 },
-  emptyReviews: { alignItems: "center", paddingVertical: 24, gap: 8 },
-  emptyText: { fontSize: 13, color: "#b89898" },
+  reviewCard:      { flexDirection: "row", alignItems: "flex-start", gap: 10, marginBottom: 14 },
+  avatar:          { width: 38, height: 38, borderRadius: 19, marginTop: 2 },
+  reviewBubble:         { flex: 1, backgroundColor: "#f4eeee", borderRadius: 18, paddingHorizontal: 14, paddingVertical: 10 },
+  reviewBubbleHeader:   { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 4 },
+  reviewAuthor:         { fontSize: 13, fontWeight: "700", color: "#4a2e2c" },
+  reviewComment:        { fontSize: 13, color: "#4a2e2c", lineHeight: 19 },
+  reviewDate:           { fontSize: 11, color: "#b0908c", marginTop: 5 },
+  emptyReviews:         { alignItems: "center", paddingVertical: 24, gap: 8 },
+  emptyText:            { fontSize: 13, color: "#b89898" },
+
+  // ── Comment bar ──
   commentBarWrapper: { backgroundColor: "#fff", borderTopWidth: 1, borderTopColor: "#f0e0de", paddingBottom: Platform.OS === "ios" ? 28 : 12, paddingTop: 8, paddingHorizontal: 12 },
-  starPickerRow: { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 4, paddingBottom: 10 },
-  starPickerLabel: { fontSize: 13, fontWeight: "600", color: "#7a5a58", marginRight: 4 },
-  commentBar: { flexDirection: "row", alignItems: "flex-end", gap: 8 },
-  commentAvatar: { width: 36, height: 36, borderRadius: 18, backgroundColor: "#f0e0de", justifyContent: "center", alignItems: "center", marginBottom: 2 },
-  commentInputWrap: { flex: 1, backgroundColor: "#f4eeee", borderRadius: 22, paddingHorizontal: 14, paddingVertical: 10, minHeight: 40, maxHeight: 100, justifyContent: "center" },
-  commentInput: { fontSize: 14, color: "#4a2e2c", padding: 0 },
-  sendBtn: { width: 38, height: 38, borderRadius: 19, backgroundColor: "#6b4b45", justifyContent: "center", alignItems: "center", marginBottom: 2 },
-  sendBtnDisabled: { backgroundColor: "#d9b8b5" },
-  floatingBar: { position: "absolute", bottom: 36, alignSelf: "center", flexDirection: "row", gap: 12 },
-  floatingBtn: { flexDirection: "row", alignItems: "center", backgroundColor: "#4a2e2c", paddingVertical: 12, paddingHorizontal: 28, borderRadius: 30, gap: 7, shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.18, shadowRadius: 8, elevation: 6 },
-  floatingBtnText: { color: "#fff", fontWeight: "700", fontSize: 14 },
+  starPickerRow:     { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 4, paddingBottom: 10 },
+  starPickerLabel:   { fontSize: 13, fontWeight: "600", color: "#7a5a58", marginRight: 4 },
+  commentBar:        { flexDirection: "row", alignItems: "flex-end", gap: 8 },
+  commentAvatar:     { width: 36, height: 36, borderRadius: 18, backgroundColor: "#f0e0de", justifyContent: "center", alignItems: "center", marginBottom: 2 },
+  commentInputWrap:  { flex: 1, backgroundColor: "#f4eeee", borderRadius: 22, paddingHorizontal: 14, paddingVertical: 10, minHeight: 40, maxHeight: 100, justifyContent: "center" },
+  commentInput:      { fontSize: 14, color: "#4a2e2c", padding: 0 },
+  sendBtn:           { width: 38, height: 38, borderRadius: 19, backgroundColor: "#6b4b45", justifyContent: "center", alignItems: "center", marginBottom: 2 },
+  sendBtnDisabled:   { backgroundColor: "#d9b8b5" },
+
+  // ── Floating bar ──
+  floatingBar:    { position: "absolute", bottom: 36, alignSelf: "center", flexDirection: "row", gap: 12 },
+  floatingBtn:    { flexDirection: "row", alignItems: "center", backgroundColor: "#4a2e2c", paddingVertical: 12, paddingHorizontal: 28, borderRadius: 30, gap: 7, shadowColor: "#000", shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.18, shadowRadius: 8, elevation: 6 },
+  floatingBtnText:{ color: "#fff", fontWeight: "700", fontSize: 14 },
 });
