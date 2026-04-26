@@ -138,10 +138,17 @@
       "favicon": "./assets/favicon.png"
     },
     "extra": {
+<<<<<<< HEAD
       "eas": {
         "projectId": "8f2cc8dd-553e-49c8-a0c4-cfe299f6489f"
       },
       "router": {}
+=======
+      "router": {},
+      "eas": {
+        "projectId": "ce019b8b-d9d3-49c7-be10-9f3624a80041"
+      }
+>>>>>>> d899774037467c448fbc02648099f50d3c8ffb99
     },
     "owner": "skatzu15"
   }

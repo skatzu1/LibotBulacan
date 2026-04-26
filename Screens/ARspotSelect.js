@@ -36,14 +36,9 @@ function ARSpotSelect({ navigation }) {
         </TouchableOpacity>
         <View>
           <Text style={styles.headerTitle}>AR Experience</Text>
-          <Text style={styles.headerSub}>Choose a spot to view in AR</Text>
         </View>
       </View>
 
-      <View style={styles.badge}>
-        <Feather name="camera" size={14} color="#fff" />
-        <Text style={styles.badgeText}>Augmented Reality</Text>
-      </View>
 
       {loading ? (
         <View style={styles.centered}>
