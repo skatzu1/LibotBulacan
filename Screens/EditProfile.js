@@ -42,15 +42,17 @@ async function uploadImageToCloudinary(localUri, token) {
     type: "image/jpeg",
     name: "profile.jpg",
   });
-
   const res = await fetch(`${BASE_URL}/api/upload/profile`, {
     method: "POST",
     headers: { Authorization: `Bearer ${token}` },
     body: formData,
   });
-
-  if (!res.ok) throw new Error("Image upload failed");
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(`Image upload failed: ${errText}`);
+  }
   const data = await res.json();
+  if (!data.url) throw new Error("No URL returned from upload");
   return data.url;
 }
 
@@ -59,42 +61,41 @@ export default function EditProfile({ navigation }) {
   const { getToken } = useAuth();
   const { profileImage, setProfileImage } = useProfileImage();
 
-  const [firstName, setFirstName] = useState("");
-  const [lastName, setLastName] = useState("");
-  const [avatar, setAvatar] = useState(null);
+  const [firstName, setFirstName]           = useState("");
+  const [lastName, setLastName]             = useState("");
+  const [avatar, setAvatar]                 = useState(null);
   const [newLocalAvatar, setNewLocalAvatar] = useState(null);
-  const [pwCurrent, setPwCurrent] = useState("");
-  const [pwNew, setPwNew] = useState("");
-  const [pwConfirm, setPwConfirm] = useState("");
-  const [showCurrent, setShowCurrent] = useState(false);
-  const [showNew, setShowNew] = useState(false);
-  const [showConfirm, setShowConfirm] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [pickingImage, setPickingImage] = useState(false);
+  const [pwCurrent, setPwCurrent]           = useState("");
+  const [pwNew, setPwNew]                   = useState("");
+  const [pwConfirm, setPwConfirm]           = useState("");
+  const [showCurrent, setShowCurrent]       = useState(false);
+  const [showNew, setShowNew]               = useState(false);
+  const [showConfirm, setShowConfirm]       = useState(false);
+  const [saving, setSaving]                 = useState(false);
+  const [pickingImage, setPickingImage]     = useState(false);
 
   const [originalFirstName, setOriginalFirstName] = useState("");
-  const [originalLastName, setOriginalLastName] = useState("");
+  const [originalLastName, setOriginalLastName]   = useState("");
 
-  const hasPassword = clerkUser?.passwordEnabled ?? false;
+  const hasPassword  = clerkUser?.passwordEnabled ?? false;
   const isGoogleUser = !hasPassword;
 
+  // Populate fields when Clerk user loads
   useEffect(() => {
-    if (isLoaded && clerkUser) {
-      const fn = clerkUser.firstName || "";
-      const ln = clerkUser.lastName  || "";
-      setFirstName(fn);
-      setLastName(ln);
-      setOriginalFirstName(fn);
-      setOriginalLastName(ln);
+    if (!isLoaded || !clerkUser) return;
+    const fn = clerkUser.firstName || "";
+    const ln = clerkUser.lastName  || "";
+    setFirstName(fn);
+    setLastName(ln);
+    setOriginalFirstName(fn);
+    setOriginalLastName(ln);
+    setAvatar(profileImage || clerkUser.imageUrl || null);
+  }, [isLoaded, clerkUser]);
 
-      // Prioritize Cloudinary URL from context over Clerk's default imageUrl
-      setAvatar(
-        profileImage ||
-        clerkUser.imageUrl ||
-        null
-      );
-    }
-  }, [isLoaded, clerkUser]); // ← profileImage intentionally excluded to avoid loop
+  // Keep avatar in sync when context updates
+  useEffect(() => {
+    if (profileImage) setAvatar(profileImage);
+  }, [profileImage]);
 
   const hasChanges = useMemo(() => {
     const nameChanged    = firstName.trim() !== originalFirstName.trim() ||
@@ -116,8 +117,9 @@ export default function EditProfile({ navigation }) {
         mediaTypes: ["images"], allowsEditing: true, aspect: [1, 1], quality: 0.8,
       });
       if (!result.canceled && result.assets?.[0]?.uri) {
-        setAvatar(result.assets[0].uri);
-        setNewLocalAvatar(result.assets[0].uri);
+        const localUri = result.assets[0].uri;
+        setAvatar(localUri);
+        setNewLocalAvatar(localUri);
       }
     } finally {
       setPickingImage(false);
@@ -141,7 +143,7 @@ export default function EditProfile({ navigation }) {
     try {
       const token = await getToken();
 
-      // 1. Upload new image to Cloudinary if picked
+      // 1. Upload image to Cloudinary if picked
       let finalImageUrl = null;
       if (newLocalAvatar) {
         finalImageUrl = await uploadImageToCloudinary(newLocalAvatar, token);
@@ -154,42 +156,36 @@ export default function EditProfile({ navigation }) {
       // 3. Update password if provided
       if (pwNew) {
         if (isGoogleUser) {
-          await clerkUser.updatePassword({
-            newPassword: pwNew,
-            signOutOfOtherSessions: false,
-          });
+          await clerkUser.updatePassword({ newPassword: pwNew, signOutOfOtherSessions: false });
         } else {
-          await clerkUser.updatePassword({
-            currentPassword: pwCurrent,
-            newPassword: pwNew,
-            signOutOfOtherSessions: false,
-          });
+          await clerkUser.updatePassword({ currentPassword: pwCurrent, newPassword: pwNew, signOutOfOtherSessions: false });
         }
       }
 
-      // 4. Save to DB — always send current image URL to prevent revert to Clerk default
-      const body = {
-        firstName: firstName.trim(),
-        lastName:  lastName.trim(),
-        profileImage: finalImageUrl || profileImage || clerkUser.imageUrl || null,
-      };
-
+      // 4. Patch DB — always include current image so it never reverts
+      const imageToSave = finalImageUrl || profileImage || clerkUser.imageUrl || null;
       const dbRes = await fetch(`${BASE_URL}/api/users/me`, {
         method: "PATCH",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-        body: JSON.stringify(body),
+        body: JSON.stringify({
+          firstName:    firstName.trim(),
+          lastName:     lastName.trim(),
+          profileImage: imageToSave,
+        }),
       });
-
       const dbData = await dbRes.json();
       console.log("[EditProfile] DB response:", dbData);
 
-      // 5. Update context so all screens show new image instantly
+      // 5. Update context → all screens re-render with new avatar instantly
       if (finalImageUrl) {
-        setProfileImage(finalImageUrl);
+        await setProfileImage(finalImageUrl);
       }
 
-      // 6. Reload Clerk user so auth state reflects any changes (e.g. new password)
+      // 6. Reload Clerk user
       await clerkUser.reload();
+
+      // 7. Clear pending local URI
+      setNewLocalAvatar(null);
 
       Alert.alert(
         "Success",
@@ -254,6 +250,8 @@ export default function EditProfile({ navigation }) {
         </View>
 
         <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
+
+          {/* Avatar */}
           <View style={styles.avatarSection}>
             <TouchableOpacity onPress={handlePickAvatar} disabled={pickingImage} activeOpacity={0.8}>
               <View style={styles.profilePhotoWrapper}>
@@ -283,13 +281,15 @@ export default function EditProfile({ navigation }) {
             )}
           </View>
 
+          {/* Personal Info */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Personal Info</Text>
-            <Field label="First Name" icon="user" value={firstName} onChangeText={setFirstName} placeholder="First name" />
-            <Field label="Last Name"  icon="user" value={lastName}  onChangeText={setLastName}  placeholder="Last name"  />
-            <Field label="Email (read-only)" icon="mail" value={email} placeholder="—" editable={false} />
+            <Field label="First Name"       icon="user" value={firstName} onChangeText={setFirstName} placeholder="First name" />
+            <Field label="Last Name"         icon="user" value={lastName}  onChangeText={setLastName}  placeholder="Last name"  />
+            <Field label="Email (read-only)" icon="mail" value={email}     placeholder="—"             editable={false}         />
           </View>
 
+          {/* Password */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>{isGoogleUser ? "Set a Password" : "Change Password"}</Text>
             {isGoogleUser ? (
@@ -311,6 +311,7 @@ export default function EditProfile({ navigation }) {
             )}
           </View>
 
+          {/* Danger Zone */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Danger Zone</Text>
             <TouchableOpacity style={styles.menuItem} onPress={handleDeleteAccount} activeOpacity={0.7}>

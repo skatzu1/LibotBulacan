@@ -288,8 +288,8 @@ export default function Mission({ navigation, route }) {
           <Text style={styles.cardLabel}>HOW TO VERIFY</Text>
           {[
             { icon: 'camera',       text: 'Open the camera below' },
-            { icon: 'crosshair',    text: `Point at the ${config.product}` },
-            { icon: 'maximize',     text: 'Keep it inside the frame' },
+            { icon: 'crosshair',    text: `Point at the bought C2 Red Tea` },
+            { icon: 'maximize',     text: 'Keep it close inside the frame' },
             { icon: 'circle',       text: 'Tap the shutter button' },
             { icon: 'check-circle', text: 'AI verifies automatically' },
           ].map((step, i, arr) => (
@@ -406,11 +406,12 @@ export default function Mission({ navigation, route }) {
 // ─── Styles ───────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.bg },
-  scroll:    { paddingHorizontal: 20, paddingTop: 8, alignItems: 'center' },
+  scroll:    { paddingHorizontal: 20, paddingTop: 5, alignItems: 'center' },
 
   header: {
     flexDirection: 'row', alignItems: 'center',
-    justifyContent: 'space-between', width: '100%', marginBottom: 16,
+    justifyContent: 'space-between', width: '100%', 
+    height: 100,
   },
   backBtn: {
     width: 36, height: 36, borderRadius: 10,
