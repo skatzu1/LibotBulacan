@@ -1,30 +1,26 @@
 import React, { createContext, useState, useContext, useCallback, useEffect } from "react";
 import { useAuth } from "@clerk/clerk-expo";
+import api from "../api";
 
 const ReviewContext = createContext();
-
 export const useReviews = () => useContext(ReviewContext);
 
 export const ReviewProvider = ({ children }) => {
-  const { getToken } = useAuth();
   const [reviewsBySpot, setReviewsBySpot] = useState({});
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState(null);
+  const [loading,       setLoading]       = useState(false);
+  const [error,         setError]         = useState(null);
 
-  // ✅ Fetch all spots then prefetch reviews for each on app start
   useEffect(() => {
     const prefetchAllReviews = async () => {
       try {
         setLoading(true);
-        const res = await fetch("https://libotbackend.onrender.com/api/spots");
-        const data = await res.json();
+        const res = await api.get("/api/spots");
+        const data = res.data;
         if (data.success && data.spots) {
-          // Prefetch reviews for all spots
-          await Promise.all(
-            data.spots.map((spot) => {
-              if (spot._id) return fetchReviews(spot._id);
-            })
-          );
+          // Fetch reviews sequentially to avoid server rate limits
+          for (const spot of data.spots) {
+            if (spot._id) await fetchReviews(spot._id);
+          }
         }
       } catch (err) {
         console.error("❌ Error prefetching reviews:", err);
@@ -36,20 +32,13 @@ export const ReviewProvider = ({ children }) => {
     prefetchAllReviews();
   }, []);
 
-  // ✅ Fetch reviews for a specific spot
   const fetchReviews = useCallback(async (spotId) => {
     if (!spotId) return;
     try {
-      const res = await fetch(
-        `https://libotbackend.onrender.com/api/reviews/${spotId}`
-      );
-      const data = await res.json();
-      
+      const res = await api.get(`/api/reviews/${spotId}`);
+      const data = res.data;
       if (data.success) {
-        setReviewsBySpot((prev) => ({
-          ...prev,
-          [spotId]: data.reviews || [],
-        }));
+        setReviewsBySpot((prev) => ({ ...prev, [spotId]: data.reviews || [] }));
         setError(null);
       } else {
         throw new Error(data.message || "Failed to fetch reviews");
@@ -57,136 +46,83 @@ export const ReviewProvider = ({ children }) => {
     } catch (err) {
       console.error("❌ Error fetching reviews:", err);
       setError(err.message);
-      setReviewsBySpot((prev) => ({
-        ...prev,
-        [spotId]: [],
-      }));
     }
   }, []);
 
-  // ✅ Add a new review (creates new, doesn't replace)
-  const addReview = useCallback(
-    async (spotId, rating, comment) => {
-      if (!spotId || !rating || !comment) {
-        setError("All fields are required");
-        return false;
+  const addReview = useCallback(async (spotId, rating, comment) => {
+    if (!spotId || !rating || !comment) { setError("All fields are required"); return false; }
+    try {
+      const res = await api.post("/api/reviews", { spotId, rating, comment });
+      const data = res.data;
+      if (data.success) {
+        await fetchReviews(spotId);
+        setError(null);
+        return true;
+      } else {
+        throw new Error(data.message || "Failed to add review");
       }
+    } catch (err) {
+      console.error("❌ Error adding review:", err);
+      setError(err.message);
+      return false;
+    }
+  }, [fetchReviews]);
 
-      try {
-        const token = await getToken();
-        if (!token) {
-          setError("Authentication required");
-          return false;
-        }
-
-        const res = await fetch(
-          "https://libotbackend.onrender.com/api/reviews",
-          {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${token}`,
-            },
-            body: JSON.stringify({
-              spotId,
-              rating,
-              comment,
-            }),
-          }
-        );
-
-        const data = await res.json();
-
-        if (data.success) {
-          // ✅ Refetch to get all reviews including the new one
-          await fetchReviews(spotId);
-          setError(null);
-          return true;
-        } else {
-          throw new Error(data.message || "Failed to add review");
-        }
-      } catch (err) {
-        console.error("❌ Error adding review:", err);
-        setError(err.message);
-        return false;
+  const reportReview = useCallback(async ({ reviewId, reportedClerkUserId, reason, details = "" }) => {
+    if (!reviewId || !reportedClerkUserId || !reason) {
+      setError("reviewId, reportedClerkUserId, and reason are required");
+      return false;
+    }
+    try {
+      const res = await api.post("/api/reports", { reviewId, reportedClerkUserId, reason, details });
+      const data = res.data;
+      if (data.success) {
+        setError(null);
+        return true;
+      } else {
+        console.error("❌ Report API error:", data);
+        throw new Error(data.message || "Failed to submit report");
       }
-    },
-    [getToken, fetchReviews]
-  );
+    } catch (err) {
+      console.error("❌ Error reporting review:", err);
+      setError(err.message);
+      return false;
+    }
+  }, []);
 
-  // ✅ Get all reviews for a spot
-  const getReviewsForSpot = useCallback(
-    (spotId) => reviewsBySpot[spotId] || [],
-    [reviewsBySpot]
-  );
-
-  // ✅ Calculate average rating for a spot
-  const getAverageRating = useCallback((spotId) => {
+  const getReviewsForSpot = useCallback((spotId) => reviewsBySpot[spotId] || [], [reviewsBySpot]);
+  const getAverageRating  = useCallback((spotId) => {
     const reviews = reviewsBySpot[spotId] || [];
     if (!reviews.length) return "0.0";
     const sum = reviews.reduce((acc, r) => acc + r.rating, 0);
     return (sum / reviews.length).toFixed(1);
   }, [reviewsBySpot]);
+  const getReviewCount    = useCallback((spotId) => (reviewsBySpot[spotId] || []).length, [reviewsBySpot]);
 
-  // ✅ Get review count for a spot
-  const getReviewCount = useCallback(
-    (spotId) => (reviewsBySpot[spotId] || []).length,
-    [reviewsBySpot]
-  );
-
-  // ✅ Delete a review (only your own)
-  const deleteReview = useCallback(
-    async (reviewId, spotId) => {
-      try {
-        const token = await getToken();
-        if (!token) {
-          setError("Authentication required");
-          return false;
-        }
-
-        const res = await fetch(
-          `https://libotbackend.onrender.com/api/reviews/${reviewId}`,
-          {
-            method: "DELETE",
-            headers: {
-              Authorization: `Bearer ${token}`,
-            },
-          }
-        );
-
-        const data = await res.json();
-
-        if (data.success) {
-          // Refetch to update the list
-          await fetchReviews(spotId);
-          setError(null);
-          return true;
-        } else {
-          throw new Error(data.message || "Failed to delete review");
-        }
-      } catch (err) {
-        console.error("❌ Error deleting review:", err);
-        setError(err.message);
-        return false;
+  const deleteReview = useCallback(async (reviewId, spotId) => {
+    try {
+      const res = await api.delete(`/api/reviews/${reviewId}`);
+      const data = res.data;
+      if (data.success) {
+        await fetchReviews(spotId);
+        setError(null);
+        return true;
+      } else {
+        throw new Error(data.message || "Failed to delete review");
       }
-    },
-    [getToken, fetchReviews]
-  );
+    } catch (err) {
+      console.error("❌ Error deleting review:", err);
+      setError(err.message);
+      return false;
+    }
+  }, [fetchReviews]);
 
   return (
-    <ReviewContext.Provider
-      value={{
-        reviewsBySpot,
-        loading,
-        error,
-        fetchReviews,
-        addReview,
-        getReviewsForSpot,
-        getAverageRating,
-        getReviewCount,
-        deleteReview,
-      }}
-    >
+    <ReviewContext.Provider value={{
+      reviewsBySpot, loading, error,
+      fetchReviews, addReview, reportReview,
+      getReviewsForSpot, getAverageRating, getReviewCount, deleteReview,
+    }}>
       {children}
     </ReviewContext.Provider>
   );

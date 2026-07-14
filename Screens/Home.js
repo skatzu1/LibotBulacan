@@ -1,5 +1,5 @@
 import "react-native-gesture-handler";
-import React from "react";
+import React, { useEffect, useState, useCallback } from "react";
 import {
   View,
   Text,
@@ -11,26 +11,32 @@ import {
   ScrollView,
   RefreshControl,
 } from "react-native";
-
 import { createDrawerNavigator, DrawerContentScrollView, DrawerItem } from "@react-navigation/drawer";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import { Feather } from "@expo/vector-icons";
+import { MaterialIcons } from "@expo/vector-icons";
 import Carousel from "react-native-reanimated-carousel";
-import { useEffect, useState, useCallback } from "react";
 import { useAuth } from "../context/AuthContext";
 import { useReviews } from "../context/ReviewContext";
 import { useUser } from "@clerk/clerk-expo";
-import { MaterialIcons } from "@expo/vector-icons";
+import { useArrival } from "../context/ArrivalContext";
 import { useProfileImage } from "../context/ProfileImageContext";
+import { useTheme } from "../context/ThemeContext";
+import { BASE_URL } from "../api";
 
 import Bookmark      from "./Bookmark";
 import Leaderboard   from "./Leaderboard";
 import Categories    from "./Categories";
 import ProfileScreen from "./Profilescreen";
 
+// ── Skeleton imports ──────────────────────────────────────────────────────────
+import HomeSkeleton from "../components/HomeSkeleton";
+import Skeleton     from "../components/Skeleton";
+
 const { width, height } = Dimensions.get("window");
-const HERO_H            = height * 0.40;
+const HERO_H  = height * 0.40;
+const CARD_W  = (width - 54) / 2;
 
 const Drawer    = createDrawerNavigator();
 const BottomTab = createBottomTabNavigator();
@@ -40,22 +46,33 @@ const BottomTab = createBottomTabNavigator();
 /* -------------------------------------------------------------------------- */
 function CustomDrawerContent(props) {
   const { navigation } = props;
+  const { colors } = useTheme();
+
   return (
-    <DrawerContentScrollView {...props} contentContainerStyle={styles.drawerContainer}>
-      <Text style={styles.drawerHeading}>Menu</Text>
+    <DrawerContentScrollView
+      {...props}
+      contentContainerStyle={[styles.drawerContainer, { backgroundColor: colors.drawer }]}
+    >
+      <Text style={[styles.drawerHeading, { color: colors.drawerText }]}>Menu</Text>
 
-      <DrawerItem label="Home"    icon={({ color }) => <Feather name="home"      size={20} color={color} />} onPress={() => navigation.navigate("HomeSide")}           labelStyle={styles.drawerLabel} inactiveTintColor="#3a2a28" />
-      <DrawerItem label="Profile" icon={({ color }) => <Feather name="user"      size={20} color={color} />} onPress={() => navigation.navigate("Profile")}            labelStyle={styles.drawerLabel} inactiveTintColor="#3a2a28" />
+      <DrawerItem label="Home"    labelStyle={[styles.drawerLabel, { color: colors.drawerText }]} inactiveTintColor={colors.drawerText} icon={({ color }) => <Feather name="home"      size={20} color={color} />} onPress={() => navigation.navigate("HomeSide")} />
+      <DrawerItem label="Profile" labelStyle={[styles.drawerLabel, { color: colors.drawerText }]} inactiveTintColor={colors.drawerText} icon={({ color }) => <Feather name="user"      size={20} color={color} />} onPress={() => navigation.navigate("Profile")} />
 
-      <Text style={styles.drawerSection}>Explore</Text>
+      <Text style={[styles.drawerSection, { color: colors.brand }]}>Explore</Text>
 
-      <DrawerItem label="AR Experience"    icon={({ color }) => <Feather name="camera"    size={20} color={color} />} onPress={() => navigation.navigate("ARSpotSelect")}       labelStyle={styles.drawerLabel} inactiveTintColor="#3a2a28" />
-      <DrawerItem label="Mission"          icon={({ color }) => <Feather name="flag"       size={20} color={color} />} onPress={() => navigation.navigate("MissionsSpotSelect")} labelStyle={styles.drawerLabel} inactiveTintColor="#3a2a28" />
-      <DrawerItem label="Navigate to Spot" icon={({ color }) => <Feather name="navigation" size={20} color={color} />} onPress={() => navigation.navigate("TrackSpotSelect")}    labelStyle={styles.drawerLabel} inactiveTintColor="#3a2a28" />
+      <DrawerItem label="AR Experience"    labelStyle={[styles.drawerLabel, { color: colors.drawerText }]} inactiveTintColor={colors.drawerText} icon={({ color }) => <Feather name="camera"    size={20} color={color} />} onPress={() => navigation.navigate("ARSpotSelect")} />
+      <DrawerItem label="Mission"          labelStyle={[styles.drawerLabel, { color: colors.drawerText }]} inactiveTintColor={colors.drawerText} icon={({ color }) => <Feather name="flag"       size={20} color={color} />} onPress={() => navigation.navigate("MissionsSpotSelect")} />
+      <DrawerItem label="Navigate to Spot" labelStyle={[styles.drawerLabel, { color: colors.drawerText }]} inactiveTintColor={colors.drawerText} icon={({ color }) => <Feather name="navigation" size={20} color={color} />} onPress={() => navigation.navigate("TrackSpotSelect")} />
 
-      <View style={styles.drawerDivider} />
+      <View style={[styles.drawerDivider, { backgroundColor: colors.divider }]} />
 
-      <DrawerItem label="Logout" icon={({ color }) => <Feather name="log-out" size={20} color={color} />} onPress={() => navigation.navigate("Logout")} labelStyle={[styles.drawerLabel, { color: "#c0392b" }]} inactiveTintColor="#c0392b" />
+      <DrawerItem
+        label="Logout"
+        labelStyle={[styles.drawerLabel, { color: colors.danger }]}
+        inactiveTintColor={colors.danger}
+        icon={({ color }) => <Feather name="log-out" size={20} color={color} />}
+        onPress={() => navigation.navigate("Logout")}
+      />
     </DrawerContentScrollView>
   );
 }
@@ -64,9 +81,11 @@ function CustomDrawerContent(props) {
 /*                            CUSTOM BOTTOM TAB                               */
 /* -------------------------------------------------------------------------- */
 function CustomTabBar({ state, descriptors, navigation }) {
+  const { colors } = useTheme();
+
   return (
     <View style={styles.tabBarWrap}>
-      <View style={styles.tabBar}>
+      <View style={[styles.tabBar, { backgroundColor: colors.tabBar }]}>
         {state.routes.map((route, index) => {
           const { options } = descriptors[route.key];
           const isFocused   = state.index === index;
@@ -80,15 +99,18 @@ function CustomTabBar({ state, descriptors, navigation }) {
             <TouchableOpacity
               key={route.key}
               accessibilityRole="button"
+              accessibilityLabel={route.name}
               accessibilityState={isFocused ? { selected: true } : {}}
               onPress={onPress}
               onLongPress={() => navigation.emit({ type: "tabLongPress", target: route.key })}
               style={styles.tabItem}
             >
-              {isFocused && <View style={styles.tabActiveDot} />}
+              {isFocused && (
+                <View style={[styles.tabActiveDot, { backgroundColor: colors.tabActive }]} />
+              )}
               {options.tabBarIcon?.({
                 focused: isFocused,
-                color:   isFocused ? "#6b4b45" : "#b0a09e",
+                color:   isFocused ? colors.tabActive : colors.tabInactive,
                 size:    22,
               })}
             </TouchableOpacity>
@@ -117,15 +139,17 @@ function HomeBottomTabs() {
 }
 
 /* -------------------------------------------------------------------------- */
-/*                               HOME SCREEN                                  */
+/*                               HOME TAB                                     */
 /* -------------------------------------------------------------------------- */
 function HomeTab() {
   const navigation                = useNavigation();
   const { user: authUser }        = useAuth();
   const { user: clerkUser }       = useUser();
   const { profileImage, loading } = useProfileImage();
+  const { colors }                = useTheme();
 
-  if (loading) return null;
+  // ── CHANGED: show HomeSkeleton instead of null while profile image loads ──
+  if (loading) return <HomeSkeleton />;
 
   const profilePhoto =
     profileImage ??
@@ -135,7 +159,7 @@ function HomeTab() {
     null;
 
   return (
-    <View style={{ flex: 1, backgroundColor: "#fff" }}>
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
       <HomeContent profilePhoto={profilePhoto} navigation={navigation} />
     </View>
   );
@@ -145,17 +169,17 @@ function HomeTab() {
 /*                              HOME CONTENT                                  */
 /* -------------------------------------------------------------------------- */
 function HomeContent({ profilePhoto, navigation }) {
-  const { getAverageRating }        = useReviews();
-  const [spots, setSpots]           = useState([]);
-  const [topSpots, setTopSpots]     = useState([]);
-  const [loading, setLoading]       = useState(true);
-  const [topLoading, setTopLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
+  const { allSpots }                  = useArrival();
+  const { getAverageRating }          = useReviews();
+  const { colors }                    = useTheme();
+  const [topSpots,    setTopSpots]    = useState([]);
+  const [topLoading,  setTopLoading]  = useState(true);
+  const [refreshing,  setRefreshing]  = useState(false);
   const [activeIndex, setActiveIndex] = useState(0);
 
   const handleSpotPress = (spot) => navigation.navigate("InformationScreen", { spot });
 
-  const sliderData = spots.slice(0, 8).map(
+  const sliderData = allSpots.slice(0, 8).map(
     ({ _id, image, name, description, location, rating, modelUrl, visitCount }, i) => ({
       id:          _id || String(i),
       image,
@@ -170,46 +194,42 @@ function HomeContent({ profilePhoto, navigation }) {
 
   const activeSpot = sliderData[activeIndex] ?? null;
 
-  useEffect(() => {
-    fetch("https://libotbackend.onrender.com/api/spots")
-      .then((r) => r.json())
-      .then((d) => { if (d.success) setSpots(d.spots); })
-      .catch(console.error)
-      .finally(() => setLoading(false));
-  }, []);
-
-  useEffect(() => {
-    fetch("https://libotbackend.onrender.com/api/spots/top/visited")
+  const loadTopSpots = useCallback(() => {
+    return fetch(`${BASE_URL}/api/spots/top/visited`)
       .then((r) => r.json())
       .then((d) => {
         if (d.success) setTopSpots(d.spots.filter((s) => (s.visitCount ?? 0) > 0));
       })
-      .catch(console.error)
-      .finally(() => setTopLoading(false));
+      .catch(console.error);
+  }, []);
+
+  useEffect(() => {
+    loadTopSpots().finally(() => setTopLoading(false));
   }, []);
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
-    Promise.all([
-      fetch("https://libotbackend.onrender.com/api/spots").then((r) => r.json()).then((d) => { if (d.success) setSpots(d.spots); }),
-      fetch("https://libotbackend.onrender.com/api/spots/top/visited").then((r) => r.json()).then((d) => {
-        if (d.success) setTopSpots(d.spots.filter((s) => (s.visitCount ?? 0) > 0));
-      }),
-    ]).catch(console.error).finally(() => setRefreshing(false));
-  }, []);
+    loadTopSpots().finally(() => setRefreshing(false));
+  }, [loadTopSpots]);
 
   return (
     <ScrollView
-      style={h.scroll}
+      style={[h.scroll, { backgroundColor: colors.background }]}
       showsVerticalScrollIndicator={false}
-      refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor="#6b4b45" colors={["#6b4b45"]} />}
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={onRefresh}
+          tintColor={colors.brand}
+          colors={[colors.brand]}
+        />
+      }
     >
-      {/* ─────────────── HERO ─────────────── */}
-      <View style={h.heroWrap}>
-        {loading || sliderData.length === 0 ? (
-          <View style={h.heroPlaceholder}>
-            <Text style={{ color: "rgba(255,255,255,0.6)" }}>Loading…</Text>
-          </View>
+      {/* ─── HERO ─── */}
+      <View style={[h.heroWrap, { backgroundColor: colors.backgroundHero }]}>
+        {sliderData.length === 0 ? (
+          // ── CHANGED: shimmer instead of plain text ──
+          <Skeleton width={width} height={HERO_H} radius={0} />
         ) : (
           <Carousel
             width={width}
@@ -227,40 +247,44 @@ function HomeContent({ profilePhoto, navigation }) {
                 source={{ uri: item.image }}
                 style={h.heroImage}
                 resizeMode="cover"
+                accessibilityLabel={`Hero image of ${item.title}`}
               />
             )}
           />
         )}
 
-        {/* Dark gradient overlay at bottom of hero */}
-        <View style={h.heroGradient} />
-
-        {/* Floating header — menu | logo | avatar */}
-        <View style={h.heroHeader}>
-          <TouchableOpacity style={h.menuBtn} onPress={() => navigation.toggleDrawer()}>
-            <View style={h.menuLine} />
-            <View style={[h.menuLine, { width: 14 }]} />
-            <View style={h.menuLine} />
+        {/* Floating header — sits on top of hero */}
+        <View style={[h.heroHeader, { backgroundColor: colors.heroHeader }]}>
+          {/* Hamburger */}
+          <TouchableOpacity
+            style={h.menuBtn}
+            onPress={() => navigation.toggleDrawer()}
+            accessibilityLabel="Open menu"
+          >
+            <View style={[h.menuLine, { backgroundColor: colors.brand }]} />
+            <View style={[h.menuLine, { width: 14, backgroundColor: colors.brand }]} />
+            <View style={[h.menuLine, { backgroundColor: colors.brand }]} />
           </TouchableOpacity>
 
-          {/* ── LOGO ── */}
-          <View style={h.logoWrap}>
-            <Image
-              source={require("../assets/logo.png")}
-              style={h.logo}
-              resizeMode="contain"
-            />
+          {/* Logo */}
+          <View style={[h.logoWrap, { backgroundColor: colors.heroHeader, borderColor: colors.cardBorder }]}>
+            <Image source={require("../assets/logo.png")} style={h.logo} resizeMode="contain" />
           </View>
 
-          <TouchableOpacity onPress={() => navigation.navigate("Profile")} style={h.avatarWrap}>
+          {/* Avatar */}
+          <TouchableOpacity
+            onPress={() => navigation.navigate("Profile")}
+            style={h.avatarWrap}
+            accessibilityLabel="Go to profile"
+          >
             {profilePhoto ? (
-              <Image source={{ uri: profilePhoto }} style={h.avatar} />
+              <Image source={{ uri: profilePhoto }} style={h.avatar} accessibilityLabel="Your profile photo" />
             ) : (
               <View style={[h.avatar, h.avatarFallback]}>
                 <Feather name="user" size={18} color="#fff" />
               </View>
             )}
-            <View style={h.onlineDot} />
+            <View style={[h.onlineDot, { backgroundColor: colors.brand, borderColor: colors.heroHeader }]} />
           </TouchableOpacity>
         </View>
 
@@ -268,17 +292,24 @@ function HomeContent({ profilePhoto, navigation }) {
         {sliderData.length > 0 && (
           <View style={h.dotsRow}>
             {sliderData.map((_, i) => (
-              <View key={i} style={[h.dot, i === activeIndex && h.dotActive]} />
+              <View
+                key={i}
+                style={[
+                  h.dot,
+                  i === activeIndex && h.dotActive,
+                ]}
+              />
             ))}
           </View>
         )}
 
-        {/* ── EXPLORE BUTTON overlaid on hero ── */}
+        {/* Explore button */}
         {activeSpot && (
           <TouchableOpacity
-            style={h.heroExploreBtn}
+            style={[h.heroExploreBtn, { backgroundColor: colors.brand }]}
             onPress={() => handleSpotPress(activeSpot.spot)}
             activeOpacity={0.85}
+            accessibilityLabel={`Explore ${activeSpot.title}`}
           >
             <Text style={h.heroExploreBtnText}>Explore Spot</Text>
             <Feather name="arrow-right" size={14} color="#fff" />
@@ -286,21 +317,23 @@ function HomeContent({ profilePhoto, navigation }) {
         )}
       </View>
 
-      {/* ─────────────── SPOT INFO CARD ─────────────── */}
+      {/* ─── SPOT INFO CARD ─── */}
       {activeSpot && (
-        <View style={h.infoCard}>
+        <View style={[h.infoCard, { backgroundColor: colors.background }]}>
           <View style={h.infoRow}>
-            <Text style={h.spotName} numberOfLines={1}>{activeSpot.title}</Text>
-            <View style={h.visitsBadge}>
-              <Feather name="eye" size={12} color="#6b4b45" />
-              <Text style={h.visitsText}> {activeSpot.visitCount} visits</Text>
+            <Text style={[h.spotName, { color: colors.textPrimary }]} numberOfLines={1}>
+              {activeSpot.title}
+            </Text>
+            <View style={[h.visitsBadge, { backgroundColor: colors.card }]}>
+              <Feather name="eye" size={12} color={colors.brand} />
+              <Text style={[h.visitsText, { color: colors.brand }]}> {activeSpot.visitCount} visits</Text>
             </View>
           </View>
 
           <View style={h.infoRow}>
             <View style={h.locationRow}>
-              <Feather name="map-pin" size={13} color="#6b4b45" />
-              <Text style={h.locationText}>{activeSpot.location}</Text>
+              <Feather name="map-pin" size={13} color={colors.brand} />
+              <Text style={[h.locationText, { color: colors.brand }]}>{activeSpot.location}</Text>
             </View>
             <View style={h.starsRow}>
               {[1, 2, 3, 4, 5].map((s) => (
@@ -308,38 +341,48 @@ function HomeContent({ profilePhoto, navigation }) {
                   key={s}
                   name="star"
                   size={14}
-                  color={s <= Math.round(activeSpot.rating) ? "#f4c542" : "#e0d0ce"}
+                  color={s <= Math.round(activeSpot.rating) ? colors.star : colors.starEmpty}
                 />
               ))}
             </View>
           </View>
-          {/* description removed */}
         </View>
       )}
 
-      {/* ─────────────── TOP CITIES ─────────────── */}
+      {/* ─── TOP CITIES ─── */}
       <View style={h.section}>
-        <Text style={h.sectionTitle}>Top Cities</Text>
+        <Text style={[h.sectionTitle, { color: colors.textPrimary }]}>Top Cities</Text>
+
+        {/* ── CHANGED: shimmer grid instead of loading text ── */}
         {topLoading ? (
-          <View style={h.loadingBox}><Text style={h.loadingText}>Loading…</Text></View>
+          <View>
+            <Skeleton width="100%" height={175} radius={18} style={{ marginBottom: 10 }} />
+            <View style={{ flexDirection: "row", gap: 10 }}>
+              <Skeleton width={CARD_W} height={140} radius={18} />
+              <Skeleton width={CARD_W} height={140} radius={18} />
+            </View>
+          </View>
         ) : topSpots.length === 0 ? (
-          <Text style={h.emptyText}>No visits yet — be the first to explore!</Text>
+          <Text style={[h.emptyText, { color: colors.textMuted }]}>
+            No visits yet — be the first to explore!
+          </Text>
         ) : (
           <View style={h.grid}>
             {topSpots.map((spot, i) => (
               <TouchableOpacity
                 key={spot._id}
-                style={[h.gridCard, i === 0 && h.gridCardWide]}
+                style={[h.gridCard, i === 0 && h.gridCardWide, { backgroundColor: colors.card }]}
                 onPress={() => handleSpotPress(spot)}
                 activeOpacity={0.88}
+                accessibilityLabel={`Explore ${spot.name}`}
               >
-                <Image source={{ uri: spot.image }} style={h.gridImg} resizeMode="cover" />
-                <View style={h.gridOverlay} />
+                <Image source={{ uri: spot.image }} style={h.gridImg} resizeMode="cover" accessibilityLabel={spot.name} />
+                <View style={[h.gridOverlay, { backgroundColor: colors.overlay }]} />
                 <View style={h.gridInfoWrap}>
                   <Text style={h.gridName} numberOfLines={1}>{spot.name}</Text>
                   <View style={h.gridMeta}>
                     <View style={h.gridRatingRow}>
-                      <MaterialIcons name="star" size={11} color="#f4c542" />
+                      <MaterialIcons name="star" size={11} color={colors.star} />
                       <Text style={h.gridRatingText}>{getAverageRating(spot._id) || 0}</Text>
                     </View>
                     <View style={h.gridVisitRow}>
@@ -363,10 +406,15 @@ function HomeContent({ profilePhoto, navigation }) {
 /*                               DRAWER NAV                                   */
 /* -------------------------------------------------------------------------- */
 export default function HomeDrawer() {
+  const { colors } = useTheme();
+
   return (
     <Drawer.Navigator
       drawerContent={(props) => <CustomDrawerContent {...props} />}
-      screenOptions={{ headerShown: false, drawerStyle: { backgroundColor: "#dbbcb7" } }}
+      screenOptions={{
+        headerShown: false,
+        drawerStyle: { backgroundColor: colors.drawer },
+      }}
     >
       <Drawer.Screen name="HomeSide" component={HomeBottomTabs} />
       <Drawer.Screen name="Profile"  component={ProfileScreen} />
@@ -379,15 +427,18 @@ export default function HomeDrawer() {
 /*                               LOGOUT SCREEN                                */
 /* -------------------------------------------------------------------------- */
 function LogoutScreen() {
-  const { logout } = useAuth();
-  const navigation = useNavigation();
+  const { logout }   = useAuth();
+  const navigation   = useNavigation();
 
   useFocusEffect(
     React.useCallback(() => {
       Alert.alert("Logout", "Are you sure you want to logout?", [
         { text: "Cancel",  style: "cancel",     onPress: () => navigation.navigate("HomeSide") },
-        { text: "Log Out", style: "destructive", onPress: async () => {
-            try { await logout(); navigation.replace("Login"); }
+        {
+          text: "Log Out",
+          style: "destructive",
+          onPress: async () => {
+            try   { await logout(); }
             catch { Alert.alert("Error", "Failed to log out. Please try again."); }
           },
         },
@@ -402,10 +453,10 @@ function LogoutScreen() {
 /* -------------------------------------------------------------------------- */
 const styles = StyleSheet.create({
   drawerContainer: { flex: 1, paddingTop: 40, paddingHorizontal: 8 },
-  drawerHeading:   { fontSize: 22, fontWeight: "700", color: "#3a2a28", paddingHorizontal: 16, marginBottom: 8 },
-  drawerSection:   { fontSize: 11, fontWeight: "700", color: "#8b5550", letterSpacing: 1.2, paddingHorizontal: 16, marginTop: 20, marginBottom: 4 },
+  drawerHeading:   { fontSize: 22, fontWeight: "700", paddingHorizontal: 16, marginBottom: 8 },
+  drawerSection:   { fontSize: 11, fontWeight: "700", letterSpacing: 1.2, paddingHorizontal: 16, marginTop: 20, marginBottom: 4 },
   drawerLabel:     { fontSize: 15, fontWeight: "500" },
-  drawerDivider:   { height: 1, backgroundColor: "rgba(90,74,74,0.2)", marginHorizontal: 16, marginVertical: 12 },
+  drawerDivider:   { height: 1, marginHorizontal: 16, marginVertical: 12 },
 
   tabBarWrap: {
     position: "absolute",
@@ -416,7 +467,6 @@ const styles = StyleSheet.create({
   },
   tabBar: {
     flexDirection: "row",
-    backgroundColor: "#fff",
     borderRadius: 32,
     height: 64,
     width: width * 0.82,
@@ -440,81 +490,66 @@ const styles = StyleSheet.create({
     top: 8,
     width: 4, height: 4,
     borderRadius: 2,
-    backgroundColor: "#6b4b45",
   },
 });
 
 const h = StyleSheet.create({
-  scroll: { flex: 1, backgroundColor: "#fff" },
+  scroll: { flex: 1 },
 
   heroWrap: {
     width: "100%",
     height: HERO_H,
-    backgroundColor: "#c4a49f",
     borderBottomLeftRadius: 30,
     borderBottomRightRadius: 30,
     overflow: "hidden",
   },
-  heroPlaceholder: { flex: 1, justifyContent: "center", alignItems: "center" },
-  heroImage:       { width: "100%", height: HERO_H },
+  heroImage: { width: "100%", height: HERO_H },
 
-  // Dark gradient at bottom of hero so button/dots are readable
-  heroGradient: {
+  heroHeader: {
     position: "absolute",
-    bottom: 0, left: 0, right: 0,
-    height: HERO_H * 0.45,
-    backgroundColor: "transparent",
-    // RN doesn't support CSS gradients natively — use expo-linear-gradient if you want a true gradient
-    // For now this gives a solid dark fade effect via the button/dots contrast
+    top: 0, left: 0, right: 0,
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    paddingTop: 50,
+    paddingHorizontal: 20,
+    paddingBottom: 12,
+    borderBottomLeftRadius: 20,
+    borderBottomRightRadius: 20,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.08,
+    shadowRadius: 6,
+    elevation: 5,
   },
-
-  // AFTER
-heroHeader: {
-  position: "absolute",
-  top: 0, left: 0, right: 0,
-  flexDirection: "row",
-  justifyContent: "space-between",
-  alignItems: "center",
-  paddingTop: 50,
-  paddingHorizontal: 20,
-  paddingBottom: 10,
-},
   menuBtn:  { gap: 5, justifyContent: "center" },
-  menuLine: { width: 22, height: 2.5, backgroundColor: "#fff", borderRadius: 2 },
+  menuLine: { width: 22, height: 2.5, borderRadius: 2 },
 
-  // Logo — centered between menu and avatar
   logoWrap: {
-  backgroundColor: "#fff",
-  width: 40,
-  height: 40,
-  justifyContent: "center",
-  alignItems: "center",
-  borderWidth: 1,
-  borderColor: "#ddd",
-  borderRadius: 8,
-  },
-  logo: {
+    width: 60,
     height: 40,
-    width: 100,
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 1,
+    borderRadius: 8,
   },
+  logo: { height: 40, width: 100 },
 
-  avatarWrap:    { position: "relative" },
-  avatar:        { width: 42, height: 42, borderRadius: 21, borderWidth: 2.5, borderColor: "#fff" },
-  avatarFallback:{ backgroundColor: "rgba(107,75,69,0.8)", justifyContent: "center", alignItems: "center" },
+  avatarWrap:     { position: "relative" },
+  avatar:         { width: 42, height: 42, borderRadius: 21, borderWidth: 2.5, borderColor: "#fff" },
+  avatarFallback: { backgroundColor: "rgba(107,75,69,0.8)", justifyContent: "center", alignItems: "center" },
   onlineDot: {
     position: "absolute",
     bottom: 1, right: 1,
     width: 11, height: 11,
     borderRadius: 6,
-    backgroundColor: "#6b4b45",
-    borderWidth: 2, borderColor: "#fff",
+    borderWidth: 2,
   },
 
   dotsRow:   { position: "absolute", bottom: 56, left: 150, flexDirection: "row", gap: 5, alignItems: "center" },
-  dot:       { width: 6, height: 6, borderRadius: 3, backgroundColor: "rgba(255,255,255,0.45)" },
+  dot:       { width: 6,  height: 6, borderRadius: 3, backgroundColor: "rgba(255,255,255,0.45)" },
   dotActive: { width: 18, height: 6, borderRadius: 3, backgroundColor: "#fff" },
 
-  // Explore button overlaid on hero image
   heroExploreBtn: {
     position: "absolute",
     bottom: 10,
@@ -522,7 +557,6 @@ heroHeader: {
     flexDirection: "row",
     alignItems: "center",
     gap: 6,
-    backgroundColor: "#6b4b45",
     paddingVertical: 10,
     paddingHorizontal: 18,
     borderRadius: 24,
@@ -534,32 +568,29 @@ heroHeader: {
   },
   heroExploreBtnText: { color: "#fff", fontWeight: "700", fontSize: 13 },
 
-  // Info card — name + location + stars only (no description, no button)
   infoCard:     { paddingHorizontal: 22, paddingTop: 18, paddingBottom: 6 },
   infoRow:      { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 6 },
-  spotName:     { fontSize: 22, fontWeight: "800", color: "#2e1c1a", flex: 1, marginRight: 8 },
-  visitsBadge:  { flexDirection: "row", alignItems: "center", backgroundColor: "#faf5f4", paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 },
-  visitsText:   { fontSize: 12, color: "#6b4b45", fontWeight: "600" },
+  spotName:     { fontSize: 22, fontWeight: "800", flex: 1, marginRight: 8 },
+  visitsBadge:  { flexDirection: "row", alignItems: "center", paddingHorizontal: 10, paddingVertical: 4, borderRadius: 20 },
+  visitsText:   { fontSize: 12, fontWeight: "600" },
   locationRow:  { flexDirection: "row", alignItems: "center", gap: 4 },
-  locationText: { fontSize: 13, color: "#6b4b45", fontWeight: "600" },
+  locationText: { fontSize: 13, fontWeight: "600" },
   starsRow:     { flexDirection: "row", gap: 2 },
 
   section:      { paddingHorizontal: 22, marginTop: 20 },
-  sectionTitle: { fontSize: 17, fontWeight: "700", color: "#2e1c1a", marginBottom: 14 },
-  loadingBox:   { height: 80, justifyContent: "center", alignItems: "center" },
-  loadingText:  { color: "#aaa", fontSize: 13 },
-  emptyText:    { color: "#aaa", fontSize: 13, textAlign: "center" },
+  sectionTitle: { fontSize: 17, fontWeight: "700", marginBottom: 14 },
+  emptyText:    { fontSize: 13, textAlign: "center" },
 
-  grid:         { flexDirection: "row", flexWrap: "wrap", gap: 10 },
-  gridCard:     { width: (width - 54) / 2, height: 140, borderRadius: 18, overflow: "hidden", backgroundColor: "#e8d0ce" },
-  gridCardWide: { width: "100%", height: 175 },
-  gridImg:      { width: "100%", height: "100%", position: "absolute" },
-  gridOverlay:  { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.3)" },
-  gridInfoWrap: { position: "absolute", bottom: 0, left: 0, right: 0, padding: 12, backgroundColor: "rgba(0,0,0,0.25)" },
-  gridName:     { fontSize: 14, fontWeight: "700", color: "#fff", marginBottom: 4 },
-  gridMeta:     { flexDirection: "row", alignItems: "center", gap: 10 },
-  gridRatingRow:{ flexDirection: "row", alignItems: "center", gap: 2 },
+  grid:          { flexDirection: "row", flexWrap: "wrap", gap: 10 },
+  gridCard:      { width: (width - 54) / 2, height: 140, borderRadius: 18, overflow: "hidden" },
+  gridCardWide:  { width: "100%", height: 175 },
+  gridImg:       { width: "100%", height: "100%", position: "absolute" },
+  gridOverlay:   { ...StyleSheet.absoluteFillObject },
+  gridInfoWrap:  { position: "absolute", bottom: 0, left: 0, right: 0, padding: 12, backgroundColor: "rgba(0,0,0,0.25)" },
+  gridName:      { fontSize: 14, fontWeight: "700", color: "#fff", marginBottom: 4 },
+  gridMeta:      { flexDirection: "row", alignItems: "center", gap: 10 },
+  gridRatingRow: { flexDirection: "row", alignItems: "center", gap: 2 },
   gridRatingText:{ fontSize: 11, fontWeight: "700", color: "#fff" },
-  gridVisitRow: { flexDirection: "row", alignItems: "center" },
-  gridVisitText:{ fontSize: 11, color: "rgba(255,255,255,0.85)", fontWeight: "500" },
+  gridVisitRow:  { flexDirection: "row", alignItems: "center" },
+  gridVisitText: { fontSize: 11, color: "rgba(255,255,255,0.85)", fontWeight: "500" },
 });

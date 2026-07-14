@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   View,
   Text,
@@ -6,27 +6,39 @@ import {
   TouchableOpacity,
   ScrollView,
   Image,
-  ActivityIndicator,
+  TextInput,
+  StatusBar,
 } from "react-native";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import { Feather } from "@expo/vector-icons";
 import { FontAwesome5 } from "@expo/vector-icons";
+import { useArrival } from "../context/ArrivalContext";
 import { useBookmark } from "../context/BookmarkContext";
+import { useTheme } from "../context/ThemeContext";
+import { BASE_URL } from '../api';
 
-const API_URL = "https://libotbackend.onrender.com";
+// ── Skeleton import ───────────────────────────────────────────────────────────
+import ListsSkeleton from "../components/ListsSkeleton";
 
 export default function Lists() {
   const navigation = useNavigation();
   const route      = useRoute();
   const { isBookmarked, toggleBookmark } = useBookmark();
+  const { allSpots } = useArrival();
+  const { colors, isDark } = useTheme();
+  const styles = getStyles(colors);
 
   const category    = route.params?.category    || "Religious";
   const displayName = route.params?.displayName || category;
 
-  const [destinations, setDestinations] = useState([]);
-  const [loading, setLoading]           = useState(true);
-  const [error, setError]               = useState(null);
+  const [destinations,  setDestinations]  = useState([]);
+  const [loading,       setLoading]       = useState(false);
   const [usingFallback, setUsingFallback] = useState(false);
+
+  // ── Search state ──────────────────────────────────────────────────────────
+  const [searchActive, setSearchActive] = useState(false);
+  const [searchQuery,  setSearchQuery]  = useState("");
+  const searchInputRef = useRef(null);
 
   const fallbackData = {
     Religious: [
@@ -44,44 +56,47 @@ export default function Lists() {
     ],
   };
 
-  useEffect(() => { loadDestinations(); }, [category]);
+  useEffect(() => {
+    setLoading(true);
+    const filtered = allSpots.filter(s =>
+      (Array.isArray(s.categories) && s.categories.includes(category)) ||
+      s.category === category
+    );
 
-  const loadDestinations = async () => {
-    try {
-      setLoading(true);
-      setError(null);
+    if (filtered.length > 0) {
+      setDestinations(filtered.map(spot => ({
+        ...spot,
+        visitingHours:   spot.visitingHours   || "6am to 10pm",
+        entranceFee:     spot.entranceFee     || "Free",
+        history:         spot.history         || "Historical information coming soon...",
+        recommendations: spot.recommendations || "Recommendations coming soon...",
+      })));
       setUsingFallback(false);
-
-      const response = await fetch(
-        `${API_URL}/api/spots/category/${encodeURIComponent(category)}`,
-        { method: "GET", headers: { "Content-Type": "application/json" } }
-      );
-
-      if (!response.ok) throw new Error(`Backend returned ${response.status}`);
-
-      const data  = await response.json();
-      const spots = data.spots || data;
-
-      if (spots.length > 0) {
-        setDestinations(spots.map((spot) => ({
-          ...spot, // ✅ spreads ALL fields — modelUrl, Badge, categories, coordinates, etc.
-          visitingHours:   spot.visitingHours   || "6am to 10pm",
-          entranceFee:     spot.entranceFee     || "Free",
-          history:         spot.history         || "Historical information coming soon...",
-          recommendations: spot.recommendations || "Recommendations coming soon...",
-        })));
-      } else {
-        setDestinations(fallbackData[category] || []);
-        setUsingFallback(true);
-      }
-    } catch (error) {
+    } else {
       setDestinations(fallbackData[category] || []);
-      setError("Using offline data");
       setUsingFallback(true);
-    } finally {
-      setLoading(false);
     }
+    setLoading(false);
+  }, [category, allSpots]);
+
+  // ── Search handlers ───────────────────────────────────────────────────────
+  const openSearch = () => {
+    setSearchActive(true);
+    // wait for the input to mount before focusing
+    setTimeout(() => searchInputRef.current?.focus(), 50);
   };
+
+  const closeSearch = () => {
+    setSearchActive(false);
+    setSearchQuery("");
+  };
+
+  // Spots visible after applying the in-category search filter
+  const visibleDestinations = searchQuery.trim().length > 0
+    ? destinations.filter((item) =>
+        item.name?.toLowerCase().includes(searchQuery.trim().toLowerCase())
+      )
+    : destinations;
 
   const DestinationCard = ({ item }) => {
     const spotIsBookmarked = isBookmarked(item._id);
@@ -110,11 +125,10 @@ export default function Lists() {
           <Text style={styles.cardTitle} numberOfLines={2}>{item.name}</Text>
           {item.location && (
             <View style={styles.locationContainer}>
-              <Feather name="map-pin" size={12} color="#7a5a58" />
+              <Feather name="map-pin" size={12} color={colors.textMuted} />
               <Text style={styles.locationText}>{item.location}</Text>
             </View>
           )}
-          {/* Show category tags if the spot has multiple categories */}
           {Array.isArray(item.categories) && item.categories.length > 1 && (
             <View style={styles.tagsRow}>
               {item.categories.map((cat) => (
@@ -129,37 +143,62 @@ export default function Lists() {
     );
   };
 
-  if (loading) {
-    return (
-      <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#6b4b45" />
-        <Text style={styles.loadingText}>Loading destinations...</Text>
-      </View>
-    );
-  }
+  // ── CHANGED: skeleton replaces ActivityIndicator ──────────────────────────
+  if (loading) return <ListsSkeleton cardCount={4} />;
 
   return (
     <View style={styles.container}>
+      <StatusBar barStyle={isDark ? "light-content" : "dark-content"} />
 
       {/* Header */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <Feather name="chevron-left" size={24} color="#4a2e2c" />
-        </TouchableOpacity>
-        <Text style={styles.headerTitle}>{displayName}</Text>
-        <TouchableOpacity style={styles.searchButton}>
-          <Feather name="search" size={22} color="#4a2e2c" />
-        </TouchableOpacity>
+        {searchActive ? (
+          <>
+            <TouchableOpacity onPress={closeSearch} style={styles.backButton}>
+              <Feather name="chevron-left" size={24} color={colors.textPrimary} />
+            </TouchableOpacity>
+
+            <View style={styles.searchInputWrapper}>
+              <Feather name="search" size={16} color={colors.textMuted} style={{ marginRight: 8 }} />
+              <TextInput
+                ref={searchInputRef}
+                style={styles.searchInput}
+                placeholder={`Search in ${displayName}...`}
+                placeholderTextColor={colors.textMuted}
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                returnKeyType="search"
+                autoCorrect={false}
+              />
+              {searchQuery.length > 0 && (
+                <TouchableOpacity onPress={() => setSearchQuery("")}>
+                  <Feather name="x" size={18} color={colors.textMuted} />
+                </TouchableOpacity>
+              )}
+            </View>
+          </>
+        ) : (
+          <>
+            <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+              <Feather name="chevron-left" size={24} color={colors.textPrimary} />
+            </TouchableOpacity>
+            <Text style={styles.headerTitle}>{displayName}</Text>
+            <TouchableOpacity style={styles.searchButton} onPress={openSearch}>
+              <Feather name="search" size={22} color={colors.textPrimary} />
+            </TouchableOpacity>
+          </>
+        )}
       </View>
 
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
       >
         {/* Info bar */}
         <View style={styles.infoContainer}>
           <Text style={styles.infoText}>
-            {destinations.length} destination{destinations.length !== 1 ? "s" : ""} found
+            {visibleDestinations.length} destination{visibleDestinations.length !== 1 ? "s" : ""} found
           </Text>
           {usingFallback && (
             <View style={styles.offlineBadge}>
@@ -169,17 +208,23 @@ export default function Lists() {
           )}
         </View>
 
-        {destinations.length > 0 ? (
+        {visibleDestinations.length > 0 ? (
           <View style={styles.cardsContainer}>
-            {destinations.map((item) => (
+            {visibleDestinations.map((item) => (
               <DestinationCard key={item._id} item={item} />
             ))}
           </View>
         ) : (
           <View style={styles.emptyContainer}>
-            <Feather name="map" size={64} color="#d9b8b5" />
-            <Text style={styles.emptyText}>No destinations found</Text>
-            <Text style={styles.emptySubtext}>Try selecting a different category</Text>
+            <Feather name="map" size={64} color={colors.cardBorder} />
+            <Text style={styles.emptyText}>
+              {searchQuery.trim().length > 0 ? "No matching spots" : "No destinations found"}
+            </Text>
+            <Text style={styles.emptySubtext}>
+              {searchQuery.trim().length > 0
+                ? "Try a different search term"
+                : "Try selecting a different category"}
+            </Text>
           </View>
         )}
 
@@ -189,23 +234,11 @@ export default function Lists() {
   );
 }
 
-const styles = StyleSheet.create({
+const getStyles = (colors) => StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#fff",
+    backgroundColor: colors.background,
     paddingTop: 50,
-  },
-  loadingContainer: {
-    flex: 1,
-    backgroundColor: "#f7cfc9",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  loadingText: {
-    marginTop: 15,
-    fontSize: 15,
-    color: "#7a5a58",
-    fontWeight: "500",
   },
 
   // ── Header ──
@@ -215,6 +248,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     paddingHorizontal: 20,
     marginBottom: 16,
+    minHeight: 40,
   },
   backButton: {
     width: 40,
@@ -225,7 +259,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     fontSize: 20,
     fontWeight: "700",
-    color: "#4a2e2c",
+    color: colors.textPrimary,
     flex: 1,
     textAlign: "center",
     marginHorizontal: 10,
@@ -235,6 +269,26 @@ const styles = StyleSheet.create({
     height: 40,
     justifyContent: "center",
     alignItems: "flex-end",
+  },
+
+  // ── Search input ──
+  searchInputWrapper: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: colors.card,
+    borderRadius: 20,
+    paddingHorizontal: 14,
+    height: 40,
+    marginLeft: 8,
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 15,
+    color: colors.textPrimary,
+    padding: 0,
   },
 
   scrollContent: { paddingHorizontal: 20 },
@@ -248,7 +302,7 @@ const styles = StyleSheet.create({
   },
   infoText: {
     fontSize: 14,
-    color: "#7a5a58",
+    color: colors.textMuted,
     fontWeight: "500",
   },
   offlineBadge: {
@@ -269,10 +323,12 @@ const styles = StyleSheet.create({
   // ── Cards ──
   cardsContainer: { gap: 14 },
   card: {
-    backgroundColor: "#faf5f4",
+    backgroundColor: colors.card,
     borderRadius: 16,
     overflow: "hidden",
-    shadowColor: "#4a2e2c",
+    borderWidth: 1,
+    borderColor: colors.cardBorder,
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.08,
     shadowRadius: 6,
@@ -282,7 +338,7 @@ const styles = StyleSheet.create({
   cardImage: {
     width: "100%",
     height: 160,
-    backgroundColor: "#e8d0ce",
+    backgroundColor: colors.cardBorder,
   },
   bookmarkButton: {
     position: "absolute",
@@ -300,7 +356,7 @@ const styles = StyleSheet.create({
   cardTitle: {
     fontSize: 17,
     fontWeight: "700",
-    color: "#4a2e2c",
+    color: colors.textPrimary,
     marginBottom: 6,
   },
   locationContainer: {
@@ -310,7 +366,7 @@ const styles = StyleSheet.create({
   },
   locationText: {
     fontSize: 13,
-    color: "#7a5a58",
+    color: colors.textMuted,
   },
   tagsRow: {
     flexDirection: "row",
@@ -319,14 +375,14 @@ const styles = StyleSheet.create({
     marginTop: 6,
   },
   tag: {
-    backgroundColor: "#f0e0de",
+    backgroundColor: colors.cardBorder,
     paddingHorizontal: 8,
     paddingVertical: 2,
     borderRadius: 10,
   },
   tagText: {
     fontSize: 10,
-    color: "#8b4440",
+    color: colors.brandDark,
     fontWeight: "600",
   },
 
@@ -339,12 +395,12 @@ const styles = StyleSheet.create({
   emptyText: {
     fontSize: 18,
     fontWeight: "700",
-    color: "#4a2e2c",
+    color: colors.textPrimary,
     marginTop: 14,
   },
   emptySubtext: {
     fontSize: 14,
-    color: "#7a5a58",
+    color: colors.textMuted,
     marginTop: 5,
   },
 });

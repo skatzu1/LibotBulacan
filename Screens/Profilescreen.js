@@ -17,6 +17,7 @@ import { Feather } from "@expo/vector-icons";
 import { useUser, useAuth } from "@clerk/clerk-expo";
 import { useAuth as useAppAuth } from "../context/AuthContext";
 import { useProfileImage } from "../context/ProfileImageContext";
+import { useTheme } from "../context/ThemeContext";
 
 const BASE_URL = "https://libotbackend.onrender.com";
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
@@ -28,6 +29,7 @@ export default function ProfileScreen() {
   const { getToken }                  = useAuth();
   const { user: contextUser }         = useAppAuth();
   const { profileImage }              = useProfileImage();
+  const { colors, isDark }            = useTheme();
 
   const [userInfo, setUserInfo] = useState({
     email: "", firstName: "", lastName: "", fullName: "", profilePhoto: null,
@@ -152,28 +154,28 @@ export default function ProfileScreen() {
 
   if (!isLoaded) {
     return (
-      <View style={[styles.container, styles.centered]}>
-        <ActivityIndicator size="large" color="#6b4b45" />
+      <View style={[styles.container, styles.centered, { backgroundColor: colors.background }]}>
+        <ActivityIndicator size="large" color={colors.brand} />
       </View>
     );
   }
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
         <View style={styles.header}>
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-            <Feather name="chevron-left" size={24} color="#4a2e2c" />
+            <Feather name="chevron-left" size={24} color={colors.brandDark} />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Profile</Text>
+          <Text style={[styles.headerTitle, { color: colors.brandDark }]}>Profile</Text>
           <TouchableOpacity
             style={styles.editButton}
             onPress={() => navigation.navigate("EditProfile")}
           >
-            <Feather name="edit-2" size={18} color="#6b4b45" />
+            <Feather name="edit-2" size={18} color={colors.brand} />
           </TouchableOpacity>
         </View>
 
@@ -183,45 +185,45 @@ export default function ProfileScreen() {
             activeOpacity={displayPhoto ? 0.8 : 1}
             disabled={!displayPhoto}
           >
-            <View style={styles.profilePhotoWrapper}>
+            <View style={[styles.profilePhotoWrapper, { backgroundColor: colors.brand }]}>
               {displayPhoto ? (
                 <Image source={{ uri: displayPhoto }} style={styles.profilePhoto} />
               ) : (
-                <View style={styles.profilePhotoPlaceholder}>
-                  <Feather name="user" size={40} color="#fff" />
+                <View style={[styles.profilePhotoPlaceholder, { backgroundColor: colors.brand }]}>
+                  <Feather name="user" size={40} color={colors.textInverse} />
                 </View>
               )}
             </View>
             {displayPhoto && (
-              <View style={styles.zoomBadge}>
-                <Feather name="zoom-in" size={11} color="#fff" />
+              <View style={[styles.zoomBadge, { backgroundColor: colors.overlay }]}>
+                <Feather name="zoom-in" size={11} color={colors.textInverse} />
               </View>
             )}
           </TouchableOpacity>
         </View>
 
         {fullName ? (
-          <Text style={styles.userName}>{fullName}</Text>
+          <Text style={[styles.userName, { color: colors.brandDark }]}>{fullName}</Text>
         ) : null}
-        <Text style={styles.email}>{userInfo.email || "No email available"}</Text>
+        <Text style={[styles.email, { color: colors.textSecondary }]}>{userInfo.email || "No email available"}</Text>
 
-        <View style={styles.statsRow}>
+        <View style={[styles.statsRow, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
           <View style={styles.statCard}>
-            <Feather name="map-pin" size={18} color="#6b4b45" style={styles.statIcon} />
-            <Text style={styles.statLabel}>Trips</Text>
-            <Text style={styles.statCount}>{tripCount}</Text>
+            <Feather name="map-pin" size={18} color={colors.brand} style={styles.statIcon} />
+            <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Trips</Text>
+            <Text style={[styles.statCount, { color: colors.textPrimary }]}>{tripCount}</Text>
           </View>
-          <View style={styles.statDivider} />
+          <View style={[styles.statDivider, { backgroundColor: colors.cardBorder }]} />
           <View style={styles.statCard}>
-            <Feather name="star" size={18} color="#f4c542" style={styles.statIcon} />
-            <Text style={styles.statLabel}>Points</Text>
-            <Text style={[styles.statCount, styles.statCountAccent]}>{points}</Text>
+            <Feather name="star" size={18} color={colors.star} style={styles.statIcon} />
+            <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Points</Text>
+            <Text style={[styles.statCount, { color: colors.brand }]}>{points}</Text>
           </View>
-          <View style={styles.statDivider} />
+          <View style={[styles.statDivider, { backgroundColor: colors.cardBorder }]} />
           <View style={styles.statCard}>
-            <Feather name="award" size={18} color="#6b4b45" style={styles.statIcon} />
-            <Text style={styles.statLabel}>Badges</Text>
-            <Text style={[styles.statCount, styles.statCountAccent]}>{badgeCount}</Text>
+            <Feather name="award" size={18} color={colors.brand} style={styles.statIcon} />
+            <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Badges</Text>
+            <Text style={[styles.statCount, { color: colors.brand }]}>{badgeCount}</Text>
           </View>
         </View>
 
@@ -229,23 +231,23 @@ export default function ProfileScreen() {
           {menuItems.map((item) => (
             <TouchableOpacity
               key={item.id}
-              style={styles.menuItem}
+              style={[styles.menuItem, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}
               onPress={item.onPress}
               activeOpacity={0.7}
             >
               <View style={styles.menuLeft}>
-                <View style={styles.iconContainer}>
-                  <Feather name={item.icon} size={18} color="#6b4b45" />
+                <View style={[styles.iconContainer, { backgroundColor: colors.brandLight }]}>
+                  <Feather name={item.icon} size={18} color={colors.brand} />
                 </View>
-                <Text style={styles.menuText}>{item.title}</Text>
+                <Text style={[styles.menuText, { color: colors.textPrimary }]}>{item.title}</Text>
               </View>
               <View style={styles.menuRight}>
                 {item.badge ? (
-                  <View style={styles.badgePill}>
-                    <Text style={styles.badgePillText}>{item.badge}</Text>
+                  <View style={[styles.badgePill, { backgroundColor: colors.brand }]}>
+                    <Text style={[styles.badgePillText, { color: colors.textInverse }]}>{item.badge}</Text>
                   </View>
                 ) : null}
-                <Feather name="chevron-right" size={18} color="#b0908c" />
+                <Feather name="chevron-right" size={18} color={colors.textMuted} />
               </View>
             </TouchableOpacity>
           ))}
@@ -265,15 +267,13 @@ export default function ProfileScreen() {
         <TouchableWithoutFeedback onPress={closePhotoModal}>
           <Animated.View style={[styles.modalBackdrop, { opacity: opacityAnim }]}>
             <TouchableWithoutFeedback>
-              {/* Outer glow ring */}
               <Animated.View
                 style={[
                   styles.modalRing,
                   { transform: [{ scale: scaleAnim }], opacity: opacityAnim },
                 ]}
               >
-                {/* Inner photo circle */}
-                <View style={styles.modalContent}>
+                <View style={[styles.modalContent, { borderColor: colors.background }]}>
                   <Image
                     source={{ uri: displayPhoto }}
                     style={styles.modalImage}
@@ -283,8 +283,8 @@ export default function ProfileScreen() {
               </Animated.View>
             </TouchableWithoutFeedback>
 
-            <TouchableOpacity style={styles.modalCloseBtn} onPress={closePhotoModal}>
-              <Feather name="x" size={20} color="#fff" />
+            <TouchableOpacity style={[styles.modalCloseBtn, { backgroundColor: colors.overlay }]} onPress={closePhotoModal}>
+              <Feather name="x" size={20} color={colors.textInverse} />
             </TouchableOpacity>
           </Animated.View>
         </TouchableWithoutFeedback>
@@ -294,7 +294,7 @@ export default function ProfileScreen() {
 }
 
 const styles = StyleSheet.create({
-  container:     { flex: 1, backgroundColor: "#fff" },
+  container:     { flex: 1 },
   centered:      { justifyContent: "center", alignItems: "center" },
   scrollContent: { paddingHorizontal: 20, paddingTop: 50 },
 
@@ -303,47 +303,46 @@ const styles = StyleSheet.create({
     alignItems: "center", marginBottom: 24,
   },
   backButton:  { width: 40, height: 40, justifyContent: "center", alignItems: "flex-start" },
-  headerTitle: { fontSize: 20, fontWeight: "700", color: "#4a2e2c" },
+  headerTitle: { fontSize: 20, fontWeight: "700" },
   editButton:  { width: 40, height: 40, justifyContent: "center", alignItems: "flex-end" },
 
   profilePhotoContainer: { alignItems: "center", marginBottom: 12 },
   profilePhotoWrapper: {
     width: 100, height: 100, borderRadius: 50, overflow: "hidden",
-    backgroundColor: "#6b4b45", justifyContent: "center", alignItems: "center",
+    justifyContent: "center", alignItems: "center",
   },
   profilePhoto:            { width: "100%", height: "100%", resizeMode: "cover" },
-  profilePhotoPlaceholder: { width: "100%", height: "100%", justifyContent: "center", alignItems: "center", backgroundColor: "#6b4b45" },
-  
+  profilePhotoPlaceholder: { width: "100%", height: "100%", justifyContent: "center", alignItems: "center" },
+  zoomBadge: {
+    position: "absolute", bottom: 0, right: 0, width: 26, height: 26,
+    borderRadius: 13, justifyContent: "center", alignItems: "center",
+  },
 
-  userName: { fontSize: 18, fontWeight: "700", color: "#4a2e2c", textAlign: "center", marginBottom: 4 },
-  email:    { fontSize: 13, color: "#7a5a58", textAlign: "center", marginBottom: 20 },
+  userName: { fontSize: 18, fontWeight: "700", textAlign: "center", marginBottom: 4 },
+  email:    { fontSize: 13, textAlign: "center", marginBottom: 20 },
 
   statsRow: {
-    flexDirection: "row", backgroundColor: "#faf5f4",
-    borderRadius: 16, paddingVertical: 18, paddingHorizontal: 12,
-    marginBottom: 24, alignItems: "center",
-    borderWidth: 1, borderColor: "#f0e0de",
+    flexDirection: "row", borderRadius: 16, paddingVertical: 18, paddingHorizontal: 12,
+    marginBottom: 24, alignItems: "center", borderWidth: 1,
   },
-  statCard:        { flex: 1, alignItems: "center" },
-  statIcon:        { marginBottom: 5 },
-  statDivider:     { width: 1, height: 50, backgroundColor: "#e8d0ce", marginHorizontal: 4 },
-  statLabel:       { fontSize: 11, color: "#7a5a58", fontWeight: "500", marginBottom: 4 },
-  statCount:       { fontSize: 24, color: "#4a2e2c", fontWeight: "700" },
-  statCountAccent: { color: "#6b4b45" },
+  statCard:    { flex: 1, alignItems: "center" },
+  statIcon:    { marginBottom: 5 },
+  statDivider: { width: 1, height: 50, marginHorizontal: 4 },
+  statLabel:   { fontSize: 11, fontWeight: "500", marginBottom: 4 },
+  statCount:   { fontSize: 24, fontWeight: "700" },
 
   menuContainer: { backgroundColor: "transparent" },
   menuItem: {
     flexDirection: "row", justifyContent: "space-between", alignItems: "center",
-    backgroundColor: "#faf5f4", borderRadius: 12,
-    paddingVertical: 14, paddingHorizontal: 14,
-    marginBottom: 8, borderWidth: 1, borderColor: "#f0e0de",
+    borderRadius: 12, paddingVertical: 14, paddingHorizontal: 14,
+    marginBottom: 8, borderWidth: 1,
   },
   menuLeft:      { flexDirection: "row", alignItems: "center" },
-  iconContainer: { width: 36, height: 36, borderRadius: 10, backgroundColor: "#f0e0de", justifyContent: "center", alignItems: "center", marginRight: 12 },
-  menuText:      { fontSize: 15, color: "#4a2e2c", fontWeight: "500" },
+  iconContainer: { width: 36, height: 36, borderRadius: 10, justifyContent: "center", alignItems: "center", marginRight: 12 },
+  menuText:      { fontSize: 15, fontWeight: "500" },
   menuRight:     { flexDirection: "row", alignItems: "center", gap: 8 },
-  badgePill:     { backgroundColor: "#6b4b45", borderRadius: 12, paddingHorizontal: 8, paddingVertical: 2 },
-  badgePillText: { color: "#fff", fontSize: 11, fontWeight: "700" },
+  badgePill:     { borderRadius: 12, paddingHorizontal: 8, paddingVertical: 2 },
+  badgePillText: { fontSize: 11, fontWeight: "700" },
 
   // ── Modal ──
   modalBackdrop: {
@@ -371,7 +370,6 @@ const styles = StyleSheet.create({
     borderRadius: MODAL_SIZE / 2,
     overflow: "hidden",
     borderWidth: 4,
-    borderColor: "#fff",
     shadowColor: "#000",
     shadowOffset: { width: 0, height: 8 },
     shadowOpacity: 0.5,
@@ -389,7 +387,6 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: "rgba(0,0,0,0.5)",
     justifyContent: "center",
     alignItems: "center",
   },
