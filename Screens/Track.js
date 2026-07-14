@@ -19,7 +19,8 @@ const { width, height } = Dimensions.get("window");
 const BASE_URL = "https://libotbackend.onrender.com";
 
 const TERMINALS = [
-  // ── San Jose del Monte ──────────────────────────────────────────
+
+  // ── San Jose del Monte ───────────────────────────────────────────
   {
     id: "tungkong-mangga",
     name: "Tungkong Mangga Terminal",
@@ -32,8 +33,8 @@ const TERMINALS = [
   {
     id: "sapang-palay",
     name: "Sapang Palay Terminal",
-    lat: 14.858674515574878,
-    lng: 121.04835828892935,
+    lat: 14.8587,
+    lng: 121.0484,
     address: "Sapang Palay Proper, San Jose del Monte, Bulacan",
     routes: ["Sapang Palay – Monumento", "Sapang Palay – SM Fairview"],
     type: "Jeepney Terminal",
@@ -50,8 +51,8 @@ const TERMINALS = [
   {
     id: "francisco-homes",
     name: "Francisco Homes Terminal",
-    lat: 14.80829344106687,
-    lng: 121.0583295834346,
+    lat: 14.8083,
+    lng: 121.0583,
     address: "Francisco Homes, San Jose del Monte, Bulacan",
     routes: ["Francisco Homes – Fairview", "Francisco Homes – SM City"],
     type: "UV Express Terminal",
@@ -59,8 +60,8 @@ const TERMINALS = [
   {
     id: "muzon",
     name: "Muzon Terminal",
-    lat: 14.802447335462507,
-    lng: 121.03468287944305,
+    lat: 14.8024,
+    lng: 121.0347,
     address: "Muzon, San Jose del Monte, Bulacan",
     routes: ["Muzon – Monumento", "Muzon – SM Fairview"],
     type: "Jeepney Terminal",
@@ -68,8 +69,8 @@ const TERMINALS = [
   {
     id: "citihomes",
     name: "Citihomes Terminal",
-    lat: 14.8302,
-    lng: 121.0540,
+    lat: 14.8421,
+    lng: 121.0457,
     address: "Citihomes, San Jose del Monte, Bulacan",
     routes: ["Citihomes – Fairview", "Citihomes – Monumento"],
     type: "UV Express Terminal",
@@ -83,66 +84,51 @@ const TERMINALS = [
     routes: ["Graceville – Cubao", "Graceville – SM Fairview"],
     type: "Jeepney Terminal",
   },
-
-  // ── Malolos (Provincial Capital) ────────────────────────────────
   {
-    id: "malolos-central",
-    name: "Malolos Central Terminal",
-    lat: 14.8527,
-    lng: 120.8127,
-    address: "Paseo del Congreso, Malolos City, Bulacan",
-    routes: [
-      "Malolos – Cubao (NLEX)",
-      "Malolos – Monumento",
-      "Malolos – Tuktukan",
-    ],
-    type: "Bus / Jeepney Terminal",
+    id: "kaypian",
+    name: "Kaypian Terminal",
+    lat: 14.8370,
+    lng: 121.0630,
+    address: "Kaypian, San Jose del Monte, Bulacan",
+    routes: ["Kaypian – Fairview", "Kaypian – Monumento"],
+    type: "Jeepney Terminal",
   },
   {
-    id: "malolos-north",
-    name: "Malolos North Bus Terminal",
-    lat: 14.8620,
-    lng: 120.8130,
-    address: "McArthur Highway, Malolos City, Bulacan",
-    routes: [
-      "Malolos – Baliuag (via McArthur Hwy)",
-      "Malolos – Calumpit",
-    ],
-    type: "Bus Terminal",
-  },
-
-  // ── Meycauayan ───────────────────────────────────────────────────
-  {
-    id: "meycauayan-terminal",
-    name: "Meycauayan Transport Terminal",
-    lat: 14.7356,
-    lng: 120.9604,
-    address: "Valenzuela Road, Meycauayan City, Bulacan",
-    routes: [
-      "Meycauayan – Monumento",
-      "Meycauayan – SM Fairview",
-      "Meycauayan – Cubao",
-    ],
-    type: "Jeepney / UV Express Terminal",
+    id: "paradise-3",
+    name: "Paradise III Terminal",
+    lat: 14.8290,
+    lng: 121.0500,
+    address: "Paradise III, San Jose del Monte, Bulacan",
+    routes: ["Paradise III – Cubao", "Paradise III – SM Fairview"],
+    type: "UV Express Terminal",
   },
   {
-    id: "malhacan",
-    name: "Malhacan Terminal",
-    lat: 14.7290,
-    lng: 120.9570,
-    address: "Malhacan, Meycauayan City, Bulacan",
-    routes: ["Malhacan – Monumento", "Malhacan – EDSA"],
+    id: "san-manuel-sjdm",
+    name: "San Manuel Terminal (SJDM)",
+    lat: 14.8450,
+    lng: 121.0390,
+    address: "San Manuel, San Jose del Monte, Bulacan",
+    routes: ["San Manuel – Monumento", "San Manuel – Fairview"],
     type: "Jeepney Terminal",
   },
 
-  // ── Marilao ──────────────────────────────────────────────────────
+  // ── Sta. Maria ───────────────────────────────────────────────────
   {
-    id: "marilao-terminal",
-    name: "Marilao Terminal",
-    lat: 14.7619,
-    lng: 120.9487,
-    address: "McArthur Highway, Marilao, Bulacan",
-    routes: ["Marilao – Monumento", "Marilao – SM Fairview"],
+    id: "sta-maria-terminal",
+    name: "Sta. Maria Jeepney Terminal",
+    lat: 14.8150,
+    lng: 120.9597,
+    address: "McArthur Highway, Sta. Maria, Bulacan",
+    routes: ["Sta. Maria – Monumento", "Sta. Maria – Malolos", "Malinta – Sta. Maria"],
+    type: "Jeepney Terminal",
+  },
+  {
+    id: "bulak-terminal",
+    name: "Bulak / Baliuag–Malolos Jeepney Terminal",
+    lat: 14.7951,
+    lng: 120.8786,
+    address: "Matungao Street, Bulakan, Bulacan",
+    routes: ["Bulakan – Balagtas", "Bulakan – Malolos City"],
     type: "Jeepney Terminal",
   },
 
@@ -157,6 +143,17 @@ const TERMINALS = [
     type: "Jeepney Terminal",
   },
 
+  // ── Pandi ─────────────────────────────────────────────────────────
+  {
+    id: "pandi-terminal",
+    name: "Pandi Terminal",
+    lat: 14.8635,
+    lng: 120.9524,
+    address: "McArthur Highway, Pandi, Bulacan",
+    routes: ["Pandi – Malolos", "Pandi – Bocaue", "Pandi – Trinoma (P2P)"],
+    type: "Jeepney / P2P Terminal",
+  },
+
   // ── Balagtas ──────────────────────────────────────────────────────
   {
     id: "balagtas-terminal",
@@ -164,8 +161,8 @@ const TERMINALS = [
     lat: 14.8162,
     lng: 120.9079,
     address: "McArthur Highway, Balagtas, Bulacan",
-    routes: ["Balagtas – Monumento", "Balagtas – Malolos"],
-    type: "Jeepney Terminal",
+    routes: ["Balagtas – Monumento", "Balagtas – Malolos", "Balagtas – Trinoma (P2P)"],
+    type: "Jeepney / P2P Terminal",
   },
 
   // ── Guiguinto ─────────────────────────────────────────────────────
@@ -179,19 +176,42 @@ const TERMINALS = [
     type: "Jeepney Terminal",
   },
 
-  // ── Baliuag ───────────────────────────────────────────────────────
+  // ── Malolos ───────────────────────────────────────────────────────
   {
-    id: "baliuag-terminal",
-    name: "Baliuag Terminal",
-    lat: 14.9531,
-    lng: 120.8975,
-    address: "Rizal Street, Baliuag, Bulacan",
-    routes: [
-      "Baliuag – Cubao (NLEX)",
-      "Baliuag – Malolos",
-      "Baliuag – Cabanatuan",
-    ],
+    id: "malolos-central",
+    name: "Malolos Central Terminal",
+    lat: 14.8430,
+    lng: 120.8104,
+    address: "Paseo del Congreso, Malolos City, Bulacan",
+    routes: ["Malolos – Cubao (NLEX)", "Malolos – Monumento", "Malolos – Tuktukan"],
     type: "Bus / Jeepney Terminal",
+  },
+  {
+    id: "malolos-north",
+    name: "Malolos North Bus Terminal",
+    lat: 14.8620,
+    lng: 120.8130,
+    address: "McArthur Highway, Malolos City, Bulacan",
+    routes: ["Malolos – Baliuag (via McArthur Hwy)", "Malolos – Calumpit"],
+    type: "Bus Terminal",
+  },
+  {
+    id: "malolos-paombong",
+    name: "Malolos – Paombong / Hagonoy Terminal",
+    lat: 14.8436,
+    lng: 120.8088,
+    address: "Near Malolos Cathedral, Malolos City, Bulacan",
+    routes: ["Malolos – Paombong", "Malolos – Hagonoy"],
+    type: "Jeepney Terminal",
+  },
+  {
+    id: "robinsons-malolos",
+    name: "Robinsons Malolos Terminal",
+    lat: 14.8558,
+    lng: 120.8154,
+    address: "McArthur Highway, Malolos City, Bulacan",
+    routes: ["Robinsons Malolos – Trinoma (P2P)", "Robinsons Malolos – Monumento"],
+    type: "P2P / UV Express Terminal",
   },
 
   // ── Plaridel ──────────────────────────────────────────────────────
@@ -201,17 +221,17 @@ const TERMINALS = [
     lat: 14.8851,
     lng: 120.8594,
     address: "McArthur Highway, Plaridel, Bulacan",
-    routes: ["Plaridel – Malolos", "Plaridel – Monumento"],
-    type: "Jeepney Terminal",
+    routes: ["Plaridel – Malolos", "Plaridel – Monumento", "Plaridel – Trinoma (P2P)"],
+    type: "Jeepney / P2P Terminal",
   },
 
   // ── Pulilan ────────────────────────────────────────────────────────
   {
     id: "pulilan-terminal",
-    name: "Pulilan Terminal",
-    lat: 14.9021,
-    lng: 120.8500,
-    address: "McArthur Highway, Pulilan, Bulacan",
+    name: "Pulilan Jeepney Terminal",
+    lat: 14.8994,
+    lng: 120.8473,
+    address: "Near 588 Shopping Mall, Pulilan, Bulacan",
     routes: ["Pulilan – Malolos", "Pulilan – Baliuag"],
     type: "Jeepney Terminal",
   },
@@ -231,90 +251,10 @@ const TERMINALS = [
   {
     id: "hagonoy-terminal",
     name: "Hagonoy Terminal",
-    lat: 14.8334,
-    lng: 120.7333,
-    address: "Rizal Street, Hagonoy, Bulacan",
-    routes: ["Hagonoy – Malolos", "Hagonoy – Calumpit"],
-    type: "Jeepney Terminal",
-  },
-
-  // ── Bustos ─────────────────────────────────────────────────────────
-  {
-    id: "bustos-terminal",
-    name: "Bustos Terminal",
-    lat: 14.9556,
-    lng: 120.9167,
-    address: "Poblacion, Bustos, Bulacan",
-    routes: ["Bustos – Baliuag", "Bustos – Malolos"],
-    type: "Jeepney Terminal",
-  },
-
-  // ── Angat ──────────────────────────────────────────────────────────
-  {
-    id: "angat-terminal",
-    name: "Angat Terminal",
-    lat: 14.9333,
-    lng: 121.0167,
-    address: "Poblacion, Angat, Bulacan",
-    routes: ["Angat – Baliuag", "Angat – San Rafael"],
-    type: "Jeepney Terminal",
-  },
-
-  // ── Norzagaray ─────────────────────────────────────────────────────
-  {
-    id: "norzagaray-terminal",
-    name: "Norzagaray Terminal",
-    lat: 14.9000,
-    lng: 121.0500,
-    address: "Poblacion, Norzagaray, Bulacan",
-    routes: ["Norzagaray – Baliuag", "Norzagaray – Monumento"],
-    type: "Jeepney Terminal",
-  },
-
-  // ── San Ildefonso ──────────────────────────────────────────────────
-  {
-    id: "san-ildefonso-terminal",
-    name: "San Ildefonso Terminal",
-    lat: 15.0667,
-    lng: 121.0000,
-    address: "Poblacion, San Ildefonso, Bulacan",
-    routes: ["San Ildefonso – Baliuag", "San Ildefonso – Malolos"],
-    type: "Jeepney Terminal",
-  },
-
-  // ── San Miguel ─────────────────────────────────────────────────────
-  {
-    id: "san-miguel-terminal",
-    name: "San Miguel Terminal",
-    lat: 15.1333,
-    lng: 121.0167,
-    address: "Poblacion, San Miguel, Bulacan",
-    routes: [
-      "San Miguel – Baliuag",
-      "San Miguel – Cabanatuan (via Nueva Ecija)",
-    ],
-    type: "Bus / Jeepney Terminal",
-  },
-
-  // ── Dona Remedios Trinidad ─────────────────────────────────────────
-  {
-    id: "drt-terminal",
-    name: "Doña Remedios Trinidad Terminal",
-    lat: 15.0167,
-    lng: 121.1167,
-    address: "Poblacion, Doña Remedios Trinidad, Bulacan",
-    routes: ["DRT – Norzagaray", "DRT – San Ildefonso"],
-    type: "Jeepney Terminal",
-  },
-
-  // ── Obando ─────────────────────────────────────────────────────────
-  {
-    id: "obando-terminal",
-    name: "Obando Terminal",
-    lat: 14.7028,
-    lng: 120.9222,
-    address: "Poblacion, Obando, Bulacan",
-    routes: ["Obando – Meycauayan", "Obando – Monumento"],
+    lat: 14.8353,
+    lng: 120.7314,
+    address: "Near Hagonoy Municipal Park, Hagonoy, Bulacan",
+    routes: ["Hagonoy – Malolos (via BSU Crossing)", "Hagonoy – Calumpit"],
     type: "Jeepney Terminal",
   },
 
@@ -329,28 +269,167 @@ const TERMINALS = [
     type: "Jeepney Terminal",
   },
 
-  // ── Sta. Maria ──────────────────────────────────────────────────────
+  // ── Obando ─────────────────────────────────────────────────────────
   {
-    id: "sta-maria-terminal",
-    name: "Sta. Maria Terminal",
-    lat: 14.8119,
-    lng: 121.0003,
-    address: "McArthur Highway, Sta. Maria, Bulacan",
-    routes: ["Sta. Maria – Monumento", "Sta. Maria – Malolos"],
+    id: "obando-terminal",
+    name: "Obando Terminal",
+    lat: 14.7028,
+    lng: 120.9222,
+    address: "Poblacion, Obando, Bulacan",
+    routes: ["Obando – Meycauayan", "Obando – Monumento"],
     type: "Jeepney Terminal",
   },
 
-  // ── Pandi ────────────────────────────────────────────────────────────
+  // ── Marilao ──────────────────────────────────────────────────────
   {
-    id: "pandi-terminal",
-    name: "Pandi Terminal",
-    lat: 14.8667,
-    lng: 120.9500,
-    address: "Poblacion, Pandi, Bulacan",
-    routes: ["Pandi – Malolos", "Pandi – Bocaue"],
+    id: "marilao-terminal",
+    name: "Marilao Terminal",
+    lat: 14.7619,
+    lng: 120.9487,
+    address: "McArthur Highway, Marilao, Bulacan",
+    routes: ["Marilao – Monumento", "Marilao – SM Fairview"],
     type: "Jeepney Terminal",
   },
+
+  // ── Meycauayan ───────────────────────────────────────────────────
+  {
+    id: "meycauayan-terminal",
+    name: "Meycauayan Transport Terminal",
+    lat: 14.7356,
+    lng: 120.9604,
+    address: "Valenzuela Road, Meycauayan City, Bulacan",
+    routes: ["Meycauayan – Monumento", "Meycauayan – SM Fairview", "Meycauayan – Cubao"],
+    type: "Jeepney / UV Express Terminal",
+  },
+  {
+    id: "malhacan",
+    name: "Malhacan Terminal",
+    lat: 14.7290,
+    lng: 120.9570,
+    address: "Malhacan, Meycauayan City, Bulacan",
+    routes: ["Malhacan – Monumento", "Malhacan – EDSA"],
+    type: "Jeepney Terminal",
+  },
+  {
+    id: "meycauayan-sm",
+    name: "SM Meycauayan Terminal",
+    lat: 14.7443,
+    lng: 120.9671,
+    address: "SM City Meycauayan, Meycauayan City, Bulacan",
+    routes: ["SM Meycauayan – Monumento", "SM Meycauayan – Cubao"],
+    type: "UV Express Terminal",
+  },
+
+  // ── Baliuag ───────────────────────────────────────────────────────
+  {
+    id: "baliuag-terminal",
+    name: "Baliuag Terminal",
+    lat: 14.9531,
+    lng: 120.8975,
+    address: "Rizal Street, Baliuag, Bulacan",
+    routes: ["Baliuag – Cubao (NLEX)", "Baliuag – Malolos", "Baliuag – Cabanatuan"],
+    type: "Bus / Jeepney Terminal",
+  },
+  {
+    id: "baliuag-crossing",
+    name: "Baliuag Crossing Terminal",
+    lat: 14.9462,
+    lng: 120.9011,
+    address: "NLEX Baliuag Exit, Baliuag, Bulacan",
+    routes: ["Baliuag – Cubao (via NLEX)", "Baliuag – Monumento"],
+    type: "Bus Terminal",
+  },
+
+  // ── Bustos ─────────────────────────────────────────────────────────
+  {
+    id: "bustos-terminal",
+    name: "Bustos Terminal",
+    lat: 14.9530,
+    lng: 120.9178,
+    address: "Poblacion, Bustos, Bulacan",
+    routes: ["Bustos – Baliuag", "Bustos – Malolos"],
+    type: "Jeepney Terminal",
+  },
+
+  // ── Angat ──────────────────────────────────────────────────────────
+  {
+    id: "angat-terminal",
+    name: "Angat Terminal",
+    lat: 14.9287,
+    lng: 121.0155,
+    address: "Poblacion, Angat, Bulacan",
+    routes: ["Angat – Baliuag", "Angat – San Rafael"],
+    type: "Jeepney Terminal",
+  },
+
+  // ── Norzagaray ─────────────────────────────────────────────────────
+  {
+    id: "norzagaray-terminal",
+    name: "Norzagaray Terminal",
+    lat: 14.9022,
+    lng: 121.0523,
+    address: "Poblacion, Norzagaray, Bulacan",
+    routes: ["Norzagaray – Baliuag", "Norzagaray – Monumento"],
+    type: "Jeepney Terminal",
+  },
+
+  // ── San Ildefonso ──────────────────────────────────────────────────
+  {
+    id: "san-ildefonso-terminal",
+    name: "San Ildefonso Terminal",
+    lat: 15.0712,
+    lng: 120.9972,
+    address: "Poblacion, San Ildefonso, Bulacan",
+    routes: ["San Ildefonso – Baliuag", "San Ildefonso – Malolos"],
+    type: "Jeepney Terminal",
+  },
+
+  // ── San Miguel ─────────────────────────────────────────────────────
+  {
+    id: "san-miguel-terminal",
+    name: "San Miguel Terminal",
+    lat: 15.1329,
+    lng: 121.0212,
+    address: "Poblacion, San Miguel, Bulacan",
+    routes: ["San Miguel – Baliuag", "San Miguel – Cabanatuan (via Nueva Ecija)"],
+    type: "Bus / Jeepney Terminal",
+  },
+
+  // ── San Rafael ─────────────────────────────────────────────────────
+  {
+    id: "san-rafael-terminal",
+    name: "San Rafael Terminal",
+    lat: 14.9851,
+    lng: 121.0178,
+    address: "Poblacion, San Rafael, Bulacan",
+    routes: ["San Rafael – Baliuag", "San Rafael – Angat", "San Rafael – Malolos"],
+    type: "Jeepney Terminal",
+  },
+
+  // ── Doña Remedios Trinidad ─────────────────────────────────────────
+  {
+    id: "drt-terminal",
+    name: "Doña Remedios Trinidad Terminal",
+    lat: 15.0167,
+    lng: 121.1167,
+    address: "Poblacion, Doña Remedios Trinidad, Bulacan",
+    routes: ["DRT – Norzagaray", "DRT – San Ildefonso"],
+    type: "Jeepney Terminal",
+  },
+
 ];
+
+// ── Haversine distance in metres ──────────────────────────────────
+function haversineDistance(lat1, lng1, lat2, lng2) {
+  const R = 6371000;
+  const toRad = (d) => (d * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1);
+  const dLng = toRad(lng2 - lng1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
 
 function getSpotCoords(spot) {
   if (!spot) return null;
@@ -408,9 +487,10 @@ export default function Track({ route, navigation }) {
     })
   ).current;
 
-  const webViewRef           = useRef(null);
-  const locationSubscription = useRef(null);
-  const isMounted            = useRef(true);
+  const webViewRef            = useRef(null);
+  const webViewReady          = useRef(false);
+  const locationSubscription  = useRef(null);
+  const isMounted             = useRef(true);
 
   useEffect(() => {
     if (spotData) setActiveSpot(spotData);
@@ -467,22 +547,37 @@ export default function Track({ route, navigation }) {
   const followModeRef = useRef(followMode);
   useEffect(() => { followModeRef.current = followMode; }, [followMode]);
 
-  /* ── Update marker via injectJavaScript ── */
+  /* ── Update marker + proximity via injectJavaScript ── */
   const updateMarkerRef = useRef(null);
   const updateMarkerOnMap = useCallback((coords) => {
-    if (!webViewRef.current || !spotData) return;
-    webViewRef.current.injectJavaScript(`
-      (function() {
-        try {
-          window.updateUserLocation(
-            ${coords.latitude},
-            ${coords.longitude},
-            ${followModeRef.current}
-          );
-        } catch(e) {}
-      })(); true;
-    `);
-  }, [spotData]);
+  if (!webViewRef.current || !spotData) return;
+
+  const nearbyIds = TERMINALS
+    .filter((t) =>
+      haversineDistance(coords.latitude, coords.longitude, t.lat, t.lng) <= 25
+    )
+    .map((t) => t.id);
+
+  // Check proximity to the destination spot itself
+  const dest = getSpotCoords(spotData);
+  const nearSpot = dest
+    ? haversineDistance(coords.latitude, coords.longitude, dest.lat, dest.lng) <= 99
+    : false;
+
+  webViewRef.current.injectJavaScript(`
+    (function() {
+      try {
+        window.updateUserLocation(
+          ${coords.latitude},
+          ${coords.longitude},
+          ${followModeRef.current}
+        );
+        window.updateProximity(${JSON.stringify(nearbyIds)});
+        window.updateSpotProximity(${nearSpot});
+      } catch(e) {}
+    })(); true;
+  `);
+}, [spotData]);
 
   updateMarkerRef.current = updateMarkerOnMap;
 
@@ -524,10 +619,13 @@ export default function Track({ route, navigation }) {
           latitude:  initial.coords.latitude,
           longitude: initial.coords.longitude,
         };
+
         setUserLocation(initialCoords);
         setLoading(false);
 
-        updateMarkerRef.current?.(initialCoords);
+        if (webViewReady.current) {
+          updateMarkerRef.current?.(initialCoords);
+        }
 
         locationSubscription.current = await Location.watchPositionAsync(
           { accuracy: Location.Accuracy.High, timeInterval: 3000, distanceInterval: 3 },
@@ -575,36 +673,9 @@ export default function Track({ route, navigation }) {
     const { lat: destLat, lng: destLng } = dest;
     const spotName = (spotData.name ?? "Destination").replace(/'/g, "\\'");
 
-    // Serialize terminals for the map
     const terminalsJson = JSON.stringify(
       TERMINALS.map(({ id, name, lat, lng }) => ({ id, name, lat, lng }))
     );
-
-    // Bus SVG icon — a clean top-view bus silhouette
-    // Encoded as a data URI so no external assets are needed
-    const BUS_ICON_SVG = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32' width='32' height='32'>
-      <!-- Shadow -->
-      <ellipse cx='16' cy='29' rx='9' ry='2.5' fill='rgba(0,0,0,0.25)'/>
-      <!-- Body -->
-      <rect x='5' y='5' width='22' height='20' rx='4' fill='%232c5f9e'/>
-      <!-- Roof highlight -->
-      <rect x='5' y='5' width='22' height='8' rx='4' fill='%23356bb5'/>
-      <!-- Front windshield -->
-      <rect x='8' y='6.5' width='16' height='5' rx='2' fill='%23a8d4f5' opacity='0.9'/>
-      <!-- Side windows row -->
-      <rect x='7' y='14' width='5' height='4' rx='1' fill='%23a8d4f5' opacity='0.85'/>
-      <rect x='13.5' y='14' width='5' height='4' rx='1' fill='%23a8d4f5' opacity='0.85'/>
-      <rect x='20' y='14' width='5' height='4' rx='1' fill='%23a8d4f5' opacity='0.85'/>
-      <!-- Door -->
-      <rect x='13' y='20' width='6' height='4' rx='1' fill='%231d4b80'/>
-      <!-- Wheels -->
-      <circle cx='9'  cy='24.5' r='2.5' fill='%231a1a2e'/>
-      <circle cx='23' cy='24.5' r='2.5' fill='%231a1a2e'/>
-      <circle cx='9'  cy='24.5' r='1.2' fill='%23555'/>
-      <circle cx='23' cy='24.5' r='1.2' fill='%23555'/>
-      <!-- White border ring -->
-      <rect x='5' y='5' width='22' height='20' rx='4' fill='none' stroke='white' stroke-width='1.5'/>
-    </svg>`;
 
     return `<!DOCTYPE html><html>
     <head>
@@ -631,8 +702,6 @@ export default function Track({ route, navigation }) {
           border-radius:50%; animation:spin 0.8s linear infinite;
         }
         @keyframes spin { to { transform:rotate(360deg); } }
-
-        /* Bus marker tooltip */
         .terminal-tooltip {
           background:#fff;
           border:none;
@@ -645,6 +714,16 @@ export default function Track({ route, navigation }) {
           white-space:nowrap;
         }
         .terminal-tooltip::before { display:none; }
+        @keyframes proximity-pulse {
+          0%   { opacity:0.7;  transform:scale(0.85); }
+          50%  { opacity:0.15; transform:scale(1.15); }
+          100% { opacity:0.7;  transform:scale(0.85); }
+        }
+        @keyframes proximity-ring-spin {
+          0%   { opacity:0.9;  transform:scale(0.9);  }
+          50%  { opacity:0.25; transform:scale(1.2);  }
+          100% { opacity:0.9;  transform:scale(0.9);  }
+        }
       </style>
     </head>
     <body>
@@ -676,7 +755,6 @@ export default function Track({ route, navigation }) {
           attribution: '© OpenStreetMap contributors', maxZoom: 19,
         }).addTo(window.map);
 
-        // Dismiss sheet when map is tapped
         window.map.on('click', function() {
           window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'mapTapped' }));
         });
@@ -722,10 +800,56 @@ export default function Track({ route, navigation }) {
         });
         window.destMarker = L.marker([DEST_LAT, DEST_LNG], { icon: destIcon })
           .addTo(window.map).bindPopup(SPOT_NAME);
+          // ── Spot proximity ring ──
+var spotPulseIcon = L.divIcon({
+  html: [
+    '<div class="spot-prox-wrap" style="display:none;position:relative;width:64px;height:64px;">',
+      '<div style="',
+        'position:absolute;inset:0;border-radius:50%;',
+        'border:3px solid #8b4440;',
+        'background:rgba(139,68,64,0.18);',
+        'animation:proximity-pulse 1.4s ease-in-out infinite;',
+      '"></div>',
+      '<div style="',
+        'position:absolute;inset:8px;border-radius:50%;',
+        'border:2px solid rgba(139,68,64,0.6);',
+        'animation:proximity-ring-spin 1.4s ease-in-out infinite 0.3s;',
+      '"></div>',
+    '</div>',
+  ].join(''),
+  className: '',
+  iconSize: [64, 64],
+  iconAnchor: [32, 32],
+});
+var spotPulseMarker = L.marker([DEST_LAT, DEST_LNG], {
+  icon: spotPulseIcon,
+  interactive: false,
+  zIndexOffset: -100,
+}).addTo(window.map);
 
-        // ── Terminal markers — bus SVG icon ──
-        // The icon is an inline SVG bus silhouette (top-down view).
-        // iconSize [32,32], iconAnchor centres the icon on the coordinate.
+var spotFillCircle = L.circle([DEST_LAT, DEST_LNG], {
+  radius: 5,
+  color: '#8b4440',
+  fillColor: '#8b4440',
+  fillOpacity: 0,
+  opacity: 0,
+  weight: 2.5,
+  interactive: false,
+}).addTo(window.map);
+
+window.updateSpotProximity = function(active) {
+  spotFillCircle.setStyle({
+    opacity:     active ? 0.85 : 0,
+    fillOpacity: active ? 0.2  : 0,
+  });
+  var el = spotPulseMarker.getElement();
+  if (el) {
+    var wrap = el.querySelector('.spot-prox-wrap');
+    if (wrap) wrap.style.display = active ? 'block' : 'none';
+  }
+};
+
+        // ── Terminal markers ──
         var busIconHtml = [
           '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">',
             '<ellipse cx="16" cy="29" rx="9" ry="2.5" fill="rgba(0,0,0,0.25)"/>',
@@ -754,15 +878,12 @@ export default function Track({ route, navigation }) {
         TERMINALS.forEach(function(t) {
           const marker = L.marker([t.lat, t.lng], { icon: terminalIcon })
             .addTo(window.map);
-
-          // Persistent tooltip showing terminal name on hover
           marker.bindTooltip(t.name, {
             permanent: false,
             direction: 'top',
             offset: [0, -18],
             className: 'terminal-tooltip',
           });
-
           marker.on('click', function(e) {
             L.DomEvent.stopPropagation(e);
             window.ReactNativeWebView.postMessage(
@@ -770,6 +891,72 @@ export default function Track({ route, navigation }) {
             );
           });
         });
+
+        // ── Proximity pulse rings (one per terminal, hidden by default) ──
+        window.proximityMarkers = {};
+        TERMINALS.forEach(function(t) {
+          // Outer soft fill circle (Leaflet vector — scales with zoom)
+          var fillCircle = L.circle([t.lat, t.lng], {
+            radius: 5,
+            color: '#f5a623',
+            fillColor: '#f5a623',
+            fillOpacity: 0,
+            opacity: 0,
+            weight: 2.5,
+            interactive: false,
+          }).addTo(window.map);
+
+          // Animated div overlay (CSS pulse)
+          var pulseIcon = L.divIcon({
+            html: [
+              '<div class="prox-wrap" style="display:none;position:relative;width:64px;height:64px;">',
+                '<div class="prox-ring prox-ring-1" style="',
+                  'position:absolute;inset:0;border-radius:50%;',
+                  'border:3px solid #f5a623;',
+                  'background:rgba(245,166,35,0.22);',
+                  'animation:proximity-pulse 1.4s ease-in-out infinite;',
+                '"></div>',
+                '<div class="prox-ring prox-ring-2" style="',
+                  'position:absolute;inset:8px;border-radius:50%;',
+                  'border:2px solid rgba(245,166,35,0.6);',
+                  'animation:proximity-ring-spin 1.4s ease-in-out infinite 0.3s;',
+                '"></div>',
+              '</div>',
+            ].join(''),
+            className: '',
+            iconSize: [64, 64],
+            iconAnchor: [32, 32],
+          });
+
+          var pulseMarker = L.marker([t.lat, t.lng], {
+            icon: pulseIcon,
+            interactive: false,
+            zIndexOffset: -100,
+          }).addTo(window.map);
+
+          window.proximityMarkers[t.id] = { fillCircle, pulseMarker };
+        });
+
+        // Called from React Native on every location update
+        window.updateProximity = function(nearbyIds) {
+          Object.keys(window.proximityMarkers).forEach(function(id) {
+            var entry  = window.proximityMarkers[id];
+            var active = nearbyIds.indexOf(id) !== -1;
+
+            // Toggle vector circle
+            entry.fillCircle.setStyle({
+              opacity:     active ? 0.85 : 0,
+              fillOpacity: active ? 0.2  : 0,
+            });
+
+            // Toggle CSS pulse wrapper
+            var el = entry.pulseMarker.getElement();
+            if (el) {
+              var wrap = el.querySelector('.prox-wrap');
+              if (wrap) wrap.style.display = active ? 'block' : 'none';
+            }
+          });
+        };
 
         // ── User location ──
         window.userMarker     = null;
@@ -859,8 +1046,7 @@ export default function Track({ route, navigation }) {
     </body></html>`;
   }, [spotData]);
 
-  /* ── Loading / Error states ── */
-  if (loading || !spotData || !userLocation) {
+  if (loading || !spotData) {
     return (
       <View style={styles.loading}>
         <ActivityIndicator size="large" color="#8b4440" />
@@ -907,6 +1093,12 @@ export default function Track({ route, navigation }) {
         domStorageEnabled
         onMessage={handleWebViewMessage}
         onError={(e) => console.error("WebView error:", e.nativeEvent)}
+        onLoadEnd={() => {
+          webViewReady.current = true;
+          if (userLocation) {
+            updateMarkerRef.current?.(userLocation);
+          }
+        }}
       />
 
       {/* Header */}
@@ -931,7 +1123,6 @@ export default function Track({ route, navigation }) {
       {/* Terminal Place Sheet */}
       {selectedTerminal && (
         <>
-          {/* Scrim — tap to dismiss */}
           <TouchableOpacity
             style={styles.scrim}
             activeOpacity={1}
@@ -941,13 +1132,10 @@ export default function Track({ route, navigation }) {
             style={[styles.sheet, { transform: [{ translateY: sheetTranslateY }] }]}
             {...panResponder.panHandlers}
           >
-            {/* Drag handle */}
             <View style={styles.sheetHandle} />
 
-            {/* Terminal icon + name */}
             <View style={styles.sheetHeader}>
               <View style={styles.sheetIconWrap}>
-                {/* Bus icon in the sheet header */}
                 <Feather name="truck" size={20} color="#fff" />
               </View>
               <View style={styles.sheetTitleBlock}>
@@ -961,13 +1149,11 @@ export default function Track({ route, navigation }) {
               </TouchableOpacity>
             </View>
 
-            {/* Address */}
             <View style={styles.sheetRow}>
               <Feather name="map-pin" size={15} color="#8b4440" style={styles.sheetRowIcon} />
               <Text style={styles.sheetRowText}>{selectedTerminal.address}</Text>
             </View>
 
-            {/* Routes */}
             <View style={styles.sheetDivider} />
             <Text style={styles.sheetSectionLabel}>Routes served</Text>
             {selectedTerminal.routes.map((r, i) => (
@@ -977,7 +1163,6 @@ export default function Track({ route, navigation }) {
               </View>
             ))}
 
-            {/* Actions */}
             <View style={styles.sheetActions}>
               <TouchableOpacity
                 style={[styles.sheetActionBtn, styles.sheetActionPrimary]}

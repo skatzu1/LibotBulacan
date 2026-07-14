@@ -9,32 +9,97 @@ import {
   Platform,
   Image,
   ScrollView,
+  Keyboard,
+  TouchableWithoutFeedback,
 } from "react-native";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import CheckBox from "expo-checkbox";
-import DateTimePicker from "@react-native-community/datetimepicker";
 import { useSignUp, useOAuth, useUser } from "@clerk/clerk-expo";
 import * as WebBrowser from "expo-web-browser";
+import { Feather } from "@expo/vector-icons";
 import { authAPI } from "../api";
 
 WebBrowser.maybeCompleteAuthSession();
 
-export default function Register({ navigation }) {
-  const { isLoaded, signUp, setActive }     = useSignUp();
-  const { startOAuthFlow }                  = useOAuth({ strategy: "oauth_google" });
-  const { user }                            = useUser();
+// ── Password strength helpers ──────────────────────────────────────
+const PASSWORD_RULES = [
+  { id: "length",  label: "At least 8 characters",          test: (p) => p.length >= 8 },
+  { id: "upper",   label: "One uppercase letter",            test: (p) => /[A-Z]/.test(p) },
+  { id: "number",  label: "One number",                      test: (p) => /\d/.test(p) },
+  { id: "special", label: "One special character (!@#$…)",   test: (p) => /[^A-Za-z0-9]/.test(p) },
+];
 
-  const [name, setName]                             = useState("");
-  const [email, setEmail]                           = useState("");
-  const [password, setPassword]                     = useState("");
-  const [confirmPassword, setConfirmPassword]       = useState("");
-  const [passwordVisible, setPasswordVisible]       = useState(false);
-  const [confirmPasswordVisible, setConfirmPasswordVisible] = useState(false);
-  const [agreeToTerms, setAgreeToTerms]             = useState(false);
-  const [birthdate, setBirthdate]                   = useState(new Date());
-  const [showDatePicker, setShowDatePicker]         = useState(false);
-  const [isLoading, setIsLoading]                   = useState(false);
-  const [isGoogleLoading, setIsGoogleLoading]       = useState(false);
+function getStrength(password) {
+  const passed = PASSWORD_RULES.filter((r) => r.test(password)).length;
+  if (passed <= 1) return { level: 0, label: "Weak",   color: "#e05252" };
+  if (passed === 2) return { level: 1, label: "Fair",   color: "#e09b52" };
+  if (passed === 3) return { level: 2, label: "Good",   color: "#d4b84a" };
+  return              { level: 3, label: "Strong", color: "#4caf78" };
+}
+
+function isValidEmail(email) {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+}
+
+// ── Password Strength Widget ───────────────────────────────────────
+function PasswordStrengthPanel({ password }) {
+  if (!password) return null;
+  const strength = getStrength(password);
+  return (
+    <View style={styles.strengthPanel}>
+      {/* Bar */}
+      <View style={styles.strengthBarTrack}>
+        {[0, 1, 2, 3].map((i) => (
+          <View
+            key={i}
+            style={[
+              styles.strengthBarSegment,
+              { backgroundColor: i <= strength.level ? strength.color : "#e8d0ce" },
+            ]}
+          />
+        ))}
+      </View>
+      <Text style={[styles.strengthLabel, { color: strength.color }]}>{strength.label}</Text>
+      {/* Criteria checklist */}
+      <View style={styles.criteriaList}>
+        {PASSWORD_RULES.map((rule) => {
+          const ok = rule.test(password);
+          return (
+            <View key={rule.id} style={styles.criteriaRow}>
+              <Feather
+                name={ok ? "check-circle" : "circle"}
+                size={13}
+                color={ok ? "#4caf78" : "#b0908c"}
+              />
+              <Text style={[styles.criteriaText, ok && styles.criteriaTextOk]}>
+                {rule.label}
+              </Text>
+            </View>
+          );
+        })}
+      </View>
+    </View>
+  );
+}
+
+// ── Main Component ────────────────────────────────────────────────
+export default function Register({ navigation }) {
+  const { isLoaded, signUp, setActive } = useSignUp();
+  const { startOAuthFlow }              = useOAuth({ strategy: "oauth_google" });
+  const { user }                        = useUser();
+
+  const [name, setName]                   = useState("");
+  const [email, setEmail]                 = useState("");
+  const [password, setPassword]           = useState("");
+  const [passwordVisible, setPasswordVisible] = useState(false);
+  const [agreeToTerms, setAgreeToTerms]   = useState(false);
+  const [dob, setDob]                     = useState("");
+  const [isLoading, setIsLoading]         = useState(false);
+  const [isGoogleLoading, setIsGoogleLoading] = useState(false);
+
+  // Inline validation errors (shown after field blur)
+  const [errors, setErrors] = useState({});
+  const [touched, setTouched] = useState({});
 
   useEffect(() => {
     WebBrowser.warmUpAsync();
@@ -42,6 +107,60 @@ export default function Register({ navigation }) {
       if (Platform.OS !== "android") WebBrowser.coolDownAsync();
     };
   }, []);
+
+  // ── Validation logic ──
+  const validate = useCallback(() => {
+    const e = {};
+    if (!name.trim())            e.name     = "Full name is required.";
+    if (!email.trim())           e.email    = "Email address is required.";
+    else if (!isValidEmail(email)) e.email  = "Enter a valid email address.";
+    if (!password)               e.password = "Password is required.";
+    else if (getStrength(password).level < 2)
+                                 e.password = "Password is too weak.";
+
+    // Date of birth (single masked field, MM/DD/YYYY)
+    const digits = dob.replace(/\D/g, "");
+    if (digits.length < 8) {
+      e.dob = "Date of birth is required.";
+    } else {
+      const m = parseInt(digits.slice(0, 2), 10);
+      const d = parseInt(digits.slice(2, 4), 10);
+      const y = parseInt(digits.slice(4, 8), 10);
+      if (m < 1 || m > 12 || d < 1 || d > 31 || y < 1900 || y > new Date().getFullYear()) {
+        e.dob = "Enter a valid date of birth.";
+      } else {
+        const parsed = new Date(y, m - 1, d);
+        const isRealDate =
+          parsed.getFullYear() === y && parsed.getMonth() === m - 1 && parsed.getDate() === d;
+        if (!isRealDate) e.dob = "Enter a valid date of birth.";
+        else if (parsed > new Date()) e.dob = "Date of birth can't be in the future.";
+      }
+    }
+    return e;
+  }, [name, email, password, dob]);
+
+  const handleBlur = (field) => {
+    setTouched((prev) => ({ ...prev, [field]: true }));
+    const errs = validate();
+    setErrors((prev) => ({ ...prev, [field]: errs[field] }));
+  };
+
+  const fieldError = (field) => (touched[field] ? errors[field] : null);
+
+  // ── Date of Birth masked input helper ──
+  // Formats raw digit entry into MM/DD/YYYY as the user types.
+  const handleDobChange = (text) => {
+    const digits = text.replace(/\D/g, "").slice(0, 8);
+    let formatted = digits;
+    if (digits.length > 4) {
+      formatted = `${digits.slice(0, 2)}/${digits.slice(2, 4)}/${digits.slice(4)}`;
+    } else if (digits.length > 2) {
+      formatted = `${digits.slice(0, 2)}/${digits.slice(2)}`;
+    }
+    setDob(formatted);
+  };
+
+  const handleDobBlur = () => handleBlur("dob");
 
   // ── Google signup ──
   const handleGoogleSignUp = async () => {
@@ -52,7 +171,8 @@ export default function Register({ navigation }) {
       if (!createdSessionId) throw new Error("No session returned from Google OAuth");
       await setActive({ session: createdSessionId });
       const saveUserResult = await authAPI.register({ clerkSessionId: createdSessionId, isGoogle: true });
-      if (!saveUserResult.success) return Alert.alert("Sign Up Failed", saveUserResult.message || "Could not save user");
+      if (!saveUserResult.success)
+        return Alert.alert("Sign Up Failed", saveUserResult.message || "Could not save user");
       Alert.alert("Success", "Google account registered successfully!");
       navigation.navigate("Home");
     } catch (err) {
@@ -65,12 +185,14 @@ export default function Register({ navigation }) {
 
   // ── Email signup ──
   const handleRegister = async () => {
-    if (!name || !email || !password || !confirmPassword || !birthdate)
-      return Alert.alert("Error", "Please fill in all fields");
-    if (password !== confirmPassword)
-      return Alert.alert("Error", "Passwords do not match");
+    // Mark all fields touched so errors surface
+    setTouched({ name: true, email: true, password: true, dob: true });
+    const errs = validate();
+    setErrors(errs);
+
+    if (Object.keys(errs).length > 0) return;
     if (!agreeToTerms)
-      return Alert.alert("Error", "Please agree to the Terms and Conditions");
+      return Alert.alert("Terms Required", "Please agree to the Terms and Conditions to continue.");
     if (!isLoaded)
       return Alert.alert("Error", "Authentication system is loading. Please wait.");
 
@@ -78,32 +200,37 @@ export default function Register({ navigation }) {
     try {
       const [firstName, ...lastNameParts] = name.trim().split(" ");
       const lastName = lastNameParts.join(" ") || "";
-      const signUpResult = await signUp.create({ emailAddress: email, password, firstName, lastName });
+      const signUpResult = await signUp.create({ emailAddress: email.trim(), password, firstName, lastName });
       await signUp.prepareEmailAddressVerification({ strategy: "email_code" });
       navigation.navigate("EmailVerification", {
-        email, firstName, lastName, fromLogin: false, signUpId: signUpResult.id,
+        email: email.trim(), firstName, lastName, fromLogin: false, signUpId: signUpResult.id,
       });
     } catch (err) {
       console.error("Email Registration Error:", err);
       const errorCode    = err.errors?.[0]?.code;
       const errorMessage = err.errors?.[0]?.message;
-      if (errorCode === "form_identifier_exists")
-        Alert.alert("Registration Failed", "An account with this email already exists.");
-      else
+      if (errorCode === "form_identifier_exists") {
+        setErrors((prev) => ({ ...prev, email: "An account with this email already exists." }));
+        setTouched((prev) => ({ ...prev, email: true }));
+      } else {
         Alert.alert("Registration Failed", errorMessage || "Unable to register. Please try again.");
+      }
     } finally {
       setIsLoading(false);
     }
   };
 
+  const anyLoading = isLoading || isGoogleLoading;
+
   return (
-    <View style={styles.screen}>
-      <ScrollView
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
-      >
-        <View style={styles.card}>
+    <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
+      <View style={styles.screen}>
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
+          showsVerticalScrollIndicator={false}
+          keyboardShouldPersistTaps="handled"
+        >
+          <View style={styles.card}>
 
           <View style={styles.titleContainer}>
             <Text style={styles.title}>Create Account</Text>
@@ -112,10 +239,11 @@ export default function Register({ navigation }) {
 
           {/* Google signup */}
           <TouchableOpacity
-            style={[styles.googleButton, (isGoogleLoading || isLoading) && styles.disabled]}
+            style={[styles.googleButton, anyLoading && styles.disabled]}
             onPress={handleGoogleSignUp}
-            disabled={isGoogleLoading || isLoading || !isLoaded}
+            disabled={anyLoading || !isLoaded}
             activeOpacity={0.85}
+            accessibilityLabel="Sign up with Google"
           >
             {isGoogleLoading ? (
               <ActivityIndicator color="#444" />
@@ -134,71 +262,102 @@ export default function Register({ navigation }) {
             <View style={styles.dividerLine} />
           </View>
 
-          {/* Input fields */}
+          {/* ── Input fields ── */}
           <View style={styles.inputContainer}>
-            <TextInput
-              style={styles.input}
-              placeholder="Full Name"
-              placeholderTextColor="#b0908c"
-              value={name}
-              onChangeText={setName}
-            />
-            <TextInput
-              style={styles.input}
-              placeholder="Email"
-              placeholderTextColor="#b0908c"
-              value={email}
-              onChangeText={setEmail}
-              keyboardType="email-address"
-              autoCapitalize="none"
-            />
-            <TextInput
-              style={styles.input}
-              placeholder="Password"
-              placeholderTextColor="#b0908c"
-              secureTextEntry={!passwordVisible}
-              value={password}
-              onChangeText={setPassword}
-            />
-            <TouchableOpacity onPress={() => setPasswordVisible(!passwordVisible)} style={styles.eyeButton}>
-              <Text style={styles.eyeButtonText}>{passwordVisible ? "Hide" : "Show"} Password</Text>
-            </TouchableOpacity>
 
-            <TextInput
-              style={styles.input}
-              placeholder="Confirm Password"
-              placeholderTextColor="#b0908c"
-              secureTextEntry={!confirmPasswordVisible}
-              value={confirmPassword}
-              onChangeText={setConfirmPassword}
-            />
-            <TouchableOpacity onPress={() => setConfirmPasswordVisible(!confirmPasswordVisible)} style={styles.eyeButton}>
-              <Text style={styles.eyeButtonText}>{confirmPasswordVisible ? "Hide" : "Show"} Password</Text>
-            </TouchableOpacity>
-
-            {/* Birthdate */}
-            <TouchableOpacity
-              style={styles.dateButton}
-              onPress={() => setShowDatePicker(true)}
-              activeOpacity={0.8}
-            >
-              <Text style={styles.dateButtonText}>
-                {birthdate ? birthdate.toDateString() : "Select your birthdate"}
-              </Text>
-            </TouchableOpacity>
-
-            {showDatePicker && (
-              <DateTimePicker
-                value={birthdate}
-                mode="date"
-                display={Platform.OS === "ios" ? "spinner" : "default"}
-                maximumDate={new Date()}
-                onChange={(event, selectedDate) => {
-                  setShowDatePicker(Platform.OS === "ios");
-                  if (selectedDate) setBirthdate(selectedDate);
-                }}
+            {/* Full Name */}
+            <View>
+              <TextInput
+                style={[styles.input, fieldError("name") && styles.inputError]}
+                placeholder="Full Name"
+                placeholderTextColor="#b0908c"
+                value={name}
+                onChangeText={setName}
+                onBlur={() => handleBlur("name")}
+                editable={!anyLoading}
+                accessibilityLabel="Full name"
               />
-            )}
+              {fieldError("name") ? (
+                <Text style={styles.errorText}>
+                  <Feather name="alert-circle" size={12} /> {fieldError("name")}
+                </Text>
+              ) : null}
+            </View>
+
+            {/* Email */}
+            <View>
+              <TextInput
+                style={[styles.input, fieldError("email") && styles.inputError]}
+                placeholder="Email"
+                placeholderTextColor="#b0908c"
+                value={email}
+                onChangeText={setEmail}
+                onBlur={() => handleBlur("email")}
+                keyboardType="email-address"
+                autoCapitalize="none"
+                editable={!anyLoading}
+                accessibilityLabel="Email address"
+              />
+              {fieldError("email") ? (
+                <Text style={styles.errorText}>
+                  <Feather name="alert-circle" size={12} /> {fieldError("email")}
+                </Text>
+              ) : null}
+            </View>
+
+            {/* Password with eye icon */}
+            <View>
+              <View style={styles.passwordInputRow}>
+                <TextInput
+                  style={[styles.input, styles.passwordInput, fieldError("password") && styles.inputError]}
+                  placeholder="Password"
+                  placeholderTextColor="#b0908c"
+                  secureTextEntry={!passwordVisible}
+                  value={password}
+                  onChangeText={setPassword}
+                  onBlur={() => handleBlur("password")}
+                  editable={!anyLoading}
+                  accessibilityLabel="Password"
+                />
+                <TouchableOpacity
+                  onPress={() => setPasswordVisible((v) => !v)}
+                  style={styles.eyeIconBtn}
+                  hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  accessibilityLabel={passwordVisible ? "Hide password" : "Show password"}
+                >
+                  <Feather name={passwordVisible ? "eye-off" : "eye"} size={18} color="#6b4b45" />
+                </TouchableOpacity>
+              </View>
+              {fieldError("password") ? (
+                <Text style={styles.errorText}>
+                  <Feather name="alert-circle" size={12} /> {fieldError("password")}
+                </Text>
+              ) : null}
+              {/* Password strength panel appears as user types */}
+              <PasswordStrengthPanel password={password} />
+            </View>
+
+            {/* Date of Birth */}
+            <View>
+              <Text style={styles.fieldLabel}>Date of Birth</Text>
+              <TextInput
+                style={[styles.input, fieldError("dob") && styles.inputError]}
+                placeholder="MM/DD/YYYY"
+                placeholderTextColor="#b0908c"
+                value={dob}
+                onChangeText={handleDobChange}
+                onBlur={handleDobBlur}
+                keyboardType="number-pad"
+                maxLength={10}
+                editable={!anyLoading}
+                accessibilityLabel="Date of birth"
+              />
+              {fieldError("dob") ? (
+                <Text style={styles.errorText}>
+                  <Feather name="alert-circle" size={12} /> {fieldError("dob")}
+                </Text>
+              ) : null}
+            </View>
           </View>
 
           {/* Terms */}
@@ -209,14 +368,15 @@ export default function Register({ navigation }) {
 
           {/* Register button */}
           <TouchableOpacity
-            style={[styles.button, (isLoading || isGoogleLoading) && styles.disabled]}
+            style={[styles.button, anyLoading && styles.disabled]}
             onPress={handleRegister}
-            disabled={isLoading || isGoogleLoading || !isLoaded}
+            disabled={anyLoading || !isLoaded}
             activeOpacity={0.85}
+            accessibilityLabel="Create account"
           >
             {isLoading
               ? <ActivityIndicator color="#fff" />
-              : <Text style={styles.buttonText}>Register</Text>
+              : <Text style={styles.buttonText}>Create Account</Text>
             }
           </TouchableOpacity>
 
@@ -228,9 +388,10 @@ export default function Register({ navigation }) {
             </TouchableOpacity>
           </View>
 
-        </View>
-      </ScrollView>
-    </View>
+          </View>
+        </ScrollView>
+      </View>
+    </TouchableWithoutFeedback>
   );
 }
 
@@ -331,27 +492,74 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     borderColor: "#e8d0ce",
   },
-  eyeButton: {
-    alignSelf: "flex-end",
-    marginTop: -6,
+  inputError: {
+    borderColor: "#e05252",
+    backgroundColor: "#fff5f5",
   },
-  eyeButtonText: {
-    color: "#6b4b45",
-    fontWeight: "600",
-    fontSize: 14,
-  },
-  dateButton: {
-    backgroundColor: "#faf5f4",
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    borderRadius: 12,
-    borderWidth: 1.5,
-    borderColor: "#e8d0ce",
-  },
-  dateButtonText: {
-    fontSize: 15,
-    color: "#4a2e2c",
+  errorText: {
+    fontSize: 12,
+    color: "#e05252",
+    marginTop: 4,
+    marginLeft: 4,
     fontWeight: "500",
+  },
+  passwordInputRow: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  passwordInput: {
+    flex: 1,
+    paddingRight: 48,
+  },
+  eyeIconBtn: {
+    position: "absolute",
+    right: 14,
+    padding: 4,
+  },
+
+  // ── Password strength ──
+  strengthPanel: {
+    marginTop: 10,
+  },
+  strengthBarTrack: {
+    flexDirection: "row",
+    gap: 4,
+    marginBottom: 4,
+  },
+  strengthBarSegment: {
+    flex: 1,
+    height: 4,
+    borderRadius: 2,
+  },
+  strengthLabel: {
+    fontSize: 12,
+    fontWeight: "700",
+    marginBottom: 8,
+    textAlign: "right",
+  },
+  criteriaList: {
+    gap: 4,
+  },
+  criteriaRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+  },
+  criteriaText: {
+    fontSize: 12,
+    color: "#b0908c",
+  },
+  criteriaTextOk: {
+    color: "#4caf78",
+  },
+
+  // ── Field label ──
+  fieldLabel: {
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#6b4b45",
+    marginBottom: 6,
+    marginLeft: 2,
   },
 
   // ── Terms ──

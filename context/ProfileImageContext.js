@@ -4,6 +4,7 @@ import React, {
   useState,
   useEffect,
   useCallback,
+  useRef,
 } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useAuth } from "@clerk/clerk-expo";
@@ -14,10 +15,11 @@ const ProfileImageContext = createContext(null);
 export function ProfileImageProvider({ children }) {
   const [profileImage, setProfileImageState] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [hydrated, setHydrated] = useState(false); // storage read done, safe to render *something*
 
   const { getToken, isSignedIn, userId } = useAuth();
-
   const STORAGE_KEY = userId ? `profileImage_${userId}` : null;
+  const retryTimeoutRef = useRef(null);
 
   const loadFromStorage = useCallback(async () => {
     if (!STORAGE_KEY) return;
@@ -26,17 +28,19 @@ export function ProfileImageProvider({ children }) {
       if (saved) setProfileImageState(saved);
     } catch (e) {
       console.log("[ProfileImage] Storage load error:", e);
+    } finally {
+      setHydrated(true);
     }
   }, [STORAGE_KEY]);
 
-  const fetchProfileImage = useCallback(async () => {
+  const fetchProfileImage = useCallback(async (attempt = 1) => {
     if (!isSignedIn || !STORAGE_KEY) return;
     try {
       const token = await getToken();
       const res = await fetch(`${BASE_URL}/api/users/me`, {
         headers: { Authorization: `Bearer ${token}` },
       });
-      if (!res.ok) return;
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
       const backendImage = data?.user?.profileImage;
       if (backendImage) {
@@ -44,13 +48,20 @@ export function ProfileImageProvider({ children }) {
         await AsyncStorage.setItem(STORAGE_KEY, backendImage);
       }
     } catch (e) {
-      console.log("[ProfileImage] Fetch error:", e);
+      console.log(`[ProfileImage] Fetch error (attempt ${attempt}):`, e.message);
+      // Retry a couple times with backoff — covers Render cold-start delays
+      // and transient network failures instead of silently giving up.
+      if (attempt < 3) {
+        retryTimeoutRef.current = setTimeout(
+          () => fetchProfileImage(attempt + 1),
+          attempt * 3000 // 3s, then 6s
+        );
+      }
     } finally {
       setLoading(false);
     }
   }, [isSignedIn, getToken, STORAGE_KEY]);
 
-  // Called after upload — updates state + storage + DB
   const setProfileImage = useCallback(async (imageUrl) => {
     if (!imageUrl) return;
     try {
@@ -75,22 +86,27 @@ export function ProfileImageProvider({ children }) {
   useEffect(() => {
     if (!userId) return;
     setLoading(true);
+    setHydrated(false);
     (async () => {
-      await loadFromStorage();
-      await fetchProfileImage();
+      await loadFromStorage();   // fast, local — sets a value immediately if cached
+      await fetchProfileImage(); // slower, authoritative — corrects/confirms it
     })();
+    return () => {
+      if (retryTimeoutRef.current) clearTimeout(retryTimeoutRef.current);
+    };
   }, [userId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     if (!isSignedIn) {
       setProfileImageState(null);
       setLoading(false);
+      setHydrated(true);
     }
   }, [isSignedIn]);
 
   return (
     <ProfileImageContext.Provider
-      value={{ profileImage, setProfileImage, fetchProfileImage, loading }}
+      value={{ profileImage, setProfileImage, fetchProfileImage, loading, hydrated }}
     >
       {children}
     </ProfileImageContext.Provider>

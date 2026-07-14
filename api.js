@@ -1,29 +1,54 @@
 import axios from 'axios';
 
-const API_URL = 'https://libotbackend.onrender.com';
+// ─── Single source of truth for the backend URL ───────────────────────────────
+export const BASE_URL = 'https://libotbackend.onrender.com';
 
-const api = axios.create({
-  baseURL: API_URL,
-  headers: {
-    'Content-Type': 'application/json',
+export const API_ENDPOINTS = {
+  spots:        `${BASE_URL}/api/spots`,
+  spotById:     (id)  => `${BASE_URL}/api/spots/${id}`,
+  topVisited:   `${BASE_URL}/api/spots/top/visited`,
+  spotCategory: (cat) => `${BASE_URL}/api/spots/category/${cat}`,
+  reviews:      (spotId)    => `${BASE_URL}/api/reviews/${spotId}`,
+  addReview:    `${BASE_URL}/api/reviews`,
+  deleteReview: (reviewId)  => `${BASE_URL}/api/reviews/${reviewId}`,
+  missions:     (spotId)    => `${BASE_URL}/api/missions/${spotId}`,
+  verify:       (missionId) => `${BASE_URL}/api/verify/${missionId}`,
+  bookmarks:    `${BASE_URL}/api/bookmarks`,
+  bookmarkById: (spotId) => `${BASE_URL}/api/bookmarks/${spotId}`,
+  users:        `${BASE_URL}/api/users`,
+  userMe:       `${BASE_URL}/api/users/me`,
+  userPoints:   `${BASE_URL}/api/users/points`,
+  userBadges:   `${BASE_URL}/api/users/badges`,
+  userClaims:   `${BASE_URL}/api/users/claimed-spots`,
+  visitLogs:    `${BASE_URL}/api/visitlogs`,
+  spotVisit:    (spotId) => `${BASE_URL}/api/spots/${spotId}/visit`,
+  appeals:      `${BASE_URL}/api/appeals/me`,
+  reports:      `${BASE_URL}/api/reports`,
+  uploadProfile:`${BASE_URL}/api/upload/profile`,
+  leaderboard:  `${BASE_URL}/api/leaderboard`,
+  auth: {
+    login:       `${BASE_URL}/api/auth/login`,
+    register:    `${BASE_URL}/api/auth/register`,
+    verify:      `${BASE_URL}/api/auth/verify`,
+    checkUser:   `${BASE_URL}/api/auth/check-user`,
   },
+};
+
+// ─── Axios instance ───────────────────────────────────────────────────────────
+const api = axios.create({
+  baseURL: BASE_URL,
+  headers: { 'Content-Type': 'application/json' },
 });
 
 // ─── Clerk Token Injector ─────────────────────────────────────────────────────
-// Call this once at app startup (e.g. inside your App.js or auth provider)
-// after Clerk is loaded, passing in the `getToken` function from useAuth().
-//
+// Call once at app startup after Clerk is loaded:
 //   import { setupClerkInterceptor } from './api';
-//   const { getToken } = useAuth();
 //   setupClerkInterceptor(getToken);
-//
 export const setupClerkInterceptor = (getToken) => {
   api.interceptors.request.use(async (config) => {
     try {
       const token = await getToken();
-      if (token) {
-        config.headers.Authorization = `Bearer ${token}`;
-      }
+      if (token) config.headers.Authorization = `Bearer ${token}`;
     } catch (e) {
       console.warn('Could not get Clerk token:', e);
     }
@@ -35,7 +60,7 @@ export const setupClerkInterceptor = (getToken) => {
 export const authAPI = {
   login: async (email, password) => {
     try {
-      const response = await api.post('/api/auth/login', { email, password });
+      const response = await api.post(API_ENDPOINTS.auth.login, { email, password });
       return response.data;
     } catch (error) {
       throw error.response?.data || { message: 'Network error' };
@@ -44,17 +69,16 @@ export const authAPI = {
 
   register: async (payload) => {
     try {
-      const response = await api.post('/api/auth/register', payload);
+      const response = await api.post(API_ENDPOINTS.auth.register, payload);
       return response.data;
     } catch (error) {
       throw error.response?.data || { message: 'Network error' };
     }
   },
 
-  // Token is now auto-attached by the interceptor — no manual header needed
   verifyToken: async () => {
     try {
-      const response = await api.get('/api/auth/verify');
+      const response = await api.get(API_ENDPOINTS.auth.verify);
       return response.data;
     } catch (error) {
       throw error.response?.data || { message: 'Network error' };
@@ -63,7 +87,7 @@ export const authAPI = {
 
   checkUserExists: async (email) => {
     try {
-      const response = await api.get('/api/auth/check-user', { params: { email } });
+      const response = await api.get(API_ENDPOINTS.auth.checkUser, { params: { email } });
       return response.data;
     } catch (error) {
       throw error.response?.data || { message: 'Network error' };
@@ -72,11 +96,9 @@ export const authAPI = {
 };
 
 // ─── Users API ────────────────────────────────────────────────────────────────
-// clerkToken param no longer needed — interceptor handles it automatically.
-// Kept for backward compatibility but ignored.
 export const fetchUsers = async () => {
   try {
-    const response = await api.get('/api/users');
+    const response = await api.get(API_ENDPOINTS.users);
     return response.data;
   } catch (error) {
     throw error.response?.data || { message: 'Network error' };
@@ -87,7 +109,7 @@ export const fetchUsers = async () => {
 export const spotAPI = {
   getAllSpots: async () => {
     try {
-      const response = await api.get('/api/spots');
+      const response = await api.get(API_ENDPOINTS.spots);
       return response.data.spots;
     } catch (error) {
       throw error.response?.data || { message: 'Network error' };
@@ -96,11 +118,28 @@ export const spotAPI = {
 
   getSpotsByCategory: async (category) => {
     try {
-      const response = await api.get(`/api/spots/category/${category}`);
+      const response = await api.get(API_ENDPOINTS.spotCategory(category));
       return response.data.spots;
     } catch (error) {
       throw error.response?.data || { message: 'Network error' };
     }
+  },
+};
+
+// ─── Appeals API ──────────────────────────────────────────────────────────────
+export const appealAPI = {
+  getMyStatus: async () => {
+    try {
+      const response = await api.get(API_ENDPOINTS.appeals);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data || { message: 'Network error' };
+    }
+  },
+
+  submit: async (appealText) => {
+    const response = await api.post(API_ENDPOINTS.appeals, { appealText });
+    return response.data;
   },
 };
 
