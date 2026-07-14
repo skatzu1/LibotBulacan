@@ -34,6 +34,14 @@ const ALL_SPOTS_KEY            = "allSpots";
 const SPOTS_CACHE_TTL_MS       = 5 * 60 * 1000;
 const BACKGROUND_LOCATION_TASK = "background-location-task";
 
+// Persisted set of spotIds the user is CURRENTLY inside (per user).
+// Both the foreground watcher and the background task read/write this same
+// key, so an arrival only notifies once per "stay" — the user must leave
+// the radius (which clears the spot from this set) before arriving again
+// will notify a second time. This survives app restarts, unlike an
+// in-memory Set, which is what previously caused re-notification on reopen.
+const INSIDE_SPOTS_KEY_PREFIX  = "insideSpots_";
+
 // ─────────────────────────────────────────────
 // Helpers
 // ─────────────────────────────────────────────
@@ -84,56 +92,66 @@ TaskManager.defineTask(BACKGROUND_LOCATION_TASK, async ({ data, error }) => {
 
 async function handleBackgroundArrival(coords) {
   try {
+    const currentUserId = await AsyncStorage.getItem("currentUserId");
+    if (!currentUserId) return;
+
     const spotsJson = await AsyncStorage.getItem(ALL_SPOTS_KEY);
     const spots     = spotsJson ? JSON.parse(spotsJson) : [];
 
-    const arrivedFirstRaw  = await AsyncStorage.getItem("arrivedSpotsFirst");
-    const arrivedReturnRaw = await AsyncStorage.getItem("arrivedSpotsReturn");
-    const arrivedFirst  = arrivedFirstRaw  ? JSON.parse(arrivedFirstRaw)  : [];
-    const arrivedReturn = arrivedReturnRaw ? JSON.parse(arrivedReturnRaw) : [];
+    const insideKey  = `${INSIDE_SPOTS_KEY_PREFIX}${currentUserId}`;
+    const insideRaw  = await AsyncStorage.getItem(insideKey);
+    const insideSet  = new Set(insideRaw ? JSON.parse(insideRaw) : []);
 
-    const currentUserId = await AsyncStorage.getItem("currentUserId");
+    const cacheKey   = `claimedSpotIds_${currentUserId}`;
+    const claimedRaw = await AsyncStorage.getItem(cacheKey);
+    const claimed    = claimedRaw ? JSON.parse(claimedRaw) : [];
+
+    let changed = false;
 
     for (const spot of spots) {
       const spotId = String(spot._id ?? "").trim();
       if (!spotId) continue;
-      if (arrivedFirst.includes(spotId) || arrivedReturn.includes(spotId)) continue;
 
       const dest = getSpotCoords(spot);
       if (!dest) continue;
 
-      const dist = getDistanceMeters(coords.latitude, coords.longitude, dest.lat, dest.lng);
-      if (dist > ARRIVAL_RADIUS_METERS) continue;
+      const dist      = getDistanceMeters(coords.latitude, coords.longitude, dest.lat, dest.lng);
+      const isInside   = dist <= ARRIVAL_RADIUS_METERS;
+      const wasInside  = insideSet.has(spotId);
 
-      const cacheKey   = `claimedSpotIds_${currentUserId}`;
-      const claimedRaw = await AsyncStorage.getItem(cacheKey);
-      const claimed    = claimedRaw ? JSON.parse(claimedRaw) : [];
-      const isFirstVisit = !claimed.includes(spotId);
+      if (isInside && !wasInside) {
+        // Just entered the radius — notify.
+        insideSet.add(spotId);
+        changed = true;
 
-      if (isFirstVisit) {
-        arrivedFirst.push(spotId);
-        await AsyncStorage.setItem("arrivedSpotsFirst", JSON.stringify(arrivedFirst));
-      } else {
-        arrivedReturn.push(spotId);
-        await AsyncStorage.setItem("arrivedSpotsReturn", JSON.stringify(arrivedReturn));
+        const isFirstVisit = !claimed.includes(spotId);
+
+        await Notifications.scheduleNotificationAsync({
+          content: {
+            title: isFirstVisit ? "🏅 You arrived!" : "📍 Welcome back!",
+            body: isFirstVisit
+              ? `You've reached ${spot.name}! Open Libot to claim your badge.`
+              : `You've arrived at ${spot.name}. Open Libot Bulacan to explore!`,
+            data: { spotId, spotName: spot.name, isFirstVisit },
+          },
+          trigger: null,
+        });
+
+        console.log(
+          isFirstVisit
+            ? `[BG Arrival] ✅ First visit at: ${spot.name}`
+            : `[BG Arrival] 🔁 Return visit at: ${spot.name}`
+        );
+      } else if (!isInside && wasInside) {
+        // Left the radius — clear so the next arrival notifies again.
+        insideSet.delete(spotId);
+        changed = true;
+        console.log(`[BG Arrival] 🚶 Left: ${spot.name}`);
       }
+    }
 
-      await Notifications.scheduleNotificationAsync({
-        content: {
-          title: isFirstVisit ? "🏅 You arrived!" : "📍 Welcome back!",
-          body: isFirstVisit
-            ? `You've reached ${spot.name}! Open Libot to claim your badge.`
-            : `You've arrived at ${spot.name}. Open Libot Bulacan to explore!`,
-          data: { spotId, spotName: spot.name, isFirstVisit },
-        },
-        trigger: null,
-      });
-
-      console.log(
-        isFirstVisit
-          ? `[BG Arrival] ✅ First visit at: ${spot.name}`
-          : `[BG Arrival] 🔁 Return visit at: ${spot.name}`
-      );
+    if (changed) {
+      await AsyncStorage.setItem(insideKey, JSON.stringify([...insideSet]));
     }
   } catch (e) {
     console.error("[BG Arrival] Error:", e);
@@ -229,13 +247,19 @@ export function ArrivalProvider({ children }) {
   const badgeOpacity    = useRef(new Animated.Value(0)).current;
 
   const locationSub      = useRef(null);
-  const arrivedSpots     = useRef(new Set());
   const activeSpotRef    = useRef(null);
   const currentUserIdRef = useRef(null);
   const appStateRef      = useRef(AppState.currentState);
   const bgTrackingLock   = useRef(false);
   const appStateDebounce = useRef(null);
   const hasLocationPerms = useRef({ foreground: false, background: false });
+
+  // In-memory mirror of INSIDE_SPOTS_KEY_PREFIX for the current user.
+  // A spotId is in this set exactly while the user is currently within
+  // ARRIVAL_RADIUS_METERS of it. Entering (not in set → in set) triggers
+  // a notification; leaving (in set → not in set) clears it silently so
+  // the *next* arrival notifies again.
+  const insideSpotsRef = useRef(new Set());
 
   useEffect(() => { activeSpotRef.current = activeSpot; }, [activeSpot]);
 
@@ -265,6 +289,29 @@ export function ArrivalProvider({ children }) {
   }, []);
 
   // ─────────────────────────────────────────
+  // Load / persist the "currently inside" set for a given user.
+  // Reload is also called whenever the app returns to foreground, in case
+  // the background task updated it while this provider was inactive.
+  // ─────────────────────────────────────────
+  const loadInsideSpots = useCallback(async (userId) => {
+    try {
+      const raw = await AsyncStorage.getItem(`${INSIDE_SPOTS_KEY_PREFIX}${userId}`);
+      insideSpotsRef.current = new Set(raw ? JSON.parse(raw) : []);
+    } catch (_) {
+      insideSpotsRef.current = new Set();
+    }
+  }, []);
+
+  const persistInsideSpots = useCallback(() => {
+    const userId = currentUserIdRef.current;
+    if (!userId) return;
+    AsyncStorage.setItem(
+      `${INSIDE_SPOTS_KEY_PREFIX}${userId}`,
+      JSON.stringify([...insideSpotsRef.current])
+    ).catch(() => {});
+  }, []);
+
+  // ─────────────────────────────────────────
   // 1. On sign-in: request permissions + setup notifs + sync cache
   // ─────────────────────────────────────────
   useEffect(() => {
@@ -277,7 +324,10 @@ export function ArrivalProvider({ children }) {
       // Sync cache so local state matches DB
       const token  = await getToken();
       const userId = clerkUser?.id;
-      if (token && userId) await syncClaimedCache(userId, token);
+      if (token && userId) {
+        await syncClaimedCache(userId, token);
+        await loadInsideSpots(userId);
+      }
     };
 
     init();
@@ -343,6 +393,12 @@ export function ArrivalProvider({ children }) {
         }
 
         if (nextState === "active" && prevState !== "active") {
+          // Reload from storage in case the background task changed the
+          // "inside" set while this provider wasn't running.
+          if (currentUserIdRef.current) {
+            await loadInsideSpots(currentUserIdRef.current);
+          }
+
           try {
             const isRunning = await Location.hasStartedLocationUpdatesAsync(
               BACKGROUND_LOCATION_TASK
@@ -366,7 +422,7 @@ export function ArrivalProvider({ children }) {
       subscription.remove();
       if (appStateDebounce.current) clearTimeout(appStateDebounce.current);
     };
-  }, [isSignedIn]);
+  }, [isSignedIn, loadInsideSpots]);
 
   // ─────────────────────────────────────────
   // Reset on user change
@@ -378,10 +434,8 @@ export function ArrivalProvider({ children }) {
     console.log("[Arrival] 🔄 User changed:", currentUserIdRef.current, "→", newUserId);
 
     if (newUserId) AsyncStorage.setItem("currentUserId", newUserId);
-    AsyncStorage.removeItem("arrivedSpotsFirst");
-    AsyncStorage.removeItem("arrivedSpotsReturn");
 
-    arrivedSpots.current     = new Set();
+    insideSpotsRef.current   = new Set();
     setActiveSpotState(null);
     activeSpotRef.current    = null;
     allSpotsRef.current      = [];
@@ -495,13 +549,12 @@ export function ArrivalProvider({ children }) {
 
   // ─────────────────────────────────────────
   // Award rewards (foreground)
+  // Called only when checkArrival detects a fresh outside→inside
+  // transition, so no extra dedupe guard is needed in here.
   // ─────────────────────────────────────────
   const awardRewards = useCallback(async (spot) => {
     const spotId = String(spot._id ?? "").trim();
     if (!spotId) return;
-
-    if (arrivedSpots.current.has(spotId)) return;
-    arrivedSpots.current.add(spotId);
 
     console.log("[Arrival] ✅ Arrived at:", spot.name, "| spotId:", spotId);
 
@@ -561,7 +614,7 @@ export function ArrivalProvider({ children }) {
       console.log("[VisitLog] ✅ Logged visit for:", spot.name);
     } catch (e) { console.warn("[VisitLog] Failed:", e); }
 
-    // ── Notification (every visit) ─────────────────────────────────────────
+    // ── Notification (every fresh arrival) ─────────────────────────────────
     await Notifications.scheduleNotificationAsync({
       content: {
         title: isFirstVisit ? "🏅 You arrived!" : "📍 Welcome back!",
@@ -606,15 +659,38 @@ export function ArrivalProvider({ children }) {
 
   // ─────────────────────────────────────────
   // Foreground location watcher
+  // Detects outside→inside and inside→outside transitions per spot.
+  // Only the outside→inside transition triggers awardRewards/notification.
   // ─────────────────────────────────────────
   const checkArrival = useCallback((coords) => {
+    let changed = false;
+
     for (const spot of allSpotsRef.current) {
+      const spotId = String(spot._id ?? "").trim();
+      if (!spotId) continue;
+
       const dest = getSpotCoords(spot);
       if (!dest) continue;
-      const dist = getDistanceMeters(coords.latitude, coords.longitude, dest.lat, dest.lng);
-      if (dist <= ARRIVAL_RADIUS_METERS) awardRewards(spot);
+
+      const dist     = getDistanceMeters(coords.latitude, coords.longitude, dest.lat, dest.lng);
+      const isInside  = dist <= ARRIVAL_RADIUS_METERS;
+      const wasInside = insideSpotsRef.current.has(spotId);
+
+      if (isInside && !wasInside) {
+        // Mark synchronously *before* awarding so a rapid second location
+        // tick (or an app reopen a moment later) can't double-trigger.
+        insideSpotsRef.current.add(spotId);
+        changed = true;
+        awardRewards(spot);
+      } else if (!isInside && wasInside) {
+        insideSpotsRef.current.delete(spotId);
+        changed = true;
+        console.log("[Arrival] 🚶 Left:", spot.name);
+      }
     }
-  }, [awardRewards]);
+
+    if (changed) persistInsideSpots();
+  }, [awardRewards, persistInsideSpots]);
 
   useEffect(() => {
     if (!isSignedIn) return;

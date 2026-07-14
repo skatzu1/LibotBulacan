@@ -1,10 +1,11 @@
-import React, { createContext, useState, useContext, useCallback, useRef } from "react";
+import React, { createContext, useState, useContext, useCallback, useRef, useEffect } from "react";
 
 const MissionContext = createContext();
 export const useMissions = () => useContext(MissionContext);
 
 export const MissionProvider = ({ children }) => {
   const [missionsBySpot, setMissionsBySpot] = useState({});
+  const [completedMissions, setCompletedMissions] = useState([]);
   const fetchedSpots = useRef(new Set());
 
   const fetchMissions = useCallback(async (spotId) => {
@@ -29,6 +30,23 @@ export const MissionProvider = ({ children }) => {
       fetchedSpots.current.delete(spotId);
     }
   }, []);
+
+  useEffect(() => {
+    const prefetchAllMissions = async () => {
+      try {
+        const res = await fetch("https://libotbackend.onrender.com/api/spots");
+        const data = await res.json();
+        if (data.success && data.spots) {
+          for (const spot of data.spots) {
+            if (spot._id) await fetchMissions(spot._id);
+          }
+        }
+      } catch (err) {
+        console.error("❌ Error prefetching missions:", err);
+      }
+    };
+    prefetchAllMissions();
+  }, [fetchMissions]);
 
   const getMissionsForSpot = useCallback(
     (spotId) => missionsBySpot[spotId] || [],
@@ -60,9 +78,27 @@ export const MissionProvider = ({ children }) => {
       fetchedSpots.current.delete(spotId);
     }
   }, []);
+  const completeMission = useCallback((missionId) => {
+  if (!missionId) return;
+
+  setCompletedMissions((prev) => {
+    if (prev.includes(missionId)) return prev;
+    return [...prev, missionId];
+  });
+}, []);
 
   return (
-    <MissionContext.Provider value={{ fetchMissions, getMissionsForSpot, refetchMissions }}>
+    <MissionContext.Provider
+  value={{
+    fetchMissions,
+    getMissionsForSpot,
+    refetchMissions,
+
+    // ✅ ADD THESE TWO
+    completedMissions,
+    completeMission,
+  }}
+>
       {children}
     </MissionContext.Provider>
   );
