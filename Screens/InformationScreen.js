@@ -7,7 +7,7 @@ import {
 import { useUser } from "@clerk/clerk-expo";
 import { useIsFocused } from "@react-navigation/native";
 import { Feather } from "@expo/vector-icons";
-import { FontAwesome5, MaterialCommunityIcons } from "@expo/vector-icons";
+import { FontAwesome5, MaterialCommunityIcons, MaterialIcons } from "@expo/vector-icons";
 import { useBookmark } from "../context/BookmarkContext";
 import { useReviews } from "../context/ReviewContext";
 import { useMissions } from "../context/MissionContext";
@@ -94,9 +94,18 @@ export default function InformationScreen({ route, navigation }) {
     { key:"Reviews",    label:"Reviews",    icon:"star"      },
   ];
 
+  // ── CHANGED: now uses MaterialIcons + theme colors.star/colors.starEmpty,
+  // matching the star rendering used on the Home screen ──
   const StarRating = ({ rating, size = 14 }) => (
     <View style={styles.starsRow}>
-      {[1,2,3,4,5].map((s) => <Feather key={s} name="star" size={size} color={s <= rating ? "#f4c542" : colors.textMuted} />)}
+      {[1,2,3,4,5].map((s) => (
+        <MaterialIcons
+          key={s}
+          name="star"
+          size={size}
+          color={s <= rating ? colors.star : colors.starEmpty}
+        />
+      ))}
     </View>
   );
 
@@ -296,7 +305,7 @@ export default function InformationScreen({ route, navigation }) {
               <Text style={[styles.starPickerLabel, { color: colors.textMuted }]}>Rate:</Text>
               {[1,2,3,4,5].map((s) => (
                 <TouchableOpacity key={s} onPress={() => setNewRating(s)}>
-                  <Feather name="star" size={26} color={s <= newRating ? "#f4c542" : colors.textMuted} />
+                  <MaterialIcons name="star" size={26} color={s <= newRating ? colors.star : colors.starEmpty} />
                 </TouchableOpacity>
               ))}
             </View>

@@ -148,7 +148,6 @@ function HomeTab() {
   const { profileImage, loading } = useProfileImage();
   const { colors }                = useTheme();
 
-  // ── CHANGED: show HomeSkeleton instead of null while profile image loads ──
   if (loading) return <HomeSkeleton />;
 
   const profilePhoto =
@@ -213,192 +212,192 @@ function HomeContent({ profilePhoto, navigation }) {
   }, [loadTopSpots]);
 
   return (
-    <ScrollView
-      style={[h.scroll, { backgroundColor: colors.background }]}
-      showsVerticalScrollIndicator={false}
-      refreshControl={
-        <RefreshControl
-          refreshing={refreshing}
-          onRefresh={onRefresh}
-          tintColor={colors.brand}
-          colors={[colors.brand]}
-        />
-      }
-    >
-      {/* ─── HERO ─── */}
-      <View style={[h.heroWrap, { backgroundColor: colors.backgroundHero }]}>
-        {sliderData.length === 0 ? (
-          // ── CHANGED: shimmer instead of plain text ──
-          <Skeleton width={width} height={HERO_H} radius={0} />
-        ) : (
-          <Carousel
-            width={width}
-            height={HERO_H}
-            data={sliderData}
-            loop
-            autoPlay
-            autoPlayInterval={4000}
-            scrollAnimationDuration={900}
-            onProgressChange={(_, abs) =>
-              setActiveIndex(Math.round(abs) % sliderData.length)
-            }
-            renderItem={({ item }) => (
-              <Image
-                source={{ uri: item.image }}
-                style={h.heroImage}
-                resizeMode="cover"
-                accessibilityLabel={`Hero image of ${item.title}`}
-              />
-            )}
-          />
-        )}
+    // ── CHANGED: outer wrapper now holds a FIXED header (outside ScrollView) ──
+    // This mirrors InformationScreen's topHeader, which sits above its ScrollView
+    // and therefore never scrolls away.
+    <View style={{ flex: 1, backgroundColor: colors.background }}>
+      {/* ─── FIXED HEADER (stays visible while scrolling) ─── */}
+      <View style={[h.fixedHeader, { backgroundColor: colors.heroHeader }]}>
+        <TouchableOpacity
+          style={h.menuBtn}
+          onPress={() => navigation.toggleDrawer()}
+          accessibilityLabel="Open menu"
+        >
+          <View style={[h.menuLine, { backgroundColor: colors.brand }]} />
+          <View style={[h.menuLine, { width: 14, backgroundColor: colors.brand }]} />
+          <View style={[h.menuLine, { backgroundColor: colors.brand }]} />
+        </TouchableOpacity>
 
-        {/* Floating header — sits on top of hero */}
-        <View style={[h.heroHeader, { backgroundColor: colors.heroHeader }]}>
-          {/* Hamburger */}
-          <TouchableOpacity
-            style={h.menuBtn}
-            onPress={() => navigation.toggleDrawer()}
-            accessibilityLabel="Open menu"
-          >
-            <View style={[h.menuLine, { backgroundColor: colors.brand }]} />
-            <View style={[h.menuLine, { width: 14, backgroundColor: colors.brand }]} />
-            <View style={[h.menuLine, { backgroundColor: colors.brand }]} />
-          </TouchableOpacity>
-
-          {/* Logo */}
-          <View style={[h.logoWrap, { backgroundColor: colors.heroHeader, borderColor: colors.cardBorder }]}>
-            <Image source={require("../assets/logo.png")} style={h.logo} resizeMode="contain" />
-          </View>
-
-          {/* Avatar */}
-          <TouchableOpacity
-            onPress={() => navigation.navigate("Profile")}
-            style={h.avatarWrap}
-            accessibilityLabel="Go to profile"
-          >
-            {profilePhoto ? (
-              <Image source={{ uri: profilePhoto }} style={h.avatar} accessibilityLabel="Your profile photo" />
-            ) : (
-              <View style={[h.avatar, h.avatarFallback]}>
-                <Feather name="user" size={18} color="#fff" />
-              </View>
-            )}
-            <View style={[h.onlineDot, { backgroundColor: colors.brand, borderColor: colors.heroHeader }]} />
-          </TouchableOpacity>
+        <View style={[h.logoWrap, { backgroundColor: colors.heroHeader, borderColor: colors.cardBorder }]}>
+          <Image source={require("../assets/logo.png")} style={h.logo} resizeMode="contain" />
         </View>
 
-        {/* Pagination dots */}
-        {sliderData.length > 0 && (
-          <View style={h.dotsRow}>
-            {sliderData.map((_, i) => (
-              <View
-                key={i}
-                style={[
-                  h.dot,
-                  i === activeIndex && h.dotActive,
-                ]}
-              />
-            ))}
-          </View>
-        )}
-
-        {/* Explore button */}
-        {activeSpot && (
-          <TouchableOpacity
-            style={[h.heroExploreBtn, { backgroundColor: colors.brand }]}
-            onPress={() => handleSpotPress(activeSpot.spot)}
-            activeOpacity={0.85}
-            accessibilityLabel={`Explore ${activeSpot.title}`}
-          >
-            <Text style={h.heroExploreBtnText}>Explore Spot</Text>
-            <Feather name="arrow-right" size={14} color="#fff" />
-          </TouchableOpacity>
-        )}
+        <TouchableOpacity
+          onPress={() => navigation.navigate("Profile")}
+          style={h.avatarWrap}
+          accessibilityLabel="Go to profile"
+        >
+          {profilePhoto ? (
+            <Image source={{ uri: profilePhoto }} style={h.avatar} accessibilityLabel="Your profile photo" />
+          ) : (
+            <View style={[h.avatar, h.avatarFallback]}>
+              <Feather name="user" size={18} color="#fff" />
+            </View>
+          )}
+          <View style={[h.onlineDot, { backgroundColor: colors.brand, borderColor: colors.heroHeader }]} />
+        </TouchableOpacity>
       </View>
 
-      {/* ─── SPOT INFO CARD ─── */}
-      {activeSpot && (
-        <View style={[h.infoCard, { backgroundColor: colors.background }]}>
-          <View style={h.infoRow}>
-            <Text style={[h.spotName, { color: colors.textPrimary }]} numberOfLines={1}>
-              {activeSpot.title}
-            </Text>
-            <View style={[h.visitsBadge, { backgroundColor: colors.card }]}>
-              <Feather name="eye" size={12} color={colors.brand} />
-              <Text style={[h.visitsText, { color: colors.brand }]}> {activeSpot.visitCount} visits</Text>
-            </View>
-          </View>
+      <ScrollView
+        style={[h.scroll, { backgroundColor: colors.background }]}
+        showsVerticalScrollIndicator={false}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={colors.brand}
+            colors={[colors.brand]}
+          />
+        }
+      >
+        {/* ─── HERO (header removed from here — now lives above the ScrollView) ─── */}
+        <View style={[h.heroWrap, { backgroundColor: colors.backgroundHero }]}>
+          {sliderData.length === 0 ? (
+            <Skeleton width={width} height={HERO_H} radius={0} />
+          ) : (
+            <Carousel
+              width={width}
+              height={HERO_H}
+              data={sliderData}
+              loop
+              autoPlay
+              autoPlayInterval={4000}
+              scrollAnimationDuration={900}
+              onProgressChange={(_, abs) =>
+                setActiveIndex(Math.round(abs) % sliderData.length)
+              }
+              renderItem={({ item }) => (
+                <Image
+                  source={{ uri: item.image }}
+                  style={h.heroImage}
+                  resizeMode="cover"
+                  accessibilityLabel={`Hero image of ${item.title}`}
+                />
+              )}
+            />
+          )}
 
-          <View style={h.infoRow}>
-            <View style={h.locationRow}>
-              <Feather name="map-pin" size={13} color={colors.brand} />
-              <Text style={[h.locationText, { color: colors.brand }]}>{activeSpot.location}</Text>
-            </View>
-            <View style={h.starsRow}>
-              {[1, 2, 3, 4, 5].map((s) => (
-                <MaterialIcons
-                  key={s}
-                  name="star"
-                  size={14}
-                  color={s <= Math.round(activeSpot.rating) ? colors.star : colors.starEmpty}
+          {/* Pagination dots */}
+          {sliderData.length > 0 && (
+            <View style={h.dotsRow}>
+              {sliderData.map((_, i) => (
+                <View
+                  key={i}
+                  style={[
+                    h.dot,
+                    i === activeIndex && h.dotActive,
+                  ]}
                 />
               ))}
             </View>
-          </View>
+          )}
+
+          {/* Explore button */}
+          {activeSpot && (
+            <TouchableOpacity
+              style={[h.heroExploreBtn, { backgroundColor: colors.brand }]}
+              onPress={() => handleSpotPress(activeSpot.spot)}
+              activeOpacity={0.85}
+              accessibilityLabel={`Explore ${activeSpot.title}`}
+            >
+              <Text style={h.heroExploreBtnText}>Explore Spot</Text>
+              <Feather name="arrow-right" size={14} color="#fff" />
+            </TouchableOpacity>
+          )}
         </View>
-      )}
 
-      {/* ─── TOP CITIES ─── */}
-      <View style={h.section}>
-        <Text style={[h.sectionTitle, { color: colors.textPrimary }]}>Top Cities</Text>
+        {/* ─── SPOT INFO CARD ─── */}
+        {activeSpot && (
+          <View style={[h.infoCard, { backgroundColor: colors.background }]}>
+            <View style={h.infoRow}>
+              <Text style={[h.spotName, { color: colors.textPrimary }]} numberOfLines={1}>
+                {activeSpot.title}
+              </Text>
+              <View style={[h.visitsBadge, { backgroundColor: colors.card }]}>
+                <Feather name="eye" size={12} color={colors.brand} />
+                <Text style={[h.visitsText, { color: colors.brand }]}> {activeSpot.visitCount} visits</Text>
+              </View>
+            </View>
 
-        {/* ── CHANGED: shimmer grid instead of loading text ── */}
-        {topLoading ? (
-          <View>
-            <Skeleton width="100%" height={175} radius={18} style={{ marginBottom: 10 }} />
-            <View style={{ flexDirection: "row", gap: 10 }}>
-              <Skeleton width={CARD_W} height={140} radius={18} />
-              <Skeleton width={CARD_W} height={140} radius={18} />
+            <View style={h.infoRow}>
+              <View style={h.locationRow}>
+                <Feather name="map-pin" size={13} color={colors.brand} />
+                <Text style={[h.locationText, { color: colors.brand }]}>{activeSpot.location}</Text>
+              </View>
+              <View style={h.starsRow}>
+                {[1, 2, 3, 4, 5].map((s) => (
+                  <MaterialIcons
+                    key={s}
+                    name="star"
+                    size={14}
+                    color={s <= Math.round(activeSpot.rating) ? colors.star : colors.starEmpty}
+                  />
+                ))}
+              </View>
             </View>
           </View>
-        ) : topSpots.length === 0 ? (
-          <Text style={[h.emptyText, { color: colors.textMuted }]}>
-            No visits yet — be the first to explore!
-          </Text>
-        ) : (
-          <View style={h.grid}>
-            {topSpots.map((spot, i) => (
-              <TouchableOpacity
-                key={spot._id}
-                style={[h.gridCard, i === 0 && h.gridCardWide, { backgroundColor: colors.card }]}
-                onPress={() => handleSpotPress(spot)}
-                activeOpacity={0.88}
-                accessibilityLabel={`Explore ${spot.name}`}
-              >
-                <Image source={{ uri: spot.image }} style={h.gridImg} resizeMode="cover" accessibilityLabel={spot.name} />
-                <View style={[h.gridOverlay, { backgroundColor: colors.overlay }]} />
-                <View style={h.gridInfoWrap}>
-                  <Text style={h.gridName} numberOfLines={1}>{spot.name}</Text>
-                  <View style={h.gridMeta}>
-                    <View style={h.gridRatingRow}>
-                      <MaterialIcons name="star" size={11} color={colors.star} />
-                      <Text style={h.gridRatingText}>{getAverageRating(spot._id) || 0}</Text>
-                    </View>
-                    <View style={h.gridVisitRow}>
-                      <Feather name="eye" size={10} color="rgba(255,255,255,0.8)" />
-                      <Text style={h.gridVisitText}> {spot.visitCount ?? 0}</Text>
+        )}
+
+        {/* ─── TOP CITIES ─── */}
+        <View style={h.section}>
+          <Text style={[h.sectionTitle, { color: colors.textPrimary }]}>Top Cities</Text>
+
+          {topLoading ? (
+            <View>
+              <Skeleton width="100%" height={175} radius={18} style={{ marginBottom: 10 }} />
+              <View style={{ flexDirection: "row", gap: 10 }}>
+                <Skeleton width={CARD_W} height={140} radius={18} />
+                <Skeleton width={CARD_W} height={140} radius={18} />
+              </View>
+            </View>
+          ) : topSpots.length === 0 ? (
+            <Text style={[h.emptyText, { color: colors.textMuted }]}>
+              No visits yet — be the first to explore!
+            </Text>
+          ) : (
+            <View style={h.grid}>
+              {topSpots.map((spot, i) => (
+                <TouchableOpacity
+                  key={spot._id}
+                  style={[h.gridCard, i === 0 && h.gridCardWide, { backgroundColor: colors.card }]}
+                  onPress={() => handleSpotPress(spot)}
+                  activeOpacity={0.88}
+                  accessibilityLabel={`Explore ${spot.name}`}
+                >
+                  <Image source={{ uri: spot.image }} style={h.gridImg} resizeMode="cover" accessibilityLabel={spot.name} />
+                  <View style={[h.gridOverlay, { backgroundColor: colors.overlay }]} />
+                  <View style={h.gridInfoWrap}>
+                    <Text style={h.gridName} numberOfLines={1}>{spot.name}</Text>
+                    <View style={h.gridMeta}>
+                      <View style={h.gridRatingRow}>
+                        <MaterialIcons name="star" size={11} color={colors.star} />
+                        <Text style={h.gridRatingText}>{getAverageRating(spot._id) || 0}</Text>
+                      </View>
+                      <View style={h.gridVisitRow}>
+                        <Feather name="eye" size={10} color="rgba(255,255,255,0.8)" />
+                        <Text style={h.gridVisitText}> {spot.visitCount ?? 0}</Text>
+                      </View>
                     </View>
                   </View>
-                </View>
-              </TouchableOpacity>
-            ))}
-          </View>
-        )}
-      </View>
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
+        </View>
 
-      <View style={{ height: 160 }} />
-    </ScrollView>
+        <View style={{ height: 160 }} />
+      </ScrollView>
+    </View>
   );
 }
 
@@ -496,18 +495,9 @@ const styles = StyleSheet.create({
 const h = StyleSheet.create({
   scroll: { flex: 1 },
 
-  heroWrap: {
-    width: "100%",
-    height: HERO_H,
-    borderBottomLeftRadius: 30,
-    borderBottomRightRadius: 30,
-    overflow: "hidden",
-  },
-  heroImage: { width: "100%", height: HERO_H },
-
-  heroHeader: {
-    position: "absolute",
-    top: 0, left: 0, right: 0,
+  // ── NEW: fixed header, sibling of ScrollView (same pattern as
+  // InformationScreen's `topHeader`) so it never scrolls away.
+  fixedHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
@@ -521,7 +511,18 @@ const h = StyleSheet.create({
     shadowOpacity: 0.08,
     shadowRadius: 6,
     elevation: 5,
+    zIndex: 10,
   },
+
+  heroWrap: {
+    width: "100%",
+    height: HERO_H,
+    borderBottomLeftRadius: 30,
+    borderBottomRightRadius: 30,
+    overflow: "hidden",
+  },
+  heroImage: { width: "100%", height: HERO_H },
+
   menuBtn:  { gap: 5, justifyContent: "center" },
   menuLine: { width: 22, height: 2.5, borderRadius: 2 },
 
@@ -546,7 +547,7 @@ const h = StyleSheet.create({
     borderWidth: 2,
   },
 
-  dotsRow:   { position: "absolute", bottom: 56, left: 150, flexDirection: "row", gap: 5, alignItems: "center" },
+  dotsRow:   { position: "absolute", bottom: 16, left: 0, right: 0, flexDirection: "row", gap: 5, alignItems: "center", justifyContent: "center" },
   dot:       { width: 6,  height: 6, borderRadius: 3, backgroundColor: "rgba(255,255,255,0.45)" },
   dotActive: { width: 18, height: 6, borderRadius: 3, backgroundColor: "#fff" },
 
