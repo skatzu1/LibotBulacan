@@ -179,15 +179,15 @@ function HomeContent({ profilePhoto, navigation }) {
   const handleSpotPress = (spot) => navigation.navigate("InformationScreen", { spot });
 
   const sliderData = allSpots.slice(0, 8).map(
-    ({ _id, image, name, description, location, rating, modelUrl, visitCount }, i) => ({
+    ({ _id, image, name, description, location, city, rating, modelUrl, visitCount }, i) => ({
       id:          _id || String(i),
       image,
       title:       name,
-      location:    location || "Philippines",
+      location:    city || location || "Philippines",
       description: description || "",
       rating:      getAverageRating(_id) || 0,
       visitCount:  visitCount ?? 0,
-      spot:        { _id, image, name, description, location, rating, modelUrl },
+      spot:        { _id, image, name, description, location, city, rating, modelUrl },
     })
   );
 
@@ -378,6 +378,11 @@ function HomeContent({ profilePhoto, navigation }) {
                   <View style={[h.gridOverlay, { backgroundColor: colors.overlay }]} />
                   <View style={h.gridInfoWrap}>
                     <Text style={h.gridName} numberOfLines={1}>{spot.name}</Text>
+                    {(spot.city || spot.location) && (
+                      <Text style={h.gridLocationText} numberOfLines={1}>
+                        {spot.city || spot.location}
+                      </Text>
+                    )}
                     <View style={h.gridMeta}>
                       <View style={h.gridRatingRow}>
                         <MaterialIcons name="star" size={11} color={colors.star} />
@@ -588,7 +593,8 @@ const h = StyleSheet.create({
   gridImg:       { width: "100%", height: "100%", position: "absolute" },
   gridOverlay:   { ...StyleSheet.absoluteFillObject },
   gridInfoWrap:  { position: "absolute", bottom: 0, left: 0, right: 0, padding: 12, backgroundColor: "rgba(0,0,0,0.25)" },
-  gridName:      { fontSize: 14, fontWeight: "700", color: "#fff", marginBottom: 4 },
+  gridName:      { fontSize: 14, fontWeight: "700", color: "#fff", marginBottom: 2 },
+  gridLocationText: { fontSize: 11, color: "rgba(255,255,255,0.85)", fontWeight: "500", marginBottom: 4 },
   gridMeta:      { flexDirection: "row", alignItems: "center", gap: 10 },
   gridRatingRow: { flexDirection: "row", alignItems: "center", gap: 2 },
   gridRatingText:{ fontSize: 11, fontWeight: "700", color: "#fff" },

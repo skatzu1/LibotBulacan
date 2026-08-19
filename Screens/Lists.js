@@ -20,6 +20,18 @@ import { BASE_URL } from '../api';
 // ── Skeleton import ───────────────────────────────────────────────────────────
 import ListsSkeleton from "../components/ListsSkeleton";
 
+// Cloudinary delivery-side resize/crop/optimize. No-ops safely on any
+// non-Cloudinary URL (e.g. old Unsplash fallback images), so it's safe
+// to wrap every spot image with this.
+function optimizeImage(url, { width, height, crop = "fill" } = {}) {
+  if (!url || !url.includes("res.cloudinary.com") || !url.includes("/upload/")) return url;
+  const transforms = ["f_auto", "q_auto"]; // auto format (webp/avif) + auto quality
+  if (width)  transforms.push(`w_${width}`);
+  if (height) transforms.push(`h_${height}`);
+  if (width || height) transforms.push(`c_${crop}`);
+  return url.replace("/upload/", `/upload/${transforms.join(",")}/`);
+}
+
 export default function Lists() {
   const navigation = useNavigation();
   const route      = useRoute();
@@ -58,10 +70,14 @@ export default function Lists() {
 
   useEffect(() => {
     setLoading(true);
-    const filtered = allSpots.filter(s =>
-      (Array.isArray(s.categories) && s.categories.includes(category)) ||
-      s.category === category
-    );
+
+    // Spot.category is stored as an array (e.g. ["Festivals"]) per the
+    // Mongoose schema. Some legacy docs might still have it as a plain
+    // string, so handle both shapes instead of assuming one.
+    const filtered = allSpots.filter(s => {
+      if (Array.isArray(s.category)) return s.category.includes(category);
+      return s.category === category;
+    });
 
     if (filtered.length > 0) {
       setDestinations(filtered.map(spot => ({
@@ -106,7 +122,11 @@ export default function Lists() {
         onPress={() => navigation.navigate("InformationScreen", { spot: item })}
         activeOpacity={0.85}
       >
-        <Image source={{ uri: item.image }} style={styles.cardImage} resizeMode="cover" />
+        <Image
+          source={{ uri: optimizeImage(item.image, { width: 800, height: 480 }) }}
+          style={styles.cardImage}
+          resizeMode="cover"
+        />
 
         <TouchableOpacity
           style={styles.bookmarkButton}
@@ -129,9 +149,9 @@ export default function Lists() {
               <Text style={styles.locationText}>{item.location}</Text>
             </View>
           )}
-          {Array.isArray(item.categories) && item.categories.length > 1 && (
+          {Array.isArray(item.category) && item.category.length > 1 && (
             <View style={styles.tagsRow}>
-              {item.categories.map((cat) => (
+              {item.category.map((cat) => (
                 <View key={cat} style={styles.tag}>
                   <Text style={styles.tagText}>{cat}</Text>
                 </View>

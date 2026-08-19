@@ -169,7 +169,7 @@ export default function InformationScreen({ route, navigation }) {
         </View>
         <View style={styles.missionRowBody}>
           <Text style={[styles.missionRowTitle, { color: colors.brandDark }, isDone && styles.missionRowTitleDone]} numberOfLines={2}>{mission.title}</Text>
-          <Text style={[styles.missionRowSub, { color: colors.textMuted }]} numberOfLines={1}>{spot.location || "Philippines"}</Text>
+          <Text style={[styles.missionRowSub, { color: colors.textMuted }]} numberOfLines={1}>{spot.city || spot.location || "Philippines"}</Text>
         </View>
         {mission.type === "ar" && !isDone ? (
           <View style={styles.arLaunchBadge}><Feather name="aperture" size={11} color="#2e4a7c" style={{ marginRight:4 }}/><Text style={styles.arLaunchBadgeText}>Open AR</Text></View>
@@ -232,7 +232,7 @@ export default function InformationScreen({ route, navigation }) {
               {[
                 { icon:"clock",   label:"Visiting Hours", value: spot.visitingHours || "6:00 AM – 10:00 PM" },
                 { icon:"tag",     label:"Entrance Fee",   value: spot.entranceFee   || "Free" },
-                { icon:"map-pin", label:"Location",       value: spot.address       || "Malolos, Bulacan, Philippines" },
+                { icon:"map-pin", label:"City",           value: spot.city || spot.address || "Malolos, Bulacan, Philippines" },
                 { icon:"phone",   label:"Contact",        value: spot.contact       || "N/A" },
               ].map((row, i, arr) => (
                 <React.Fragment key={row.label}>
