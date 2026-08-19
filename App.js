@@ -13,7 +13,7 @@ import { AuthProvider }         from './context/AuthContext';
 import { BookmarkProvider }     from './context/BookmarkContext';
 import { ArrivalProvider }      from './context/ArrivalContext';
 import { tokenCache }           from './utils/tokenCache';
-import { setupClerkInterceptor, appealAPI } from './api';
+import { setupClerkInterceptor, appealAPI, moderationAPI } from './api';
 import { ProfileImageProvider } from "./context/ProfileImageContext";
 import { navigationRef }        from './navigation/navigationRef';
 import { MissionProvider }      from "./context/MissionContext";
@@ -44,6 +44,7 @@ import MissionsSpotSelect from './Screens/MissionsSpotSelect';
 import TrackSpotSelect    from './Screens/TrackSpotSelect';
 import EditProfile        from './Screens/EditProfile';
 import BannedScreen       from './Screens/BannedScreen';
+import SuspendedNotice    from './Screens/SuspendedNotice';
 import LoginSecurity       from './Screens/LoginSecurity';
 
 // Move key to .env: EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY=pk_test_...
@@ -57,6 +58,8 @@ function AppNavigator() {
   const { colors } = useTheme();
   const [hasSeenWelcome, setHasSeenWelcome] = useState(null);
   const [banInfo,        setBanInfo]        = useState(null);
+  const [suspensionInfo, setSuspensionInfo] = useState(null);
+  const [showSuspensionNotice, setShowSuspensionNotice] = useState(false);
   const [isCheckingBan,  setIsCheckingBan]  = useState(true);
 
   useEffect(() => {
@@ -77,19 +80,30 @@ function AppNavigator() {
 
   useEffect(() => {
     if (isSignedIn && userId) {
-      const checkBan = async () => {
+      const checkStatus = async () => {
         try {
-          const data = await appealAPI.getMyStatus();
-          if (data.archived) setBanInfo(data);
+          const [appealData, moderationData] = await Promise.all([
+            appealAPI.getMyStatus(),
+            moderationAPI.getStatus(),
+          ]);
+          if (appealData.archived) setBanInfo(appealData);
+
+          if (moderationData?.isSuspended) {
+            setSuspensionInfo(moderationData);
+            setShowSuspensionNotice(true); // popup once per sign-in/app open, dismissible
+          } else {
+            setSuspensionInfo(null);
+          }
         } catch (error) {
-          console.warn("Ban check failed:", error);
+          console.warn("Status check failed:", error);
         } finally {
           setIsCheckingBan(false);
         }
       };
-      checkBan();
+      checkStatus();
     } else {
       setBanInfo(null);
+      setSuspensionInfo(null);
       setIsCheckingBan(false);
     }
   }, [isSignedIn, userId]);
@@ -110,49 +124,57 @@ function AppNavigator() {
         <ReviewProvider>
           <BookmarkProvider>
             <ErrorBoundary>
-              <NavigationContainer ref={navigationRef}>
-                {isSignedIn && banInfo?.archived ? (
-                  <BannedScreen banInfo={banInfo} />
-                ) : (
-                  <ArrivalProvider>
-                    <Stack.Navigator screenOptions={{ headerShown: false }}>
-                      {isSignedIn ? (
-                        <>
-                          <Stack.Screen name="Home"              component={Home}               options={{ gestureEnabled: false }} />
-                          <Stack.Screen name="Leaderboard"       component={Leaderboard} />
-                          <Stack.Screen name="InformationScreen" component={InformationScreen} />
-                          <Stack.Screen name="Categories"        component={Categories} />
-                          <Stack.Screen name="Bookmark"          component={Bookmark} />
-                          <Stack.Screen name="ar"                component={ARScreen} />
-                          <Stack.Screen name="Settings"          component={Settings} />
-                          <Stack.Screen name="EditProfile"       component={EditProfile} />
-                          <Stack.Screen name="Lists"             component={Lists} />
-                          <Stack.Screen name="Mission"           component={Mission} />
-                          <Stack.Screen name="Track"             component={Track} />
-                          <Stack.Screen name="Badges"            component={BadgeScreen} />
-                          <Stack.Screen name="PreviousTrips"     component={PreviousTripsScreen} />
-                          <Stack.Screen name="ARSpotSelect"      component={ARSpotSelect} />
-                          <Stack.Screen name="MissionsSpotSelect" component={MissionsSpotSelect} />
-                          <Stack.Screen name="TrackSpotSelect"   component={TrackSpotSelect} />
-                          <Stack.Screen name="LoginSecurity"     component={LoginSecurity} />
-                        </>
-                      ) : (
-                        <>
-                          {!hasSeenWelcome && (
-                            <>
-                              <Stack.Screen name="WelcomePage"  component={WelcomePage} />
-                              <Stack.Screen name="WelcomePage2" component={WelcomePage2} />
-                            </>
-                          )}
-                          <Stack.Screen name="Login"             component={Login}             options={{ gestureEnabled: false }} />
-                          <Stack.Screen name="Register"          component={Register} />
-                          <Stack.Screen name="EmailVerification" component={EmailVerification} options={{ gestureEnabled: false }} />
-                        </>
-                      )}
-                    </Stack.Navigator>
-                  </ArrivalProvider>
-                )}
-              </NavigationContainer>
+              <>
+                <NavigationContainer ref={navigationRef}>
+                  {isSignedIn && banInfo?.archived ? (
+                    <BannedScreen banInfo={banInfo} />
+                  ) : (
+                    <ArrivalProvider>
+                      <Stack.Navigator screenOptions={{ headerShown: false }}>
+                        {isSignedIn ? (
+                          <>
+                            <Stack.Screen name="Home"              component={Home}               options={{ gestureEnabled: false }} />
+                            <Stack.Screen name="Leaderboard"       component={Leaderboard} />
+                            <Stack.Screen name="InformationScreen" component={InformationScreen} />
+                            <Stack.Screen name="Categories"        component={Categories} />
+                            <Stack.Screen name="Bookmark"          component={Bookmark} />
+                            <Stack.Screen name="ar"                component={ARScreen} />
+                            <Stack.Screen name="Settings"          component={Settings} />
+                            <Stack.Screen name="EditProfile"       component={EditProfile} />
+                            <Stack.Screen name="Lists"             component={Lists} />
+                            <Stack.Screen name="Mission"           component={Mission} />
+                            <Stack.Screen name="Track"             component={Track} />
+                            <Stack.Screen name="Badges"            component={BadgeScreen} />
+                            <Stack.Screen name="PreviousTrips"     component={PreviousTripsScreen} />
+                            <Stack.Screen name="ARSpotSelect"      component={ARSpotSelect} />
+                            <Stack.Screen name="MissionsSpotSelect" component={MissionsSpotSelect} />
+                            <Stack.Screen name="TrackSpotSelect"   component={TrackSpotSelect} />
+                            <Stack.Screen name="LoginSecurity"     component={LoginSecurity} />
+                          </>
+                        ) : (
+                          <>
+                            {!hasSeenWelcome && (
+                              <>
+                                <Stack.Screen name="WelcomePage"  component={WelcomePage} />
+                                <Stack.Screen name="WelcomePage2" component={WelcomePage2} />
+                              </>
+                            )}
+                            <Stack.Screen name="Login"             component={Login}             options={{ gestureEnabled: false }} />
+                            <Stack.Screen name="Register"          component={Register} />
+                            <Stack.Screen name="EmailVerification" component={EmailVerification} options={{ gestureEnabled: false }} />
+                          </>
+                        )}
+                      </Stack.Navigator>
+                    </ArrivalProvider>
+                  )}
+                </NavigationContainer>
+
+                <SuspendedNotice
+                  visible={isSignedIn && !banInfo?.archived && !!suspensionInfo?.isSuspended && showSuspensionNotice}
+                  suspensionInfo={suspensionInfo}
+                  onDismiss={() => setShowSuspensionNotice(false)}
+                />
+              </>
             </ErrorBoundary>
           </BookmarkProvider>
         </ReviewProvider>

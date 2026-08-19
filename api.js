@@ -23,6 +23,7 @@ export const API_ENDPOINTS = {
   visitLogs:    `${BASE_URL}/api/visitlogs`,
   spotVisit:    (spotId) => `${BASE_URL}/api/spots/${spotId}/visit`,
   appeals:      `${BASE_URL}/api/appeals/me`,
+  moderationStatus: `${BASE_URL}/api/reviews/user/moderation-status`,
   reports:      `${BASE_URL}/api/reports`,
   uploadProfile:`${BASE_URL}/api/upload/profile`,
   leaderboard:  `${BASE_URL}/api/leaderboard`,
@@ -140,6 +141,20 @@ export const appealAPI = {
   submit: async (appealText) => {
     const response = await api.post(API_ENDPOINTS.appeals, { appealText });
     return response.data;
+  },
+};
+
+// ─── Moderation API ───────────────────────────────────────────────────────────
+// Mute / suspension / ban status for the signed-in user — powers the
+// SuspendedNotice popup and the comment-bar notice in InformationScreen.
+export const moderationAPI = {
+  getStatus: async () => {
+    try {
+      const response = await api.get(API_ENDPOINTS.moderationStatus);
+      return response.data;
+    } catch (error) {
+      throw error.response?.data || { message: 'Network error' };
+    }
   },
 };
 
