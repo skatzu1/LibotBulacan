@@ -6,9 +6,10 @@ const ReviewContext = createContext();
 export const useReviews = () => useContext(ReviewContext);
 
 export const ReviewProvider = ({ children }) => {
-  const [reviewsBySpot, setReviewsBySpot] = useState({});
-  const [loading,       setLoading]       = useState(false);
-  const [error,         setError]         = useState(null);
+  const [reviewsBySpot,     setReviewsBySpot]     = useState({});
+  const [loading,           setLoading]           = useState(false);
+  const [error,             setError]             = useState(null);
+  const [moderationStatus,  setModerationStatus]  = useState(null);
 
   useEffect(() => {
     const prefetchAllReviews = async () => {
@@ -30,6 +31,7 @@ export const ReviewProvider = ({ children }) => {
       }
     };
     prefetchAllReviews();
+    fetchModerationStatus();
   }, []);
 
   const fetchReviews = useCallback(async (spotId) => {
@@ -49,24 +51,43 @@ export const ReviewProvider = ({ children }) => {
     }
   }, []);
 
+  // Pulls the signed-in user's mute/suspension/ban state, so screens can
+  // show a notice proactively instead of only finding out via a 403.
+  const fetchModerationStatus = useCallback(async () => {
+    try {
+      const res = await api.get("/api/reviews/user/moderation-status");
+      const data = res.data;
+      if (data.success) setModerationStatus(data);
+    } catch (err) {
+      console.error("❌ Error fetching moderation status:", err);
+    }
+  }, []);
+
   const addReview = useCallback(async (spotId, rating, comment) => {
-    if (!spotId || !rating || !comment) { setError("All fields are required"); return false; }
+    if (!spotId || !rating || !comment) {
+      setError("All fields are required");
+      return { success: false, message: "All fields are required" };
+    }
     try {
       const res = await api.post("/api/reviews", { spotId, rating, comment });
       const data = res.data;
       if (data.success) {
         await fetchReviews(spotId);
         setError(null);
-        return true;
+        return { success: true };
       } else {
         throw new Error(data.message || "Failed to add review");
       }
     } catch (err) {
-      console.error("❌ Error adding review:", err);
-      setError(err.message);
-      return false;
+      const message = err.response?.data?.message || err.message || "Failed to add review";
+      console.error("❌ Error adding review:", message);
+      setError(message);
+      // A 403 here means the user is muted/suspended/banned — refresh
+      // status so the UI reflects the current mute/suspension window.
+      if (err.response?.status === 403) await fetchModerationStatus();
+      return { success: false, message };
     }
-  }, [fetchReviews]);
+  }, [fetchReviews, fetchModerationStatus]);
 
   const reportReview = useCallback(async ({ reviewId, reportedClerkUserId, reason, details = "" }) => {
     if (!reviewId || !reportedClerkUserId || !reason) {
@@ -119,8 +140,8 @@ export const ReviewProvider = ({ children }) => {
 
   return (
     <ReviewContext.Provider value={{
-      reviewsBySpot, loading, error,
-      fetchReviews, addReview, reportReview,
+      reviewsBySpot, loading, error, moderationStatus,
+      fetchReviews, addReview, reportReview, fetchModerationStatus,
       getReviewsForSpot, getAverageRating, getReviewCount, deleteReview,
     }}>
       {children}

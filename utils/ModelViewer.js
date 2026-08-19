@@ -12,7 +12,7 @@ import {
   ViroDirectionalLight,
   Viro3DObject,
   ViroSphere,
-  ViroMaterials,
+  ViroMaterials,npx 
 } from "@reactvision/react-viro";
 
 import { MaterialCommunityIcons, Feather } from "@expo/vector-icons";
@@ -21,7 +21,7 @@ const VIEW_DISTANCE     = -20;
 const SENSITIVITY       = 0.3;
 const INERTIA           = 0.92;
 const INERTIA_MIN       = 0.05;
-const AUTO_ROTATE_SPEED = 0.35;
+const AUTO_ROTATE_SPEED = 0.5;  // degrees per millisecond
 const RESET_STEPS       = 40;
 
 const DEFAULT_BASE_ROT_X  = -0;
