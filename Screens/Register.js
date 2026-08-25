@@ -11,6 +11,7 @@ import {
   ScrollView,
   Keyboard,
   TouchableWithoutFeedback,
+  Linking,
 } from "react-native";
 import { useState, useEffect, useCallback } from "react";
 import CheckBox from "expo-checkbox";
@@ -20,6 +21,10 @@ import { Feather } from "@expo/vector-icons";
 import { authAPI } from "../api";
 
 WebBrowser.maybeCompleteAuthSession();
+
+// ── TODO: replace with your real Termly-hosted URLs ──────────────────
+const TERMS_OF_SERVICE_URL = "https://app.termly.io/policy-viewer/policy.html?policyUUID=REPLACE_WITH_YOUR_TOS_UUID";
+const PRIVACY_POLICY_URL   = "https://app.termly.io/policy-viewer/policy.html?policyUUID=REPLACE_WITH_YOUR_PRIVACY_UUID";
 
 // ── Password strength helpers ──────────────────────────────────────
 const PASSWORD_RULES = [
@@ -39,6 +44,20 @@ function getStrength(password) {
 
 function isValidEmail(email) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+}
+
+async function openLink(url) {
+  try {
+    const supported = await Linking.canOpenURL(url);
+    if (supported) {
+      await Linking.openURL(url);
+    } else {
+      Alert.alert("Unable to Open Link", "Please check your internet connection and try again.");
+    }
+  } catch (err) {
+    console.error("openLink error:", err);
+    Alert.alert("Unable to Open Link", "Something went wrong opening that page.");
+  }
 }
 
 // ── Password Strength Widget ───────────────────────────────────────
@@ -165,6 +184,10 @@ export default function Register({ navigation }) {
   // ── Google signup ──
   const handleGoogleSignUp = async () => {
     if (isGoogleLoading || !isLoaded) return;
+    if (!agreeToTerms) {
+      Alert.alert("Terms Required", "Please agree to the Terms of Service and Privacy Policy to continue.");
+      return;
+    }
     setIsGoogleLoading(true);
     try {
       const { createdSessionId } = await startOAuthFlow();
@@ -192,7 +215,7 @@ export default function Register({ navigation }) {
 
     if (Object.keys(errs).length > 0) return;
     if (!agreeToTerms)
-      return Alert.alert("Terms Required", "Please agree to the Terms and Conditions to continue.");
+      return Alert.alert("Terms Required", "Please agree to the Terms of Service and Privacy Policy to continue.");
     if (!isLoaded)
       return Alert.alert("Error", "Authentication system is loading. Please wait.");
 
@@ -362,8 +385,22 @@ export default function Register({ navigation }) {
 
           {/* Terms */}
           <View style={styles.termsContainer}>
-            <CheckBox value={agreeToTerms} onValueChange={setAgreeToTerms} color="#6b4b45" />
-            <Text style={styles.termsText}>I agree to the Terms and Conditions</Text>
+            <CheckBox
+              value={agreeToTerms}
+              onValueChange={setAgreeToTerms}
+              color={agreeToTerms ? "#4caf78" : undefined}
+            />
+            <Text style={styles.termsText}>
+              I hereby confirm that I have read and agree with the{" "}
+              <Text style={styles.termsLink} onPress={() => openLink(TERMS_OF_SERVICE_URL)}>
+                Terms of Service
+              </Text>{" "}
+              and{" "}
+              <Text style={styles.termsLink} onPress={() => openLink(PRIVACY_POLICY_URL)}>
+                Privacy Policy
+              </Text>
+              .
+            </Text>
           </View>
 
           {/* Register button */}
@@ -565,14 +602,20 @@ const styles = StyleSheet.create({
   // ── Terms ──
   termsContainer: {
     flexDirection: "row",
-    alignItems: "center",
+    alignItems: "flex-start",
     marginBottom: 20,
     gap: 10,
   },
   termsText: {
-    fontSize: 14,
+    fontSize: 13,
     color: "#7a5a58",
     flex: 1,
+    lineHeight: 18,
+  },
+  termsLink: {
+    color: "#6b4b45",
+    fontWeight: "700",
+    textDecorationLine: "underline",
   },
 
   // ── Primary button ──
