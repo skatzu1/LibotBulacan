@@ -33,6 +33,24 @@ const REPORT_REASONS = [
   { key:"other",              label:"Other" },
 ];
 
+// Centralized helper: figure out whether a failed action came back because
+// the user is muted, and show a single consistent popup for it.
+const isMutedResult = (result) =>
+  !!result && (
+    result.muted === true ||
+    result.error === "muted" ||
+    result.reason === "muted" ||
+    (typeof result.message === "string" && result.message.toLowerCase().includes("muted"))
+  );
+
+const showMutedAlert = (result) => {
+  Alert.alert(
+    "You're Muted",
+    (result && result.message) ||
+      "You've been temporarily muted from posting or reacting due to community reports. Please try again later.",
+  );
+};
+
 export default function InformationScreen({ route, navigation }) {
   const spot = route?.params?.spot;
   const { colors, isDark } = useTheme();
@@ -49,11 +67,12 @@ export default function InformationScreen({ route, navigation }) {
   const [reportReason,     setReportReason]     = useState("");
   const [reportDetails,    setReportDetails]    = useState("");
   const [submittingReport, setSubmittingReport] = useState(false);
+  const [submittingReview, setSubmittingReview] = useState(false);
 
   const inputRef = useRef(null);
   const { user: clerkUser } = useUser();
   const { isBookmarked, toggleBookmark }                                                           = useBookmark();
-  const { getReviewsForSpot, addReview, reportReview, getAverageRating, getReviewCount, fetchReviews } = useReviews();
+  const { getReviewsForSpot, addReview, reportReview, reactToReview, getAverageRating, getReviewCount, fetchReviews } = useReviews();
   const { fetchMissions, getMissionsForSpot, completedMissions }                                   = useMissions();
   const { profileImage } = useProfileImage();
   const isFocused = useIsFocused();
@@ -94,8 +113,6 @@ export default function InformationScreen({ route, navigation }) {
     { key:"Reviews",    label:"Reviews",    icon:"star"      },
   ];
 
-  // ── CHANGED: now uses MaterialIcons + theme colors.star/colors.starEmpty,
-  // matching the star rendering used on the Home screen ──
   const StarRating = ({ rating, size = 14 }) => (
     <View style={styles.starsRow}>
       {[1,2,3,4,5].map((s) => (
@@ -112,8 +129,29 @@ export default function InformationScreen({ route, navigation }) {
   const handleSubmit = async () => {
     if (newRating === 0) { setShowStarPicker(true); return; }
     if (newReview.trim() === "") return;
-    await addReview(spot._id, newRating, newReview.trim());
-    setNewRating(0); setNewReview(""); setShowStarPicker(false); inputRef.current?.blur();
+    if (submittingReview) return;
+
+    setSubmittingReview(true);
+    try {
+      const result = await addReview(spot._id, newRating, newReview.trim());
+      if (isMutedResult(result)) {
+        showMutedAlert(result);
+        return;
+      }
+      if (result && result.success === false) {
+        Alert.alert("Error", result.message || "Failed to post your review. Please try again.");
+        return;
+      }
+      setNewRating(0); setNewReview(""); setShowStarPicker(false); inputRef.current?.blur();
+    } catch (err) {
+      if (isMutedResult(err)) {
+        showMutedAlert(err);
+      } else {
+        Alert.alert("Error", "Failed to post your review. Please try again.");
+      }
+    } finally {
+      setSubmittingReview(false);
+    }
   };
 
   const handleBookmarkToggle = async () => { await toggleBookmark(spot); setRefreshKey(prev => prev + 1); };
@@ -127,15 +165,57 @@ export default function InformationScreen({ route, navigation }) {
   const handleSubmitReport = async () => {
     if (!reportReason) { Alert.alert("Select a reason", "Please choose a reason for reporting."); return; }
     setSubmittingReport(true);
-    const success = await reportReview({ reviewId: reportTarget.reviewId, reportedClerkUserId: reportTarget.reportedClerkUserId, reason: reportReason, details: reportDetails });
-    setSubmittingReport(false); setShowReportModal(false);
-    if (success) Alert.alert("Report submitted", "Thank you. Our moderators will review this report.");
-    else Alert.alert("Error", "Failed to submit report. Please try again.");
+    try {
+      const result = await reportReview({ reviewId: reportTarget.reviewId, reportedClerkUserId: reportTarget.reportedClerkUserId, reason: reportReason, details: reportDetails });
+      setSubmittingReport(false);
+      if (isMutedResult(result)) {
+        setShowReportModal(false);
+        showMutedAlert(result);
+        return;
+      }
+      setShowReportModal(false);
+      if (result) Alert.alert("Report submitted", "Thank you. Our moderators will review this report.");
+      else Alert.alert("Error", "Failed to submit report. Please try again.");
+    } catch (err) {
+      setSubmittingReport(false);
+      setShowReportModal(false);
+      if (isMutedResult(err)) {
+        showMutedAlert(err);
+      } else {
+        Alert.alert("Error", "Failed to submit report. Please try again.");
+      }
+    }
   };
 
   const ReviewCard = ({ review }) => {
     const isMe = clerkUser?.id === review.clerkUserId;
     const avatarUri = isMe ? (profileImage || review.userImage || clerkUser?.imageUrl) : (review.userImage || "https://i.pravatar.cc/150?img=10");
+    const [reacting, setReacting] = useState(false);
+
+    // Prefer a locally-patched userReaction (set right after a react call,
+    // and correctly captures "null" meaning removed). Fall back to
+    // deriving it from the raw reactions array on freshly-fetched reviews.
+    const userReaction = ("userReaction" in review)
+      ? review.userReaction
+      : (review.reactions || []).find((r) => r.clerkUserId === clerkUser?.id)?.type || null;
+
+    const handleReact = async (type) => {
+      if (isMe || reacting) return;
+      setReacting(true);
+      try {
+        const result = await reactToReview(review._id, spot._id, type);
+        if (isMutedResult(result)) {
+          showMutedAlert(result);
+        }
+      } catch (err) {
+        if (isMutedResult(err)) {
+          showMutedAlert(err);
+        }
+      } finally {
+        setReacting(false);
+      }
+    };
+
     return (
       <View style={styles.reviewCard}>
         <Image source={{ uri: avatarUri }} style={styles.avatar} defaultSource={{ uri: "https://i.pravatar.cc/150?img=10" }} />
@@ -150,7 +230,35 @@ export default function InformationScreen({ route, navigation }) {
             </View>
           </View>
           <Text style={[styles.reviewComment, { color: colors.textPrimary }]}>{review.comment}</Text>
-          <Text style={[styles.reviewDate, { color: colors.textMuted }]}>{review.createdAt ? new Date(review.createdAt).toLocaleDateString() : "Just now"}</Text>
+          <View style={styles.reviewFooterRow}>
+            <Text style={[styles.reviewDate, { color: colors.textMuted }]}>{review.createdAt ? new Date(review.createdAt).toLocaleDateString() : "Just now"}</Text>
+            <View style={styles.reactionsRow}>
+              <TouchableOpacity
+                onPress={() => handleReact("like")}
+                disabled={isMe || reacting}
+                hitSlop={{ top:6,bottom:6,left:6,right:6 }}
+                style={[styles.reactionBtn, isMe && styles.reactionBtnDisabled]}
+                activeOpacity={0.7}
+              >
+                <Feather name="thumbs-up" size={13} color={userReaction === "like" ? colors.brand : colors.textMuted} />
+                <Text style={[styles.reactionCount, { color: userReaction === "like" ? colors.brand : colors.textMuted }]}>
+                  {review.likes || 0}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => handleReact("dislike")}
+                disabled={isMe || reacting}
+                hitSlop={{ top:6,bottom:6,left:6,right:6 }}
+                style={[styles.reactionBtn, isMe && styles.reactionBtnDisabled]}
+                activeOpacity={0.7}
+              >
+                <Feather name="thumbs-down" size={13} color={userReaction === "dislike" ? "#c0392b" : colors.textMuted} />
+                <Text style={[styles.reactionCount, { color: userReaction === "dislike" ? "#c0392b" : colors.textMuted }]}>
+                  {review.dislikes || 0}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          </View>
         </View>
       </View>
     );
@@ -321,8 +429,8 @@ export default function InformationScreen({ route, navigation }) {
             <TouchableOpacity style={[styles.commentInputWrap, { backgroundColor: colors.card }]} activeOpacity={1} onPress={() => { setShowStarPicker(true); inputRef.current?.focus(); }}>
               <TextInput ref={inputRef} style={[styles.commentInput, { color: colors.brandDark }]} placeholder="Write a review..." placeholderTextColor={colors.textMuted} value={newReview} onChangeText={setNewReview} onFocus={() => setShowStarPicker(true)} multiline maxLength={500} />
             </TouchableOpacity>
-            <TouchableOpacity style={[styles.sendBtn, (!newReview.trim() || newRating === 0) && styles.sendBtnDisabled, { backgroundColor: colors.brand }]} onPress={handleSubmit} disabled={!newReview.trim() || newRating === 0}>
-              <Feather name="send" size={18} color="#fff" />
+            <TouchableOpacity style={[styles.sendBtn, (!newReview.trim() || newRating === 0 || submittingReview) && styles.sendBtnDisabled, { backgroundColor: colors.brand }]} onPress={handleSubmit} disabled={!newReview.trim() || newRating === 0 || submittingReview}>
+              {submittingReview ? <ActivityIndicator size="small" color="#fff" /> : <Feather name="send" size={18} color="#fff" />}
             </TouchableOpacity>
           </View>
         </View>
@@ -427,7 +535,12 @@ const styles = StyleSheet.create({
   reviewBubbleHeaderRight: { flexDirection:"row", alignItems:"center", gap:8 },
   reviewAuthor:    { fontSize:13, fontWeight:"700" },
   reviewComment:   { fontSize:13, lineHeight:19 },
-  reviewDate:      { fontSize:11, marginTop:5 },
+  reviewFooterRow: { flexDirection:"row", alignItems:"center", justifyContent:"space-between", marginTop:6 },
+  reviewDate:      { fontSize:11 },
+  reactionsRow:    { flexDirection:"row", alignItems:"center", gap:14 },
+  reactionBtn:     { flexDirection:"row", alignItems:"center", gap:4 },
+  reactionBtnDisabled: { opacity:0.35 },
+  reactionCount:   { fontSize:12, fontWeight:"600" },
   reportButton:    { padding:2 },
   emptyReviews:    { alignItems:"center", paddingVertical:24, gap:8 },
   emptyText:       { fontSize:13 },

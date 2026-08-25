@@ -11,8 +11,11 @@ import {
   ScrollView,
   Dimensions,
   StatusBar,
+  Animated,
+  PanResponder,
 } from 'react-native';
 import { CameraView, useCameraPermissions } from 'expo-camera';
+import * as ImageManipulator from 'expo-image-manipulator';
 import { Feather } from '@expo/vector-icons';
 import { useAuth } from '@clerk/clerk-expo';
 import { loadModel, runPrediction } from '../utils/missionAI';
@@ -57,6 +60,68 @@ const TYPE_CONFIG = {
   },
 };
 
+// ─── Scan frame geometry (must match scanFrame style below) ───────────────────
+const FRAME_TOP_RATIO  = 0.22;  // matches scanFrame.top: height * 0.22
+const FRAME_LEFT_RATIO = 0.1;   // matches scanFrame.left: width * 0.1
+const FRAME_SIZE_RATIO = 0.8;   // matches scanFrame.width/height: width * 0.8
+
+// Crops the captured photo down to exactly the region the user saw inside
+// the on-screen scan frame, correcting for the camera preview's "cover" fit
+// (the raw photo's aspect ratio usually differs from the screen's).
+async function cropToScanFrame(photo) {
+  try {
+    const photoW = photo.width;
+    const photoH = photo.height;
+    if (!photoW || !photoH) return photo.uri;
+
+    const screenAspect = width / height;
+    const photoAspect   = photoW / photoH;
+
+    let visibleW = photoW;
+    let visibleH = photoH;
+    let offsetX  = 0;
+    let offsetY  = 0;
+
+    if (photoAspect > screenAspect) {
+      visibleW = photoH * screenAspect;
+      offsetX  = (photoW - visibleW) / 2;
+    } else {
+      visibleH = photoW / screenAspect;
+      offsetY  = (photoH - visibleH) / 2;
+    }
+
+    const scaleX = visibleW / width;
+    const scaleY = visibleH / height;
+
+    const frameLeft = FRAME_LEFT_RATIO * width;
+    const frameTop  = FRAME_TOP_RATIO * height;
+    const frameSize = FRAME_SIZE_RATIO * width;
+
+    const cropOriginX = Math.round(offsetX + frameLeft * scaleX);
+    const cropOriginY = Math.round(offsetY + frameTop * scaleY);
+    const cropWidth   = Math.round(frameSize * scaleX);
+    const cropHeight  = Math.round(frameSize * scaleY);
+
+    const result = await ImageManipulator.manipulateAsync(
+      photo.uri,
+      [{
+        crop: {
+          originX: Math.max(0, cropOriginX),
+          originY: Math.max(0, cropOriginY),
+          width:   Math.min(cropWidth, photoW - Math.max(0, cropOriginX)),
+          height:  Math.min(cropHeight, photoH - Math.max(0, cropOriginY)),
+        },
+      }],
+      { compress: 1, format: ImageManipulator.SaveFormat.JPEG }
+    );
+
+    return result.uri;
+  } catch (err) {
+    console.error('Crop error:', err);
+    return photo.uri;
+  }
+}
+
 // ─── Step Row ─────────────────────────────────────────────────────────────────
 function StepRow({ number, icon, text, isLast }) {
   return (
@@ -89,6 +154,46 @@ const stepStyles = StyleSheet.create({
   text:      { fontSize: 13.5, color: COLORS.textSub, flex: 1, lineHeight: 20 },
 });
 
+// ─── Confidence Meter ───────────────────────────────────────────────────────────
+function ConfidenceMeter({ confidence, color }) {
+  if (confidence === null || confidence === undefined) return null;
+  const pct = Math.max(0, Math.min(100, confidence));
+
+  return (
+    <View style={meterStyles.wrap}>
+      <View style={meterStyles.labelRow}>
+        <Text style={meterStyles.label}>AI Confidence</Text>
+        <Text style={[meterStyles.value, { color }]}>{pct.toFixed(1)}%</Text>
+      </View>
+      <View style={meterStyles.track}>
+        <View style={[meterStyles.fill, { width: `${pct}%`, backgroundColor: color }]} />
+      </View>
+    </View>
+  );
+}
+
+const meterStyles = StyleSheet.create({
+  wrap:     { width: '100%', marginBottom: 18 },
+  labelRow: {
+    flexDirection: 'row', justifyContent: 'space-between',
+    alignItems: 'center', marginBottom: 6,
+  },
+  label: {
+    fontSize: 11, fontWeight: '700', color: COLORS.textMuted,
+    textTransform: 'uppercase', letterSpacing: 0.6,
+  },
+  value: { fontSize: 13, fontWeight: '800' },
+  track: {
+    width: '100%', height: 8, borderRadius: 4,
+    backgroundColor: COLORS.border, overflow: 'hidden',
+  },
+  fill: { height: '100%', borderRadius: 4 },
+});
+
+// ─── Zoom geometry ──────────────────────────────────────────────────────────
+const ZOOM_TRACK_HEIGHT = 160;
+const ZOOM_THUMB_SIZE   = 24;
+
 // ─── Component ────────────────────────────────────────────────────────────────
 export default function Mission({ navigation, route }) {
   const { spot, mission } = route.params;
@@ -116,6 +221,21 @@ export default function Mission({ navigation, route }) {
   const [status, setStatus]             = useState('pending');
   const [attempts, setAttempts]         = useState(0);
   const [facing, setFacing]             = useState('back');
+  const [confidence, setConfidence]     = useState(null);
+
+  // ── Focus & zoom state ──────────────────────────────────────────────────
+  const [zoom, setZoom]             = useState(0);
+  // Fixed continuous autofocus. We no longer toggle this off/on for tap-to-focus
+  // because expo-camera's CameraView has no real tap-to-focus-point API here —
+  // toggling the AF mode just forced the camera to re-run auto exposure/focus
+  // convergence, which is what caused the screen to visibly darken on tap.
+  const autofocus = 'on';
+  const [focusPoint, setFocusPoint] = useState(null);
+  const reticleAnim       = useRef(new Animated.Value(0)).current;
+  const flashAnim         = useRef(new Animated.Value(0)).current;
+  const zoomStartRef      = useRef(0);
+  const pinchStartDistRef = useRef(null);
+  const touchStartRef     = useRef({ time: 0, touches: 1 });
 
   useEffect(() => {
     (async () => {
@@ -134,24 +254,118 @@ export default function Mission({ navigation, route }) {
     }
     setCapturedImage(null);
     setStatus('pending');
+    setConfidence(null);
+    setZoom(0);
     setCameraOpen(true);
   };
+
+  // ── Tap-to-focus (visual reticle only — see note on `autofocus` above) ──
+  const triggerFocusReticle = (x, y) => {
+    setFocusPoint({ x, y });
+    reticleAnim.setValue(0);
+    Animated.sequence([
+      Animated.timing(reticleAnim, { toValue: 1, duration: 200, useNativeDriver: true }),
+      Animated.delay(500),
+      Animated.timing(reticleAnim, { toValue: 0, duration: 250, useNativeDriver: true }),
+    ]).start(() => setFocusPoint(null));
+  };
+
+  // ── Single responder for BOTH tap-to-focus and pinch-to-zoom ────────────
+  // Combined into one PanResponder so the two gestures stop fighting over
+  // the responder (a separate TouchableWithoutFeedback + PanResponder pair
+  // on the same view clobber each other's touch handlers).
+  const gestureResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: (evt) => evt.nativeEvent.touches.length === 2,
+      onPanResponderGrant: (evt) => {
+        const touches = evt.nativeEvent.touches;
+        touchStartRef.current = { time: Date.now(), touches: touches.length };
+        if (touches.length === 2) {
+          const dx = touches[0].pageX - touches[1].pageX;
+          const dy = touches[0].pageY - touches[1].pageY;
+          pinchStartDistRef.current = Math.sqrt(dx * dx + dy * dy);
+          zoomStartRef.current = zoom;
+        }
+      },
+      onPanResponderMove: (evt) => {
+        const touches = evt.nativeEvent.touches;
+        if (touches.length === 2) {
+          if (!pinchStartDistRef.current) {
+            const dx = touches[0].pageX - touches[1].pageX;
+            const dy = touches[0].pageY - touches[1].pageY;
+            pinchStartDistRef.current = Math.sqrt(dx * dx + dy * dy);
+            zoomStartRef.current = zoom;
+            return;
+          }
+          const dx = touches[0].pageX - touches[1].pageX;
+          const dy = touches[0].pageY - touches[1].pageY;
+          const dist = Math.sqrt(dx * dx + dy * dy);
+          const delta = (dist - pinchStartDistRef.current) / width;
+          const next = Math.max(0, Math.min(1, zoomStartRef.current + delta));
+          setZoom(next);
+        }
+      },
+      onPanResponderRelease: (evt) => {
+        const { time, touches } = touchStartRef.current;
+        const elapsed = Date.now() - time;
+        // A quick single-finger tap (no pinch involved) triggers focus.
+        if (touches === 1 && elapsed < 300) {
+          const { locationX, locationY } = evt.nativeEvent;
+          triggerFocusReticle(locationX, locationY);
+        }
+        pinchStartDistRef.current = null;
+      },
+      onPanResponderTerminate: () => {
+        pinchStartDistRef.current = null;
+      },
+    })
+  ).current;
+
+  // ── Zoom slider ──────────────────────────────────────────────────────────
+  const zoomSliderResponder = useRef(
+    PanResponder.create({
+      onStartShouldSetPanResponder: () => true,
+      onMoveShouldSetPanResponder: () => true,
+      onPanResponderGrant: (evt) => {
+        const y = evt.nativeEvent.locationY;
+        const next = Math.max(0, Math.min(1, 1 - y / ZOOM_TRACK_HEIGHT));
+        setZoom(next);
+      },
+      onPanResponderMove: (evt) => {
+        const y = evt.nativeEvent.locationY;
+        const next = Math.max(0, Math.min(1, 1 - y / ZOOM_TRACK_HEIGHT));
+        setZoom(next);
+      },
+    })
+  ).current;
 
   const takePhoto = async () => {
   if (!cameraRef.current) return;
   try {
+    // Custom (non-native) shutter flash
+    Animated.sequence([
+      Animated.timing(flashAnim, { toValue: 1, duration: 60, useNativeDriver: true }),
+      Animated.timing(flashAnim, { toValue: 0, duration: 180, useNativeDriver: true }),
+    ]).start();
+
     const photo = await cameraRef.current.takePictureAsync({
       quality: 0.8,
       base64: false,
       skipProcessing: false,
     });
 
+    // Crop down to exactly what the user saw inside the scan frame,
+    // so the AI analyzes the same region the guide shows.
+    const croppedUri = await cropToScanFrame(photo);
+
     setCameraOpen(false);
-    setCapturedImage(photo.uri);
+    setCapturedImage(croppedUri);
     setStatus('scanning');
+    setConfidence(null);
     setAttempts(prev => prev + 1);
 
-    const result = await runPrediction(photo.uri, mission._id, getToken);
+    const result = await runPrediction(croppedUri, mission._id, getToken);
 
     if (!result) {
       Alert.alert('Error', 'Could not analyze image. Please try again.');
@@ -169,6 +383,7 @@ export default function Mission({ navigation, route }) {
       return;
     }
 
+    setConfidence(typeof result.confidence === 'number' ? result.confidence : null);
     setStatus(result.verified ? 'approved' : 'failed');
   } catch (error) {
     console.error('Camera error:', error);
@@ -192,43 +407,99 @@ export default function Mission({ navigation, route }) {
     return (
       <View style={styles.cameraContainer}>
         <StatusBar barStyle="light-content" />
-        <CameraView ref={cameraRef} style={styles.camera} facing={facing}>
+        <View style={{ flex: 1 }} {...gestureResponder.panHandlers}>
+          <CameraView
+            ref={cameraRef}
+            style={styles.camera}
+            facing={facing}
+            zoom={zoom}
+            autofocus={autofocus}
+            animateShutter={false}
+          >
 
-          <SafeAreaView style={styles.cameraTopBar}>
-            <TouchableOpacity onPress={closeCamera} style={styles.cameraIconBtn}>
-              <Feather name="x" size={20} color="white" />
-            </TouchableOpacity>
-            <View style={styles.cameraTitleWrap}>
-              <Text style={styles.cameraLabel}>SCANNING</Text>
-              <Text style={styles.cameraTitle}>{config.product}</Text>
+            <SafeAreaView style={styles.cameraTopBar}>
+              <TouchableOpacity onPress={closeCamera} style={styles.cameraIconBtn}>
+                <Feather name="x" size={20} color="white" />
+              </TouchableOpacity>
+              <View style={styles.cameraTitleWrap}>
+                <Text style={styles.cameraLabel}>SCANNING</Text>
+                <Text style={styles.cameraTitle}>{config.product}</Text>
+              </View>
+              <TouchableOpacity onPress={flipCamera} style={styles.cameraIconBtn}>
+                <Feather name="refresh-cw" size={18} color="white" />
+              </TouchableOpacity>
+            </SafeAreaView>
+
+            <View style={styles.scanFrame}>
+              <View style={[styles.corner, styles.topLeft]} />
+              <View style={[styles.corner, styles.topRight]} />
+              <View style={[styles.corner, styles.bottomLeft]} />
+              <View style={[styles.corner, styles.bottomRight]} />
+              <View style={styles.scanLineWrapper}>
+                <View style={styles.scanLine} />
+              </View>
             </View>
-            <TouchableOpacity onPress={flipCamera} style={styles.cameraIconBtn}>
-              <Feather name="refresh-cw" size={18} color="white" />
-            </TouchableOpacity>
-          </SafeAreaView>
 
-          <View style={styles.scanFrame}>
-            <View style={[styles.corner, styles.topLeft]} />
-            <View style={[styles.corner, styles.topRight]} />
-            <View style={[styles.corner, styles.bottomLeft]} />
-            <View style={[styles.corner, styles.bottomRight]} />
-            <View style={styles.scanLineWrapper}>
-              <View style={styles.scanLine} />
+            {/* Focus reticle */}
+            {focusPoint && (
+              <Animated.View
+                pointerEvents="none"
+                style={[
+                  styles.focusReticle,
+                  {
+                    left: focusPoint.x - 32,
+                    top:  focusPoint.y - 32,
+                    opacity: reticleAnim,
+                    transform: [{
+                      scale: reticleAnim.interpolate({
+                        inputRange: [0, 1],
+                        outputRange: [1.3, 1],
+                      }),
+                    }],
+                  },
+                ]}
+              />
+            )}
+
+            {/* Custom shutter flash (replaces native flash animation) */}
+            <Animated.View
+              pointerEvents="none"
+              style={[styles.shutterFlash, { opacity: flashAnim }]}
+            />
+
+            <View style={styles.scanHintWrap}>
+              <Feather name="maximize" size={12} color="rgba(255,255,255,0.8)" style={{ marginRight: 6 }} />
+              <Text style={styles.scanHint}>Center the label inside the frame</Text>
             </View>
-          </View>
 
-          <View style={styles.scanHintWrap}>
-            <Feather name="maximize" size={12} color="rgba(255,255,255,0.8)" style={{ marginRight: 6 }} />
-            <Text style={styles.scanHint}>Center the label inside the frame</Text>
-          </View>
+            {/* Zoom slider */}
+            <View style={styles.zoomTrackWrap}>
+              <Feather name="zoom-in" size={14} color="rgba(255,255,255,0.8)" />
+              <View style={styles.zoomTrack} {...zoomSliderResponder.panHandlers}>
+                <View
+                  style={[
+                    styles.zoomFill,
+                    { height: `${zoom * 100}%` },
+                  ]}
+                />
+                <View
+                  style={[
+                    styles.zoomThumb,
+                    { bottom: `${zoom * 100}%`, marginBottom: -ZOOM_THUMB_SIZE / 2 },
+                  ]}
+                />
+              </View>
+              <Feather name="zoom-out" size={14} color="rgba(255,255,255,0.8)" />
+            </View>
 
-          <View style={styles.cameraBottomBar}>
-            <TouchableOpacity style={styles.captureButton} onPress={takePhoto} activeOpacity={0.8}>
-              <View style={styles.captureInner} />
-            </TouchableOpacity>
-          </View>
+            <View style={styles.cameraBottomBar}>
+              <TouchableOpacity style={styles.captureButton} onPress={takePhoto} activeOpacity={0.8}>
+                <View style={styles.captureInner} />
+              </TouchableOpacity>
+            </View>
 
-        </CameraView>
+          </CameraView>
+        </View>
       </View>
     );
   }
@@ -288,7 +559,7 @@ export default function Mission({ navigation, route }) {
           <Text style={styles.cardLabel}>HOW TO VERIFY</Text>
           {[
             { icon: 'camera',       text: 'Open the camera below' },
-            { icon: 'crosshair',    text: `Point at the bought C2 Red Tea` },
+            { icon: 'crosshair',    text: 'Point at the required item' },
             { icon: 'maximize',     text: 'Keep it close inside the frame' },
             { icon: 'circle',       text: 'Tap the shutter button' },
             { icon: 'check-circle', text: 'AI verifies automatically' },
@@ -356,6 +627,7 @@ export default function Mission({ navigation, route }) {
               {capturedImage && (
                 <Image source={{ uri: capturedImage }} style={styles.preview} />
               )}
+              <ConfidenceMeter confidence={confidence} color={COLORS.success} />
               <View style={[styles.statusBanner, { backgroundColor: COLORS.successLight }]}>
                 <Feather name="check-circle" size={18} color={COLORS.success} style={{ marginRight: 8 }} />
                 <Text style={[styles.statusBannerText, { color: COLORS.success }]}>Mission Verified</Text>
@@ -381,6 +653,7 @@ export default function Mission({ navigation, route }) {
               {capturedImage && (
                 <Image source={{ uri: capturedImage }} style={styles.preview} />
               )}
+              <ConfidenceMeter confidence={confidence} color={COLORS.danger} />
               <View style={[styles.statusBanner, { backgroundColor: COLORS.dangerLight }]}>
                 <Feather name="x-circle" size={18} color={COLORS.danger} style={{ marginRight: 8 }} />
                 <Text style={[styles.statusBannerText, { color: COLORS.danger }]}>Not Recognized</Text>
@@ -557,6 +830,16 @@ const styles = StyleSheet.create({
   scanLineWrapper: { width: '88%', alignItems: 'center' },
   scanLine: { width: '100%', height: 1.5, backgroundColor: 'rgba(255,255,255,0.35)', borderRadius: 1 },
 
+  focusReticle: {
+    position: 'absolute', width: 64, height: 64, borderRadius: 6,
+    borderWidth: 2, borderColor: '#FFD166',
+  },
+
+  shutterFlash: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: COLORS.brand,
+  },
+
   scanHintWrap: {
     position: 'absolute', bottom: height * 0.21, alignSelf: 'center',
     flexDirection: 'row', alignItems: 'center',
@@ -564,6 +847,26 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20,
   },
   scanHint: { color: 'rgba(255,255,255,0.85)', fontSize: 12.5 },
+
+  zoomTrackWrap: {
+    position: 'absolute', right: 16, top: '30%',
+    alignItems: 'center', gap: 8,
+  },
+  zoomTrack: {
+    width: 4, height: ZOOM_TRACK_HEIGHT, borderRadius: 2,
+    backgroundColor: 'rgba(255,255,255,0.25)',
+    justifyContent: 'flex-end',
+  },
+  zoomFill: {
+    width: '100%', borderRadius: 2,
+    backgroundColor: '#FFFFFF',
+  },
+  zoomThumb: {
+    position: 'absolute', alignSelf: 'center',
+    width: ZOOM_THUMB_SIZE, height: ZOOM_THUMB_SIZE, borderRadius: ZOOM_THUMB_SIZE / 2,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 2, borderColor: COLORS.brand,
+  },
 
   cameraBottomBar: { position: 'absolute', bottom: 48, width: '100%', alignItems: 'center' },
   captureButton: {
