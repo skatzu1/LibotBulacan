@@ -111,6 +111,41 @@ export const ReviewProvider = ({ children }) => {
     }
   }, []);
 
+  // Like/dislike toggle. Optimistically patches the single review in
+  // state with the server's returned counts + the caller's own reaction,
+  // rather than refetching the whole spot's review list.
+  const reactToReview = useCallback(async (reviewId, spotId, type) => {
+    if (!reviewId || !spotId || !["like", "dislike"].includes(type)) {
+      return { success: false, message: "reviewId, spotId, and a valid type are required" };
+    }
+    try {
+      const res = await api.patch(`/api/reviews/${reviewId}/react`, { type });
+      const data = res.data;
+      if (data.success) {
+        setReviewsBySpot((prev) => {
+          const spotReviews = prev[spotId] || [];
+          return {
+            ...prev,
+            [spotId]: spotReviews.map((r) =>
+              r._id === reviewId
+                ? { ...r, likes: data.likes, dislikes: data.dislikes, userReaction: data.userReaction }
+                : r
+            ),
+          };
+        });
+        setError(null);
+        return { success: true, likes: data.likes, dislikes: data.dislikes, userReaction: data.userReaction };
+      } else {
+        throw new Error(data.message || "Failed to react to review");
+      }
+    } catch (err) {
+      const message = err.response?.data?.message || err.message || "Failed to react to review";
+      console.error("❌ Error reacting to review:", message);
+      setError(message);
+      return { success: false, message };
+    }
+  }, []);
+
   const getReviewsForSpot = useCallback((spotId) => reviewsBySpot[spotId] || [], [reviewsBySpot]);
   const getAverageRating  = useCallback((spotId) => {
     const reviews = reviewsBySpot[spotId] || [];
@@ -141,7 +176,7 @@ export const ReviewProvider = ({ children }) => {
   return (
     <ReviewContext.Provider value={{
       reviewsBySpot, loading, error, moderationStatus,
-      fetchReviews, addReview, reportReview, fetchModerationStatus,
+      fetchReviews, addReview, reportReview, reactToReview, fetchModerationStatus,
       getReviewsForSpot, getAverageRating, getReviewCount, deleteReview,
     }}>
       {children}
