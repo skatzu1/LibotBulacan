@@ -62,9 +62,14 @@ function AppNavigator() {
   const [showSuspensionNotice, setShowSuspensionNotice] = useState(false);
   const [isCheckingBan,  setIsCheckingBan]  = useState(true);
 
-  useEffect(() => {
-    if (isLoaded) setupClerkInterceptor(getToken);
-  }, [isLoaded, getToken]);
+  // IMPORTANT: runs during render, not inside a useEffect. React always fires
+  // child effects before parent effects in the same commit, so if this lived
+  // in a useEffect here, ReviewProvider's own useEffect (a child) could run
+  // its first requests before this parent effect ever executed — sending
+  // them with no auth token registered and triggering a 500 from the
+  // backend. Calling this in the render body guarantees the token getter is
+  // wired up before any child component mounts or fires its effects.
+  if (isLoaded) setupClerkInterceptor(getToken);
 
   useEffect(() => {
     const checkWelcome = async () => {

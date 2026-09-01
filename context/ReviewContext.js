@@ -6,12 +6,21 @@ const ReviewContext = createContext();
 export const useReviews = () => useContext(ReviewContext);
 
 export const ReviewProvider = ({ children }) => {
+  const { isLoaded, isSignedIn } = useAuth();
+
   const [reviewsBySpot,     setReviewsBySpot]     = useState({});
   const [loading,           setLoading]           = useState(false);
   const [error,             setError]             = useState(null);
   const [moderationStatus,  setModerationStatus]  = useState(null);
 
   useEffect(() => {
+    // Wait for Clerk to finish restoring/validating the session before
+    // hitting authenticated endpoints. This is a defensive guard on top of
+    // the render-time interceptor fix in App.js/api.js — it ensures this
+    // effect never fires a request while isSignedIn is still unresolved,
+    // regardless of what else changes upstream in the future.
+    if (!isLoaded || !isSignedIn) return;
+
     const prefetchAllReviews = async () => {
       try {
         setLoading(true);
@@ -32,7 +41,7 @@ export const ReviewProvider = ({ children }) => {
     };
     prefetchAllReviews();
     fetchModerationStatus();
-  }, []);
+  }, [isLoaded, isSignedIn]);
 
   const fetchReviews = useCallback(async (spotId) => {
     if (!spotId) return;

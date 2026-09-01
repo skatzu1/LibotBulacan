@@ -42,19 +42,31 @@ const api = axios.create({
 });
 
 // ─── Clerk Token Injector ─────────────────────────────────────────────────────
-// Call once at app startup after Clerk is loaded:
+// The interceptor is registered ONCE, synchronously, at module load — not
+// inside a React effect. This guarantees it exists before any component
+// (e.g. ReviewProvider) can mount and fire off a request. setupClerkInterceptor
+// is now just a cheap, idempotent assignment to a mutable holder, so it's safe
+// to call directly from a component's render body on every render, with no
+// ordering dependency on other useEffect calls.
+//
 //   import { setupClerkInterceptor } from './api';
-//   setupClerkInterceptor(getToken);
-export const setupClerkInterceptor = (getToken) => {
-  api.interceptors.request.use(async (config) => {
-    try {
-      const token = await getToken();
+//   if (isLoaded) setupClerkInterceptor(getToken);   // call in render body
+const tokenGetterRef = { current: null };
+
+api.interceptors.request.use(async (config) => {
+  try {
+    if (tokenGetterRef.current) {
+      const token = await tokenGetterRef.current();
       if (token) config.headers.Authorization = `Bearer ${token}`;
-    } catch (e) {
-      console.warn('Could not get Clerk token:', e);
     }
-    return config;
-  });
+  } catch (e) {
+    console.warn('Could not get Clerk token:', e);
+  }
+  return config;
+});
+
+export const setupClerkInterceptor = (getToken) => {
+  tokenGetterRef.current = getToken;
 };
 
 // ─── Auth API ─────────────────────────────────────────────────────────────────
