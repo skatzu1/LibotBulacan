@@ -15,6 +15,7 @@ import { FontAwesome5 } from "@expo/vector-icons";
 import { useArrival } from "../context/ArrivalContext";
 import { useBookmark } from "../context/BookmarkContext";
 import { useTheme } from "../context/ThemeContext";
+import { ScreenHeader, SpotCard, EmptyState, H_PAD } from "../components/ui";
 import { BASE_URL } from '../api';
 
 // ── Skeleton import ───────────────────────────────────────────────────────────
@@ -117,49 +118,28 @@ export default function Lists() {
   const DestinationCard = ({ item }) => {
     const spotIsBookmarked = isBookmarked(item._id);
     return (
-      <TouchableOpacity
-        style={styles.card}
+      <SpotCard
+        spot={{ ...item, image: optimizeImage(item.image, { width: 800, height: 480 }) }}
+        wide
+        height={180}
+        style={{ marginBottom: 14 }}
         onPress={() => navigation.navigate("InformationScreen", { spot: item })}
-        activeOpacity={0.85}
-      >
-        <Image
-          source={{ uri: optimizeImage(item.image, { width: 800, height: 480 }) }}
-          style={styles.cardImage}
-          resizeMode="cover"
-        />
-
-        <TouchableOpacity
-          style={styles.bookmarkButton}
-          onPress={(e) => { e.stopPropagation(); toggleBookmark(item); }}
-          activeOpacity={0.8}
-        >
-          <FontAwesome5
-            name="bookmark"
-            size={20}
-            solid={spotIsBookmarked}
-            color={spotIsBookmarked ? "#f4c542" : "#fff"}
-          />
-        </TouchableOpacity>
-
-        <View style={styles.cardContent}>
-          <Text style={styles.cardTitle} numberOfLines={2}>{item.name}</Text>
-          {item.location && (
-            <View style={styles.locationContainer}>
-              <Feather name="map-pin" size={12} color={colors.textMuted} />
-              <Text style={styles.locationText}>{item.location}</Text>
-            </View>
-          )}
-          {Array.isArray(item.category) && item.category.length > 1 && (
-            <View style={styles.tagsRow}>
-              {item.category.map((cat) => (
-                <View key={cat} style={styles.tag}>
-                  <Text style={styles.tagText}>{cat}</Text>
-                </View>
-              ))}
-            </View>
-          )}
-        </View>
-      </TouchableOpacity>
+        right={
+          <TouchableOpacity
+            style={styles.bookmarkButton}
+            onPress={(e) => { e.stopPropagation(); toggleBookmark(item); }}
+            activeOpacity={0.8}
+            accessibilityLabel={spotIsBookmarked ? "Remove bookmark" : "Add bookmark"}
+          >
+            <FontAwesome5
+              name="bookmark"
+              size={17}
+              solid={spotIsBookmarked}
+              color={spotIsBookmarked ? colors.star : "#fff"}
+            />
+          </TouchableOpacity>
+        }
+      />
     );
   };
 
@@ -170,63 +150,51 @@ export default function Lists() {
     <View style={styles.container}>
       <StatusBar barStyle={isDark ? "light-content" : "dark-content"} />
 
-      {/* Header */}
-      <View style={styles.header}>
-        {searchActive ? (
-          <>
-            <TouchableOpacity onPress={closeSearch} style={styles.backButton}>
-              <Feather name="chevron-left" size={24} color={colors.textPrimary} />
+      {searchActive ? (
+        <View style={styles.searchHeader}>
+          <TouchableOpacity onPress={closeSearch} style={styles.backButton} hitSlop={8}>
+            <Feather name="chevron-left" size={24} color={colors.textPrimary} />
+          </TouchableOpacity>
+          <View style={styles.searchInputWrapper}>
+            <Feather name="search" size={16} color={colors.textMuted} style={{ marginRight: 8 }} />
+            <TextInput
+              ref={searchInputRef}
+              style={styles.searchInput}
+              placeholder={`Search in ${displayName}...`}
+              placeholderTextColor={colors.textMuted}
+              value={searchQuery}
+              onChangeText={setSearchQuery}
+              returnKeyType="search"
+              autoCorrect={false}
+            />
+            {searchQuery.length > 0 && (
+              <TouchableOpacity onPress={() => setSearchQuery("")} hitSlop={8}>
+                <Feather name="x" size={18} color={colors.textMuted} />
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+      ) : (
+        <ScreenHeader
+          title={displayName}
+          onBack={() => navigation.goBack()}
+          right={
+            <TouchableOpacity onPress={openSearch} hitSlop={8} accessibilityLabel="Search">
+              <Feather name="search" size={21} color={colors.textPrimary} />
             </TouchableOpacity>
-
-            <View style={styles.searchInputWrapper}>
-              <Feather name="search" size={16} color={colors.textMuted} style={{ marginRight: 8 }} />
-              <TextInput
-                ref={searchInputRef}
-                style={styles.searchInput}
-                placeholder={`Search in ${displayName}...`}
-                placeholderTextColor={colors.textMuted}
-                value={searchQuery}
-                onChangeText={setSearchQuery}
-                returnKeyType="search"
-                autoCorrect={false}
-              />
-              {searchQuery.length > 0 && (
-                <TouchableOpacity onPress={() => setSearchQuery("")}>
-                  <Feather name="x" size={18} color={colors.textMuted} />
-                </TouchableOpacity>
-              )}
-            </View>
-          </>
-        ) : (
-          <>
-            <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-              <Feather name="chevron-left" size={24} color={colors.textPrimary} />
-            </TouchableOpacity>
-            <Text style={styles.headerTitle}>{displayName}</Text>
-            <TouchableOpacity style={styles.searchButton} onPress={openSearch}>
-              <Feather name="search" size={22} color={colors.textPrimary} />
-            </TouchableOpacity>
-          </>
-        )}
-      </View>
+          }
+        />
+      )}
 
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
         keyboardShouldPersistTaps="handled"
       >
-        {/* Info bar */}
-        <View style={styles.infoContainer}>
-          <Text style={styles.infoText}>
-            {visibleDestinations.length} destination{visibleDestinations.length !== 1 ? "s" : ""} found
-          </Text>
-          {usingFallback && (
-            <View style={styles.offlineBadge}>
-              <Feather name="wifi-off" size={12} color="#c0392b" />
-              <Text style={styles.offlineText}>Offline</Text>
-            </View>
-          )}
-        </View>
+        <Text style={styles.infoText}>
+          {visibleDestinations.length} destination{visibleDestinations.length !== 1 ? "s" : ""}
+          {usingFallback ? " · offline" : ""}
+        </Text>
 
         {visibleDestinations.length > 0 ? (
           <View style={styles.cardsContainer}>
@@ -235,192 +203,55 @@ export default function Lists() {
             ))}
           </View>
         ) : (
-          <View style={styles.emptyContainer}>
-            <Feather name="map" size={64} color={colors.cardBorder} />
-            <Text style={styles.emptyText}>
-              {searchQuery.trim().length > 0 ? "No matching spots" : "No destinations found"}
-            </Text>
-            <Text style={styles.emptySubtext}>
-              {searchQuery.trim().length > 0
-                ? "Try a different search term"
-                : "Try selecting a different category"}
-            </Text>
-          </View>
+          <EmptyState
+            icon="map"
+            text={searchQuery.trim().length > 0
+              ? "No matching spots — try a different search"
+              : "No destinations in this category yet"}
+          />
         )}
 
-        <View style={{ height: 30 }} />
+        <View style={{ height: 40 }} />
       </ScrollView>
     </View>
   );
 }
 
 const getStyles = (colors) => StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-    paddingTop: 50,
-  },
+  container: { flex: 1, backgroundColor: colors.background },
 
-  // ── Header ──
-  header: {
+  // ── Search header (only while search is active) ──
+  searchHeader: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
-    paddingHorizontal: 20,
-    marginBottom: 16,
-    minHeight: 40,
+    paddingTop: 52,
+    paddingHorizontal: H_PAD,
+    paddingBottom: 10,
   },
-  backButton: {
-    width: 40,
-    height: 40,
-    justifyContent: "center",
-    alignItems: "flex-start",
-  },
-  headerTitle: {
-    fontSize: 20,
-    fontWeight: "700",
-    color: colors.textPrimary,
-    flex: 1,
-    textAlign: "center",
-    marginHorizontal: 10,
-  },
-  searchButton: {
-    width: 40,
-    height: 40,
-    justifyContent: "center",
-    alignItems: "flex-end",
-  },
-
-  // ── Search input ──
+  backButton: { width: 36, height: 40, justifyContent: "center", alignItems: "flex-start" },
   searchInputWrapper: {
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
     backgroundColor: colors.card,
-    borderRadius: 20,
-    paddingHorizontal: 14,
-    height: 40,
-    marginLeft: 8,
+    borderRadius: 999,
+    paddingHorizontal: 16,
+    height: 42,
     borderWidth: 1,
     borderColor: colors.cardBorder,
   },
-  searchInput: {
-    flex: 1,
-    fontSize: 15,
-    color: colors.textPrimary,
-    padding: 0,
-  },
+  searchInput: { flex: 1, fontSize: 15, color: colors.textPrimary, padding: 0 },
 
-  scrollContent: { paddingHorizontal: 20 },
+  scrollContent: { paddingHorizontal: H_PAD, paddingTop: 8 },
+  infoText: { fontSize: 13.5, color: colors.textSecondary, fontWeight: "500", marginBottom: 16 },
 
-  // ── Info bar ──
-  infoContainer: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: 14,
-  },
-  infoText: {
-    fontSize: 14,
-    color: colors.textMuted,
-    fontWeight: "500",
-  },
-  offlineBadge: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#fde8e6",
-    paddingHorizontal: 10,
-    paddingVertical: 5,
-    borderRadius: 12,
-    gap: 5,
-  },
-  offlineText: {
-    fontSize: 12,
-    color: "#c0392b",
-    fontWeight: "600",
-  },
-
-  // ── Cards ──
-  cardsContainer: { gap: 14 },
-  card: {
-    backgroundColor: colors.card,
-    borderRadius: 16,
-    overflow: "hidden",
-    borderWidth: 1,
-    borderColor: colors.cardBorder,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 6,
-    elevation: 3,
-    position: "relative",
-  },
-  cardImage: {
-    width: "100%",
-    height: 160,
-    backgroundColor: colors.cardBorder,
-  },
+  cardsContainer: {},
   bookmarkButton: {
-    position: "absolute",
-    top: 12,
-    right: 12,
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: "rgba(0,0,0,0.35)",
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: "rgba(0,0,0,0.4)",
     justifyContent: "center",
     alignItems: "center",
-    zIndex: 10,
-  },
-  cardContent: { padding: 14 },
-  cardTitle: {
-    fontSize: 17,
-    fontWeight: "700",
-    color: colors.textPrimary,
-    marginBottom: 6,
-  },
-  locationContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 5,
-  },
-  locationText: {
-    fontSize: 13,
-    color: colors.textMuted,
-  },
-  tagsRow: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 4,
-    marginTop: 6,
-  },
-  tag: {
-    backgroundColor: colors.cardBorder,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 10,
-  },
-  tagText: {
-    fontSize: 10,
-    color: colors.brandDark,
-    fontWeight: "600",
-  },
-
-  // ── Empty state ──
-  emptyContainer: {
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: 60,
-  },
-  emptyText: {
-    fontSize: 18,
-    fontWeight: "700",
-    color: colors.textPrimary,
-    marginTop: 14,
-  },
-  emptySubtext: {
-    fontSize: 14,
-    color: colors.textMuted,
-    marginTop: 5,
   },
 });

@@ -2,111 +2,105 @@ import React, { useState, useEffect } from "react";
 import { View, Text, TouchableOpacity, Image, StyleSheet, ScrollView, Dimensions, StatusBar } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { Feather } from "@expo/vector-icons";
-import { useUser } from "@clerk/clerk-expo";
-import { useAuth } from "../context/AuthContext";
-import { useProfileImage } from "../context/ProfileImageContext";
 import { useTheme } from "../context/ThemeContext";
+import { ScreenHeader, SectionTitle, H_PAD } from "../components/ui";
 import CategoriesSkeleton from "../components/CategoriesSkeleton";
 
 const { width } = Dimensions.get("window");
 
+const CATEGORIES = [
+  { key: "Religious",  label: "Religious",  icon: "users",  image: "https://res.cloudinary.com/dcls9ayhn/image/upload/v1770858981/images_uxnf6s.jpg" },
+  { key: "Historical", label: "Historical", icon: "book",   image: "https://res.cloudinary.com/dcls9ayhn/image/upload/v1770859026/images_iggbls.jpg" },
+  { key: "Nature",     label: "Nature",     icon: "globe",  image: "https://res.cloudinary.com/dcls9ayhn/image/upload/v1770859084/JdlD3t1A-image_k7g8cd.webp" },
+  { key: "Festivals",  label: "Festivals",  icon: "award",  image: "https://res.cloudinary.com/dcls9ayhn/image/upload/v1770859149/newest-tanglawan_pwfcve.jpg" },
+];
+
 export default function Categories() {
   const navigation = useNavigation();
-  const { user: clerkUser } = useUser();
-  const { user: authUser }  = useAuth();
-  const { profileImage }    = useProfileImage();
-  const { colors, isDark }  = useTheme();
-  const profilePhoto = profileImage;
+  const { colors, isDark } = useTheme();
 
   const [ready, setReady] = useState(false);
   useEffect(() => { const t = setTimeout(() => setReady(true), 120); return () => clearTimeout(t); }, []);
-
   if (!ready) return <CategoriesSkeleton count={4} />;
-
-  const categories = [
-    { _id:1, name:"Religious",  backendCategory:"Religious",  image:"https://res.cloudinary.com/dcls9ayhn/image/upload/v1770858981/images_uxnf6s.jpg",       icon:"users"  },
-    { _id:2, name:"Historical", backendCategory:"Historical", image:"https://res.cloudinary.com/dcls9ayhn/image/upload/v1770859026/images_iggbls.jpg",       icon:"book"   },
-    { _id:3, name:"Nature",     backendCategory:"Nature",     image:"https://res.cloudinary.com/dcls9ayhn/image/upload/v1770859084/JdlD3t1A-image_k7g8cd.webp", icon:"globe"  },
-    { _id:4, name:"Festivals",  backendCategory:"Festivals",  image:"https://res.cloudinary.com/dcls9ayhn/image/upload/v1770859149/newest-tanglawan_pwfcve.jpg", icon:"award"  },
-  ];
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={colors.background} />
 
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <Feather name="chevron-left" size={26} color={colors.brandDark} />
-        </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.brandDark }]}>Explore</Text>
-        <TouchableOpacity onPress={() => navigation.navigate("Profile")} style={styles.avatarWrap}>
-          {profilePhoto ? (
-            <Image source={{ uri: profilePhoto }} style={[styles.avatar, { borderColor: colors.cardBorder ?? "#e8d0ce" }]} />
-          ) : (
-            <View style={[styles.avatar, styles.avatarFallback, { backgroundColor: colors.brand }]}>
-              <Feather name="user" size={18} color="#fff" />
-            </View>
-          )}
-          <View style={[styles.onlineDot, { backgroundColor: colors.brand, borderColor: colors.background }]} />
-        </TouchableOpacity>
-      </View>
+      <ScreenHeader
+        title="Explore"
+        onBack={navigation.canGoBack() ? () => navigation.goBack() : undefined}
+      />
 
-      <ScrollView style={styles.scrollView} showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-        <View style={styles.subtitleContainer}>
-          <Text style={[styles.subtitle, { color: colors.brandDark }]}>Discover Categories</Text>
-          <Text style={[styles.description, { color: colors.textMuted }]}>Choose a category to explore amazing destinations</Text>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: 150 }}>
+        <View style={styles.intro}>
+          <Text style={[styles.introTitle, { color: colors.textPrimary }]}>Browse by category</Text>
+          <Text style={[styles.introSub, { color: colors.textSecondary }]}>
+            Pick a theme and discover destinations across Bulacan
+          </Text>
         </View>
 
-        <View style={styles.gridContainer}>
-          {categories.map((category, index) => (
+        <SectionTitle>Categories</SectionTitle>
+
+        <View style={styles.grid}>
+          {CATEGORIES.map((cat) => (
             <TouchableOpacity
-              key={category._id}
-              style={[styles.categoryCard, { marginTop: index % 2 !== 0 ? 20 : 0 }]}
-              onPress={() => navigation.navigate("Lists", { category: category.backendCategory, displayName: category.name })}
-              activeOpacity={0.85}
+              key={cat.key}
+              style={[styles.card, { backgroundColor: colors.card }]}
+              onPress={() => navigation.navigate("Lists", { category: cat.key, displayName: cat.label })}
+              activeOpacity={0.88}
+              accessibilityLabel={`${cat.label} spots`}
             >
-              <Image source={{ uri: category.image }} style={styles.categoryImage} resizeMode="cover" />
-              <View style={styles.gradientOverlay}>
-                <View style={styles.overlayContent}>
-                  <View style={styles.iconContainer}>
-                    <Feather name={category.icon} size={28} color="#fff" />
-                  </View>
-                  <Text style={styles.categoryText}>{category.name}</Text>
-                  <View style={styles.arrowContainer}>
-                    <Feather name="arrow-right" size={18} color="#fff" />
-                  </View>
-                </View>
+              <Image source={{ uri: cat.image }} style={styles.cardImg} resizeMode="cover" />
+              <View style={styles.cardScrim} />
+              <View style={styles.cardIconWrap}>
+                <Feather name={cat.icon} size={20} color="#fff" />
+              </View>
+              <View style={styles.cardFooter}>
+                <Text style={styles.cardLabel}>{cat.label}</Text>
+                <Feather name="arrow-up-right" size={18} color="#fff" />
               </View>
             </TouchableOpacity>
           ))}
         </View>
-        <View style={{ height: 120 }} />
       </ScrollView>
     </View>
   );
 }
 
+const CARD_W = (width - H_PAD * 2 - 12) / 2;
+
 const styles = StyleSheet.create({
-  container:      { flex: 1, paddingTop: 50 },
-  header:         { flexDirection:"row", justifyContent:"space-between", alignItems:"center", paddingHorizontal:20, marginBottom:20 },
-  backButton:     { width:40, height:40, justifyContent:"center", alignItems:"flex-start" },
-  headerTitle:    { fontSize:20, fontWeight:"700" },
-  avatarWrap:     { position:"relative" },
-  avatar:         { width:42, height:42, borderRadius:21, borderWidth:2.5 },
-  avatarFallback: { justifyContent:"center", alignItems:"center" },
-  onlineDot:      { position:"absolute", bottom:1, right:1, width:11, height:11, borderRadius:6, borderWidth:2 },
-  scrollView:     { flex:1 },
-  scrollContent:  { paddingHorizontal:20 },
-  subtitleContainer: { marginBottom:28, alignItems:"center" },
-  subtitle:       { fontSize:24, fontWeight:"700", marginBottom:8, textAlign:"center" },
-  description:    { fontSize:14, textAlign:"center", paddingHorizontal:20, lineHeight:20 },
-  gridContainer:  { flexDirection:"row", flexWrap:"wrap", justifyContent:"space-between", width:"100%" },
-  categoryCard:   { width:"48%", height:220, marginBottom:20, borderRadius:20, overflow:"hidden", shadowColor:"#4a2e2c", shadowOffset:{width:0,height:6}, shadowOpacity:0.12, shadowRadius:12, elevation:6 },
-  categoryImage:  { width:"100%", height:"100%", position:"absolute" },
-  gradientOverlay:{ position:"absolute", bottom:0, left:0, right:0, top:0, backgroundColor:"rgba(0,0,0,0.4)", justifyContent:"flex-end", padding:15 },
-  overlayContent: { alignItems:"center" },
-  iconContainer:  { width:56, height:56, borderRadius:28, backgroundColor:"rgba(255,255,255,0.2)", justifyContent:"center", alignItems:"center", marginBottom:12, borderWidth:2, borderColor:"rgba(255,255,255,0.3)" },
-  categoryText:   { fontSize:14, fontWeight:"700", color:"#fff", textAlign:"center", marginBottom:8 },
-  arrowContainer: { width:32, height:32, borderRadius:16, backgroundColor:"rgba(255,255,255,0.25)", justifyContent:"center", alignItems:"center" },
+  container: { flex: 1 },
+
+  intro: { paddingHorizontal: H_PAD, paddingTop: 6 },
+  introTitle: { fontSize: 26, fontWeight: "800", letterSpacing: -0.5 },
+  introSub: { fontSize: 13.5, fontWeight: "500", marginTop: 6, lineHeight: 20 },
+
+  grid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: 12,
+    paddingHorizontal: H_PAD,
+  },
+  card: {
+    width: CARD_W,
+    height: 168,
+    borderRadius: 22,
+    overflow: "hidden",
+  },
+  cardImg: { ...StyleSheet.absoluteFillObject, width: "100%", height: "100%" },
+  cardScrim: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(6,20,22,0.42)" },
+  cardIconWrap: {
+    position: "absolute", top: 14, left: 14,
+    width: 40, height: 40, borderRadius: 14,
+    alignItems: "center", justifyContent: "center",
+    backgroundColor: "rgba(255,255,255,0.18)",
+    borderWidth: 1, borderColor: "rgba(255,255,255,0.28)",
+  },
+  cardFooter: {
+    position: "absolute", left: 14, right: 14, bottom: 14,
+    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+  },
+  cardLabel: { color: "#fff", fontSize: 16, fontWeight: "800", letterSpacing: -0.3 },
 });

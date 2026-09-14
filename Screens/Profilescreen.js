@@ -14,10 +14,12 @@ import {
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { Feather } from "@expo/vector-icons";
+import { showAlert } from "../components/AppAlert";
 import { useUser, useAuth } from "@clerk/clerk-expo";
 import { useAuth as useAppAuth } from "../context/AuthContext";
 import { useProfileImage } from "../context/ProfileImageContext";
 import { useTheme } from "../context/ThemeContext";
+import { ScreenHeader, H_PAD } from "../components/ui";
 
 const BASE_URL = "https://libotbackend.onrender.com";
 const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
@@ -130,7 +132,12 @@ export default function ProfileScreen() {
       id: 1,
       icon: "user-x",
       title: "Deactivate",
-      onPress: () => console.log("Deactivate pressed"),
+      onPress: () =>
+        showAlert(
+          "Not Available Yet",
+          "Account deactivation isn't set up yet. If you'd like to deactivate or delete your account, please contact support.",
+          [{ text: "OK" }]
+        ),
     },
     {
       id: 2,
@@ -162,35 +169,36 @@ export default function ProfileScreen() {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <ScreenHeader
+        title="Profile"
+        onBack={navigation.canGoBack() ? () => navigation.goBack() : undefined}
+        right={
+          <TouchableOpacity
+            onPress={() => navigation.navigate("EditProfile")}
+            hitSlop={8}
+            accessibilityLabel="Edit profile"
+          >
+            <Feather name="edit-2" size={18} color={colors.brand} />
+          </TouchableOpacity>
+        }
+      />
+
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
       >
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-            <Feather name="chevron-left" size={24} color={colors.brandDark} />
-          </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: colors.brandDark }]}>Profile</Text>
-          <TouchableOpacity
-            style={styles.editButton}
-            onPress={() => navigation.navigate("EditProfile")}
-          >
-            <Feather name="edit-2" size={18} color={colors.brand} />
-          </TouchableOpacity>
-        </View>
-
         <View style={styles.profilePhotoContainer}>
           <TouchableOpacity
             onPress={openPhotoModal}
             activeOpacity={displayPhoto ? 0.8 : 1}
             disabled={!displayPhoto}
           >
-            <View style={[styles.profilePhotoWrapper, { backgroundColor: colors.brand }]}>
+            <View style={[styles.profilePhotoWrapper, { backgroundColor: colors.brand, borderColor: colors.card }]}>
               {displayPhoto ? (
                 <Image source={{ uri: displayPhoto }} style={styles.profilePhoto} />
               ) : (
                 <View style={[styles.profilePhotoPlaceholder, { backgroundColor: colors.brand }]}>
-                  <Feather name="user" size={40} color={colors.textInverse} />
+                  <Feather name="user" size={40} color={colors.onBrand} />
                 </View>
               )}
             </View>
@@ -203,7 +211,7 @@ export default function ProfileScreen() {
         </View>
 
         {fullName ? (
-          <Text style={[styles.userName, { color: colors.brandDark }]}>{fullName}</Text>
+          <Text style={[styles.userName, { color: colors.textPrimary }]}>{fullName}</Text>
         ) : null}
         <Text style={[styles.email, { color: colors.textSecondary }]}>{userInfo.email || "No email available"}</Text>
 
@@ -296,20 +304,13 @@ export default function ProfileScreen() {
 const styles = StyleSheet.create({
   container:     { flex: 1 },
   centered:      { justifyContent: "center", alignItems: "center" },
-  scrollContent: { paddingHorizontal: 20, paddingTop: 50 },
+  scrollContent: { paddingHorizontal: H_PAD, paddingTop: 16, paddingBottom: 60 },
 
-  header: {
-    flexDirection: "row", justifyContent: "space-between",
-    alignItems: "center", marginBottom: 24,
-  },
-  backButton:  { width: 40, height: 40, justifyContent: "center", alignItems: "flex-start" },
-  headerTitle: { fontSize: 20, fontWeight: "700" },
-  editButton:  { width: 40, height: 40, justifyContent: "center", alignItems: "flex-end" },
-
-  profilePhotoContainer: { alignItems: "center", marginBottom: 12 },
+  profilePhotoContainer: { alignItems: "center", marginBottom: 14 },
   profilePhotoWrapper: {
-    width: 100, height: 100, borderRadius: 50, overflow: "hidden",
+    width: 104, height: 104, borderRadius: 52, overflow: "hidden",
     justifyContent: "center", alignItems: "center",
+    borderWidth: 4,
   },
   profilePhoto:            { width: "100%", height: "100%", resizeMode: "cover" },
   profilePhotoPlaceholder: { width: "100%", height: "100%", justifyContent: "center", alignItems: "center" },
@@ -318,30 +319,30 @@ const styles = StyleSheet.create({
     borderRadius: 13, justifyContent: "center", alignItems: "center",
   },
 
-  userName: { fontSize: 18, fontWeight: "700", textAlign: "center", marginBottom: 4 },
-  email:    { fontSize: 13, textAlign: "center", marginBottom: 20 },
+  userName: { fontSize: 24, fontWeight: "800", letterSpacing: -0.5, textAlign: "center", marginBottom: 4 },
+  email:    { fontSize: 13, fontWeight: "500", textAlign: "center", marginBottom: 26 },
 
   statsRow: {
-    flexDirection: "row", borderRadius: 16, paddingVertical: 18, paddingHorizontal: 12,
-    marginBottom: 24, alignItems: "center", borderWidth: 1,
+    flexDirection: "row", borderRadius: 22, paddingVertical: 20, paddingHorizontal: 12,
+    marginBottom: 28, alignItems: "center", borderWidth: 1,
   },
   statCard:    { flex: 1, alignItems: "center" },
   statIcon:    { marginBottom: 5 },
   statDivider: { width: 1, height: 50, marginHorizontal: 4 },
   statLabel:   { fontSize: 11, fontWeight: "500", marginBottom: 4 },
-  statCount:   { fontSize: 24, fontWeight: "700" },
+  statCount:   { fontSize: 26, fontWeight: "800", letterSpacing: -0.5 },
 
   menuContainer: { backgroundColor: "transparent" },
   menuItem: {
     flexDirection: "row", justifyContent: "space-between", alignItems: "center",
-    borderRadius: 12, paddingVertical: 14, paddingHorizontal: 14,
-    marginBottom: 8, borderWidth: 1,
+    borderRadius: 16, paddingVertical: 15, paddingHorizontal: 15,
+    marginBottom: 10, borderWidth: 1,
   },
   menuLeft:      { flexDirection: "row", alignItems: "center" },
-  iconContainer: { width: 36, height: 36, borderRadius: 10, justifyContent: "center", alignItems: "center", marginRight: 12 },
-  menuText:      { fontSize: 15, fontWeight: "500" },
+  iconContainer: { width: 38, height: 38, borderRadius: 12, justifyContent: "center", alignItems: "center", marginRight: 12 },
+  menuText:      { fontSize: 15, fontWeight: "600" },
   menuRight:     { flexDirection: "row", alignItems: "center", gap: 8 },
-  badgePill:     { borderRadius: 12, paddingHorizontal: 8, paddingVertical: 2 },
+  badgePill:     { borderRadius: 999, paddingHorizontal: 9, paddingVertical: 3 },
   badgePillText: { fontSize: 11, fontWeight: "700" },
 
   // ── Modal ──

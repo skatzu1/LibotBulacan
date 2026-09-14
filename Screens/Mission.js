@@ -6,7 +6,6 @@ import {
   TouchableOpacity,
   Image,
   ActivityIndicator,
-  Alert,
   SafeAreaView,
   ScrollView,
   Dimensions,
@@ -14,55 +13,68 @@ import {
   Animated,
   PanResponder,
 } from 'react-native';
+import { showAlert } from "../components/AppAlert";
 import { Camera, useCameraDevice, useCameraPermission } from 'react-native-vision-camera';
 import * as ImageManipulator from 'expo-image-manipulator';
 import { Feather } from '@expo/vector-icons';
 import { useIsFocused } from '@react-navigation/native';
 import { useAuth } from '@clerk/clerk-expo';
 import { loadModel, runPrediction } from '../utils/missionAI';
+import { useTheme } from '../context/ThemeContext';
+import { useMissions } from '../context/MissionContext';
 
 const { width, height } = Dimensions.get('window');
 
 // ─── Palette ────────────────────────────────────────────────────────────────
-// Warm, sun-worn paper + rust/terracotta — a field-journal feel for a
-// location-hunting mission, rather than a generic SaaS card look.
-const COLORS = {
-  bg:           '#F7F1E8',
-  surface:      '#FFFFFF',
-  border:       '#E9DDD1',
-  ink:          '#241811',
-  inkSub:       '#8C7A6D',
-  inkMuted:     '#C1B2A4',
-  brand:        '#B85C2E',
-  brandDeep:    '#8F4520',
-  brandTint:    '#F4E3D3',
-  gold:         '#C89A4B',
-  danger:       '#B23B2E',
-  dangerTint:   '#FBE9E5',
-  success:      '#3C7A4E',
-  successTint:  '#E7F2E8',
-};
+// Mission screen uses the shared app theme. This maps the local style keys
+// onto theme tokens so the screen adapts to light/dark like the rest of the app.
+const makeColors = (c) => ({
+  bg:          c.background,
+  surface:     c.card,
+  border:      c.cardBorder,
+  ink:         c.textPrimary,
+  inkSub:      c.textSecondary,
+  inkMuted:    c.textMuted,
+  brand:       c.brand,
+  brandDeep:   c.brandDark,
+  brandTint:   c.brandLight,
+  gold:        c.accent,
+  onGold:      c.onAccent,
+  danger:      c.danger,
+  dangerTint:  c.dangerBg,
+  success:     c.success,
+  successTint: c.successBg,
+});
 
+// `accentKey` names a ThemeContext colour token rather than a literal hex, so
+// each mission type stays on-brand and follows light/dark like the rest of the
+// app. (These used to be one-off hexes left over from the pre-cyan palette —
+// e.g. checkin was still the old maroon.)
 const TYPE_CONFIG = {
   checkin: {
-    iconName:    'map-pin',
-    accentColor: '#6b4b45',
-    hint:        'Head to this spot in person, then check in to log it.',
+    iconName:  'map-pin',
+    accentKey: 'success',      // arriving / confirming you're there
+    hint:      'Head to this spot in person, then check in to log it.',
   },
   photo: {
-    iconName:    'camera',
-    accentColor: '#4a7c59',
-    hint:        'Snap a clear photo so the sighting can be confirmed.',
+    iconName:  'camera',
+    accentKey: 'accentDark',   // capture — the brand's gold
+    hint:      'Snap a clear photo so the sighting can be confirmed.',
   },
   ar: {
-    iconName:    'aperture',
-    accentColor: '#2e4a7c',
-    hint:        'Line it up in AR to log this sighting.',
+    iconName:  'aperture',
+    accentKey: 'brand',        // camera/scan features share the brand teal
+    hint:      'Line it up in AR to log this sighting.',
   },
   quiz: {
-    iconName:    'help-circle',
-    accentColor: '#7c4a2e',
-    hint:        'Answer correctly to log this sighting.',
+    iconName:  'help-circle',
+    accentKey: 'warning',
+    hint:      'Answer correctly to log this sighting.',
+  },
+  ai: {
+    iconName:  'cpu',
+    accentKey: 'brand',
+    hint:      'Snap a clear photo — an on-site AI scan confirms the sighting.',
   },
 };
 
@@ -71,23 +83,38 @@ const FRAME_TOP_RATIO  = 0.22;  // matches scanFrame.top: height * 0.22
 const FRAME_LEFT_RATIO = 0.1;   // matches scanFrame.left: width * 0.1
 const FRAME_SIZE_RATIO = 0.8;   // matches scanFrame.width/height: width * 0.8
 
-// Crops the captured photo down to exactly the region the user saw inside
-// the on-screen scan frame, correcting for the camera preview's "cover" fit
-// (the raw photo's aspect ratio usually differs from the screen's).
-async function cropToScanFrame(photo) {
+// Crops the captured photo down to exactly the square region the user saw
+// inside the on-screen scan frame. Two things make this fiddly:
+//
+//  1. The camera preview is displayed "cover" — scaled uniformly to fill the
+//     screen with the overflow clipped — so the raw photo's aspect ratio
+//     differs from what was visible on screen.
+//  2. On Android, vision-camera returns the photo as raw *sensor* pixels
+//     (usually landscape) plus an EXIF rotation flag; it does NOT rotate the
+//     pixels. expo-image-manipulator bakes that rotation in before applying
+//     any op, so we must measure the image AFTER an orientation-normalising
+//     round-trip — never from the width/height vision-camera reports.
+async function cropToScanFrame(uri) {
   try {
-    const photoW = photo.width;
-    const photoH = photo.height;
-    if (!photoW || !photoH) return photo.uri;
+    // Pass [] ops purely to normalise EXIF orientation, so width/height and
+    // the crop rect below are all in the same (upright) coordinate space.
+    const normalized = await ImageManipulator.manipulateAsync(
+      uri, [], { compress: 1, format: ImageManipulator.SaveFormat.JPEG }
+    );
+
+    const photoW = normalized.width;
+    const photoH = normalized.height;
+    if (!photoW || !photoH) return normalized.uri;
 
     const screenAspect = width / height;
-    const photoAspect   = photoW / photoH;
+    const photoAspect  = photoW / photoH;
 
+    // The portion of the photo that was actually visible on screen under the
+    // "cover" fit.
     let visibleW = photoW;
     let visibleH = photoH;
     let offsetX  = 0;
     let offsetY  = 0;
-
     if (photoAspect > screenAspect) {
       visibleW = photoH * screenAspect;
       offsetX  = (photoW - visibleW) / 2;
@@ -96,40 +123,34 @@ async function cropToScanFrame(photo) {
       offsetY  = (photoH - visibleH) / 2;
     }
 
-    const scaleX = visibleW / width;
-    const scaleY = visibleH / height;
+    // Photo pixels per screen point — uniform on both axes for a "cover" fit.
+    const scale = visibleW / width;
 
-    const frameLeft = FRAME_LEFT_RATIO * width;
-    const frameTop  = FRAME_TOP_RATIO * height;
-    const frameSize = FRAME_SIZE_RATIO * width;
-
-    const cropOriginX = Math.round(offsetX + frameLeft * scaleX);
-    const cropOriginY = Math.round(offsetY + frameTop * scaleY);
-    const cropWidth   = Math.round(frameSize * scaleX);
-    const cropHeight  = Math.round(frameSize * scaleY);
+    const originX = Math.max(0, Math.round(offsetX + FRAME_LEFT_RATIO * width  * scale));
+    const originY = Math.max(0, Math.round(offsetY + FRAME_TOP_RATIO  * height * scale));
+    // Keep it square, and never run past the image edges.
+    const size = Math.round(
+      Math.min(FRAME_SIZE_RATIO * width * scale, photoW - originX, photoH - originY)
+    );
 
     const result = await ImageManipulator.manipulateAsync(
-      photo.uri,
-      [{
-        crop: {
-          originX: Math.max(0, cropOriginX),
-          originY: Math.max(0, cropOriginY),
-          width:   Math.min(cropWidth, photoW - Math.max(0, cropOriginX)),
-          height:  Math.min(cropHeight, photoH - Math.max(0, cropOriginY)),
-        },
-      }],
+      normalized.uri,
+      [{ crop: { originX, originY, width: size, height: size } }],
       { compress: 1, format: ImageManipulator.SaveFormat.JPEG }
     );
 
     return result.uri;
   } catch (err) {
     console.error('Crop error:', err);
-    return photo.uri;
+    return uri;
   }
 }
 
 // ─── Step Row ─────────────────────────────────────────────────────────────────
 function StepRow({ number, icon, text, isLast }) {
+  const { colors } = useTheme();
+  const C = useMemo(() => makeColors(colors), [colors]);
+  const stepStyles = useMemo(() => makeStepStyles(C), [C]);
   return (
     <View style={[stepStyles.row, isLast && { marginBottom: 0 }]}>
       <View style={stepStyles.left}>
@@ -139,14 +160,14 @@ function StepRow({ number, icon, text, isLast }) {
         {!isLast && <View style={stepStyles.connector} />}
       </View>
       <View style={stepStyles.content}>
-        <Feather name={icon} size={13} color={COLORS.inkMuted} style={{ marginRight: 8, marginTop: 1 }} />
+        <Feather name={icon} size={13} color={C.inkMuted} style={{ marginRight: 8, marginTop: 1 }} />
         <Text style={stepStyles.text}>{text}</Text>
       </View>
     </View>
   );
 }
 
-const stepStyles = StyleSheet.create({
+const makeStepStyles = (COLORS) => StyleSheet.create({
   row:       { flexDirection: 'row', marginBottom: 18 },
   left:      { alignItems: 'center', marginRight: 14 },
   numCircle: {
@@ -162,6 +183,8 @@ const stepStyles = StyleSheet.create({
 
 // ─── Confidence Meter ───────────────────────────────────────────────────────────
 function ConfidenceMeter({ confidence, color }) {
+  const { colors } = useTheme();
+  const meterStyles = useMemo(() => makeMeterStyles(makeColors(colors)), [colors]);
   if (confidence === null || confidence === undefined) return null;
   const pct = Math.max(0, Math.min(100, confidence));
 
@@ -178,7 +201,7 @@ function ConfidenceMeter({ confidence, color }) {
   );
 }
 
-const meterStyles = StyleSheet.create({
+const makeMeterStyles = (COLORS) => StyleSheet.create({
   wrap:     { width: '100%', marginBottom: 18 },
   labelRow: {
     flexDirection: 'row', justifyContent: 'space-between',
@@ -206,15 +229,30 @@ export default function Mission({ navigation, route }) {
   const config = {
     id:          mission._id,
     title:       mission.title,
-    product:     mission.title,
-    category:    mission.type.charAt(0).toUpperCase() + mission.type.slice(1),
+    // For "ai" missions, `product` needs to read as a noun phrase ("the
+    // Philippine flag") since it's slotted into sentences like "Keep {product}
+    // inside the frame" — aiTargetPhrase is computed live server-side from the
+    // spot's current category (see missionRoutes.js) so it can't drift out of
+    // sync the way the mission title/description could.
+    product:     mission.type === 'ai' && mission.aiTargetPhrase
+      ? mission.aiTargetPhrase
+      : mission.title,
+    category:    mission.type === 'ai'
+      ? 'AI'
+      : mission.type.charAt(0).toUpperCase() + mission.type.slice(1),
     iconName:    mission.icon || typeConfig.iconName,
-    accentColor: typeConfig.accentColor,
-    hint:        mission.description || typeConfig.hint,
+    hint:        mission.aiHint || mission.description || typeConfig.hint,
     type:        mission.type,
   };
 
   const { getToken } = useAuth();
+  const { completeMission: persistMissionComplete, completedMissions } = useMissions();
+  const alreadyCompleted = completedMissions?.includes(mission._id);
+  const { colors, isDark } = useTheme();
+  // Resolved here rather than in TYPE_CONFIG so it follows the active theme.
+  const accentColor = colors[typeConfig.accentKey] || colors.brand;
+  const C = useMemo(() => makeColors(colors), [colors]);
+  const styles = useMemo(() => makeStyles(C), [C]);
 
   const cameraRef = useRef(null);
   const { hasPermission, requestPermission } = useCameraPermission();
@@ -271,7 +309,7 @@ export default function Mission({ navigation, route }) {
     if (!hasPermission) {
       const granted = await requestPermission();
       if (!granted) {
-        Alert.alert('Camera Required', 'Camera access is needed to spot this one.');
+        showAlert('Camera Required', 'Camera access is needed to spot this one.');
         return;
       }
     }
@@ -386,7 +424,7 @@ export default function Mission({ navigation, route }) {
 
     // Crop down to exactly what the user saw inside the scan frame,
     // so the AI analyzes the same region the guide shows.
-    const croppedUri = await cropToScanFrame({ uri: photoUri, width: photo.width, height: photo.height });
+    const croppedUri = await cropToScanFrame(photoUri);
 
     setCameraOpen(false);
     setCapturedImage(croppedUri);
@@ -397,14 +435,14 @@ export default function Mission({ navigation, route }) {
     const result = await runPrediction(croppedUri, mission._id, getToken);
 
     if (!result) {
-      Alert.alert('Error', 'Could not analyze image. Please try again.');
+      showAlert('Error', 'Could not analyze image. Please try again.');
       setStatus('failed');
       return;
     }
 
     // If backend says no model exists yet for this mission
     if (result.noModel) {
-      Alert.alert(
+      showAlert(
         'Not Ready Yet',
         `Verification for "${mission.title}" isn't set up yet. Check back soon!`
       );
@@ -424,7 +462,12 @@ export default function Mission({ navigation, route }) {
   const closeCamera = () => { setCameraOpen(false); setStatus('pending'); };
 
   const completeMission = () => {
-    Alert.alert(
+    // Persists to the backend (awards points + survives app restarts) and
+    // updates local state so InformationScreen's mission list reflects it
+    // immediately. Fire-and-forget — the confirmation shows regardless, and
+    // completeMission() is idempotent server-side if it's retried.
+    persistMissionComplete(mission._id);
+    showAlert(
       '🎉 Nice spotting!',
       `"${mission.title}" is confirmed and logged as complete.`,
       [{ text: 'Back to Missions', onPress: () => navigation.goBack() }]
@@ -548,7 +591,7 @@ export default function Mission({ navigation, route }) {
   // ─── MAIN SCREEN ──────────────────────────────────────────────────────────
   return (
     <SafeAreaView style={styles.container}>
-      <StatusBar barStyle="dark-content" backgroundColor={COLORS.bg} />
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={C.bg} />
       <ScrollView
         contentContainerStyle={styles.scroll}
         showsVerticalScrollIndicator={false}
@@ -556,7 +599,7 @@ export default function Mission({ navigation, route }) {
         {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-            <Feather name="chevron-left" size={20} color={COLORS.ink} />
+            <Feather name="chevron-left" size={20} color={C.ink} />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Mission</Text>
           <View style={{ width: 36 }} />
@@ -571,8 +614,8 @@ export default function Mission({ navigation, route }) {
         {/* Mission ticket */}
         <View style={styles.ticketCard}>
           <View style={styles.ticketMain}>
-            <View style={[styles.iconWrap, { backgroundColor: config.accentColor + '18' }]}>
-              <Feather name={config.iconName} size={24} color={config.accentColor} />
+            <View style={[styles.iconWrap, { backgroundColor: accentColor + '18' }]}>
+              <Feather name={config.iconName} size={24} color={accentColor} />
             </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.ticketCategory}>{config.category} sighting</Text>
@@ -598,7 +641,7 @@ export default function Mission({ navigation, route }) {
 
           {spot?.name && (
             <View style={styles.spotRow}>
-              <Feather name="map-pin" size={12} color={COLORS.inkSub} />
+              <Feather name="map-pin" size={12} color={C.inkSub} />
               <Text style={styles.spotRowText}>{spot.name}</Text>
             </View>
           )}
@@ -607,7 +650,7 @@ export default function Mission({ navigation, route }) {
         {/* Model loading */}
         {!modelReady && (
           <View style={styles.loadingRow}>
-            <ActivityIndicator color={COLORS.brand} size="small" />
+            <ActivityIndicator color={C.brand} size="small" />
             <Text style={styles.loadingText}>Getting the scanner ready…</Text>
           </View>
         )}
@@ -632,8 +675,17 @@ export default function Mission({ navigation, route }) {
 
           {config.hint && (
             <View style={styles.hintBox}>
-              <Feather name="info" size={13} color={COLORS.brandDeep} style={{ marginRight: 8, marginTop: 1 }} />
+              <Feather name="info" size={13} color={C.brandDeep} style={{ marginRight: 8, marginTop: 1 }} />
               <Text style={styles.hintText}>{config.hint}</Text>
+            </View>
+          )}
+
+          {alreadyCompleted && status === 'pending' && (
+            <View style={[styles.hintBox, { backgroundColor: C.successTint, marginTop: 10 }]}>
+              <Feather name="check-circle" size={13} color={C.success} style={{ marginRight: 8, marginTop: 1 }} />
+              <Text style={[styles.hintText, { color: C.success }]}>
+                Already logged — feel free to scan again just for fun.
+              </Text>
             </View>
           )}
         </View>
@@ -645,7 +697,7 @@ export default function Mission({ navigation, route }) {
           {status === 'pending' && (
             <View style={styles.statusInner}>
               <View style={styles.statusIconCircle}>
-                <Feather name="compass" size={28} color={COLORS.brand} />
+                <Feather name="compass" size={28} color={C.brand} />
               </View>
               <Text style={styles.statusTitle}>Ready when you are</Text>
               <Text style={styles.statusDesc}>
@@ -657,7 +709,7 @@ export default function Mission({ navigation, route }) {
                 disabled={!modelReady}
                 activeOpacity={0.85}
               >
-                <Feather name="camera" size={16} color="white" style={{ marginRight: 8 }} />
+                <Feather name="camera" size={16} color={C.onGold} style={{ marginRight: 8 }} />
                 <Text style={styles.primaryBtnText}>
                   {modelReady ? 'Open Camera' : 'Loading scanner…'}
                 </Text>
@@ -669,10 +721,10 @@ export default function Mission({ navigation, route }) {
           {status === 'scanning' && (
             <View style={styles.statusInner}>
               {capturedImage && (
-                <Image source={{ uri: capturedImage }} style={styles.preview} />
+                <Image source={{ uri: capturedImage }} style={styles.preview} resizeMode="contain" />
               )}
               <View style={styles.scanningRow}>
-                <ActivityIndicator size="small" color={COLORS.brand} style={{ marginRight: 10 }} />
+                <ActivityIndicator size="small" color={C.brand} style={{ marginRight: 10 }} />
                 <Text style={styles.scanningText}>Checking your photo…</Text>
               </View>
             </View>
@@ -682,23 +734,23 @@ export default function Mission({ navigation, route }) {
           {status === 'approved' && (
             <View style={styles.statusInner}>
               {capturedImage && (
-                <Image source={{ uri: capturedImage }} style={styles.preview} />
+                <Image source={{ uri: capturedImage }} style={styles.preview} resizeMode="contain" />
               )}
-              <ConfidenceMeter confidence={confidence} color={COLORS.success} />
-              <View style={[styles.statusBanner, { backgroundColor: COLORS.successTint }]}>
-                <Feather name="check-circle" size={18} color={COLORS.success} style={{ marginRight: 8 }} />
-                <Text style={[styles.statusBannerText, { color: COLORS.success }]}>Sighting confirmed</Text>
+              <ConfidenceMeter confidence={confidence} color={C.success} />
+              <View style={[styles.statusBanner, { backgroundColor: C.successTint }]}>
+                <Feather name="check-circle" size={18} color={C.success} style={{ marginRight: 8 }} />
+                <Text style={[styles.statusBannerText, { color: C.success }]}>Sighting confirmed</Text>
               </View>
               <TouchableOpacity
-                style={[styles.primaryBtn, { backgroundColor: config.accentColor }]}
+                style={styles.primaryBtn}
                 onPress={completeMission}
                 activeOpacity={0.85}
               >
-                <Feather name="check" size={16} color="white" style={{ marginRight: 8 }} />
+                <Feather name="check" size={16} color={C.onGold} style={{ marginRight: 8 }} />
                 <Text style={styles.primaryBtnText}>Mark as Done</Text>
               </TouchableOpacity>
               <TouchableOpacity style={styles.outlineBtn} onPress={openCamera} activeOpacity={0.8}>
-                <Feather name="refresh-cw" size={14} color={COLORS.brand} style={{ marginRight: 6 }} />
+                <Feather name="refresh-cw" size={14} color={C.brand} style={{ marginRight: 6 }} />
                 <Text style={styles.outlineBtnText}>Scan Again</Text>
               </TouchableOpacity>
             </View>
@@ -708,18 +760,18 @@ export default function Mission({ navigation, route }) {
           {status === 'failed' && (
             <View style={styles.statusInner}>
               {capturedImage && (
-                <Image source={{ uri: capturedImage }} style={styles.preview} />
+                <Image source={{ uri: capturedImage }} style={styles.preview} resizeMode="contain" />
               )}
-              <ConfidenceMeter confidence={confidence} color={COLORS.danger} />
-              <View style={[styles.statusBanner, { backgroundColor: COLORS.dangerTint }]}>
-                <Feather name="x-circle" size={18} color={COLORS.danger} style={{ marginRight: 8 }} />
-                <Text style={[styles.statusBannerText, { color: COLORS.danger }]}>No match yet</Text>
+              <ConfidenceMeter confidence={confidence} color={C.danger} />
+              <View style={[styles.statusBanner, { backgroundColor: C.dangerTint }]}>
+                <Feather name="x-circle" size={18} color={C.danger} style={{ marginRight: 8 }} />
+                <Text style={[styles.statusBannerText, { color: C.danger }]}>No match yet</Text>
               </View>
               <Text style={styles.failedTip}>
                 Make sure <Text style={{ fontWeight: '700' }}>{config.product}</Text> is clearly visible and well-lit, then try again.
               </Text>
               <TouchableOpacity style={styles.primaryBtn} onPress={openCamera} activeOpacity={0.85}>
-                <Feather name="camera" size={16} color="white" style={{ marginRight: 8 }} />
+                <Feather name="camera" size={16} color={C.onGold} style={{ marginRight: 8 }} />
                 <Text style={styles.primaryBtnText}>Try Again</Text>
               </TouchableOpacity>
             </View>
@@ -734,7 +786,7 @@ export default function Mission({ navigation, route }) {
 }
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
-const styles = StyleSheet.create({
+const makeStyles = (COLORS) => StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.bg },
   scroll:    { paddingHorizontal: 20, paddingTop: 5, alignItems: 'center' },
 
@@ -759,10 +811,10 @@ const styles = StyleSheet.create({
 
   // ── Mission "ticket" — the one signature visual moment on this screen ──
   ticketCard: {
-    backgroundColor: COLORS.surface, borderRadius: 18,
+    backgroundColor: COLORS.surface, borderRadius: 22,
     padding: 20, width: '100%', marginBottom: 12,
-    shadowColor: COLORS.ink, shadowOpacity: 0.08,
-    shadowRadius: 14, shadowOffset: { width: 0, height: 6 }, elevation: 3,
+    shadowColor: '#0B2E31', shadowOpacity: 0.06,
+    shadowRadius: 22, shadowOffset: { width: 0, height: 10 }, elevation: 3,
   },
   ticketMain: { flexDirection: 'row', alignItems: 'center', gap: 14 },
   iconWrap: {
@@ -803,10 +855,10 @@ const styles = StyleSheet.create({
   loadingText: { fontSize: 13, color: COLORS.inkMuted },
 
   card: {
-    backgroundColor: COLORS.surface, borderRadius: 18,
+    backgroundColor: COLORS.surface, borderRadius: 22,
     padding: 20, width: '100%', marginBottom: 12,
-    shadowColor: COLORS.ink, shadowOpacity: 0.05,
-    shadowRadius: 10, shadowOffset: { width: 0, height: 3 }, elevation: 2,
+    shadowColor: '#0B2E31', shadowOpacity: 0.05,
+    shadowRadius: 18, shadowOffset: { width: 0, height: 8 }, elevation: 2,
   },
   cardLabel: {
     fontSize: 13, fontWeight: '700', color: COLORS.ink, marginBottom: 20,
@@ -814,7 +866,7 @@ const styles = StyleSheet.create({
 
   hintBox: {
     flexDirection: 'row', alignItems: 'flex-start',
-    backgroundColor: COLORS.brandTint, borderRadius: 12, padding: 12, marginTop: 4,
+    backgroundColor: COLORS.brandTint, borderRadius: 14, padding: 14, marginTop: 4,
   },
   hintText: { fontSize: 12.5, color: COLORS.brandDeep, lineHeight: 18, flex: 1 },
 
@@ -833,14 +885,16 @@ const styles = StyleSheet.create({
     marginBottom: 24, lineHeight: 21, maxWidth: 260,
   },
 
+  // Square to match the (square) scan-frame crop, so the preview shows exactly
+  // what was captured rather than a cover-cropped slice of it.
   preview: {
-    width: '100%', height: 220, borderRadius: 14,
+    width: '100%', aspectRatio: 1, borderRadius: 18,
     marginBottom: 16, backgroundColor: COLORS.border,
   },
 
   statusBanner: {
     flexDirection: 'row', alignItems: 'center',
-    borderRadius: 12, paddingHorizontal: 16, paddingVertical: 10,
+    borderRadius: 14, paddingHorizontal: 16, paddingVertical: 11,
     marginBottom: 18, width: '100%', justifyContent: 'center',
   },
   statusBannerText: { fontSize: 15, fontWeight: '700' },
@@ -853,20 +907,20 @@ const styles = StyleSheet.create({
   scanningRow: {
     flexDirection: 'row', alignItems: 'center', marginTop: 12,
     backgroundColor: COLORS.brandTint, paddingHorizontal: 16,
-    paddingVertical: 10, borderRadius: 12, width: '100%', justifyContent: 'center',
+    paddingVertical: 11, borderRadius: 14, width: '100%', justifyContent: 'center',
   },
   scanningText: { fontSize: 14, color: COLORS.brandDeep, fontWeight: '600' },
 
   primaryBtn: {
-    backgroundColor: COLORS.brand, paddingVertical: 14,
-    paddingHorizontal: 28, borderRadius: 14, marginBottom: 10,
+    backgroundColor: COLORS.gold, paddingVertical: 14,
+    paddingHorizontal: 28, borderRadius: 16, marginBottom: 12,
     width: '100%', alignItems: 'center', justifyContent: 'center', flexDirection: 'row',
   },
   disabledBtn:     { backgroundColor: COLORS.border },
-  primaryBtnText:  { color: 'white', fontSize: 15, fontWeight: '700', letterSpacing: 0.2 },
+  primaryBtnText:  { color: COLORS.onGold, fontSize: 15, fontWeight: '700', letterSpacing: 0.2 },
   outlineBtn: {
     borderWidth: 1.5, borderColor: COLORS.border,
-    paddingVertical: 12, paddingHorizontal: 28, borderRadius: 14,
+    paddingVertical: 13, paddingHorizontal: 28, borderRadius: 16,
     width: '100%', alignItems: 'center', flexDirection: 'row', justifyContent: 'center',
   },
   outlineBtnText: { color: COLORS.brand, fontSize: 14, fontWeight: '600' },

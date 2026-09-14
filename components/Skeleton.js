@@ -15,16 +15,23 @@ import Animated, {
   interpolate,
   Extrapolation,
 } from "react-native-reanimated";
+import { useTheme } from "../context/ThemeContext";
 
 // ─── Shimmer Bone ─────────────────────────────────────────────────────────────
+// baseColor/shineColor are optional overrides — when omitted, the shimmer
+// pulls its colors from the current theme so it looks right in both light
+// and dark mode instead of always rendering the light-mode cyan tint.
 export default function Skeleton({
   width,
   height,
   radius = 8,
   style,
-  baseColor  = "#f0e0de",
-  shineColor = "#fdf6f5",
+  baseColor,
+  shineColor,
 }) {
+  const { colors, isDark } = useTheme();
+  const resolvedBase  = baseColor  ?? colors.card;
+  const resolvedShine = shineColor ?? (isDark ? colors.cardBorder : colors.backgroundSoft);
   const progress = useSharedValue(0);
 
   useEffect(() => {
@@ -62,7 +69,7 @@ export default function Skeleton({
           width,
           height,
           borderRadius: radius,
-          backgroundColor: baseColor,
+          backgroundColor: resolvedBase,
           overflow: "hidden",
         },
         boneStyle,
@@ -72,7 +79,7 @@ export default function Skeleton({
       <Animated.View
         style={[
           StyleSheet.absoluteFill,
-          { backgroundColor: shineColor },
+          { backgroundColor: resolvedShine },
           shineStyle,
         ]}
       />

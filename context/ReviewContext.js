@@ -61,14 +61,19 @@ export const ReviewProvider = ({ children }) => {
   }, []);
 
   // Pulls the signed-in user's mute/suspension/ban state, so screens can
-  // show a notice proactively instead of only finding out via a 403.
+  // show a notice proactively instead of only finding out via a 403. Returns
+  // the fetched data (not just setting state) so callers that need it
+  // synchronously — e.g. addReview's catch block below — aren't stuck reading
+  // a stale `moderationStatus` closure from before this call resolved.
   const fetchModerationStatus = useCallback(async () => {
     try {
       const res = await api.get("/api/reviews/user/moderation-status");
       const data = res.data;
       if (data.success) setModerationStatus(data);
+      return data;
     } catch (err) {
       console.error("❌ Error fetching moderation status:", err);
+      return null;
     }
   }, []);
 
@@ -91,10 +96,17 @@ export const ReviewProvider = ({ children }) => {
       const message = err.response?.data?.message || err.message || "Failed to add review";
       console.error("❌ Error adding review:", message);
       setError(message);
-      // A 403 here means the user is muted/suspended/banned — refresh
-      // status so the UI reflects the current mute/suspension window.
-      if (err.response?.status === 403) await fetchModerationStatus();
-      return { success: false, message };
+      // A 403 here means the user is muted/suspended/banned — refresh status
+      // and hand the fresh isSuspended/suspendedUntil/isMuted/commentMuteUntil
+      // fields straight back to the caller (the UI needs the exact end date
+      // to show a "time remaining" countdown, not just the message string).
+      let status = null;
+      if (err.response?.status === 403) status = await fetchModerationStatus();
+      // Exclude status.success — it reflects whether *this status fetch*
+      // succeeded, not whether the review post did (which is always false
+      // here); spreading it as-is would silently flip the result to "success".
+      const { success: _statusSuccess, ...statusFields } = status || {};
+      return { success: false, message, ...statusFields };
     }
   }, [fetchReviews, fetchModerationStatus]);
 

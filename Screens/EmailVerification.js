@@ -1,17 +1,40 @@
-import { View, StyleSheet, TouchableOpacity, TextInput, Text, Alert, ActivityIndicator } from "react-native";
+import {
+  View,
+  StyleSheet,
+  TouchableOpacity,
+  TextInput,
+  Text,
+  ActivityIndicator,
+  ScrollView,
+  KeyboardAvoidingView,
+  Platform,
+  StatusBar,
+} from "react-native";
+import { showAlert, showToast } from "../components/AppAlert";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useState, useRef } from "react";
 import { useSignUp, useSignIn } from "@clerk/clerk-expo";
+import { Feather } from "@expo/vector-icons";
+import { useTheme, spacing, radius, typography } from "../context/ThemeContext";
+
+const EMPTY_CODE = ["", "", "", "", "", ""];
 
 export default function EmailVerification({ navigation, route }) {
+  const { colors, isDark } = useTheme();
   const { email, fromLogin } = route.params || {};
   const { isLoaded: signUpLoaded, signUp, setActive: setActiveSignUp } = useSignUp();
   const { isLoaded: signInLoaded, signIn, setActive: setActiveSignIn } = useSignIn();
-  
-  const [code, setCode] = useState(["", "", "", "", "", ""]);
+
+  const [code, setCode] = useState(EMPTY_CODE);
   const [isLoading, setIsLoading] = useState(false);
   const [isResending, setIsResending] = useState(false);
-  
+
   const inputRefs = useRef([]);
+
+  const resetCode = () => {
+    setCode(EMPTY_CODE);
+    inputRefs.current[0]?.focus();
+  };
 
   const handleCodeChange = (text, index) => {
     if (text && !/^\d+$/.test(text)) return;
@@ -26,165 +49,92 @@ export default function EmailVerification({ navigation, route }) {
   };
 
   const handleKeyPress = (e, index) => {
-    if (e.nativeEvent.key === 'Backspace' && !code[index] && index > 0) {
+    if (e.nativeEvent.key === "Backspace" && !code[index] && index > 0) {
       inputRefs.current[index - 1]?.focus();
     }
   };
 
   const handleVerify = async () => {
     const verificationCode = code.join("");
-    
+
     if (verificationCode.length !== 6) {
-      Alert.alert("Error", "Please enter the complete 6-digit code");
+      showAlert("Error", "Please enter the complete 6-digit code");
       return;
     }
 
     if (!signUpLoaded && !signInLoaded) {
-      Alert.alert("Error", "Please wait, loading...");
+      showAlert("Error", "Please wait, loading...");
       return;
     }
 
     setIsLoading(true);
-    
-    try {
-      console.log('🔵 Attempting email verification...');
-      console.log('Code:', verificationCode);
-      console.log('Email:', email);
-      console.log('From login:', fromLogin);
 
+    try {
       // Try signUp verification first (for new registrations)
       if (signUp && signUpLoaded && !fromLogin) {
         try {
-          console.log('Attempting signUp verification...');
-          
-          const result = await signUp.attemptEmailAddressVerification({
-            code: verificationCode,
-          });
+          const result = await signUp.attemptEmailAddressVerification({ code: verificationCode });
 
-          console.log('SignUp verification result:', result);
-          console.log('Status:', result.status);
-
-          if (result.status === 'complete') {
-            console.log('✅ Email verified successfully!');
-            console.log('Setting active session...');
-            
-            // Set active session - this will trigger Clerk webhook
-            await setActiveSignUp({ 
-              session: result.createdSessionId 
-            });
-
-            console.log('✅ Session activated');
-            console.log('User will be saved to database via Clerk webhook');
-
-            // Show success and navigate to Home
-            Alert.alert(
-              "Success!",
-              "Email verified successfully! Welcome to Libot.",
-              [{
-                text: "OK",
-                onPress: () => {
-                  // Navigation will happen automatically via App.js
-                  // because isSignedIn will now be true
-                  console.log('User should now be redirected to Home');
-                }
-              }]
-            );
-            
+          if (result.status === "complete") {
+            await setActiveSignUp({ session: result.createdSessionId });
+            showToast("Email verified — welcome to Libot!", { type: "success" });
             setIsLoading(false);
             return;
-          } else {
-            console.log('⚠️ Unexpected status:', result.status);
           }
         } catch (signUpError) {
-          console.error('SignUp verification error:', signUpError);
-          console.error('Error details:', JSON.stringify(signUpError, null, 2));
-          
+          console.error("SignUp verification error:", signUpError);
           const errorCode = signUpError.errors?.[0]?.code;
           const errorMessage = signUpError.errors?.[0]?.message;
-          
-          if (errorCode === 'form_code_incorrect') {
-            Alert.alert("Invalid Code", "The verification code is incorrect. Please try again.");
-            setCode(["", "", "", "", "", ""]);
-            inputRefs.current[0]?.focus();
-            setIsLoading(false);
-            return;
-          } else if (errorCode === 'verification_expired') {
-            Alert.alert("Code Expired", "This verification code has expired. Please request a new one.");
-            setCode(["", "", "", "", "", ""]);
-            inputRefs.current[0]?.focus();
-            setIsLoading(false);
-            return;
+
+          if (errorCode === "form_code_incorrect") {
+            showAlert("Invalid Code", "The verification code is incorrect. Please try again.");
+          } else if (errorCode === "verification_expired") {
+            showAlert("Code Expired", "This verification code has expired. Please request a new one.");
           } else {
-            Alert.alert("Verification Failed", errorMessage || "Unable to verify code. Please try again.");
-            setCode(["", "", "", "", "", ""]);
-            inputRefs.current[0]?.focus();
-            setIsLoading(false);
-            return;
+            showAlert("Verification Failed", errorMessage || "Unable to verify code. Please try again.");
           }
+          resetCode();
+          setIsLoading(false);
+          return;
         }
       }
 
       // Try signIn verification (for login flow)
       if (signIn && signInLoaded && fromLogin) {
         try {
-          console.log('Attempting signIn verification...');
-          
           const result = await signIn.attemptFirstFactor({
-            strategy: 'email_code',
+            strategy: "email_code",
             code: verificationCode,
           });
 
-          console.log('SignIn verification result:', result);
-          console.log('Status:', result.status);
-
-          if (result.status === 'complete') {
-            console.log('✅ Email verified successfully!');
-            
-            await setActiveSignIn({ 
-              session: result.createdSessionId 
-            });
-
-            Alert.alert(
-              "Success!",
-              "Email verified! Welcome back.",
-              [{
-                text: "OK",
-                onPress: () => {
-                  console.log('User should now be redirected to Home');
-                }
-              }]
-            );
-            
+          if (result.status === "complete") {
+            await setActiveSignIn({ session: result.createdSessionId });
+            showToast("Email verified — welcome back!", { type: "success" });
             setIsLoading(false);
             return;
           }
         } catch (signInError) {
-          console.error('SignIn verification error:', signInError);
-          
+          console.error("SignIn verification error:", signInError);
           const errorCode = signInError.errors?.[0]?.code;
           const errorMessage = signInError.errors?.[0]?.message;
-          
-          if (errorCode === 'form_code_incorrect') {
-            Alert.alert("Invalid Code", "The verification code is incorrect. Please try again.");
+
+          if (errorCode === "form_code_incorrect") {
+            showAlert("Invalid Code", "The verification code is incorrect. Please try again.");
           } else {
-            Alert.alert("Verification Failed", errorMessage || "Unable to verify code.");
+            showAlert("Verification Failed", errorMessage || "Unable to verify code.");
           }
-          
-          setCode(["", "", "", "", "", ""]);
-          inputRefs.current[0]?.focus();
+          resetCode();
           setIsLoading(false);
           return;
         }
       }
 
       // If we get here, verification failed
-      Alert.alert("Verification Failed", "Unable to verify the code. Please try again.");
-      setCode(["", "", "", "", "", ""]);
-      inputRefs.current[0]?.focus();
-      
+      showAlert("Verification Failed", "Unable to verify the code. Please try again.");
+      resetCode();
     } catch (error) {
-      console.error('❌ Unexpected verification error:', error);
-      Alert.alert("Error", "An unexpected error occurred. Please try again.");
+      console.error("Unexpected verification error:", error);
+      showAlert("Error", "An unexpected error occurred. Please try again.");
     } finally {
       setIsLoading(false);
     }
@@ -192,222 +142,191 @@ export default function EmailVerification({ navigation, route }) {
 
   const handleResendCode = async () => {
     if (!signUpLoaded && !signInLoaded) {
-      Alert.alert("Error", "Please wait, loading...");
+      showAlert("Error", "Please wait, loading...");
       return;
     }
 
     setIsResending(true);
-    
+
     try {
-      console.log('🔵 Resending verification code...');
-      
-      // Resend for signUp
       if (signUp && signUpLoaded && !fromLogin) {
-        await signUp.prepareEmailAddressVerification({ 
-          strategy: 'email_code' 
-        });
-        
-        Alert.alert(
-          "Code Sent",
-          `A new verification code has been sent to ${email}. Please check your email.`
-        );
-        
-        setCode(["", "", "", "", "", ""]);
-        inputRefs.current[0]?.focus();
+        await signUp.prepareEmailAddressVerification({ strategy: "email_code" });
+        showToast("New code sent — check your email.", { type: "success" });
+        resetCode();
       }
-      
-      // Resend for signIn
+
       if (signIn && signInLoaded && fromLogin) {
         const emailFactor = signIn.supportedFirstFactors?.find(
-          factor => factor.strategy === 'email_code'
+          (factor) => factor.strategy === "email_code"
         );
-
         if (emailFactor) {
           await signIn.prepareFirstFactor({
-            strategy: 'email_code',
+            strategy: "email_code",
             emailAddressId: emailFactor.emailAddressId,
           });
-          
-          Alert.alert(
-            "Code Sent",
-            `A new verification code has been sent to ${email}.`
-          );
-          
-          setCode(["", "", "", "", "", ""]);
-          inputRefs.current[0]?.focus();
+          showToast("New code sent to your email.", { type: "success" });
+          resetCode();
         }
       }
     } catch (error) {
-      console.error('❌ Resend error:', error);
-      Alert.alert("Error", "Failed to resend code. Please try again.");
+      console.error("Resend error:", error);
+      showAlert("Error", "Failed to resend code. Please try again.");
     } finally {
       setIsResending(false);
     }
   };
 
+  const busy = isLoading || isResending;
+
   return (
-    <View style={styles.screen}>
-      <View style={styles.titleContainer}>
-        <Text style={styles.title}>Verify Your Email</Text>
-        <Text style={styles.subtitle}>We've sent a 6-digit code to</Text>
-        <Text style={styles.email}>{email}</Text>
-        <Text style={styles.hint}>Please check your inbox and spam folder</Text>
-      </View>
-
-      <View style={styles.codeContainer}>
-        {code.map((digit, index) => (
-          <TextInput
-            key={index}
-            ref={(ref) => (inputRefs.current[index] = ref)}
-            style={styles.codeInput}
-            value={digit}
-            onChangeText={(text) => handleCodeChange(text, index)}
-            onKeyPress={(e) => handleKeyPress(e, index)}
-            keyboardType="number-pad"
-            maxLength={1}
-            selectTextOnFocus
-            editable={!isLoading && !isResending}
-          />
-        ))}
-      </View>
-
-      <View style={styles.buttonContainer}>
-        <TouchableOpacity 
-          style={[styles.verifyButton, (isLoading || isResending) && styles.verifyButtonDisabled]} 
-          onPress={handleVerify}
-          disabled={isLoading || isResending}
+    <SafeAreaView style={[styles.screen, { backgroundColor: colors.background }]} edges={["top", "bottom"]}>
+      <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={colors.background} />
+      <KeyboardAvoidingView
+        style={styles.flex}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+      >
+        <ScrollView
+          contentContainerStyle={styles.scroll}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
         >
-          {isLoading ? (
-            <ActivityIndicator color="#fff" />
-          ) : (
-            <Text style={styles.buttonText}>Verify Email</Text>
-          )}
-        </TouchableOpacity>
-      </View>
+          <View style={[styles.iconCircle, { backgroundColor: colors.card }]}>
+            <Feather name="mail" size={30} color={colors.brand} />
+          </View>
 
-      <View style={styles.resendContainer}>
-        <Text style={styles.resendText}>Didn't receive the code? </Text>
-        <TouchableOpacity 
-          onPress={handleResendCode} 
-          disabled={isLoading || isResending}
-        >
-          {isResending ? (
-            <ActivityIndicator size="small" color="#6b4b45" />
-          ) : (
-            <Text style={styles.resendLink}>Resend</Text>
-          )}
-        </TouchableOpacity>
-      </View>
+          <View style={styles.titleContainer}>
+            <Text style={[typography.h1, styles.center, { color: colors.textPrimary }]}>Verify Your Email</Text>
+            <Text style={[typography.body, styles.center, { color: colors.textSecondary, marginTop: spacing.sm }]}>
+              We've sent a 6-digit code to
+            </Text>
+            <Text style={[typography.bodyStrong, styles.center, { color: colors.brand, marginTop: spacing.xs }]}>
+              {email}
+            </Text>
+            <Text style={[typography.caption, styles.center, { color: colors.textMuted, marginTop: spacing.sm }]}>
+              Please check your inbox and spam folder
+            </Text>
+          </View>
 
-      <View style={styles.backContainer}>
-        <TouchableOpacity 
-          onPress={() => navigation.goBack()}
-          disabled={isLoading || isResending}
-        >
-          <Text style={styles.backText}>← Back to {fromLogin ? 'Login' : 'Register'}</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
+          <View style={styles.codeContainer}>
+            {code.map((digit, index) => (
+              <TextInput
+                key={index}
+                ref={(ref) => (inputRefs.current[index] = ref)}
+                style={[
+                  styles.codeInput,
+                  {
+                    backgroundColor: colors.inputBg,
+                    color: colors.textPrimary,
+                    borderColor: digit ? colors.brand : colors.inputBorder,
+                  },
+                ]}
+                value={digit}
+                onChangeText={(text) => handleCodeChange(text, index)}
+                onKeyPress={(e) => handleKeyPress(e, index)}
+                keyboardType="number-pad"
+                maxLength={1}
+                selectTextOnFocus
+                editable={!busy}
+              />
+            ))}
+          </View>
+
+          <TouchableOpacity
+            style={[styles.verifyButton, { backgroundColor: colors.accent }, busy && styles.disabled]}
+            onPress={handleVerify}
+            disabled={busy}
+            activeOpacity={0.85}
+          >
+            {isLoading
+              ? <ActivityIndicator color={colors.onAccent} />
+              : <Text style={[typography.title, { color: colors.onAccent }]}>Verify Email</Text>
+            }
+          </TouchableOpacity>
+
+          <View style={styles.resendContainer}>
+            <Text style={[typography.body, { color: colors.textSecondary }]}>Didn't receive the code? </Text>
+            <TouchableOpacity onPress={handleResendCode} disabled={busy}>
+              {isResending
+                ? <ActivityIndicator size="small" color={colors.brand} />
+                : <Text style={[typography.bodyStrong, { color: colors.textPrimary, fontWeight: "700" }]}>Resend</Text>
+              }
+            </TouchableOpacity>
+          </View>
+
+          <TouchableOpacity
+            style={styles.backContainer}
+            onPress={() => navigation.goBack()}
+            disabled={busy}
+          >
+            <Feather name="arrow-left" size={14} color={colors.textSecondary} />
+            <Text style={[typography.bodyStrong, { color: colors.textPrimary }]}>
+              Back to {fromLogin ? "Login" : "Register"}
+            </Text>
+          </TouchableOpacity>
+        </ScrollView>
+      </KeyboardAvoidingView>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: {
-    backgroundColor: "#f7cfc9",
-    flex: 1,
-    padding: 20,
-    paddingTop: 80,
+  flex: { flex: 1 },
+  screen: { flex: 1 },
+  scroll: {
+    flexGrow: 1,
+    justifyContent: "center",
+    padding: spacing.xl,
   },
-  titleContainer: {
+  center: { textAlign: "center" },
+
+  iconCircle: {
+    width: 64,
+    height: 64,
+    borderRadius: radius.pill,
     alignItems: "center",
-    marginBottom: 60,
-    marginTop: 60,
+    justifyContent: "center",
+    alignSelf: "center",
+    marginBottom: spacing.lg,
   },
-  title: {
-    fontSize: 25,
-    fontWeight: "700",
-    textAlign: "center",
-    marginBottom: 15,
-  },
-  subtitle: {
-    fontSize: 16,
-    textAlign: "center",
-    color: "#444",
-    marginBottom: 5,
-  },
-  email: {
-    fontSize: 16,
-    textAlign: "center",
-    color: "#6b4b45",
-    fontWeight: "600",
-    marginBottom: 10,
-  },
-  hint: {
-    fontSize: 12,
-    textAlign: "center",
-    color: "#666",
-    fontStyle: "italic",
-  },
+
+  titleContainer: { alignItems: "center", marginBottom: spacing.xxl },
+
   codeContainer: {
     flexDirection: "row",
     justifyContent: "center",
     alignItems: "center",
-    marginBottom: 40,
-    gap: 10,
+    marginBottom: spacing.xxl,
+    gap: spacing.sm,
   },
   codeInput: {
-    backgroundColor: "#fff",
-    width: 50,
-    height: 60,
-    borderRadius: 10,
+    width: 48,
+    height: 58,
+    borderRadius: radius.md,
     fontSize: 24,
     fontWeight: "700",
     textAlign: "center",
     borderWidth: 2,
-    borderColor: "#6b4b45",
   },
-  buttonContainer: {
-    width: "100%",
-    alignItems: "center",
-    marginBottom: 20,
-  },
+
   verifyButton: {
-    backgroundColor: "#6b4b45",
-    padding: 15,
-    borderRadius: 10,
+    paddingVertical: spacing.lg,
+    borderRadius: radius.md,
     alignItems: "center",
-    width: "80%",
+    width: "100%",
   },
-  verifyButtonDisabled: {
-    backgroundColor: "#999",
-  },
-  buttonText: {
-    color: "#fff",
-    fontWeight: "700",
-    fontSize: 18,
-  },
+  disabled: { opacity: 0.55 },
+
   resendContainer: {
     flexDirection: "row",
     justifyContent: "center",
     alignItems: "center",
-    marginTop: 20,
-  },
-  resendText: {
-    fontSize: 14,
-    color: "#444",
-  },
-  resendLink: {
-    fontSize: 14,
-    color: "#6b4b45",
-    fontWeight: "700",
+    marginTop: spacing.xl,
   },
   backContainer: {
+    flexDirection: "row",
     alignItems: "center",
-    marginTop: 30,
-  },
-  backText: {
-    fontSize: 14,
-    color: "#6b4b45",
-    fontWeight: "600",
+    justifyContent: "center",
+    gap: spacing.xs,
+    marginTop: spacing.xl,
   },
 });

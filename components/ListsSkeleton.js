@@ -8,14 +8,15 @@
 import React from "react";
 import { View, StyleSheet, Dimensions } from "react-native";
 import Skeleton from "./Skeleton";
+import { useTheme } from "../context/ThemeContext";
 
 const { width } = Dimensions.get("window");
 const CARD_W    = width - 40;  // matches scrollContent paddingHorizontal:20
 
 // Single card skeleton — mirrors DestinationCard
-function CardSkeleton() {
+function CardSkeleton({ colors }) {
   return (
-    <View style={styles.card}>
+    <View style={[styles.card, { backgroundColor: colors.card }]}>
       {/* Image area */}
       <Skeleton width={CARD_W} height={160} radius={0} />
 
@@ -37,8 +38,9 @@ function CardSkeleton() {
 }
 
 export default function ListsSkeleton({ cardCount = 4 }) {
+  const { colors } = useTheme();
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* ── Header ── */}
       <View style={styles.header}>
         <Skeleton width={40} height={40} radius={20} />
@@ -55,7 +57,7 @@ export default function ListsSkeleton({ cardCount = 4 }) {
         {/* ── Cards ── */}
         <View style={styles.cardsContainer}>
           {Array.from({ length: cardCount }).map((_, i) => (
-            <CardSkeleton key={i} />
+            <CardSkeleton key={i} colors={colors} />
           ))}
         </View>
       </View>
@@ -66,7 +68,6 @@ export default function ListsSkeleton({ cardCount = 4 }) {
 const styles = StyleSheet.create({
   container: {
     flex:            1,
-    backgroundColor: "#fff",
     paddingTop:      50,
   },
   header: {
@@ -81,7 +82,6 @@ const styles = StyleSheet.create({
   cardsContainer: { gap: 14 },
 
   card: {
-    backgroundColor: "#faf5f4",
     borderRadius:    16,
     overflow:        "hidden",
     position:        "relative",
