@@ -4,19 +4,24 @@ import {
   TouchableOpacity,
   TextInput,
   Text,
-  Alert,
   ActivityIndicator,
   Platform,
   Image,
   Modal,
+  ScrollView,
   KeyboardAvoidingView,
   Keyboard,
   TouchableWithoutFeedback,
+  StatusBar,
 } from "react-native";
+import { showAlert } from "../components/AppAlert";
+import { SafeAreaView } from "react-native-safe-area-context";
 import { useState, useEffect } from "react";
 import { useSignIn, useOAuth } from "@clerk/clerk-expo";
 import * as WebBrowser from "expo-web-browser";
 import { Feather } from "@expo/vector-icons";
+import { useTheme, spacing, radius, typography, shadow } from "../context/ThemeContext";
+import Logo from "../components/Logo";
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -26,6 +31,7 @@ function isValidEmail(email) {
 
 // ── Forgot Password Modal ────────────────────────────────────────
 function ForgotPasswordModal({ visible, onClose, signIn }) {
+  const { colors } = useTheme();
   const [step, setStep]               = useState("email");
   const [email, setEmail]             = useState("");
   const [code, setCode]               = useState("");
@@ -62,10 +68,10 @@ function ForgotPasswordModal({ visible, onClose, signIn }) {
 
   // Step 2 — verify OTP + set new password
   const handleResetPassword = async () => {
-    if (!code.trim())           return Alert.alert("Error", "Please enter the code sent to your email.");
-    if (!newPassword)           return Alert.alert("Error", "Please enter a new password.");
-    if (newPassword.length < 8) return Alert.alert("Error", "Password must be at least 8 characters.");
-    if (newPassword !== confirmPassword) return Alert.alert("Error", "Passwords do not match.");
+    if (!code.trim())           return showAlert("Error", "Please enter the code sent to your email.");
+    if (!newPassword)           return showAlert("Error", "Please enter a new password.");
+    if (newPassword.length < 8) return showAlert("Error", "Password must be at least 8 characters.");
+    if (newPassword !== confirmPassword) return showAlert("Error", "Passwords do not match.");
     setLoading(true);
     try {
       const result = await signIn.attemptFirstFactor({
@@ -74,48 +80,53 @@ function ForgotPasswordModal({ visible, onClose, signIn }) {
         password: newPassword,
       });
       if (result.status === "complete") {
-        Alert.alert("Password updated", "You can now log in with your new password.", [
+        showAlert("Password updated", "You can now log in with your new password.", [
           { text: "OK", onPress: handleClose },
         ]);
       } else {
-        Alert.alert("Error", "Could not complete password reset. Please try again.");
+        showAlert("Error", "Could not complete password reset. Please try again.");
       }
     } catch (err) {
-      Alert.alert("Error", "Invalid or expired code. Please request a new one.");
+      showAlert("Error", "Invalid or expired code. Please request a new one.");
     } finally {
       setLoading(false);
     }
   };
 
+  const inputStyle = [
+    styles.modalInput,
+    { backgroundColor: colors.inputBg, borderColor: colors.inputBorder, color: colors.textPrimary },
+  ];
+
   return (
     <Modal visible={visible} animationType="slide" transparent onRequestClose={handleClose}>
       <KeyboardAvoidingView
-        style={styles.modalOverlay}
+        style={styles.flex}
         behavior={Platform.OS === "ios" ? "padding" : "height"}
       >
         <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
-          <View style={styles.modalOverlayInner}>
+          <View style={[styles.modalOverlayInner, { backgroundColor: colors.overlay }]}>
             <TouchableWithoutFeedback>
-              <View style={styles.modalCard}>
+              <View style={[styles.modalCard, { backgroundColor: colors.background }]}>
                 {/* Header */}
                 <View style={styles.modalHeader}>
-                  <Text style={styles.modalTitle}>
+                  <Text style={[typography.h2, { color: colors.textPrimary }]}>
                     {step === "email" ? "Reset Password" : "Enter Code"}
                   </Text>
-                  <TouchableOpacity onPress={handleClose} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
-                    <Feather name="x" size={22} color="#4a2e2c" />
+                  <TouchableOpacity onPress={handleClose} hitSlop={8}>
+                    <Feather name="x" size={22} color={colors.textPrimary} />
                   </TouchableOpacity>
                 </View>
 
                 {step === "email" ? (
                   <>
-                    <Text style={styles.modalSubtitle}>
+                    <Text style={[typography.body, styles.modalSubtitle, { color: colors.textSecondary }]}>
                       Enter the email linked to your account and we'll send you a reset code.
                     </Text>
                     <TextInput
-                      style={[styles.modalInput, emailError ? styles.modalInputError : null]}
+                      style={[inputStyle, emailError ? { borderColor: colors.danger, backgroundColor: colors.dangerBg } : null]}
                       placeholder="Email address"
-                      placeholderTextColor="#b0908c"
+                      placeholderTextColor={colors.placeholder}
                       autoCapitalize="none"
                       keyboardType="email-address"
                       value={email}
@@ -124,34 +135,34 @@ function ForgotPasswordModal({ visible, onClose, signIn }) {
                       accessibilityLabel="Email address for password reset"
                     />
                     {emailError ? (
-                      <Text style={styles.errorText}>
-                        <Feather name="alert-circle" size={12} /> {emailError}
+                      <Text style={[typography.caption, styles.errorText, { color: colors.danger }]}>
+                        {emailError}
                       </Text>
                     ) : null}
                     <TouchableOpacity
-                      style={[styles.modalBtn, loading && styles.disabled]}
+                      style={[styles.primaryBtn, { backgroundColor: colors.accent }, loading && styles.disabled]}
                       onPress={handleSendCode}
                       disabled={loading}
                       activeOpacity={0.85}
                     >
                       {loading
-                        ? <ActivityIndicator color="#fff" />
-                        : <Text style={styles.modalBtnText}>Send Reset Code</Text>
+                        ? <ActivityIndicator color={colors.onAccent} />
+                        : <Text style={[typography.title, { color: colors.onAccent }]}>Send Reset Code</Text>
                       }
                     </TouchableOpacity>
                   </>
                 ) : (
                   <>
-                    <Text style={styles.modalSubtitle}>
+                    <Text style={[typography.body, styles.modalSubtitle, { color: colors.textSecondary }]}>
                       We sent a 6-digit code to{" "}
-                      <Text style={{ fontWeight: "700", color: "#4a2e2c" }}>{email}</Text>.
+                      <Text style={{ fontWeight: "700", color: colors.textPrimary }}>{email}</Text>.
                       Enter it below with your new password.
                     </Text>
 
                     <TextInput
-                      style={styles.modalInput}
+                      style={inputStyle}
                       placeholder="6-digit code"
-                      placeholderTextColor="#b0908c"
+                      placeholderTextColor={colors.placeholder}
                       keyboardType="number-pad"
                       maxLength={6}
                       value={code}
@@ -162,51 +173,51 @@ function ForgotPasswordModal({ visible, onClose, signIn }) {
 
                     <View style={styles.passwordRow}>
                       <TextInput
-                        style={[styles.modalInput, { flex: 1 }]}
+                        style={[inputStyle, styles.flex]}
                         placeholder="New password"
-                        placeholderTextColor="#b0908c"
+                        placeholderTextColor={colors.placeholder}
                         secureTextEntry={!showNew}
                         value={newPassword}
                         onChangeText={setNewPassword}
                         editable={!loading}
                         accessibilityLabel="New password"
                       />
-                      <TouchableOpacity onPress={() => setShowNew((v) => !v)} style={styles.eyeBtn}>
-                        <Feather name={showNew ? "eye-off" : "eye"} size={18} color="#6b4b45" />
+                      <TouchableOpacity onPress={() => setShowNew((v) => !v)} style={styles.eyeBtn} hitSlop={8}>
+                        <Feather name={showNew ? "eye-off" : "eye"} size={18} color={colors.textSecondary} />
                       </TouchableOpacity>
                     </View>
 
                     <View style={styles.passwordRow}>
                       <TextInput
-                        style={[styles.modalInput, { flex: 1 }]}
+                        style={[inputStyle, styles.flex]}
                         placeholder="Confirm new password"
-                        placeholderTextColor="#b0908c"
+                        placeholderTextColor={colors.placeholder}
                         secureTextEntry={!showConfirm}
                         value={confirmPassword}
                         onChangeText={setConfirmPassword}
                         editable={!loading}
                         accessibilityLabel="Confirm new password"
                       />
-                      <TouchableOpacity onPress={() => setShowConfirm((v) => !v)} style={styles.eyeBtn}>
-                        <Feather name={showConfirm ? "eye-off" : "eye"} size={18} color="#6b4b45" />
+                      <TouchableOpacity onPress={() => setShowConfirm((v) => !v)} style={styles.eyeBtn} hitSlop={8}>
+                        <Feather name={showConfirm ? "eye-off" : "eye"} size={18} color={colors.textSecondary} />
                       </TouchableOpacity>
                     </View>
 
                     <TouchableOpacity
-                      style={[styles.modalBtn, loading && styles.disabled]}
+                      style={[styles.primaryBtn, { backgroundColor: colors.accent }, loading && styles.disabled]}
                       onPress={handleResetPassword}
                       disabled={loading}
                       activeOpacity={0.85}
                     >
                       {loading
-                        ? <ActivityIndicator color="#fff" />
-                        : <Text style={styles.modalBtnText}>Reset Password</Text>
+                        ? <ActivityIndicator color={colors.onAccent} />
+                        : <Text style={[typography.title, { color: colors.onAccent }]}>Reset Password</Text>
                       }
                     </TouchableOpacity>
 
                     <TouchableOpacity onPress={() => setStep("email")} style={styles.backLink}>
-                      <Feather name="arrow-left" size={14} color="#6b4b45" />
-                      <Text style={styles.backLinkText}>Use a different email</Text>
+                      <Feather name="arrow-left" size={14} color={colors.textSecondary} />
+                      <Text style={[typography.bodyStrong, { color: colors.textPrimary }]}>Use a different email</Text>
                     </TouchableOpacity>
                   </>
                 )}
@@ -221,6 +232,7 @@ function ForgotPasswordModal({ visible, onClose, signIn }) {
 
 // ── Main Login Screen ────────────────────────────────────────────
 export default function Login({ navigation }) {
+  const { colors, isDark } = useTheme();
   const { isLoaded, signIn, setActive } = useSignIn();
   const { startOAuthFlow } = useOAuth({ strategy: "oauth_google" });
 
@@ -285,7 +297,7 @@ export default function Login({ navigation }) {
             emailAddressId: emailFactor.emailAddressId,
           });
           navigation.navigate("EmailVerification", { email: email.trim(), fromLogin: true });
-          Alert.alert("Verification Required", "Check your email for a verification code.");
+          showAlert("Verification Required", "Check your email for a verification code.");
           return;
         }
       }
@@ -316,414 +328,284 @@ export default function Login({ navigation }) {
       await setActive({ session: createdSessionId });
     } catch (err) {
       if (err.code === "user-cancelled" || err.code === "browser-closed") return;
-      Alert.alert("Sign-in failed", "Unable to sign in with Google. Please try again.");
+      showAlert("Sign-in failed", "Unable to sign in with Google. Please try again.");
     } finally {
       setIsGoogleLoading(false);
     }
   };
 
   const anyLoading = isLoading || isGoogleLoading;
+  const disabled   = anyLoading || !isLoaded;
+
+  const inputStyle = [
+    styles.input,
+    { backgroundColor: colors.inputBg, borderColor: colors.inputBorder, color: colors.textPrimary },
+  ];
 
   return (
-    <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
-      <View style={styles.screen}>
-        <View style={styles.card}>
+    <SafeAreaView style={[styles.screen, { backgroundColor: colors.background }]} edges={["top", "bottom"]}>
+      <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={colors.background} />
+      <KeyboardAvoidingView
+        style={styles.flex}
+        behavior={Platform.OS === "ios" ? "padding" : undefined}
+      >
+        <ScrollView
+          contentContainerStyle={styles.scroll}
+          keyboardShouldPersistTaps="handled"
+          showsVerticalScrollIndicator={false}
+        >
+          <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.cardBorder }, shadow.md]}>
 
-          <View style={styles.titleContainer}>
-            <Text style={styles.title}>Welcome Back</Text>
-            <Text style={styles.subtitle}>Sign in to continue</Text>
-          </View>
-
-          {/* Google login */}
-          <TouchableOpacity
-            style={[styles.googleButton, (anyLoading || !isLoaded) && styles.disabled]}
-            onPress={handleGoogleLogin}
-            disabled={anyLoading || !isLoaded}
-            activeOpacity={0.85}
-            accessibilityLabel="Sign in with Google"
-          >
-            {isGoogleLoading ? (
-              <ActivityIndicator color="#444" />
-            ) : (
-              <>
-                <Image source={require("../assets/googlelogo.png")} style={styles.googleLogo} />
-                <Text style={styles.googleButtonText}>Sign in with Google</Text>
-              </>
-            )}
-          </TouchableOpacity>
-
-          {/* Divider */}
-          <View style={styles.dividerContainer}>
-            <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>OR</Text>
-            <View style={styles.dividerLine} />
-          </View>
-
-          {/* Email / Password */}
-          <View style={styles.inputContainer}>
-
-            {/* Email with inline validation */}
-            <View>
-              <TextInput
-                style={[styles.input, emailError ? styles.inputError : null]}
-                placeholder="Email"
-                autoCapitalize="none"
-                placeholderTextColor="#b0908c"
-                keyboardType="email-address"
-                value={email}
-                onChangeText={(v) => {
-                  setEmail(v);
-                  // Clear errors while typing so user gets immediate feedback
-                  if (emailError) setEmailError("");
-                  if (authError) setAuthError("");
-                }}
-                onBlur={handleEmailBlur}
-                editable={!anyLoading && isLoaded}
-                accessibilityLabel="Email address"
-              />
-              {emailError ? (
-                <Text style={styles.errorText}>
-                  <Feather name="alert-circle" size={12} /> {emailError}
-                </Text>
-              ) : null}
+            <View style={styles.titleContainer}>
+              <Logo size={64} style={styles.logo} />
+              <Text style={[typography.h1, { color: colors.textPrimary }]}>Welcome Back</Text>
+              <Text style={[typography.body, styles.subtitle, { color: colors.textSecondary }]}>
+                Sign in to continue
+              </Text>
             </View>
 
-            {/* Password with eye icon */}
-            <View style={styles.passwordInputRow}>
-              <TextInput
-                style={[styles.input, styles.passwordInput]}
-                placeholder="Password"
-                placeholderTextColor="#b0908c"
-                secureTextEntry={!passwordVisible}
-                value={password}
-                onChangeText={(v) => { setPassword(v); if (authError) setAuthError(""); }}
-                editable={!anyLoading && isLoaded}
-                accessibilityLabel="Password"
-              />
-              <TouchableOpacity
-                onPress={() => setPasswordVisible((v) => !v)}
-                style={styles.eyeIconBtn}
-                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
-                accessibilityLabel={passwordVisible ? "Hide password" : "Show password"}
-              >
-                <Feather name={passwordVisible ? "eye-off" : "eye"} size={18} color="#6b4b45" />
+            {/* Google login */}
+            <TouchableOpacity
+              style={[
+                styles.googleButton,
+                { backgroundColor: colors.inputBg, borderColor: colors.inputBorder },
+                disabled && styles.disabled,
+              ]}
+              onPress={handleGoogleLogin}
+              disabled={disabled}
+              activeOpacity={0.85}
+              accessibilityLabel="Sign in with Google"
+            >
+              {isGoogleLoading ? (
+                <ActivityIndicator color={colors.textSecondary} />
+              ) : (
+                <>
+                  <Image source={require("../assets/googlelogo.png")} style={styles.googleLogo} />
+                  <Text style={[typography.bodyStrong, { color: colors.textPrimary }]}>
+                    Sign in with Google
+                  </Text>
+                </>
+              )}
+            </TouchableOpacity>
+
+            {/* Divider */}
+            <View style={styles.dividerContainer}>
+              <View style={[styles.dividerLine, { backgroundColor: colors.divider }]} />
+              <Text style={[typography.label, styles.dividerText, { color: colors.textSecondary }]}>OR</Text>
+              <View style={[styles.dividerLine, { backgroundColor: colors.divider }]} />
+            </View>
+
+            {/* Email / Password */}
+            <View style={styles.inputContainer}>
+              <View>
+                <TextInput
+                  style={[inputStyle, emailError ? { borderColor: colors.danger, backgroundColor: colors.dangerBg } : null]}
+                  placeholder="Email"
+                  autoCapitalize="none"
+                  placeholderTextColor={colors.placeholder}
+                  keyboardType="email-address"
+                  value={email}
+                  onChangeText={(v) => {
+                    setEmail(v);
+                    if (emailError) setEmailError("");
+                    if (authError) setAuthError("");
+                  }}
+                  onBlur={handleEmailBlur}
+                  editable={!disabled}
+                  accessibilityLabel="Email address"
+                />
+                {emailError ? (
+                  <Text style={[typography.caption, styles.errorText, { color: colors.danger }]}>
+                    {emailError}
+                  </Text>
+                ) : null}
+              </View>
+
+              {/* Password with eye icon */}
+              <View style={styles.passwordInputRow}>
+                <TextInput
+                  style={[inputStyle, styles.passwordInput]}
+                  placeholder="Password"
+                  placeholderTextColor={colors.placeholder}
+                  secureTextEntry={!passwordVisible}
+                  value={password}
+                  onChangeText={(v) => { setPassword(v); if (authError) setAuthError(""); }}
+                  editable={!disabled}
+                  accessibilityLabel="Password"
+                />
+                <TouchableOpacity
+                  onPress={() => setPasswordVisible((v) => !v)}
+                  style={styles.eyeIconBtn}
+                  hitSlop={8}
+                  accessibilityLabel={passwordVisible ? "Hide password" : "Show password"}
+                >
+                  <Feather name={passwordVisible ? "eye-off" : "eye"} size={18} color={colors.textSecondary} />
+                </TouchableOpacity>
+              </View>
+            </View>
+
+            {/* Auth error (generic, shown below inputs) */}
+            {authError ? (
+              <View style={[styles.authErrorBox, { backgroundColor: colors.dangerBg, borderColor: colors.danger }]}>
+                <Feather name="alert-circle" size={14} color={colors.danger} />
+                <Text style={[typography.body, styles.authErrorText, { color: colors.danger }]}>{authError}</Text>
+              </View>
+            ) : null}
+
+            {/* Login button */}
+            <TouchableOpacity
+              style={[styles.primaryBtn, { backgroundColor: colors.accent }, disabled && styles.disabled]}
+              onPress={handleLogin}
+              disabled={disabled}
+              activeOpacity={0.85}
+              accessibilityLabel="Login"
+            >
+              {isLoading
+                ? <ActivityIndicator color={colors.onAccent} />
+                : <Text style={[typography.title, { color: colors.onAccent }]}>Login</Text>
+              }
+            </TouchableOpacity>
+
+            {/* Forgot password */}
+            <TouchableOpacity
+              style={styles.forgotRow}
+              onPress={() => setShowForgot(true)}
+              accessibilityLabel="Forgot password"
+            >
+              <Text style={[typography.bodyStrong, { color: colors.textPrimary }]}>Forgot password?</Text>
+            </TouchableOpacity>
+
+            {/* Register link */}
+            <View style={styles.linkRow}>
+              <Text style={[typography.body, { color: colors.textSecondary }]}>Don't have an account? </Text>
+              <TouchableOpacity onPress={() => navigation.navigate("Register")} accessibilityLabel="Sign up">
+                <Text style={[typography.bodyStrong, { color: colors.textPrimary, fontWeight: "700" }]}>Sign Up</Text>
               </TouchableOpacity>
             </View>
+
           </View>
+        </ScrollView>
+      </KeyboardAvoidingView>
 
-          {/* Auth error (generic, shown below inputs) */}
-          {authError ? (
-            <View style={styles.authErrorBox}>
-              <Feather name="alert-circle" size={14} color="#e05252" />
-              <Text style={styles.authErrorText}>{authError}</Text>
-            </View>
-          ) : null}
-
-          {/* Login button */}
-          <TouchableOpacity
-            style={[styles.button, (anyLoading || !isLoaded) && styles.disabled]}
-            onPress={handleLogin}
-            disabled={anyLoading || !isLoaded}
-            activeOpacity={0.85}
-            accessibilityLabel="Login"
-          >
-            {isLoading
-              ? <ActivityIndicator color="#fff" />
-              : <Text style={styles.buttonText}>Login</Text>
-            }
-          </TouchableOpacity>
-
-          {/* Forgot password */}
-          <TouchableOpacity
-            style={styles.forgotRow}
-            onPress={() => setShowForgot(true)}
-            accessibilityLabel="Forgot password"
-          >
-            <Text style={styles.forgotText}>Forgot password?</Text>
-          </TouchableOpacity>
-
-          {/* Register link */}
-          <View style={styles.linkRow}>
-            <Text style={styles.linkText}>Don't have an account? </Text>
-            <TouchableOpacity onPress={() => navigation.navigate("Register")} accessibilityLabel="Sign up">
-              <Text style={styles.link}>Sign Up</Text>
-            </TouchableOpacity>
-          </View>
-
-        </View>
-
-        {/* Forgot Password Modal */}
-        {isLoaded && (
-          <ForgotPasswordModal
-            visible={showForgot}
-            onClose={() => setShowForgot(false)}
-            signIn={signIn}
-          />
-        )}
-      </View>
-    </TouchableWithoutFeedback>
+      {/* Forgot Password Modal */}
+      {isLoaded && (
+        <ForgotPasswordModal
+          visible={showForgot}
+          onClose={() => setShowForgot(false)}
+          signIn={signIn}
+        />
+      )}
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: {
-    flex: 1,
-    backgroundColor: "#f7cfc9",
-    padding: 20,
+  flex: { flex: 1 },
+  screen: { flex: 1 },
+  scroll: {
+    flexGrow: 1,
     justifyContent: "center",
+    padding: spacing.xl,
   },
 
-  // ── Card ──
   card: {
-    backgroundColor: "#fff",
-    borderRadius: 20,
-    padding: 24,
-    shadowColor: "#4a2e2c",
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.1,
-    shadowRadius: 12,
-    elevation: 6,
+    borderRadius: radius.xl,
+    borderWidth: 1,
+    padding: spacing.xl,
   },
 
-  // ── Title ──
-  titleContainer: {
-    alignItems: "center",
-    marginBottom: 24,
-  },
-  title: {
-    fontSize: 26,
-    fontWeight: "700",
-    color: "#4a2e2c",
-  },
-  subtitle: {
-    fontSize: 15,
-    color: "#7a5a58",
-    marginTop: 6,
-  },
+  titleContainer: { alignItems: "center", marginBottom: spacing.xl },
+  logo: { marginBottom: spacing.md },
+  subtitle: { marginTop: spacing.xs },
 
-  // ── Google button ──
   googleButton: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "#faf5f4",
-    borderRadius: 12,
-    paddingVertical: 14,
-    paddingHorizontal: 20,
-    marginBottom: 20,
+    borderRadius: radius.md,
+    paddingVertical: spacing.lg,
+    paddingHorizontal: spacing.xl,
+    marginBottom: spacing.xl,
     borderWidth: 1.5,
-    borderColor: "#d9b8b5",
+    gap: spacing.sm,
   },
-  googleLogo: {
-    width: 22,
-    height: 22,
-    resizeMode: "contain",
-    marginRight: 10,
-  },
-  googleButtonText: {
-    fontSize: 16,
-    fontWeight: "600",
-    color: "#4a2e2c",
-  },
+  googleLogo: { width: 22, height: 22, resizeMode: "contain" },
 
-  // ── Divider ──
   dividerContainer: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 20,
+    marginBottom: spacing.xl,
   },
-  dividerLine: {
-    flex: 1,
-    height: 1,
-    backgroundColor: "#e8d0ce",
-  },
-  dividerText: {
-    marginHorizontal: 12,
-    color: "#7a5a58",
-    fontWeight: "600",
-    fontSize: 13,
-  },
+  dividerLine: { flex: 1, height: 1 },
+  dividerText: { marginHorizontal: spacing.md },
 
-  // ── Inputs ──
-  inputContainer: {
-    gap: 12,
-    marginBottom: 16,
-  },
+  inputContainer: { gap: spacing.md, marginBottom: spacing.lg },
   input: {
-    backgroundColor: "#faf5f4",
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    borderRadius: 12,
+    paddingVertical: spacing.lg,
+    paddingHorizontal: spacing.lg,
+    borderRadius: radius.md,
     fontSize: 15,
-    color: "#4a2e2c",
     borderWidth: 1.5,
-    borderColor: "#e8d0ce",
   },
-  inputError: {
-    borderColor: "#e05252",
-    backgroundColor: "#fff5f5",
-  },
-  errorText: {
-    fontSize: 12,
-    color: "#e05252",
-    marginTop: 4,
-    marginLeft: 4,
-    fontWeight: "500",
-  },
-  passwordInputRow: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-  passwordInput: {
-    flex: 1,
-    paddingRight: 48,
-  },
-  eyeIconBtn: {
-    position: "absolute",
-    right: 14,
-    padding: 4,
-  },
+  errorText: { marginTop: spacing.xs, marginLeft: spacing.xs, fontWeight: "500" },
+  passwordInputRow: { flexDirection: "row", alignItems: "center" },
+  passwordInput: { flex: 1, paddingRight: 48 },
+  eyeIconBtn: { position: "absolute", right: spacing.md, padding: spacing.xs },
 
-  // ── Auth error box ──
   authErrorBox: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 6,
-    backgroundColor: "#fff5f5",
-    borderRadius: 10,
-    paddingVertical: 10,
-    paddingHorizontal: 14,
-    marginBottom: 14,
+    gap: spacing.sm,
+    borderRadius: radius.sm,
+    paddingVertical: spacing.md,
+    paddingHorizontal: spacing.md,
+    marginBottom: spacing.md,
     borderWidth: 1,
-    borderColor: "#f0c4c4",
   },
-  authErrorText: {
-    fontSize: 13,
-    color: "#e05252",
-    fontWeight: "500",
-    flex: 1,
-  },
+  authErrorText: { flex: 1, fontWeight: "500" },
 
-  // ── Primary button ──
-  button: {
-    backgroundColor: "#6b4b45",
-    paddingVertical: 15,
-    borderRadius: 12,
+  primaryBtn: {
+    paddingVertical: spacing.lg,
+    borderRadius: radius.md,
     alignItems: "center",
-    marginBottom: 20,
+    marginBottom: spacing.lg,
+    marginTop: spacing.xs,
   },
-  buttonText: {
-    color: "#fff",
-    fontSize: 17,
-    fontWeight: "700",
-  },
-  disabled: {
-    opacity: 0.55,
-  },
+  disabled: { opacity: 0.55 },
 
-  // ── Forgot / link row ──
-  forgotRow: {
-    alignItems: "center",
-    marginBottom: 16,
-  },
-  forgotText: {
-    fontSize: 14,
-    color: "#6b4b45",
-    fontWeight: "600",
-  },
-  linkRow: {
-    flexDirection: "row",
-    justifyContent: "center",
-  },
-  linkText: {
-    fontSize: 14,
-    color: "#7a5a58",
-  },
-  link: {
-    fontSize: 14,
-    color: "#6b4b45",
-    fontWeight: "700",
-  },
+  forgotRow: { alignItems: "center", marginBottom: spacing.lg },
+  linkRow: { flexDirection: "row", justifyContent: "center", alignItems: "center" },
 
   // ── Forgot Password Modal ──
-  modalOverlay: {
-    flex: 1,
-  },
-  modalOverlayInner: {
-    flex: 1,
-    backgroundColor: "rgba(0,0,0,0.45)",
-    justifyContent: "flex-end",
-  },
+  modalOverlayInner: { flex: 1, justifyContent: "flex-end" },
   modalCard: {
-    backgroundColor: "#f7cfc9",
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    padding: 24,
-    paddingBottom: Platform.OS === "ios" ? 40 : 24,
+    borderTopLeftRadius: radius.xl,
+    borderTopRightRadius: radius.xl,
+    padding: spacing.xl,
+    paddingBottom: Platform.OS === "ios" ? spacing.xxl : spacing.xl,
   },
   modalHeader: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 12,
+    marginBottom: spacing.md,
   },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: "700",
-    color: "#4a2e2c",
-  },
-  modalSubtitle: {
-    fontSize: 14,
-    color: "#7a5a58",
-    lineHeight: 20,
-    marginBottom: 18,
-  },
+  modalSubtitle: { marginBottom: spacing.lg },
   modalInput: {
-    backgroundColor: "#fff",
-    paddingVertical: 14,
-    paddingHorizontal: 16,
-    borderRadius: 12,
+    paddingVertical: spacing.lg,
+    paddingHorizontal: spacing.lg,
+    borderRadius: radius.md,
     fontSize: 15,
-    color: "#4a2e2c",
     borderWidth: 1.5,
-    borderColor: "#e8d0ce",
-    marginBottom: 12,
+    marginBottom: spacing.md,
   },
-  modalInputError: {
-    borderColor: "#e05252",
-    backgroundColor: "#fff5f5",
-  },
-  modalBtn: {
-    backgroundColor: "#6b4b45",
-    paddingVertical: 15,
-    borderRadius: 12,
-    alignItems: "center",
-    marginTop: 4,
-  },
-  modalBtnText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "700",
-  },
-  passwordRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-  },
-  eyeBtn: {
-    paddingHorizontal: 8,
-    paddingBottom: 12,
-  },
+  passwordRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
+  eyeBtn: { paddingHorizontal: spacing.sm, paddingBottom: spacing.md },
   backLink: {
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    gap: 6,
-    marginTop: 16,
-  },
-  backLinkText: {
-    fontSize: 14,
-    color: "#6b4b45",
-    fontWeight: "600",
+    gap: spacing.xs,
+    marginTop: spacing.lg,
   },
 });

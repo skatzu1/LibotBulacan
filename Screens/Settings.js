@@ -4,26 +4,22 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  ScrollView,
-  Alert,
-  ActivityIndicator,
+  ScrollView,  ActivityIndicator,
   Linking,
   Switch,
 } from "react-native";
+import { showAlert } from "../components/AppAlert";
 import { Feather } from "@expo/vector-icons";
 import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
+import { ScreenHeader } from "../components/ui";
 import * as Notifications from "expo-notifications";
-
-const HELP_URL    = "https://libotbackend.onrender.com/help";
-const ABOUT_URL   = "https://libotbackend.onrender.com/about";
-const TERMS_URL   = "https://libotbackend.onrender.com/terms";
-const PRIVACY_URL = "https://libotbackend.onrender.com/privacy";
+import { HELP_URL, ABOUT_URL, TERMS_URL, PRIVACY_URL } from "../utils/legalLinks";
 
 const openURL = async (url) => {
   const supported = await Linking.canOpenURL(url);
   if (supported) await Linking.openURL(url);
-  else Alert.alert("Unavailable", "This page isn't available right now.");
+  else showAlert("Unavailable", "This page isn't available right now.");
 };
 
 const Settings = ({ navigation }) => {
@@ -33,11 +29,21 @@ const Settings = ({ navigation }) => {
   const [isLoggingOut, setIsLoggingOut] = React.useState(false);
   const [notifEnabled, setNotifEnabled] = React.useState(null);
 
-  React.useEffect(() => {
+  const checkNotifPermission = React.useCallback(() => {
     Notifications.getPermissionsAsync().then(({ status }) => {
       setNotifEnabled(status === "granted");
     });
   }, []);
+
+  // Re-check on mount AND every time this screen regains focus — the user
+  // may have changed the permission from OS Settings and come back, and a
+  // bare mount-only check would keep showing the stale value until the
+  // screen is fully remounted.
+  React.useEffect(() => {
+    checkNotifPermission();
+    const unsubscribe = navigation.addListener("focus", checkNotifPermission);
+    return unsubscribe;
+  }, [navigation, checkNotifPermission]);
 
   const handleNotifToggle = async (value) => {
     if (value) {
@@ -45,7 +51,7 @@ const Settings = ({ navigation }) => {
       if (status === "granted") {
         setNotifEnabled(true);
       } else {
-        Alert.alert(
+        showAlert(
           "Permission Denied",
           "To enable notifications, please allow them in your device Settings.",
           [
@@ -55,7 +61,7 @@ const Settings = ({ navigation }) => {
         );
       }
     } else {
-      Alert.alert(
+      showAlert(
         "Disable Notifications",
         "To turn off notifications, please disable them in your device Settings.",
         [
@@ -67,7 +73,7 @@ const Settings = ({ navigation }) => {
   };
 
   const handleLogout = () => {
-    Alert.alert("Log Out", "Are you sure you want to log out?", [
+    showAlert("Log Out", "Are you sure you want to log out?", [
       { text: "Cancel", style: "cancel" },
       {
         text: "Log Out",
@@ -77,7 +83,7 @@ const Settings = ({ navigation }) => {
             setIsLoggingOut(true);
             await logout();
           } catch {
-            Alert.alert("Error", "Failed to log out. Please try again.");
+            showAlert("Error", "Failed to log out. Please try again.");
           } finally {
             setIsLoggingOut(false);
           }
@@ -87,7 +93,7 @@ const Settings = ({ navigation }) => {
   };
 
   const handleReportProblem = () => {
-    Alert.alert("Report a Problem", "How would you like to report?", [
+    showAlert("Report a Problem", "How would you like to report?", [
       { text: "Cancel", style: "cancel" },
       {
         text: "Send Email",
@@ -100,7 +106,7 @@ const Settings = ({ navigation }) => {
   };
 
   const handlePrivacy = () => {
-    Alert.alert("Privacy", "View our full privacy policy?", [
+    showAlert("Privacy", "View our full privacy policy?", [
       { text: "Cancel", style: "cancel" },
       { text: "View Policy", onPress: () => openURL(PRIVACY_URL) },
     ]);
@@ -133,19 +139,10 @@ const Settings = ({ navigation }) => {
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-
-      {/* Header */}
-      <View style={[styles.header, { borderBottomColor: colors.divider }]}>
-        <TouchableOpacity
-          onPress={() => navigation.goBack()}
-          style={styles.backButton}
-          accessibilityLabel="Go back"
-        >
-          <Feather name="chevron-left" size={24} color={colors.brandDark} />
-        </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.brandDark }]}>Settings</Text>
-        <View style={{ width: 40 }} />
-      </View>
+      <ScreenHeader
+        title="Settings"
+        onBack={navigation.canGoBack() ? () => navigation.goBack() : undefined}
+      />
 
       <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
 
@@ -231,17 +228,14 @@ const Settings = ({ navigation }) => {
 };
 
 const styles = StyleSheet.create({
-  container:     { flex: 1, paddingTop: 50 },
-  header:        { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingHorizontal: 20, marginBottom: 24, borderBottomWidth: 0 },
-  backButton:    { width: 40, height: 40, justifyContent: "center", alignItems: "flex-start" },
-  headerTitle:   { fontSize: 20, fontWeight: "700" },
-  scrollContent: { paddingHorizontal: 20 },
+  container:     { flex: 1 },
+  scrollContent: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 60 },
   section:       { marginBottom: 28 },
   sectionTitle:  { fontSize: 13, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 10, marginLeft: 4 },
-  menuItem:      { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 13, paddingHorizontal: 14, marginBottom: 6, borderRadius: 12, borderWidth: 1 },
+  menuItem:      { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 15, paddingHorizontal: 15, marginBottom: 8, borderRadius: 16, borderWidth: 1 },
   menuLeft:      { flexDirection: "row", alignItems: "center" },
-  iconContainer: { width: 34, height: 34, borderRadius: 10, justifyContent: "center", alignItems: "center", marginRight: 12 },
-  menuText:      { fontSize: 15, fontWeight: "500" },
+  iconContainer: { width: 36, height: 36, borderRadius: 12, justifyContent: "center", alignItems: "center", marginRight: 12 },
+  menuText:      { fontSize: 15, fontWeight: "600" },
 });
 
 export default Settings;

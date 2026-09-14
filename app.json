@@ -6,11 +6,11 @@
     "version": "1.0.0",
     "scheme": "libot",
     "orientation": "portrait",
-    "icon": "./assets/logo.png",
+    "icon": "./assets/icon.png",
     "splash": {
-      "image": "./assets/logo.png",
+      "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#ffffff"
+      "backgroundColor": "#8FE1E9"
     },
     "newArchEnabled": true,
     "userInterfaceStyle": "automatic",
@@ -25,7 +25,7 @@
         "expo-notifications",
         {
           "icon": "./assets/notification-icon.png",
-          "color": "#8b4440",
+          "color": "#0C7A84",
           "defaultChannel": "default",
           "largeIcon": "./assets/logo.png"
         }
@@ -113,8 +113,8 @@
         "android.permission.WRITE_EXTERNAL_STORAGE"
       ],
       "adaptiveIcon": {
-        "foregroundImage": "./assets/logo.png",
-        "backgroundColor": "#ffffff"
+        "foregroundImage": "./assets/adaptive-icon.png",
+        "backgroundColor": "#F3DA3C"
       },
       "edgeToEdgeEnabled": true,
       "package": "com.skatzu15.libot.beta",

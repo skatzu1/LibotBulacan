@@ -1,9 +1,15 @@
 import React, { createContext, useState, useContext, useCallback, useRef, useEffect } from "react";
+import { useAuth } from "@clerk/clerk-expo";
+import api from "../api";
+import { usePoints } from "./PointsContext";
 
 const MissionContext = createContext();
 export const useMissions = () => useContext(MissionContext);
 
 export const MissionProvider = ({ children }) => {
+  const { isLoaded, isSignedIn } = useAuth();
+  const { refresh: refreshPoints } = usePoints();
+
   const [missionsBySpot, setMissionsBySpot] = useState({});
   const [completedMissions, setCompletedMissions] = useState([]);
   const fetchedSpots = useRef(new Set());
@@ -78,27 +84,67 @@ export const MissionProvider = ({ children }) => {
       fetchedSpots.current.delete(spotId);
     }
   }, []);
-  const completeMission = useCallback((missionId) => {
-  if (!missionId) return;
 
-  setCompletedMissions((prev) => {
-    if (prev.includes(missionId)) return prev;
-    return [...prev, missionId];
-  });
-}, []);
+  // ── Completed missions — persisted server-side (User.completedMissions) so
+  // progress survives app restarts instead of living only in this state. ──
+
+  // Hydrate on sign-in; reset on sign-out.
+  useEffect(() => {
+    if (!isLoaded) return;
+    if (!isSignedIn) { setCompletedMissions([]); return; }
+
+    let cancelled = false;
+    api.get("/api/missions/completed")
+      .then((res) => {
+        if (cancelled) return;
+        if (res.data?.success && Array.isArray(res.data.missionIds)) {
+          setCompletedMissions(res.data.missionIds);
+        }
+      })
+      .catch((err) => console.warn("Could not load completed missions:", err?.message));
+
+    return () => { cancelled = true; };
+  }, [isLoaded, isSignedIn]);
+
+  // `extra` is optional request-body data — "location" missions need the
+  // user's current { lat, lng } so the backend can verify they're actually
+  // within range before accepting the completion (that can genuinely fail —
+  // unlike an AI/AR mission, which only calls this after already passing its
+  // own check, a location mission's server-side distance check is the *only*
+  // gate). Returns the raw response so a caller like LocationMission.js can
+  // branch on `tooFar` / `noLocation`; other callers (Mission.js, ARScreen)
+  // already ignore the return value and keep working unchanged.
+  const completeMission = useCallback(async (missionId, extra) => {
+    if (!missionId) return null;
+
+    try {
+      const res = await api.patch(`/api/missions/${missionId}/complete`, extra || {});
+      const data = res.data;
+
+      // Only reflect "done" once the server actually agrees — a location
+      // mission can be rejected (tooFar / noLocation), so no optimistic
+      // update here the way a plain fire-and-forget completion might do.
+      if (data?.success && (data.alreadyCompleted || (!data.tooFar && !data.noLocation))) {
+        setCompletedMissions((prev) => (prev.includes(missionId) ? prev : [...prev, missionId]));
+        if (!data.alreadyCompleted) refreshPoints();
+      }
+      return data;
+    } catch (err) {
+      console.warn("Could not persist mission completion:", err?.message);
+      return null;
+    }
+  }, [refreshPoints]);
 
   return (
     <MissionContext.Provider
-  value={{
-    fetchMissions,
-    getMissionsForSpot,
-    refetchMissions,
-
-    // ✅ ADD THESE TWO
-    completedMissions,
-    completeMission,
-  }}
->
+      value={{
+        fetchMissions,
+        getMissionsForSpot,
+        refetchMissions,
+        completedMissions,
+        completeMission,
+      }}
+    >
       {children}
     </MissionContext.Provider>
   );

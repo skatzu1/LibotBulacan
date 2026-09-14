@@ -15,6 +15,7 @@ import { useNavigation } from "@react-navigation/native";
 import { Feather } from "@expo/vector-icons";
 import { useAuth } from "@clerk/clerk-expo";
 import { useTheme } from "../context/ThemeContext";
+import { ScreenHeader } from "../components/ui";
 
 const { width } = Dimensions.get("window");
 const BASE_URL  = "https://libotbackend.onrender.com";
@@ -161,17 +162,18 @@ export default function PreviousTripsScreen() {
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.backgroundHero }]}>
-
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <Feather name="chevron-left" size={24} color={colors.brandDark} />
-        </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.brandDark }]}>Previous Trips</Text>
-        <View style={[styles.countPill, { backgroundColor: colors.brand }]}>
-          <Text style={[styles.countText, { color: colors.textInverse }]}>{visited.length}</Text>
-        </View>
-      </View>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <ScreenHeader
+        title="Previous Trips"
+        onBack={() => navigation.goBack()}
+        right={
+          visited.length ? (
+            <View style={[styles.countPill, { backgroundColor: colors.brandLight }]}>
+              <Text style={[styles.countText, { color: colors.brandDark }]}>{visited.length}</Text>
+            </View>
+          ) : null
+        }
+      />
 
       {error ? (
         <TouchableOpacity onPress={() => loadVisited(true)} style={[styles.errorBanner, { backgroundColor: colors.dangerBg, borderColor: colors.danger }]}>
@@ -216,7 +218,7 @@ export default function PreviousTripsScreen() {
 }
 
 const styles = StyleSheet.create({
-  container:   { flex: 1, paddingTop: 50 },
+  container:   { flex: 1 },
   centered:    { flex: 1, justifyContent: "center", alignItems: "center" },
   loadingText: { marginTop: 12, fontSize: 14, fontWeight: "500" },
 
@@ -228,7 +230,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   backButton:  { width: 40, height: 40, justifyContent: "center", alignItems: "flex-start" },
-  headerTitle: { fontSize: 20, fontWeight: "700" },
+  headerTitle: { fontSize: 22, fontWeight: "800", letterSpacing: -0.3 },
   countPill: {
     borderRadius: 20,
     minWidth: 32,
@@ -253,13 +255,13 @@ const styles = StyleSheet.create({
   listContent: { paddingHorizontal: 20 },
 
   card: {
-    borderRadius: 18,
+    borderRadius: 22,
     marginBottom: 16,
     overflow: "hidden",
-    shadowColor: "#4a2e2c",
-    shadowOffset: { width: 0, height: 3 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
+    shadowColor: "#0B2E31",
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.06,
+    shadowRadius: 22,
     elevation: 4,
   },
   imageWrapper:     { width: "100%", height: 170, position: "relative" },
@@ -291,7 +293,7 @@ const styles = StyleSheet.create({
   categoryText: { color: "#fff", fontSize: 11, fontWeight: "600" },
 
   cardBody:  { padding: 14 },
-  spotName:  { fontSize: 17, fontWeight: "700", marginBottom: 6 },
+  spotName:  { fontSize: 18, fontWeight: "700", letterSpacing: -0.2, marginBottom: 6 },
   infoRow:   { flexDirection: "row", alignItems: "center", gap: 5, marginBottom: 10 },
   infoText:  { fontSize: 13, flex: 1 },
   divider:   { height: 1, marginBottom: 10 },
@@ -312,6 +314,6 @@ const styles = StyleSheet.create({
 
   emptyState:    { alignItems: "center", marginTop: 80, paddingHorizontal: 40 },
   emptyEmoji:    { fontSize: 56, marginBottom: 14 },
-  emptyTitle:    { fontSize: 18, fontWeight: "700", marginBottom: 6 },
+  emptyTitle:    { fontSize: 20, fontWeight: "800", letterSpacing: -0.3, marginBottom: 6 },
   emptySubtitle: { fontSize: 13, textAlign: "center", lineHeight: 19 },
 });

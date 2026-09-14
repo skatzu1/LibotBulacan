@@ -4,21 +4,19 @@ module.exports = (async () => {
   const config = await getDefaultConfig(__dirname);
 
   // ── Asset extensions (single source of truth — removed from app.json) ──
+  // .glb/.gltf/.bin are the Viro 3D models. The .tflite/.onnx entries were
+  // dropped along with onnxruntime-react-native: mission verification runs
+  // server-side (POST /api/verify/:missionId), so no model files ship in the
+  // app bundle any more.
   config.resolver.assetExts.push("glb");
   config.resolver.assetExts.push("gltf");
   config.resolver.assetExts.push("bin");
-  config.resolver.assetExts.push("tflite");
-  config.resolver.assetExts.push("onnx");
 
-  // ── TensorFlow.js CJS support ──
   config.resolver.sourceExts.push("cjs");
 
-  // ── Block unused three.js files to prevent OOM crash ──
-  config.resolver.blockList = [
-    // Block everything in jsm/ except loaders/ and utils/ (utils needed by some libs)
-    /node_modules\/three\/examples\/jsm\/(?!(loaders|utils)\/).*/,
-    /node_modules\/three\/examples\/js\/.*/,
-  ];
+  // (The three.js blockList that used to live here is gone — three /
+  // three-stdlib / expo-gl were unused and have been removed, so there's
+  // nothing left to block.)
 
   // ── Polyfill Node core modules as empty to prevent null JSI crash ──
   config.resolver.resolveRequest = (context, moduleName, platform) => {

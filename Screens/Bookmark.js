@@ -1,130 +1,88 @@
 import React, { useMemo } from "react";
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
-  Image, ActivityIndicator, StatusBar,
+  ActivityIndicator, StatusBar,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
-import { Feather } from "@expo/vector-icons";
 import { FontAwesome5 } from "@expo/vector-icons";
 import { useBookmark } from "../context/BookmarkContext";
-import { useUser } from "@clerk/clerk-expo";
-import { useAuth } from "../context/AuthContext";
-import { useProfileImage } from "../context/ProfileImageContext";
 import { useTheme } from "../context/ThemeContext";
+import { ScreenHeader, SpotCard, EmptyState, H_PAD } from "../components/ui";
 
 export default function Bookmark() {
   const navigation = useNavigation();
   const { bookmarks, toggleBookmark, loading } = useBookmark();
-  const { user: clerkUser } = useUser();
-  const { user: authUser }  = useAuth();
-  const { profileImage }    = useProfileImage();
-  const { colors, isDark }  = useTheme();
-  const profilePhoto = profileImage;
+  const { colors, isDark } = useTheme();
 
-  const bookmarkedSpots = useMemo(() => {
-    return bookmarks.map(bookmark => {
-      if (typeof bookmark.spotId === "object" && bookmark.spotId?._id) return bookmark.spotId;
-      console.warn("Bookmark spotId not populated:", bookmark);
-      return null;
-    }).filter(Boolean);
-  }, [bookmarks]);
-
-  const BookmarkCard = ({ item }) => {
-    if (!item || !item._id) return (
-      <View style={[styles.card, { backgroundColor: colors.card }]}>
-        <View style={styles.cardImage}><ActivityIndicator size="large" color={colors.brand} /></View>
-        <View style={styles.cardContent}><Text style={[styles.cardTitle, { color: colors.textPrimary }]}>Loading...</Text></View>
-      </View>
-    );
-    return (
-      <TouchableOpacity style={[styles.card, { backgroundColor: colors.card }]} onPress={() => navigation.navigate("InformationScreen", { spot: item })} activeOpacity={0.85}>
-        {item.image ? (
-          <Image source={{ uri: item.image }} style={styles.cardImage} resizeMode="cover" />
-        ) : (
-          <View style={[styles.cardImage, { backgroundColor: colors.backgroundHero ?? "#e8d0ce", justifyContent:"center", alignItems:"center" }]}>
-            <Feather name="image" size={40} color={colors.textMuted} />
-          </View>
-        )}
-        <TouchableOpacity style={styles.bookmarkButton} onPress={() => toggleBookmark(item)} activeOpacity={0.8}>
-          <FontAwesome5 name="bookmark" size={20} solid color="#f4c542" />
-        </TouchableOpacity>
-        <View style={styles.cardContent}>
-          <Text style={[styles.cardTitle, { color: colors.brandDark }]} numberOfLines={2}>{item.name || "Unknown Spot"}</Text>
-          {item.location && (
-            <View style={styles.locationContainer}>
-              <Feather name="map-pin" size={12} color={colors.brand} />
-              <Text style={[styles.locationText, { color: colors.textMuted }]} numberOfLines={1}>{item.location}</Text>
-            </View>
-          )}
-        </View>
-      </TouchableOpacity>
-    );
-  };
+  const bookmarkedSpots = useMemo(
+    () =>
+      bookmarks
+        .map((b) => (typeof b.spotId === "object" && b.spotId?._id ? b.spotId : null))
+        .filter(Boolean),
+    [bookmarks]
+  );
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={colors.background} />
 
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <Feather name="chevron-left" size={26} color={colors.brandDark} />
-        </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.brandDark }]}>Soon to Visit</Text>
-        <TouchableOpacity onPress={() => navigation.navigate("Profile")} style={styles.avatarWrap}>
-          {profilePhoto ? (
-            <Image source={{ uri: profilePhoto }} style={[styles.avatar, { borderColor: colors.cardBorder ?? "#e8d0ce" }]} />
-          ) : (
-            <View style={[styles.avatar, styles.avatarFallback, { backgroundColor: colors.brand }]}>
-              <Feather name="user" size={18} color="#fff" />
-            </View>
-          )}
-          <View style={[styles.onlineDot, { backgroundColor: colors.brand, borderColor: colors.background }]} />
-        </TouchableOpacity>
-      </View>
+      <ScreenHeader
+        title="Saved spots"
+        onBack={navigation.canGoBack() ? () => navigation.goBack() : undefined}
+      />
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scroll}>
+        <Text style={[styles.count, { color: colors.textSecondary }]}>
+          {bookmarkedSpots.length
+            ? `${bookmarkedSpots.length} place${bookmarkedSpots.length === 1 ? "" : "s"} to visit`
+            : "Your reading list for Bulacan"}
+        </Text>
+
         {loading && bookmarks.length === 0 ? (
-          <View style={styles.emptyContainer}>
+          <View style={styles.centered}>
             <ActivityIndicator size="large" color={colors.brand} />
-            <Text style={[styles.emptyText, { color: colors.brandDark }]}>Loading bookmarks...</Text>
           </View>
         ) : bookmarkedSpots.length === 0 ? (
-          <View style={styles.emptyContainer}>
-            <Feather name="bookmark" size={64} color={colors.textMuted} />
-            <Text style={[styles.emptyText, { color: colors.brandDark }]}>No bookmarks yet</Text>
-            <Text style={[styles.emptySubtext, { color: colors.textMuted }]}>Start exploring and save your favorite destinations</Text>
-          </View>
+          <EmptyState
+            icon="bookmark"
+            text="No saved spots yet. Tap the bookmark on any place to add it here."
+          />
         ) : (
-          <View style={styles.cardsContainer}>
-            {bookmarkedSpots.map((spot) => <BookmarkCard key={spot._id || spot.id} item={spot} />)}
+          <View style={styles.list}>
+            {bookmarkedSpots.map((spot) => (
+              <SpotCard
+                key={spot._id || spot.id}
+                spot={spot}
+                wide
+                height={180}
+                onPress={() => navigation.navigate("InformationScreen", { spot })}
+                right={
+                  <TouchableOpacity
+                    style={[styles.bmBtn, { backgroundColor: "rgba(0,0,0,0.4)" }]}
+                    onPress={() => toggleBookmark(spot)}
+                    activeOpacity={0.8}
+                    accessibilityLabel="Remove bookmark"
+                  >
+                    <FontAwesome5 name="bookmark" size={17} solid color={colors.star} />
+                  </TouchableOpacity>
+                }
+              />
+            ))}
           </View>
         )}
-        <View style={{ height: 100 }} />
       </ScrollView>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
-  container:      { flex: 1, paddingTop: 50 },
-  header:         { flexDirection:"row", justifyContent:"space-between", alignItems:"center", paddingHorizontal:20, marginBottom:20 },
-  backButton:     { width:40, height:40, justifyContent:"center", alignItems:"flex-start" },
-  headerTitle:    { fontSize:20, fontWeight:"700" },
-  avatarWrap:     { position:"relative" },
-  avatar:         { width:42, height:42, borderRadius:21, borderWidth:2.5 },
-  avatarFallback: { justifyContent:"center", alignItems:"center" },
-  onlineDot:      { position:"absolute", bottom:1, right:1, width:11, height:11, borderRadius:6, borderWidth:2 },
-  scrollContent:  { paddingHorizontal:20 },
-  cardsContainer: { gap:14 },
-  card:           { borderRadius:16, overflow:"hidden", shadowColor:"#4a2e2c", shadowOffset:{width:0,height:2}, shadowOpacity:0.08, shadowRadius:6, elevation:3, position:"relative" },
-  cardImage:      { width:"100%", height:180 },
-  bookmarkButton: { position:"absolute", top:12, right:12, width:36, height:36, borderRadius:18, backgroundColor:"rgba(0,0,0,0.35)", justifyContent:"center", alignItems:"center", zIndex:10 },
-  cardContent:    { padding:14 },
-  cardTitle:      { fontSize:17, fontWeight:"700", marginBottom:6 },
-  locationContainer: { flexDirection:"row", alignItems:"center", gap:5 },
-  locationText:   { fontSize:13, flex:1 },
-  emptyContainer: { flex:1, justifyContent:"center", alignItems:"center", paddingVertical:80 },
-  emptyText:      { fontSize:20, fontWeight:"700", marginTop:20, marginBottom:8 },
-  emptySubtext:   { fontSize:14, textAlign:"center", paddingHorizontal:40 },
+  container: { flex: 1 },
+  scroll:    { paddingHorizontal: H_PAD, paddingBottom: 150 },
+  count:     { fontSize: 13.5, fontWeight: "500", marginTop: 4, marginBottom: 16 },
+  centered:  { paddingVertical: 80, alignItems: "center" },
+  list:      { gap: 14 },
+  bmBtn: {
+    width: 34, height: 34, borderRadius: 17,
+    alignItems: "center", justifyContent: "center",
+  },
 });

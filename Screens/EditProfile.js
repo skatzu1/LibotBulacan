@@ -1,14 +1,16 @@
 import React, { useState, useEffect, useMemo } from "react";
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
-  TextInput, Alert, ActivityIndicator, Image,
+  TextInput, ActivityIndicator, Image,
   KeyboardAvoidingView, Platform,
 } from "react-native";
+import { showAlert } from "../components/AppAlert";
 import { Feather } from "@expo/vector-icons";
 import { useUser, useAuth } from "@clerk/clerk-expo";
 import ImageCropPicker from "react-native-image-crop-picker";
 import { useProfileImage } from "../context/ProfileImageContext";
 import { useTheme } from "../context/ThemeContext";
+import { ScreenHeader } from "../components/ui";
 
 const BASE_URL = "https://libotbackend.onrender.com";
 
@@ -107,7 +109,7 @@ export default function EditProfile({ navigation }) {
     const unsubscribe = navigation.addListener("beforeRemove", (e) => {
       if (!hasChanges) return;
       e.preventDefault();
-      Alert.alert(
+      showAlert(
         "Discard changes?",
         "You have unsaved changes. Are you sure you want to leave?",
         [
@@ -120,7 +122,7 @@ export default function EditProfile({ navigation }) {
   }, [navigation, hasChanges]);
 
   const handlePickAvatar = () => {
-    Alert.alert("Change Photo", "Choose a source", [
+    showAlert("Change Photo", "Choose a source", [
       { text: "Cancel", style: "cancel" },
       { text: "Camera",  onPress: () => launchPicker("camera")  },
       { text: "Gallery", onPress: () => launchPicker("gallery") },
@@ -152,7 +154,7 @@ export default function EditProfile({ navigation }) {
     } catch (err) {
       if (err?.code !== "E_PICKER_CANCELLED") {
         console.error("[EditProfile] Image pick error:", err);
-        Alert.alert("Error", "Could not select image. Please try again.");
+        showAlert("Error", "Could not select image. Please try again.");
       }
     } finally {
       setPickingImage(false);
@@ -161,7 +163,7 @@ export default function EditProfile({ navigation }) {
 
   const validate = () => {
     if (!firstName.trim()) {
-      Alert.alert("Validation", "First name cannot be empty.");
+      showAlert("Validation", "First name cannot be empty.");
       return false;
     }
     return true;
@@ -202,25 +204,25 @@ export default function EditProfile({ navigation }) {
       }
       setNewLocalAvatar(null);
 
-      Alert.alert("Success", "Profile updated successfully.", [
+      showAlert("Success", "Profile updated successfully.", [
         { text: "OK", onPress: () => navigation.goBack() },
       ]);
     } catch (err) {
       console.error("[EditProfile] Save error:", err);
-      Alert.alert("Error", err?.errors?.[0]?.longMessage || err?.message || "Failed to update profile.");
+      showAlert("Error", err?.errors?.[0]?.longMessage || err?.message || "Failed to update profile.");
     } finally {
       setSaving(false);
     }
   };
 
   const handleDeleteAccount = () => {
-    Alert.alert("Delete Account", "This is permanent and cannot be undone. All your data will be erased.", [
+    showAlert("Delete Account", "This is permanent and cannot be undone. All your data will be erased.", [
       { text: "Cancel", style: "cancel" },
       {
         text: "Delete", style: "destructive",
         onPress: async () => {
           try { await clerkUser.delete(); }
-          catch (err) { Alert.alert("Error", err?.errors?.[0]?.message || "Could not delete account."); }
+          catch (err) { showAlert("Error", err?.errors?.[0]?.message || "Could not delete account."); }
         },
       },
     ]);
@@ -244,30 +246,30 @@ export default function EditProfile({ navigation }) {
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
       <View style={[styles.container, { backgroundColor: colors.background }]}>
 
-        <View style={styles.header}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-            <Feather name="chevron-left" size={24} color={colors.brandDark} />
-          </TouchableOpacity>
-          <Text style={[styles.headerTitle, { color: colors.brandDark }]}>Edit Profile</Text>
-          <TouchableOpacity
-            style={[
-              styles.saveButton,
-              { backgroundColor: colors.brand },
-              saveDisabled && { backgroundColor: colors.cardBorder },
-            ]}
-            onPress={handleSave}
-            disabled={saveDisabled}
-          >
-            {saving
-              ? <ActivityIndicator color={colors.textInverse} size="small" />
-              : <Text style={[
-                  styles.saveButtonText,
-                  { color: colors.textInverse },
-                  saveDisabled && { color: colors.textMuted },
-                ]}>Save</Text>
-            }
-          </TouchableOpacity>
-        </View>
+        <ScreenHeader
+          title="Edit Profile"
+          onBack={() => navigation.goBack()}
+          right={
+            <TouchableOpacity
+              style={[
+                styles.saveButton,
+                { backgroundColor: colors.accent },
+                saveDisabled && { backgroundColor: colors.cardBorder },
+              ]}
+              onPress={handleSave}
+              disabled={saveDisabled}
+            >
+              {saving
+                ? <ActivityIndicator color={colors.onAccent} size="small" />
+                : <Text style={[
+                    styles.saveButtonText,
+                    { color: colors.onAccent },
+                    saveDisabled && { color: colors.textMuted },
+                  ]}>Save</Text>
+              }
+            </TouchableOpacity>
+          }
+        />
 
         <ScrollView
           showsVerticalScrollIndicator={false}
@@ -335,16 +337,10 @@ export default function EditProfile({ navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, paddingTop: 50 },
+  container: { flex: 1 },
   centered:  { justifyContent: "center", alignItems: "center" },
 
-  header: {
-    flexDirection: "row", justifyContent: "space-between", alignItems: "center",
-    paddingHorizontal: 20, marginBottom: 8,
-  },
-  backButton:  { width: 40, height: 40, justifyContent: "center", alignItems: "flex-start" },
-  headerTitle: { fontSize: 20, fontWeight: "700" },
-  saveButton:  { paddingHorizontal: 18, paddingVertical: 8, borderRadius: 20, minWidth: 60, alignItems: "center" },
+  saveButton:  { paddingHorizontal: 18, paddingVertical: 8, borderRadius: 999, minWidth: 58, alignItems: "center" },
   saveButtonText: { fontWeight: "700", fontSize: 14 },
 
   scrollContent: { paddingHorizontal: 20 },
@@ -355,10 +351,10 @@ const styles = StyleSheet.create({
   profilePhotoPlaceholder: { width: "100%", height: "100%", justifyContent: "center", alignItems: "center" },
   avatarInitials:          { fontSize: 32, fontWeight: "700" },
   avatarBadge:             { position: "absolute", bottom: 2, right: 2, width: 26, height: 26, borderRadius: 13, justifyContent: "center", alignItems: "center", borderWidth: 2 },
-  fullNameLabel:           { fontSize: 18, fontWeight: "700", marginTop: 12, marginBottom: 2 },
+  fullNameLabel:           { fontSize: 21, fontWeight: "800", letterSpacing: -0.3, marginTop: 14, marginBottom: 2 },
   emailLabel:              { fontSize: 13, marginBottom: 4 },
   avatarHint:              { fontSize: 12, marginBottom: 8 },
-  googleBadge:             { flexDirection: "row", alignItems: "center", borderRadius: 20, paddingHorizontal: 10, paddingVertical: 4, borderWidth: 1, gap: 5, marginTop: 4 },
+  googleBadge:             { flexDirection: "row", alignItems: "center", borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4, borderWidth: 1, gap: 5, marginTop: 4 },
   googleBadgeText:         { fontSize: 12, fontWeight: "600" },
 
   section:      { marginBottom: 28 },
@@ -366,13 +362,13 @@ const styles = StyleSheet.create({
 
   fieldWrapper: { marginBottom: 10 },
   fieldLabel:   { fontSize: 12, fontWeight: "600", marginBottom: 5, marginLeft: 4 },
-  fieldRow:     { flexDirection: "row", alignItems: "center", borderRadius: 12, borderWidth: 1, paddingHorizontal: 12, paddingVertical: 11 },
+  fieldRow:     { flexDirection: "row", alignItems: "center", borderRadius: 14, borderWidth: 1, paddingHorizontal: 13, paddingVertical: 13 },
   fieldRowDisabled: { opacity: 0.5 },
   fieldIcon:    { width: 28, height: 28, borderRadius: 8, justifyContent: "center", alignItems: "center", marginRight: 10 },
   fieldInput:   { flex: 1, fontSize: 15, fontWeight: "500", padding: 0 },
 
-  menuItem:      { flexDirection: "row", justifyContent: "space-between", alignItems: "center", borderRadius: 12, paddingVertical: 14, paddingHorizontal: 14, marginBottom: 8, borderWidth: 1 },
+  menuItem:      { flexDirection: "row", justifyContent: "space-between", alignItems: "center", borderRadius: 16, paddingVertical: 15, paddingHorizontal: 15, marginBottom: 10, borderWidth: 1 },
   menuLeft:      { flexDirection: "row", alignItems: "center" },
-  iconContainer: { width: 36, height: 36, borderRadius: 10, justifyContent: "center", alignItems: "center", marginRight: 12 },
-  menuText:      { fontSize: 15, fontWeight: "500" },
+  iconContainer: { width: 38, height: 38, borderRadius: 12, justifyContent: "center", alignItems: "center", marginRight: 12 },
+  menuText:      { fontSize: 15, fontWeight: "600" },
 });
