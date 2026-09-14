@@ -12,7 +12,7 @@ import {
   ViroDirectionalLight,
   Viro3DObject,
   ViroSphere,
-  ViroMaterials,npx 
+  ViroMaterials,
 } from "@reactvision/react-viro";
 
 import { MaterialCommunityIcons, Feather } from "@expo/vector-icons";

@@ -15,12 +15,14 @@ import {
   StatusBar,
   Pressable,
 } from "react-native";
+import { showAlert } from "../components/AppAlert";
 import { useNavigation } from "@react-navigation/native";
 import { Feather } from "@expo/vector-icons";
 import { useAuth } from "@clerk/clerk-expo";
 import { captureRef } from "react-native-view-shot";
 import RNShare from "react-native-share";
 import { useTheme } from "../context/ThemeContext";
+import { ScreenHeader } from "../components/ui";
 
 const { width } = Dimensions.get("window");
 const GRID_GAP  = 16;
@@ -189,7 +191,7 @@ export default function BadgeScreen() {
     } catch (e) {
       if (e?.message !== "User did not share") {
         console.warn("[Share] Failed:", e);
-        Alert.alert?.("Error", "Could not prepare the badge image to share.");
+        showAlert("Error", "Could not prepare the badge image to share.");
       }
     } finally {
       setSharing(false);
@@ -296,16 +298,15 @@ export default function BadgeScreen() {
         </View>
       </View>
 
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <Feather name="chevron-left" size={24} color={colors.brandDark} />
-        </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.brandDark }]}>Badges</Text>
-        <View style={[styles.countBadge, { backgroundColor: colors.brand }]}>
-          <Text style={[styles.countText, { color: colors.textInverse }]}>{claimedCount}/{badges.length}</Text>
-        </View>
-      </View>
+      <ScreenHeader
+        title="Badges"
+        onBack={() => navigation.goBack()}
+        right={
+          <View style={[styles.countBadge, { backgroundColor: colors.brandLight }]}>
+            <Text style={[styles.countText, { color: colors.brandDark }]}>{claimedCount}/{badges.length}</Text>
+          </View>
+        }
+      />
 
       <FlatList
         data={visibleBadges}
@@ -498,17 +499,17 @@ export default function BadgeScreen() {
 
             {selectedBadge?.claimed ? (
               <TouchableOpacity
-                style={[styles.shareButton, { backgroundColor: colors.brand }, sharing && { opacity: 0.7 }]}
+                style={[styles.shareButton, { backgroundColor: colors.accent }, sharing && { opacity: 0.7 }]}
                 onPress={handleShare}
                 activeOpacity={0.82}
                 disabled={sharing}
               >
                 {sharing ? (
-                  <ActivityIndicator size="small" color={colors.textInverse} style={{ marginRight: 8 }} />
+                  <ActivityIndicator size="small" color={colors.onAccent} style={{ marginRight: 8 }} />
                 ) : (
-                  <Feather name="share-2" size={17} color={colors.textInverse} style={{ marginRight: 8 }} />
+                  <Feather name="share-2" size={17} color={colors.onAccent} style={{ marginRight: 8 }} />
                 )}
-                <Text style={[styles.shareButtonText, { color: colors.textInverse }]}>
+                <Text style={[styles.shareButtonText, { color: colors.onAccent }]}>
                   {sharing ? "Preparing..." : "Share This Badge"}
                 </Text>
               </TouchableOpacity>
@@ -530,7 +531,7 @@ export default function BadgeScreen() {
 }
 
 const styles = StyleSheet.create({
-  container:   { flex: 1, paddingTop: 50 },
+  container:   { flex: 1 },
   centered:    { flex: 1, justifyContent: "center", alignItems: "center" },
   loadingText: { marginTop: 12, fontSize: 14, fontWeight: "500" },
 
@@ -576,7 +577,7 @@ const styles = StyleSheet.create({
   },
   backButton:  { width: 40, height: 40, justifyContent: "center", alignItems: "flex-start" },
   headerTitle: { fontSize: 20, fontWeight: "700" },
-  countBadge:  { borderRadius: 20, paddingHorizontal: 12, paddingVertical: 4 },
+  countBadge:  { borderRadius: 999, paddingHorizontal: 12, paddingVertical: 5 },
   countText:   { fontWeight: "700", fontSize: 13 },
 
   scrollContent: { paddingHorizontal: 20, paddingTop: 15 },
@@ -617,7 +618,7 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 12,
     alignItems: "center",
-    shadowColor: "#4a2e2c",
+    shadowColor: "#0B2E31",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.08,
     shadowRadius: 6,
@@ -784,7 +785,7 @@ const styles = StyleSheet.create({
     paddingVertical: 14,
     paddingHorizontal: 32,
     width: "100%",
-    shadowColor: "#6b4b45",
+    shadowColor: "#0B2E31",
     shadowOffset: { width: 0, height: 4 },
     shadowOpacity: 0.28,
     shadowRadius: 10,

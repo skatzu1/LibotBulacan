@@ -17,14 +17,17 @@ import {
   Modal,
   Platform,
   AppState,
+  Linking,
 } from "react-native";
 import * as Location from "expo-location";
+import { showAlert } from "../components/AppAlert";
 import * as Notifications from "expo-notifications";
 import * as TaskManager from "expo-task-manager";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useAuth, useUser } from "@clerk/clerk-expo";
 import { Feather } from "@expo/vector-icons";
 import { navigationRef } from "../navigation/navigationRef";
+import { useTheme } from "./ThemeContext";
 
 const BASE_URL                 = "https://libotbackend.onrender.com";
 const ARRIVAL_RADIUS_METERS    = 50;
@@ -190,7 +193,40 @@ async function setupNotifications() {
 // ─────────────────────────────────────────────
 // Request location permissions in correct order
 // ─────────────────────────────────────────────
+
+// Promise-wrapped themed confirm dialog (AppAlert has no promise API of its own).
+function confirmAsync(title, message, opts = {}) {
+  const { confirmText = "Continue", cancelText = "Not now", tone = "info", icon } = opts;
+  return new Promise((resolve) => {
+    showAlert(
+      title, message,
+      [
+        { text: cancelText, style: "cancel", onPress: () => resolve(false) },
+        { text: confirmText, onPress: () => resolve(true) },
+      ],
+      { tone, icon, cancelable: false },
+    );
+  });
+}
+
 async function requestAllLocationPermissions() {
+  const current = await Location.getForegroundPermissionsAsync();
+
+  // First-time ask → show a short Libot-branded rationale BEFORE the OS dialog
+  // (better grant rates, and the OS "Precise / While using the app / …" sheet
+  // makes more sense once the user knows why).
+  if (current.status !== "granted" && current.canAskAgain) {
+    const proceed = await confirmAsync(
+      "Libot uses your location",
+      "To show spots near you, log the places you visit, and send arrival alerts. You'll pick a permission level on the next screen.",
+      { confirmText: "Continue", icon: "map-pin", tone: "info" },
+    );
+    if (!proceed) {
+      console.warn("[Location] User declined the rationale");
+      return { foreground: false, background: false };
+    }
+  }
+
   const { status: fg } = await Location.requestForegroundPermissionsAsync();
   if (fg !== "granted") {
     console.warn("[Location] Foreground permission denied");
@@ -205,6 +241,40 @@ async function requestAllLocationPermissions() {
 
   console.log("[Location] ✅ Foreground + background permissions granted");
   return { foreground: true, background: true };
+}
+
+// Life360-style nudge: shown when Libot has only "while using the app" (or no)
+// location access. Two steps — an intro, then a Settings shortcut — because on
+// Android 11+ "Allow all the time" can only be granted from system Settings.
+const ALLTIME_PROMPT_KEY  = "alltimeLocationPromptAt";
+const ALLTIME_PROMPT_EVERY = 12 * 60 * 60 * 1000; // at most once per 12h
+
+async function promptForAllTimeLocation() {
+  if (Platform.OS !== "android") return; // iOS shows its own "Always Allow" prompt
+  try {
+    const last = Number(await AsyncStorage.getItem(ALLTIME_PROMPT_KEY)) || 0;
+    if (Date.now() - last < ALLTIME_PROMPT_EVERY) return;
+    await AsyncStorage.setItem(ALLTIME_PROMPT_KEY, String(Date.now()));
+  } catch (_) {}
+
+  const openStep2 = () => {
+    showAlert(
+      `Libot's location features only work if it can access your location "all the time"`,
+      `In Settings → Permissions → Location, choose "Allow all the time".`,
+      [
+        { text: "Not now", style: "cancel" },
+        { text: "Go to Settings", onPress: () => Linking.openSettings() },
+      ],
+      { tone: "danger", cancelable: false },
+    );
+  };
+
+  showAlert(
+    `Libot only works correctly if it can access your location "all the time"`,
+    `Right now Libot can only see your location while the app is open, so arrival alerts and visit logging won't work in the background.`,
+    [{ text: "OK", onPress: openStep2 }],
+    { tone: "danger", cancelable: false },
+  );
 }
 
 // ─────────────────────────────────────────────
@@ -229,6 +299,7 @@ export function useArrival() {
 export function ArrivalProvider({ children }) {
   const { getToken, isSignedIn } = useAuth();
   const { user: clerkUser }      = useUser();
+  const { colors }               = useTheme();
 
   const [activeSpot, setActiveSpotState] = useState(null);
   const [allSpots, setAllSpots]          = useState([]);
@@ -270,7 +341,12 @@ export function ArrivalProvider({ children }) {
   // ─────────────────────────────────────────
   const syncClaimedCache = useCallback(async (userId, token) => {
     try {
-      const res  = await fetch(`${BASE_URL}/api/users/claimed-spots`, {
+      // NOTE: this used to call /api/users/claimed-spots, which was never
+      // implemented on the backend — it 404'd on every sign-in, so the local
+      // "already claimed" cache was never actually reconciled with the DB.
+      // /api/users/visitedSpots is the real endpoint and already returns the
+      // exact shape expected here: { success, spotIds } from awardedSpotIds.
+      const res  = await fetch(`${BASE_URL}/api/users/visitedSpots`, {
         headers: { Authorization: `Bearer ${token}` },
       });
       if (!res.ok) {
@@ -319,7 +395,13 @@ export function ArrivalProvider({ children }) {
 
     const init = async () => {
       await setupNotifications();
-      hasLocationPerms.current = await requestAllLocationPermissions();
+      const perms = await requestAllLocationPermissions();
+      hasLocationPerms.current = perms;
+      // Only nudge for "all the time" when they've granted foreground but not
+      // background — don't stack a second modal on top of a fresh "Not now".
+      if (perms.foreground && !perms.background) {
+        promptForAllTimeLocation();
+      }
 
       // Sync cache so local state matches DB
       const token  = await getToken();
@@ -380,7 +462,7 @@ export function ArrivalProvider({ children }) {
                 foregroundService: {
                   notificationTitle: "Libot is tracking your location",
                   notificationBody:  "Detecting nearby tourist spots in Bulacan.",
-                  notificationColor: "#8b4440",
+                  notificationColor: "#0C7A84",
                 },
               });
               console.log("[Location] ✅ Background tracking started");
@@ -738,14 +820,16 @@ export function ArrivalProvider({ children }) {
           <Animated.View
             pointerEvents="none"
             style={[styles.pointsPopup, {
+              backgroundColor: colors.background,
+              borderColor: colors.accent,
               opacity:   pointsOpacity,
               transform: [{ translateY: pointsTranslateY }, { scale: pointsScale }],
             }]}
           >
             <Text style={styles.pointsEmoji}>🎉</Text>
-            <Text style={styles.pointsTitle}>You arrived!</Text>
-            <Text style={styles.pointsEarned}>+{String(popupPoints.earned)} Points</Text>
-            <Text style={styles.pointsTotal}>Total: {String(popupPoints.total)} pts</Text>
+            <Text style={[styles.pointsTitle, { color: colors.textSecondary }]}>You arrived!</Text>
+            <Text style={[styles.pointsEarned, { color: colors.brand }]}>+{String(popupPoints.earned)} Points</Text>
+            <Text style={[styles.pointsTotal, { color: colors.textMuted }]}>Total: {String(popupPoints.total)} pts</Text>
           </Animated.View>
         </View>
       </Modal>
@@ -755,6 +839,8 @@ export function ArrivalProvider({ children }) {
           <Animated.View
             pointerEvents="auto"
             style={[styles.badgeBanner, {
+              backgroundColor: colors.background,
+              borderColor: colors.accent,
               opacity:   badgeOpacity,
               transform: [{ translateY: badgeTranslateY }],
             }]}
@@ -764,14 +850,14 @@ export function ArrivalProvider({ children }) {
                 {earnedBadge?.image ? (
                   <Image source={{ uri: earnedBadge.image }} style={styles.bannerImage} />
                 ) : (
-                  <View style={styles.bannerPlaceholder}>
-                    <Feather name="award" size={22} color="#8b4440" />
+                  <View style={[styles.bannerPlaceholder, { backgroundColor: colors.brandSoft }]}>
+                    <Feather name="award" size={22} color={colors.brand} />
                   </View>
                 )}
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.bannerLabel}>🏅 Badge Earned!</Text>
-                  <Text style={styles.bannerName} numberOfLines={2}>{String(earnedBadge?.name ?? "")}</Text>
-                  <Text style={styles.bannerSub}>Tap to view · Auto-dismiss in 5s</Text>
+                  <Text style={[styles.bannerLabel, { color: colors.brand }]}>🏅 Badge Earned!</Text>
+                  <Text style={[styles.bannerName, { color: colors.brandDark }]} numberOfLines={2}>{String(earnedBadge?.name ?? "")}</Text>
+                  <Text style={[styles.bannerSub, { color: colors.textMuted }]}>Tap to view · Auto-dismiss in 5s</Text>
                 </View>
               </View>
             </TouchableOpacity>
@@ -790,25 +876,25 @@ const styles = StyleSheet.create({
   pointsPopup: {
     backgroundColor: "#fff", borderRadius: 24, paddingVertical: 22, paddingHorizontal: 40,
     alignItems: "center", shadowColor: "#000", shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.25, shadowRadius: 10, elevation: 25, borderWidth: 2, borderColor: "#f4c542", minWidth: 200,
+    shadowOpacity: 0.25, shadowRadius: 10, elevation: 25, borderWidth: 2, borderColor: "#F2CE1B", minWidth: 200,
   },
   pointsEmoji:  { fontSize: 38, marginBottom: 6 },
-  pointsTitle:  { fontSize: 18, fontWeight: "700", color: "#4a4a4a", marginBottom: 4 },
-  pointsEarned: { fontSize: 28, fontWeight: "800", color: "#8b4440", marginBottom: 2 },
-  pointsTotal:  { fontSize: 13, color: "#6a5a5a", fontWeight: "500" },
+  pointsTitle:  { fontSize: 18, fontWeight: "700", color: "#4C5A5B", marginBottom: 4 },
+  pointsEarned: { fontSize: 28, fontWeight: "800", color: "#0C7A84", marginBottom: 2 },
+  pointsTotal:  { fontSize: 13, color: "#66787A", fontWeight: "500" },
 
   badgeBackdrop: { flex: 1, pointerEvents: "none" },
   badgeBanner: {
     marginTop: Platform.OS === "ios" ? 55 : 40, marginHorizontal: 16, backgroundColor: "#fff",
     borderRadius: 18, paddingVertical: 14, paddingHorizontal: 16, flexDirection: "row",
     alignItems: "center", shadowColor: "#000", shadowOffset: { width: 0, height: 5 },
-    shadowOpacity: 0.2, shadowRadius: 12, elevation: 25, borderWidth: 1.5, borderColor: "#f4c542",
+    shadowOpacity: 0.2, shadowRadius: 12, elevation: 25, borderWidth: 1.5, borderColor: "#F2CE1B",
   },
   bannerTouchable:   { flex: 1, flexDirection: "row" },
   bannerLeft:        { flexDirection: "row", alignItems: "center", gap: 12, flex: 1 },
   bannerImage:       { width: 46, height: 46, borderRadius: 23, resizeMode: "cover" },
-  bannerPlaceholder: { width: 46, height: 46, borderRadius: 23, backgroundColor: "#fce8e6", justifyContent: "center", alignItems: "center" },
-  bannerLabel:       { fontSize: 11, color: "#8b4440", fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.6 },
-  bannerName:        { fontSize: 14, color: "#4a2e2c", fontWeight: "600", marginTop: 2 },
-  bannerSub:         { fontSize: 11, color: "#b0908c", marginTop: 3, fontWeight: "500" },
+  bannerPlaceholder: { width: 46, height: 46, borderRadius: 23, backgroundColor: "#E6F6F8", justifyContent: "center", alignItems: "center" },
+  bannerLabel:       { fontSize: 11, color: "#0C7A84", fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.6 },
+  bannerName:        { fontSize: 14, color: "#232B2C", fontWeight: "600", marginTop: 2 },
+  bannerSub:         { fontSize: 11, color: "#66787A", marginTop: 3, fontWeight: "500" },
 });

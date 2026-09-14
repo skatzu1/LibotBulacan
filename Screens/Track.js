@@ -9,11 +9,28 @@ import {
   Dimensions,
   Animated,
   PanResponder,
+  StatusBar,
 } from "react-native";
 import { WebView } from "react-native-webview";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import * as Location from "expo-location";
 import { useArrival } from "../context/ArrivalContext";
+import { useTheme, radius, shadow } from "../context/ThemeContext";
+import { BULACAN_BOUNDARY, BULACAN_BBOX } from "../utils/bulacanBoundary";
+
+/* ── Human-readable distance / duration ───────────────────────────── */
+function fmtDistance(m) {
+  if (m == null) return "";
+  return m >= 1000 ? `${(m / 1000).toFixed(m >= 10000 ? 0 : 1)} km` : `${Math.round(m / 10) * 10} m`;
+}
+function fmtDuration(s) {
+  if (s == null) return "";
+  const mins = Math.round(s / 60);
+  if (mins < 60) return `${mins} min`;
+  const h = Math.floor(mins / 60);
+  return `${h} hr ${mins % 60} min`;
+}
 
 const { width, height } = Dimensions.get("window");
 const BASE_URL = "https://libotbackend.onrender.com";
@@ -443,6 +460,8 @@ function getSpotCoords(spot) {
 export default function Track({ route, navigation }) {
   const { spot } = route.params;
   const { setActiveSpot } = useArrival();
+  const { colors, isDark } = useTheme();
+  const insets = useSafeAreaInsets();
 
   const [userLocation, setUserLocation]   = useState(null);
   const [loading, setLoading]             = useState(true);
@@ -450,6 +469,7 @@ export default function Track({ route, navigation }) {
   const [locationError, setLocationError] = useState(null);
   const [followMode, setFollowMode]       = useState(false);
   const [selectedTerminal, setSelectedTerminal] = useState(null);
+  const [routeInfo, setRouteInfo]         = useState(null); // { distance, time }
 
   // Bottom sheet animation
   const sheetAnim = useRef(new Animated.Value(0)).current;
@@ -590,6 +610,8 @@ export default function Track({ route, navigation }) {
         if (terminal) showSheet(terminal);
       } else if (data.type === "mapTapped") {
         if (sheetVisible.current) hideSheet();
+      } else if (data.type === "route") {
+        setRouteInfo({ distance: data.distance, time: data.time });
       }
     } catch {}
   }, [showSheet, hideSheet]);
@@ -673,9 +695,36 @@ export default function Track({ route, navigation }) {
     const { lat: destLat, lng: destLng } = dest;
     const spotName = (spotData.name ?? "Destination").replace(/'/g, "\\'");
 
+    // Destination pin + route line follow the app's brand colour; the jeepney
+    // terminal proximity rings use the yellow accent.
+    const hexToRgba = (hex) => {
+      const h = hex.replace("#", "");
+      const [r, g, b] = [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16));
+      return (a) => `rgba(${r},${g},${b},${a})`;
+    };
+    const destColor = colors.brand;
+    const destRgba = hexToRgba(destColor);
+    const termColor = colors.accent;
+    const termRgba = hexToRgba(termColor);
+
+    // Map chrome (page/tile background, loading overlay, popups, tooltips)
+    // follows the app theme so this screen doesn't flash light-mode colors
+    // when opened in dark mode.
+    const mapBg      = colors.background;
+    const surfaceBg  = colors.card;
+    const surfaceText   = colors.textPrimary;
+    const surfaceSub    = colors.textSecondary;
+    const surfaceBorder = colors.cardBorder;
+    const tileUrl = isDark
+      ? "https://{s}.basemap.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}{r}.png"
+      : "https://{s}.basemap.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png";
+
     const terminalsJson = JSON.stringify(
       TERMINALS.map(({ id, name, lat, lng }) => ({ id, name, lat, lng }))
     );
+
+    const boundaryJson = JSON.stringify(BULACAN_BOUNDARY);
+    const bbox = BULACAN_BBOX;
 
     return `<!DOCTYPE html><html>
     <head>
@@ -684,36 +733,51 @@ export default function Track({ route, navigation }) {
       <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.css" />
       <style>
         * { margin:0; padding:0; box-sizing:border-box; }
-        body { background:#1a1a2e; }
-        #map { width:100%; height:100vh; background:#1a1a2e; }
+        html,body { background:${mapBg}; }
+        #map { width:100%; height:100vh; background:${mapBg}; }
         .leaflet-control-attribution { display:none; }
+        .leaflet-container { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; background:${mapBg}; }
         #loading-overlay {
           position:fixed; top:0; left:0; right:0; bottom:0;
-          background:#1a1a2e;
+          background:${mapBg};
           display:flex; flex-direction:column;
           align-items:center; justify-content:center;
           z-index:9999;
-          font-family:sans-serif; color:#aaa;
-          font-size:14px; font-weight:600; gap:12px;
+          font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+          color:${surfaceSub}; font-size:13.5px; font-weight:600; gap:14px;
+          letter-spacing:0.2px;
+          transition:opacity 0.35s ease;
         }
         .spinner {
-          width:36px; height:36px;
-          border:4px solid #333; border-top-color:#8b4440;
-          border-radius:50%; animation:spin 0.8s linear infinite;
+          width:34px; height:34px;
+          border:3px solid ${destRgba(0.15)};
+          border-top-color:${destColor};
+          border-radius:50%; animation:spin 0.7s linear infinite;
         }
         @keyframes spin { to { transform:rotate(360deg); } }
         .terminal-tooltip {
-          background:#fff;
+          background:${surfaceBg};
           border:none;
-          border-radius:6px;
-          padding:4px 8px;
-          font-size:11px;
+          border-radius:9px;
+          padding:6px 11px;
+          font-size:11.5px;
           font-weight:600;
-          color:#1a1a2e;
-          box-shadow:0 2px 8px rgba(0,0,0,0.25);
+          color:${surfaceText};
+          box-shadow:0 6px 18px rgba(11,46,49,0.16);
           white-space:nowrap;
         }
         .terminal-tooltip::before { display:none; }
+        /* Cleaner popups */
+        .leaflet-popup-content-wrapper {
+          background:${surfaceBg};
+          border-radius:14px;
+          box-shadow:0 10px 30px rgba(11,46,49,0.18);
+        }
+        .leaflet-popup-content { font-weight:600; color:${surfaceText}; margin:11px 14px; }
+        .leaflet-popup-tip { box-shadow:none; }
+        /* Route line — rounded joins for a smooth modern stroke */
+        .leaflet-routing-container { display:none; }
+        path.leaflet-interactive { stroke-linecap:round; stroke-linejoin:round; }
         @keyframes proximity-pulse {
           0%   { opacity:0.7;  transform:scale(0.85); }
           50%  { opacity:0.15; transform:scale(1.15); }
@@ -739,80 +803,101 @@ export default function Track({ route, navigation }) {
         const DEST_LNG   = ${destLng};
         const SPOT_NAME  = '${spotName}';
         const TERMINALS  = ${terminalsJson};
+        const BULACAN_RING = ${boundaryJson}; // [ [lat,lng], ... ] — closed
 
         const bulacanBounds = L.latLngBounds(
-          L.latLng(14.55, 120.68),
-          L.latLng(15.35, 121.35)
+          L.latLng(${bbox.south}, ${bbox.west}),
+          L.latLng(${bbox.north}, ${bbox.east})
+        );
+        // maxBounds is looser than the fit target so panning doesn't rubber-band
+        // right at the edge of the province.
+        const panBounds = L.latLngBounds(
+          L.latLng(${(bbox.south - 0.25).toFixed(4)}, ${(bbox.west - 0.25).toFixed(4)}),
+          L.latLng(${(bbox.north + 0.25).toFixed(4)}, ${(bbox.east + 0.25).toFixed(4)})
         );
 
         window.map = L.map('map', {
-          maxBounds: bulacanBounds,
-          maxBoundsViscosity: 1.0,
-          minZoom: 10, maxZoom: 18, zoomControl: true,
-        }).setView([14.9200, 120.9900], 11);
+          maxBounds: panBounds,
+          maxBoundsViscosity: 0.9,
+          minZoom: 9, maxZoom: 19, zoomControl: false,
+        }).fitBounds(bulacanBounds);
 
-        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-          attribution: '© OpenStreetMap contributors', maxZoom: 19,
-        }).addTo(window.map);
+        // Modern, low-clutter basemap (CARTO Voyager in light mode, CARTO Dark
+        // Matter in dark mode) with a plain-OSM fallback.
+        var baseTiles = L.tileLayer(
+          '${tileUrl}',
+          { subdomains: 'abcd', maxZoom: 20, detectRetina: true }
+        );
+        baseTiles.on('tileerror', function () {
+          if (window._fellBackTiles) return;
+          window._fellBackTiles = true;
+          L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            maxZoom: 19,
+          }).addTo(window.map);
+        });
+        baseTiles.addTo(window.map);
+
+        // Fade the loading overlay out once (idempotent).
+        function hideOverlay() {
+          var o = document.getElementById('loading-overlay');
+          if (!o || o._gone) return;
+          o._gone = true;
+          o.style.opacity = '0';
+          setTimeout(function () { o.style.display = 'none'; }, 400);
+        }
+
+        // Safety net: never leave the spinner up forever if a slow network call
+        // (routing) hangs — the base map itself is already usable.
+        setTimeout(hideOverlay, 6000);
 
         window.map.on('click', function() {
           window.ReactNativeWebView.postMessage(JSON.stringify({ type: 'mapTapped' }));
         });
 
-        // ── Bulacan boundary ──
-        const overpassQuery = \`[out:json][timeout:30];
-          relation["name"="Bulacan"]["admin_level"="4"];
-          out geom;\`;
-        const overpassURL = 'https://overpass-api.de/api/interpreter?data=' + encodeURIComponent(overpassQuery);
+        // ── Bulacan focus mask ──
+        // The province outline is bundled with the app (utils/bulacanBoundary.js),
+        // so the cut is always the real Bulacan shape — no live boundary fetch,
+        // no rectangular fallback.
+        L.polygon(
+          [[ [-90,-180],[-90,180],[90,180],[90,-180],[-90,-180] ], BULACAN_RING],
+          { fillColor:'${mapBg}', fillOpacity:0.55, stroke:false, interactive:false }
+        ).addTo(window.map);
+        L.polyline(BULACAN_RING, {
+          color:'${destColor}', weight:2.5, opacity:0.65,
+          dashArray:'2 8', lineCap:'round',
+        }).addTo(window.map);
 
-        fetch(overpassURL)
-          .then(r => r.json())
-          .then(data => {
-            const relation = data.elements[0];
-            if (!relation?.members) throw new Error('No boundary');
-            const outerRings = relation.members
-              .filter(m => m.role === 'outer' && m.geometry?.length > 1)
-              .map(m => m.geometry.map(pt => [pt.lat, pt.lon]));
-            if (!outerRings.length) throw new Error('No outer rings');
-            const merged = mergeRings(outerRings);
-            const f = merged[0], l = merged[merged.length - 1];
-            if (Math.abs(f[0]-l[0]) > 0.0001 || Math.abs(f[1]-l[1]) > 0.0001) merged.push(f);
-            L.polygon(
-              [[ [-90,-180],[-90,180],[90,180],[90,-180],[-90,-180] ], merged],
-              { fillColor:'#1a1a2e', fillOpacity:0.92, stroke:false, interactive:false }
-            ).addTo(window.map);
-            L.polyline(merged, { color:'#8b4440', weight:2.5, opacity:0.9 }).addTo(window.map);
-            document.getElementById('loading-overlay').style.display = 'none';
-          })
-          .catch(() => {
-            L.polygon(
-              [[ [-90,-180],[-90,180],[90,180],[90,-180] ],
-               [ [14.62,120.76],[14.62,121.28],[15.22,121.28],[15.22,120.76] ]],
-              { fillColor:'#1a1a2e', fillOpacity:0.92, stroke:false, interactive:false }
-            ).addTo(window.map);
-            document.getElementById('loading-overlay').style.display = 'none';
-          });
-
-        // ── Destination marker ──
+        // ── Destination marker — clean teardrop pin with a soft shadow ──
         const destIcon = L.divIcon({
-          html: '<div style="background:#8b4440;width:30px;height:30px;border-radius:50% 50% 50% 0;transform:rotate(-45deg);border:3px solid white;box-shadow:0 2px 5px rgba(0,0,0,0.3);"></div>',
-          className:'', iconSize:[30,30], iconAnchor:[15,30]
+          html: [
+            '<svg width="36" height="46" viewBox="0 0 36 46" xmlns="http://www.w3.org/2000/svg"',
+            ' style="filter:drop-shadow(0 5px 8px rgba(11,46,49,0.35));">',
+            '<path d="M18 1C9 1 1.5 8.3 1.5 17.4 1.5 29 18 45 18 45s16.5-16 16.5-27.6C34.5 8.3 27 1 18 1z"',
+            ' fill="${destColor}" stroke="#fff" stroke-width="2.5"/>',
+            '<circle cx="18" cy="17.4" r="6" fill="#fff"/>',
+            '</svg>',
+          ].join(''),
+          className:'', iconSize:[36,46], iconAnchor:[18,45], popupAnchor:[0,-38]
         });
         window.destMarker = L.marker([DEST_LAT, DEST_LNG], { icon: destIcon })
           .addTo(window.map).bindPopup(SPOT_NAME);
+
+        // Core map is ready now — drop the spinner (boundary polygon keeps
+        // loading in the background).
+        hideOverlay();
           // ── Spot proximity ring ──
 var spotPulseIcon = L.divIcon({
   html: [
     '<div class="spot-prox-wrap" style="display:none;position:relative;width:64px;height:64px;">',
       '<div style="',
         'position:absolute;inset:0;border-radius:50%;',
-        'border:3px solid #8b4440;',
-        'background:rgba(139,68,64,0.18);',
+        'border:3px solid ${destColor};',
+        'background:${destRgba(0.18)};',
         'animation:proximity-pulse 1.4s ease-in-out infinite;',
       '"></div>',
       '<div style="',
         'position:absolute;inset:8px;border-radius:50%;',
-        'border:2px solid rgba(139,68,64,0.6);',
+        'border:2px solid ${destRgba(0.6)};',
         'animation:proximity-ring-spin 1.4s ease-in-out infinite 0.3s;',
       '"></div>',
     '</div>',
@@ -828,12 +913,12 @@ var spotPulseMarker = L.marker([DEST_LAT, DEST_LNG], {
 }).addTo(window.map);
 
 var spotFillCircle = L.circle([DEST_LAT, DEST_LNG], {
-  radius: 5,
-  color: '#8b4440',
-  fillColor: '#8b4440',
+  radius: 99,
+  color: '${destColor}',
+  fillColor: '${destColor}',
   fillOpacity: 0,
   opacity: 0,
-  weight: 2.5,
+  weight: 2,
   interactive: false,
 }).addTo(window.map);
 
@@ -849,30 +934,26 @@ window.updateSpotProximity = function(active) {
   }
 };
 
-        // ── Terminal markers ──
+        // ── Terminal markers — clean white chip with a bus glyph ──
         var busIconHtml = [
-          '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32">',
-            '<ellipse cx="16" cy="29" rx="9" ry="2.5" fill="rgba(0,0,0,0.25)"/>',
-            '<rect x="5" y="5" width="22" height="20" rx="4" fill="#2c5f9e"/>',
-            '<rect x="5" y="5" width="22" height="8" rx="4" fill="#356bb5"/>',
-            '<rect x="8" y="6.5" width="16" height="5" rx="2" fill="#a8d4f5" opacity="0.9"/>',
-            '<rect x="7" y="14" width="5" height="4" rx="1" fill="#a8d4f5" opacity="0.85"/>',
-            '<rect x="13.5" y="14" width="5" height="4" rx="1" fill="#a8d4f5" opacity="0.85"/>',
-            '<rect x="20" y="14" width="5" height="4" rx="1" fill="#a8d4f5" opacity="0.85"/>',
-            '<rect x="13" y="20" width="6" height="4" rx="1" fill="#1d4b80"/>',
-            '<circle cx="9" cy="24.5" r="2.5" fill="#1a1a2e"/>',
-            '<circle cx="23" cy="24.5" r="2.5" fill="#1a1a2e"/>',
-            '<circle cx="9" cy="24.5" r="1.2" fill="#555"/>',
-            '<circle cx="23" cy="24.5" r="1.2" fill="#555"/>',
-            '<rect x="5" y="5" width="22" height="20" rx="4" fill="none" stroke="white" stroke-width="1.5"/>',
-          '</svg>'
+          '<div style="width:30px;height:30px;border-radius:50%;background:#fff;',
+            'border:2px solid ${termColor};box-shadow:0 4px 10px rgba(11,46,49,0.22);',
+            'display:flex;align-items:center;justify-content:center;">',
+            '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">',
+              '<path d="M4 7a3 3 0 0 1 3-3h10a3 3 0 0 1 3 3v8a2 2 0 0 1-1 1.7V18a1 1 0 0 1-2 0v-1H7v1a1 1 0 0 1-2 0v-1.3A2 2 0 0 1 4 15V7z"',
+              ' fill="${destColor}"/>',
+              '<rect x="6" y="7" width="12" height="4" rx="1" fill="#fff"/>',
+              '<circle cx="8" cy="14" r="1.3" fill="#fff"/>',
+              '<circle cx="16" cy="14" r="1.3" fill="#fff"/>',
+            '</svg>',
+          '</div>',
         ].join('');
 
         const terminalIcon = L.divIcon({
           html: busIconHtml,
           className: '',
-          iconSize: [32, 32],
-          iconAnchor: [16, 16],
+          iconSize: [30, 30],
+          iconAnchor: [15, 15],
         });
 
         TERMINALS.forEach(function(t) {
@@ -897,12 +978,12 @@ window.updateSpotProximity = function(active) {
         TERMINALS.forEach(function(t) {
           // Outer soft fill circle (Leaflet vector — scales with zoom)
           var fillCircle = L.circle([t.lat, t.lng], {
-            radius: 5,
-            color: '#f5a623',
-            fillColor: '#f5a623',
+            radius: 25,
+            color: '${termColor}',
+            fillColor: '${termColor}',
             fillOpacity: 0,
             opacity: 0,
-            weight: 2.5,
+            weight: 2,
             interactive: false,
           }).addTo(window.map);
 
@@ -912,13 +993,13 @@ window.updateSpotProximity = function(active) {
               '<div class="prox-wrap" style="display:none;position:relative;width:64px;height:64px;">',
                 '<div class="prox-ring prox-ring-1" style="',
                   'position:absolute;inset:0;border-radius:50%;',
-                  'border:3px solid #f5a623;',
-                  'background:rgba(245,166,35,0.22);',
+                  'border:3px solid ${termColor};',
+                  'background:${termRgba(0.22)};',
                   'animation:proximity-pulse 1.4s ease-in-out infinite;',
                 '"></div>',
                 '<div class="prox-ring prox-ring-2" style="',
                   'position:absolute;inset:8px;border-radius:50%;',
-                  'border:2px solid rgba(245,166,35,0.6);',
+                  'border:2px solid ${termRgba(0.6)};',
                   'animation:proximity-ring-spin 1.4s ease-in-out infinite 0.3s;',
                 '"></div>',
               '</div>',
@@ -979,17 +1060,37 @@ window.updateSpotProximity = function(active) {
           window.routingControl = L.Routing.control({
             waypoints: [L.latLng(lat, lng), L.latLng(DEST_LAT, DEST_LNG)],
             router: L.Routing.osrmv1({ serviceUrl:'https://router.project-osrm.org/route/v1' }),
-            lineOptions: { styles:[{ color:'#8b4440', weight:5, opacity:0.8 }] },
+            lineOptions: { styles:[
+              { color:'#FFFFFF', weight:10, opacity:0.95 },
+              { color:'${destColor}', weight:5.5, opacity:1 },
+            ] },
             createMarker: () => null,
             addWaypoints: false, routeWhileDragging: false,
             show: false, fitSelectedRoutes: false,
           }).addTo(window.map);
 
-          window.map.fitBounds(
-            L.latLngBounds([lat, lng], [DEST_LAT, DEST_LNG]),
-            { padding:[80,80] }
-          );
+          // Surface distance / ETA to React Native for the floating card.
+          window.routingControl.on('routesfound', function (e) {
+            var r = e.routes && e.routes[0];
+            if (!r || !r.summary) return;
+            window.ReactNativeWebView.postMessage(JSON.stringify({
+              type: 'route',
+              distance: r.summary.totalDistance,
+              time: r.summary.totalTime,
+            }));
+          });
 
+          if (Math.abs(lat - DEST_LAT) > 1e-5 || Math.abs(lng - DEST_LNG) > 1e-5) {
+            window.map.fitBounds(
+              L.latLngBounds([lat, lng], [DEST_LAT, DEST_LNG]),
+              { padding:[80,80] }
+            );
+          } else {
+            window.map.setView([DEST_LAT, DEST_LNG], 16);
+          }
+
+          window._lastRoutedAt = Date.now();
+          window._lastRoutedPt = [lat, lng];
           window.mapReady = true;
         };
 
@@ -999,79 +1100,56 @@ window.updateSpotProximity = function(active) {
             return;
           }
           if (window.userMarker) window.userMarker.setLatLng([lat, lng]);
+
+          // Re-route only when the user has actually moved (~45 m) and not more
+          // often than every 15 s — the OSRM demo router rate-limits, and a
+          // request per GPS tick makes the route line flicker / vanish.
           if (window.routingControl) {
-            window.routingControl.setWaypoints([
-              L.latLng(lat, lng),
-              L.latLng(DEST_LAT, DEST_LNG)
-            ]);
+            var far = !window._lastRoutedPt ||
+              Math.hypot(lat - window._lastRoutedPt[0], lng - window._lastRoutedPt[1]) > 0.0004;
+            var due = !window._lastRoutedAt || (Date.now() - window._lastRoutedAt > 15000);
+            if (far && due) {
+              window._lastRoutedAt = Date.now();
+              window._lastRoutedPt = [lat, lng];
+              window.routingControl.setWaypoints([
+                L.latLng(lat, lng),
+                L.latLng(DEST_LAT, DEST_LNG)
+              ]);
+            }
           }
           if (follow && window.map) window.map.panTo([lat, lng], { animate:true });
         };
-
-        // ── Ring merge utility ──
-        function mergeRings(rings) {
-          if (rings.length === 1) return rings[0].slice();
-          const dist = (a,b) => Math.hypot(a[0]-b[0], a[1]-b[1]);
-          const TOL  = 0.001;
-          let merged = rings[0].slice();
-          const rem  = rings.slice(1).map(r => r.slice());
-          let passes = rem.length * 4;
-          while (rem.length > 0 && passes-- > 0) {
-            const mF = merged[0], mL = merged[merged.length-1];
-            let found = false;
-            for (let i = 0; i < rem.length; i++) {
-              const r = rem[i], rF = r[0], rL = r[r.length-1];
-              if      (dist(mL,rF) < TOL) { merged = merged.concat(r.slice(1));              rem.splice(i,1); found=true; break; }
-              else if (dist(mL,rL) < TOL) { merged = merged.concat(r.slice(0,-1).reverse()); rem.splice(i,1); found=true; break; }
-              else if (dist(mF,rL) < TOL) { merged = r.slice(0,-1).concat(merged);           rem.splice(i,1); found=true; break; }
-              else if (dist(mF,rF) < TOL) { merged = r.slice(1).reverse().concat(merged);    rem.splice(i,1); found=true; break; }
-            }
-            if (!found) {
-              let bi=0, bd=Infinity, br=false;
-              for (let i=0;i<rem.length;i++) {
-                const r=rem[i];
-                const d1=dist(mL,r[0]), d2=dist(mL,r[r.length-1]);
-                if (d1<bd){bd=d1;bi=i;br=false;}
-                if (d2<bd){bd=d2;bi=i;br=true;}
-              }
-              merged = br
-                ? merged.concat(rem[bi].slice(0,-1).reverse())
-                : merged.concat(rem[bi].slice(1));
-              rem.splice(bi,1);
-            }
-          }
-          return merged;
-        }
       </script>
     </body></html>`;
-  }, [spotData]);
+  }, [spotData, colors, isDark]);
 
   if (loading || !spotData) {
     return (
-      <View style={styles.loading}>
-        <ActivityIndicator size="large" color="#8b4440" />
-        <Text style={styles.loadingText}>
-          {!spotData ? "Loading spot data..." : "Getting your location..."}
+      <View style={[styles.loading, { backgroundColor: colors.background }]}>
+        <View style={[styles.loadingBadge, { backgroundColor: colors.brandSoft }]}>
+          <Feather name="map" size={26} color={colors.brand} />
+        </View>
+        <ActivityIndicator size="small" color={colors.brand} style={{ marginTop: 20 }} />
+        <Text style={[styles.loadingText, { color: colors.textSecondary }]}>
+          {!spotData ? "Loading spot details…" : "Finding your location…"}
         </Text>
       </View>
     );
   }
-  if (locationError) {
+  if (locationError || !getSpotCoords(spotData)) {
+    const msg = locationError || "Location coordinates aren't available for this spot yet.";
     return (
-      <View style={styles.loading}>
-        <Text style={styles.errorText}>{locationError}</Text>
-        <TouchableOpacity style={styles.backButtonError} onPress={() => navigation.goBack()}>
-          <Text style={styles.backButtonText}>Go Back</Text>
-        </TouchableOpacity>
-      </View>
-    );
-  }
-  if (!getSpotCoords(spotData)) {
-    return (
-      <View style={styles.loading}>
-        <Text style={styles.errorText}>Location coordinates not available for this spot.</Text>
-        <TouchableOpacity style={styles.backButtonError} onPress={() => navigation.goBack()}>
-          <Text style={styles.backButtonText}>Go Back</Text>
+      <View style={[styles.loading, { backgroundColor: colors.background }]}>
+        <View style={[styles.loadingBadge, { backgroundColor: colors.dangerBg }]}>
+          <Feather name="alert-triangle" size={24} color={colors.danger} />
+        </View>
+        <Text style={[styles.errorText, { color: colors.textSecondary, marginTop: 18 }]}>{msg}</Text>
+        <TouchableOpacity
+          style={[styles.backButtonError, { backgroundColor: colors.accent }, shadow.sm]}
+          onPress={() => navigation.goBack()}
+          activeOpacity={0.85}
+        >
+          <Text style={[styles.backButtonText, { color: colors.onAccent }]}>Go Back</Text>
         </TouchableOpacity>
       </View>
     );
@@ -1079,11 +1157,12 @@ window.updateSpotProximity = function(active) {
 
   const sheetTranslateY = sheetAnim.interpolate({
     inputRange: [0, 1],
-    outputRange: [300, 0],
+    outputRange: [340, 0],
   });
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      <StatusBar barStyle={isDark ? "light-content" : "dark-content"} translucent backgroundColor="transparent" />
       <WebView
         ref={webViewRef}
         originWhitelist={["*"]}
@@ -1093,6 +1172,7 @@ window.updateSpotProximity = function(active) {
         domStorageEnabled
         onMessage={handleWebViewMessage}
         onError={(e) => console.error("WebView error:", e.nativeEvent)}
+        onLoadStart={() => { webViewReady.current = false; }}
         onLoadEnd={() => {
           webViewReady.current = true;
           if (userLocation) {
@@ -1101,71 +1181,112 @@ window.updateSpotProximity = function(active) {
         }}
       />
 
-      {/* Header */}
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
-          <Feather name="chevron-left" size={24} color="#fff" />
+      {/* Floating top bar — back button + title chip */}
+      <View style={[styles.topBar, { top: insets.top + 10 }]} pointerEvents="box-none">
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          style={[styles.circleBtn, { backgroundColor: colors.background }, shadow.md]}
+          activeOpacity={0.8}
+          hitSlop={8}
+        >
+          <Feather name="chevron-left" size={22} color={colors.brand} />
         </TouchableOpacity>
-        <Text style={styles.headerTitle} numberOfLines={1}>{spotData.name}</Text>
-        <View style={{ width: 40 }} />
+
+        <View style={[styles.titleChip, { backgroundColor: colors.background }, shadow.md]}>
+          <Feather name="map-pin" size={13} color={colors.brand} />
+          <Text style={[styles.titleChipText, { color: colors.textPrimary }]} numberOfLines={1}>
+            {spotData.name}
+          </Text>
+        </View>
       </View>
 
-      {/* Center on Me */}
-      <TouchableOpacity
-        style={[styles.centerButton, followMode && styles.centerButtonActive]}
-        onPress={handleCenterOnMe}
-        activeOpacity={0.85}
+      {/* Floating controls — ETA card (left) + recenter FAB (right) */}
+      <View
+        style={[styles.controlsRow, { bottom: insets.bottom + 24 }]}
+        pointerEvents="box-none"
       >
-        <Feather name="navigation" size={22} color={followMode ? "#fff" : "#8b4440"} />
-        {followMode && <Text style={styles.centerButtonLabel}>Following</Text>}
-      </TouchableOpacity>
+        {routeInfo ? (
+          <View style={[styles.etaCard, { backgroundColor: colors.background }, shadow.lg]}>
+            <View style={[styles.etaIcon, { backgroundColor: colors.brand }]}>
+              <Feather name="navigation-2" size={15} color={colors.onBrand} />
+            </View>
+            <View style={styles.etaText}>
+              <Text style={[styles.etaPrimary, { color: colors.textPrimary }]} numberOfLines={1}>
+                {fmtDistance(routeInfo.distance)} · {fmtDuration(routeInfo.time)}
+              </Text>
+              <Text style={[styles.etaSecondary, { color: colors.textMuted }]} numberOfLines={1}>
+                to {spotData.name}
+              </Text>
+            </View>
+          </View>
+        ) : (
+          <View />
+        )}
+
+        <TouchableOpacity
+          style={[
+            styles.circleBtn,
+            styles.fab,
+            { backgroundColor: followMode ? colors.brand : colors.background },
+            shadow.lg,
+          ]}
+          onPress={handleCenterOnMe}
+          activeOpacity={0.85}
+        >
+          <Feather
+            name="navigation"
+            size={21}
+            color={followMode ? colors.onBrand : colors.brand}
+          />
+        </TouchableOpacity>
+      </View>
 
       {/* Terminal Place Sheet */}
       {selectedTerminal && (
         <>
           <TouchableOpacity
-            style={styles.scrim}
+            style={[styles.scrim, { backgroundColor: colors.overlay }]}
             activeOpacity={1}
             onPress={hideSheet}
           />
           <Animated.View
-            style={[styles.sheet, { transform: [{ translateY: sheetTranslateY }] }]}
+            style={[styles.sheet, { backgroundColor: colors.card, transform: [{ translateY: sheetTranslateY }] }]}
             {...panResponder.panHandlers}
           >
-            <View style={styles.sheetHandle} />
+            <View style={[styles.sheetHandle, { backgroundColor: colors.divider }]} />
 
             <View style={styles.sheetHeader}>
-              <View style={styles.sheetIconWrap}>
-                <Feather name="truck" size={20} color="#fff" />
+              <View style={[styles.sheetIconWrap, { backgroundColor: colors.brand }]}>
+                <Feather name="truck" size={20} color={colors.onBrand} />
               </View>
               <View style={styles.sheetTitleBlock}>
-                <Text style={styles.sheetName} numberOfLines={2}>
+                <Text style={[styles.sheetName, { color: colors.textPrimary }]} numberOfLines={2}>
                   {selectedTerminal.name}
                 </Text>
-                <Text style={styles.sheetType}>{selectedTerminal.type}</Text>
+                <Text style={[styles.sheetType, { color: colors.textSecondary }]}>{selectedTerminal.type}</Text>
               </View>
-              <TouchableOpacity style={styles.sheetClose} onPress={hideSheet}>
-                <Feather name="x" size={18} color="#888" />
+              <TouchableOpacity style={styles.sheetClose} onPress={hideSheet} hitSlop={8}>
+                <Feather name="x" size={18} color={colors.textMuted} />
               </TouchableOpacity>
             </View>
 
             <View style={styles.sheetRow}>
-              <Feather name="map-pin" size={15} color="#8b4440" style={styles.sheetRowIcon} />
-              <Text style={styles.sheetRowText}>{selectedTerminal.address}</Text>
+              <Feather name="map-pin" size={15} color={colors.brand} style={styles.sheetRowIcon} />
+              <Text style={[styles.sheetRowText, { color: colors.textPrimary }]}>{selectedTerminal.address}</Text>
             </View>
 
-            <View style={styles.sheetDivider} />
-            <Text style={styles.sheetSectionLabel}>Routes served</Text>
+            <View style={[styles.sheetDivider, { backgroundColor: colors.divider }]} />
+            <Text style={[styles.sheetSectionLabel, { color: colors.textMuted }]}>Routes served</Text>
             {selectedTerminal.routes.map((r, i) => (
               <View key={i} style={styles.sheetRow}>
-                <Feather name="arrow-right-circle" size={15} color="#2c5f9e" style={styles.sheetRowIcon} />
-                <Text style={styles.sheetRowText}>{r}</Text>
+                <Feather name="arrow-right-circle" size={15} color={colors.brand} style={styles.sheetRowIcon} />
+                <Text style={[styles.sheetRowText, { color: colors.textPrimary }]}>{r}</Text>
               </View>
             ))}
 
             <View style={styles.sheetActions}>
               <TouchableOpacity
-                style={[styles.sheetActionBtn, styles.sheetActionPrimary]}
+                style={[styles.sheetActionBtn, { backgroundColor: colors.accent }]}
                 activeOpacity={0.85}
                 onPress={() => {
                   hideSheet();
@@ -1177,16 +1298,16 @@ window.updateSpotProximity = function(active) {
                   `);
                 }}
               >
-                <Feather name="crosshair" size={16} color="#fff" />
-                <Text style={styles.sheetActionPrimaryText}>Show on map</Text>
+                <Feather name="crosshair" size={16} color={colors.onAccent} />
+                <Text style={[styles.sheetActionPrimaryText, { color: colors.onAccent }]}>Show on map</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
-                style={[styles.sheetActionBtn, styles.sheetActionSecondary]}
+                style={[styles.sheetActionBtn, { backgroundColor: colors.brandLight }]}
                 activeOpacity={0.85}
                 onPress={hideSheet}
               >
-                <Text style={styles.sheetActionSecondaryText}>Dismiss</Text>
+                <Text style={[styles.sheetActionSecondaryText, { color: colors.textSecondary }]}>Dismiss</Text>
               </TouchableOpacity>
             </View>
           </Animated.View>
@@ -1197,9 +1318,11 @@ window.updateSpotProximity = function(active) {
 }
 
 const styles = StyleSheet.create({
+  // backgroundColor is applied at render from the active theme (see the
+  // container <View> above) — no hardcoded light value here, so dark mode
+  // doesn't flash a pale background.
   container: {
     flex: 1,
-    backgroundColor: "#000",
   },
   map: {
     flex: 1,
@@ -1210,87 +1333,109 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "#f7cfc9",
-  },
-  loadingText: {
-    marginTop: 15,
-    fontSize: 16,
-    color: "#4a4a4a",
-    fontWeight: "600",
-  },
-  errorText: {
-    fontSize: 16,
-    color: "#8b4440",
-    fontWeight: "600",
-    textAlign: "center",
     paddingHorizontal: 40,
   },
-  backButtonError: {
-    marginTop: 20,
-    backgroundColor: "#8b4440",
-    paddingHorizontal: 30,
-    paddingVertical: 12,
-    borderRadius: 25,
-  },
-  backButtonText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "700",
-  },
-  header: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    right: 0,
-    flexDirection: "row",
-    alignItems: "center",
-    paddingHorizontal: 20,
-    paddingTop: 50,
-    paddingBottom: 20,
-    backgroundColor: "rgba(139, 68, 64, 0.95)",
-  },
-  backButton: {
-    width: 40,
-    height: 40,
+  loadingBadge: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
     justifyContent: "center",
     alignItems: "center",
-    backgroundColor: "rgba(0,0,0,0.2)",
-    borderRadius: 20,
   },
-  headerTitle: {
-    flex: 1,
-    fontSize: 18,
-    fontWeight: "700",
-    color: "#fff",
-    marginHorizontal: 12,
-  },
-  centerButton: {
-    position: "absolute",
-    bottom: 40,
-    right: 20,
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#fff",
-    paddingHorizontal: 16,
-    paddingVertical: 12,
-    borderRadius: 30,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 4,
-    elevation: 5,
-    gap: 6,
-  },
-  centerButtonActive: {
-    backgroundColor: "#8b4440",
-  },
-  centerButtonLabel: {
-    color: "#fff",
+  loadingText: {
+    marginTop: 14,
     fontSize: 14,
+    fontWeight: "600",
+    textAlign: "center",
+  },
+  errorText: {
+    fontSize: 15,
+    fontWeight: "600",
+    textAlign: "center",
+    paddingHorizontal: 20,
+    lineHeight: 22,
+  },
+  backButtonError: {
+    marginTop: 22,
+    paddingHorizontal: 32,
+    paddingVertical: 13,
+    borderRadius: radius.pill,
+  },
+  backButtonText: {
+    fontSize: 15,
     fontWeight: "700",
   },
 
+  // ── Floating top bar ──
+  topBar: {
+    position: "absolute",
+    left: 16,
+    right: 16,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 12,
+  },
+  circleBtn: {
+    width: 46,
+    height: 46,
+    borderRadius: 23,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  titleChip: {
+    flex: 1,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 7,
+    height: 42,
+    paddingHorizontal: 16,
+    borderRadius: radius.pill,
+  },
+  titleChipText: {
+    flex: 1,
+    fontSize: 14.5,
+    fontWeight: "700",
+    letterSpacing: -0.2,
+  },
+
+  // ── Floating bottom controls ──
+  controlsRow: {
+    position: "absolute",
+    left: 16,
+    right: 16,
+    flexDirection: "row",
+    alignItems: "flex-end",
+    justifyContent: "space-between",
+  },
+  fab: {
+    width: 52,
+    height: 52,
+    borderRadius: 26,
+  },
+  etaCard: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 11,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: radius.lg,
+    maxWidth: width - 100,
+  },
+  etaIcon: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  etaText: { flexShrink: 1 },
+  etaPrimary: { fontSize: 14, fontWeight: "800", letterSpacing: -0.2 },
+  etaSecondary: { fontSize: 11.5, fontWeight: "500", marginTop: 1 },
+
   // ── Bottom sheet ──
+  // NOTE: no default backgroundColor here — the scrim, and the color values
+  // below it, are supplied inline from the theme at render time so this
+  // screen matches light/dark mode instead of hardcoded light-mode colors.
   scrim: {
     position: "absolute",
     top: 0,
@@ -1303,23 +1448,21 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    backgroundColor: "#fff",
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    paddingHorizontal: 20,
+    borderTopLeftRadius: radius.xl,
+    borderTopRightRadius: radius.xl,
+    paddingHorizontal: 22,
     paddingBottom: 36,
-    shadowColor: "#000",
-    shadowOffset: { width: 0, height: -3 },
-    shadowOpacity: 0.12,
-    shadowRadius: 10,
-    elevation: 20,
+    shadowColor: "#0B2E31",
+    shadowOpacity: 0.16,
+    shadowRadius: 32,
+    shadowOffset: { width: 0, height: -8 },
+    elevation: 24,
   },
   sheetHandle: {
     alignSelf: "center",
     width: 40,
     height: 4,
     borderRadius: 2,
-    backgroundColor: "#ddd",
     marginTop: 10,
     marginBottom: 16,
   },
@@ -1332,8 +1475,7 @@ const styles = StyleSheet.create({
   sheetIconWrap: {
     width: 44,
     height: 44,
-    borderRadius: 10,
-    backgroundColor: "#2c5f9e",
+    borderRadius: 14,
     alignItems: "center",
     justifyContent: "center",
     flexShrink: 0,
@@ -1344,12 +1486,10 @@ const styles = StyleSheet.create({
   sheetName: {
     fontSize: 16,
     fontWeight: "700",
-    color: "#1a1a2e",
     lineHeight: 22,
   },
   sheetType: {
     fontSize: 13,
-    color: "#777",
     marginTop: 2,
   },
   sheetClose: {
@@ -1358,13 +1498,11 @@ const styles = StyleSheet.create({
   },
   sheetDivider: {
     height: 1,
-    backgroundColor: "#f0f0f0",
     marginVertical: 12,
   },
   sheetSectionLabel: {
     fontSize: 12,
     fontWeight: "700",
-    color: "#aaa",
     textTransform: "uppercase",
     letterSpacing: 0.8,
     marginBottom: 8,
@@ -1381,7 +1519,6 @@ const styles = StyleSheet.create({
   },
   sheetRowText: {
     fontSize: 14,
-    color: "#333",
     flex: 1,
     lineHeight: 20,
   },
@@ -1392,26 +1529,18 @@ const styles = StyleSheet.create({
   },
   sheetActionBtn: {
     flex: 1,
-    paddingVertical: 13,
-    borderRadius: 12,
+    paddingVertical: 14,
+    borderRadius: radius.button,
     alignItems: "center",
     justifyContent: "center",
     flexDirection: "row",
     gap: 6,
   },
-  sheetActionPrimary: {
-    backgroundColor: "#8b4440",
-  },
   sheetActionPrimaryText: {
-    color: "#fff",
     fontSize: 14,
     fontWeight: "700",
   },
-  sheetActionSecondary: {
-    backgroundColor: "#f2f2f2",
-  },
   sheetActionSecondaryText: {
-    color: "#555",
     fontSize: 14,
     fontWeight: "600",
   },

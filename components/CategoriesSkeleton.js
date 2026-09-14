@@ -9,18 +9,20 @@
 import React from "react";
 import { View, StyleSheet, Dimensions } from "react-native";
 import Skeleton from "./Skeleton";
+import { useTheme } from "../context/ThemeContext";
 
 const { width } = Dimensions.get("window");
 const CARD_W    = (width - 40 - 16) * 0.48;  // 48% of scrollContent width
 
 export default function CategoriesSkeleton({ count = 4 }) {
+  const { colors } = useTheme();
   const pairs = [];
   for (let i = 0; i < count; i += 2) {
     pairs.push([i, i + 1].filter((n) => n < count));
   }
 
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       {/* ── Header ── */}
       <View style={styles.header}>
         <Skeleton width={40} height={40} radius={20} />
@@ -63,7 +65,6 @@ export default function CategoriesSkeleton({ count = 4 }) {
 const styles = StyleSheet.create({
   container: {
     flex:            1,
-    backgroundColor: "#fff",
     paddingTop:      50,
   },
   header: {

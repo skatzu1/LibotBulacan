@@ -11,40 +11,39 @@ import {
   Dimensions,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { Feather } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useUser, useAuth } from "@clerk/clerk-expo";
 import { useProfileImage } from "../context/ProfileImageContext";
-import { useTheme } from "../context/ThemeContext";
+import { useTheme, radius, shadow } from "../context/ThemeContext";
 
 const BASE_URL      = "https://libotbackend.onrender.com";
 const { width: SW } = Dimensions.get("window");
 
-// Podium config — block heights/avatar sizes are layout, not color
+// Podium layout (sizes only — colours come from MEDAL / theme below).
 const PODIUM = {
-  1: { blockH: 110, avatarSz: 76, order: 1 },
-  2: { blockH: 85,  avatarSz: 64, order: 0 },
-  3: { blockH: 75,  avatarSz: 60, order: 2 },
+  1: { blockH: 96, avatarSz: 78, order: 1 },
+  2: { blockH: 68, avatarSz: 62, order: 0 },
+  3: { blockH: 52, avatarSz: 58, order: 2 },
 };
 
-const fmtPts = (n) =>
-  n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n);
+// Medal palette — gold uses the app's yellow accent; silver / bronze are neutral.
+const MEDAL = {
+  1: { ring: "#F2CE1B", coin: "#F2CE1B", coinText: "#5E4B00" },
+  2: { ring: "#C4D0D2", coin: "#C4D0D2", coinText: "#4B5859" },
+  3: { ring: "#E0A66B", coin: "#E0A66B", coinText: "#5E3A17" },
+};
+
+const fmtPts = (n) => (n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n));
 
 export default function Leaderboard() {
   const navigation                    = useNavigation();
+  const insets                        = useSafeAreaInsets();
   const { user: clerkUser, isLoaded } = useUser();
   const { getToken }                  = useAuth();
   const { profileImage }              = useProfileImage();
-  const { colors, isDark }            = useTheme();
-
-  // Podium block colors — 1st/2nd/3rd get progressively lighter tints of brand.
-  // Note: original used fixed hex per rank regardless of theme; these are
-  // theme-derived approximations. Adjust if you want distinct tokens per rank.
-  const podiumBlockColor = {
-    1: colors.brand,
-    2: isDark ? "#8a6058" : "#a07870",
-    3: isDark ? "#5a4038" : "#c4a49f",
-  };
+  const { colors }                    = useTheme();
 
   const [allUsers, setAllUsers]     = useState([]);
   const [loading, setLoading]       = useState(true);
@@ -122,103 +121,119 @@ export default function Leaderboard() {
     if (user.avatar)
       return <Image source={{ uri: user.avatar }} style={{ width: size, height: size, borderRadius: size / 2 }} />;
     return (
-      <View style={{ width: size, height: size, borderRadius: size / 2, backgroundColor: user.isMe ? colors.brand : podiumBlockColor[2], justifyContent: "center", alignItems: "center" }}>
-        <Feather name="user" size={size * 0.4} color={colors.textInverse} />
+      <View style={{
+        width: size, height: size, borderRadius: size / 2,
+        backgroundColor: user.isMe ? colors.brand : colors.brandLight,
+        justifyContent: "center", alignItems: "center",
+      }}>
+        <Feather name="user" size={size * 0.42} color={user.isMe ? colors.onBrand : colors.brand} />
       </View>
     );
   };
 
-  if (!isLoaded || loading) {
-    return (
-      <View style={[styles.fullScreen, styles.centered, { backgroundColor: colors.background }]}>
-        <ActivityIndicator size="large" color={colors.brand} />
-        <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Loading leaderboard…</Text>
-      </View>
-    );
-  }
-
-  const ErrorOrEmpty = ({ emoji, title, sub, retry }) => (
+  const StateScreen = ({ icon, tone, title, sub, retry }) => (
     <View style={[styles.fullScreen, { backgroundColor: colors.background }]}>
-      <View style={[styles.hero, { backgroundColor: colors.brand }]}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-          <Feather name="chevron-left" size={24} color={colors.textInverse} />
-        </TouchableOpacity>
-        <Text style={[styles.heroTitle, { color: colors.textInverse }]}>Leaderboard</Text>
+      <View style={[styles.hero, { backgroundColor: colors.backgroundHero, paddingTop: insets.top + 8 }]}>
+        <View style={styles.heroNav}>
+          <TouchableOpacity onPress={() => navigation.goBack()} style={[styles.backBtn, { backgroundColor: colors.background }]}>
+            <Feather name="chevron-left" size={22} color={colors.brand} />
+          </TouchableOpacity>
+          <Text style={[styles.heroTitle, { color: colors.brandDark }]}>Leaderboard</Text>
+          <View style={{ width: 40 }} />
+        </View>
       </View>
       <View style={styles.centered}>
-        <Text style={{ fontSize: 48, marginBottom: 12 }}>{emoji}</Text>
+        <View style={[styles.stateBadge, { backgroundColor: tone === "error" ? colors.dangerBg : colors.brandSoft }]}>
+          <Feather name={icon} size={26} color={tone === "error" ? colors.danger : colors.brand} />
+        </View>
         <Text style={[styles.emptyTitle, { color: colors.brandDark }]}>{title}</Text>
         <Text style={[styles.emptySub, { color: colors.textSecondary }]}>{sub}</Text>
         {retry && (
-          <TouchableOpacity style={[styles.retryBtn, { backgroundColor: colors.brand }]} onPress={retry}>
-            <Text style={[styles.retryText, { color: colors.textInverse }]}>Retry</Text>
+          <TouchableOpacity style={[styles.retryBtn, { backgroundColor: colors.accent }, shadow.sm]} onPress={retry} activeOpacity={0.85}>
+            <Text style={[styles.retryText, { color: colors.onAccent }]}>Try again</Text>
           </TouchableOpacity>
         )}
       </View>
     </View>
   );
 
-  if (error) return <ErrorOrEmpty emoji="⚠️" title="Something went wrong" sub={error} retry={() => buildLeaderboard()} />;
-  if (allUsers.length === 0) return <ErrorOrEmpty emoji="🏆" title="No rankings yet" sub="Visit locations to earn points!" />;
+  if (!isLoaded || loading) {
+    return (
+      <View style={[styles.fullScreen, styles.centered, { backgroundColor: colors.background }]}>
+        <View style={[styles.stateBadge, { backgroundColor: colors.brandSoft }]}>
+          <Feather name="award" size={26} color={colors.brand} />
+        </View>
+        <ActivityIndicator size="small" color={colors.brand} style={{ marginTop: 16 }} />
+        <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Loading leaderboard…</Text>
+      </View>
+    );
+  }
+
+  if (error)
+    return <StateScreen icon="alert-triangle" tone="error" title="Something went wrong" sub={error} retry={() => buildLeaderboard()} />;
+  if (allUsers.length === 0)
+    return <StateScreen icon="award" title="No rankings yet" sub="Visit locations around Bulacan to earn points and climb the board." />;
 
   const top3      = allUsers.slice(0, 3);
   const restUsers = allUsers.slice(3);
   const podiumVisual = [top3[1], top3[0], top3[2]];
   const podiumRanks  = [2, 1, 3];
 
+  const myIndex = allUsers.findIndex((u) => u.isMe);
+  const myRank  = myIndex >= 0 ? myIndex + 1 : null;
+  const showMyRankBar = myRank != null && myRank > 3;
+
   return (
     <View style={[styles.fullScreen, { backgroundColor: colors.background }]}>
 
       {/* ─── Hero ─── */}
-      <View style={[styles.hero, { backgroundColor: colors.brand }]}>
-        <View style={StyleSheet.absoluteFill} pointerEvents="none">
-          {Array.from({ length: 16 }).map((_, i) => (
-            <View key={i} style={[styles.ray, { transform: [{ rotate: `${i * 22.5}deg` }] }]} />
-          ))}
-        </View>
+      <View style={[styles.hero, { backgroundColor: colors.backgroundHero, paddingTop: insets.top + 8 }]}>
+        <View style={[styles.heroBlob, { backgroundColor: "rgba(255,255,255,0.22)" }]} pointerEvents="none" />
 
         <View style={styles.heroNav}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-            <Feather name="chevron-left" size={24} color={colors.textInverse} />
+          <TouchableOpacity onPress={() => navigation.goBack()} style={[styles.backBtn, { backgroundColor: colors.background }]} activeOpacity={0.8}>
+            <Feather name="chevron-left" size={22} color={colors.brand} />
           </TouchableOpacity>
-          <Text style={[styles.heroTitle, { color: colors.textInverse }]}>Leaderboard</Text>
+          <Text style={[styles.heroTitle, { color: colors.brandDark }]}>Leaderboard</Text>
           <View style={{ width: 40 }} />
         </View>
+
+        <Text style={[styles.heroSub, { color: colors.textSecondary }]}>Top explorers of Bulacan</Text>
 
         <View style={styles.podiumRow}>
           {podiumVisual.map((user, i) => {
             if (!user) return <View key={i} style={{ flex: 1 }} />;
-            const rank = podiumRanks[i];
-            const cfg  = PODIUM[rank];
+            const rank  = podiumRanks[i];
+            const cfg   = PODIUM[rank];
+            const medal = MEDAL[rank];
             return (
-              <View
-                key={user.id || i}
-                style={[
-                  styles.podiumCol,
-                  rank === 3 && { marginBottom: 6 },
-                ]}>
+              <View key={user.id || i} style={styles.podiumCol}>
+                {rank === 1 && <Feather name="star" size={16} color={colors.accent} style={{ marginBottom: 4 }} />}
 
-                {rank === 1 && <Text style={styles.crown}>👑</Text>}
-
-                <View style={[
-                  styles.avatarRing,
-                  { borderColor: "rgba(255,255,255,0.35)" },
-                  rank === 1 && { borderColor: colors.star },
-                  user.isMe && { borderColor: colors.textInverse },
-                ]}>
+                <View style={[styles.avatarRing, { borderColor: medal.ring }, user.isMe && { borderColor: colors.brand }]}>
                   <Avatar user={user} size={cfg.avatarSz} />
+                  <View style={[styles.medalCoin, { backgroundColor: medal.coin }]}>
+                    <Text style={[styles.medalCoinText, { color: medal.coinText }]}>{rank}</Text>
+                  </View>
                 </View>
 
-                <Text style={[styles.podiumName, { color: colors.textInverse }, user.isMe && { color: colors.textInverse, fontWeight: "800" }]} numberOfLines={1}>
-                  {user.name}{user.isMe ? "\n(You)" : ""}
+                <Text
+                  style={[styles.podiumName, { color: colors.brandDark }, user.isMe && { fontWeight: "800" }]}
+                  numberOfLines={1}
+                >
+                  {user.isMe ? "You" : user.name}
                 </Text>
 
-                <Text style={[styles.podiumPts, { color: "rgba(255,255,255,0.7)" }]}>
-                  <Feather name="star" size={10} color="rgba(255,255,255,0.7)" />{" "}{fmtPts(user.points)}
-                </Text>
+                <View style={[styles.podiumPts, { backgroundColor: colors.background }]}>
+                  <Feather name="star" size={10} color={colors.accent} />
+                  <Text style={[styles.podiumPtsText, { color: colors.brandDark }]}>{fmtPts(user.points)}</Text>
+                </View>
 
-                <View style={[styles.podiumBlock, { height: cfg.blockH, backgroundColor: podiumBlockColor[rank] }]}>
-                  <Text style={styles.podiumNum}>{rank}</Text>
+                <View style={[
+                  styles.podiumBlock,
+                  { height: cfg.blockH, backgroundColor: "rgba(255,255,255,0.42)" },
+                ]}>
+                  <Text style={[styles.podiumNum, { color: colors.brand }]}>{rank}</Text>
                 </View>
               </View>
             );
@@ -226,11 +241,19 @@ export default function Leaderboard() {
         </View>
       </View>
 
-      {/* ─── Card ─── */}
+      {/* ─── Sheet ─── */}
       <View style={[styles.card, { backgroundColor: colors.background }]}>
+        <View style={styles.sheetHeaderRow}>
+          <Text style={[styles.sheetTitle, { color: colors.brandDark }]}>All rankings</Text>
+          <Text style={[styles.sheetCount, { color: colors.textMuted }]}>{allUsers.length} explorers</Text>
+        </View>
+
         <ScrollView
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.listContent}
+          contentContainerStyle={[
+            styles.listContent,
+            { paddingBottom: (showMyRankBar ? 172 : 116) + insets.bottom },
+          ]}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
@@ -240,27 +263,69 @@ export default function Leaderboard() {
             />
           }
         >
-          {restUsers.map((user, idx) => (
-            <View key={user.id} style={[styles.row, user.isMe && { backgroundColor: colors.card }]}>
-              {user.isMe && <View style={[styles.rowAccent, { backgroundColor: colors.brand }]} />}
-              <Text style={[styles.rowRank, { color: colors.textSecondary }]}>{idx + 4}</Text>
-              <View style={styles.rowAvatarWrap}>
-                <Avatar user={user} size={42} />
+          {restUsers.map((user, idx) => {
+            const rank = idx + 4;
+            return (
+              <View
+                key={user.id}
+                style={[
+                  styles.row,
+                  { borderColor: colors.divider },
+                  user.isMe && { backgroundColor: colors.brandSoft, borderColor: colors.brand },
+                ]}
+              >
+                <View style={[styles.rankCoin, { backgroundColor: colors.brandSoft }]}>
+                  <Text style={[styles.rankCoinText, { color: colors.brand }]}>{rank}</Text>
+                </View>
+
+                <View style={[styles.rowAvatarWrap, { borderColor: colors.cardBorder }]}>
+                  <Avatar user={user} size={40} />
+                </View>
+
+                <Text
+                  style={[styles.rowName, { color: colors.textPrimary }, user.isMe && { color: colors.brand, fontWeight: "800" }]}
+                  numberOfLines={1}
+                >
+                  {user.name}{user.isMe ? " · You" : ""}
+                </Text>
+
+                <View style={[styles.rowPtsPill, { backgroundColor: colors.background, borderColor: colors.divider }]}>
+                  <Feather name="star" size={12} color={colors.accent} />
+                  <Text style={[styles.rowPts, { color: colors.brandDark }]}>{fmtPts(user.points)}</Text>
+                </View>
               </View>
-              <Text style={[styles.rowName, { color: colors.textPrimary }, user.isMe && { color: colors.brand, fontWeight: "700" }]} numberOfLines={1}>
-                {user.name}{user.isMe ? " (You)" : ""}
-              </Text>
-              <View style={styles.rowPtsWrap}>
-                <Feather name="star" size={13} color={colors.textMuted} />
-                <Text style={[styles.rowPts, { color: colors.textSecondary }]}>{fmtPts(user.points)}</Text>
-              </View>
-            </View>
-          ))}
+            );
+          })}
 
           {restUsers.length === 0 && (
-            <Text style={[styles.topThreeOnly, { color: colors.textMuted }]}>Only the top 3 so far! 🎉</Text>
+            <View style={[styles.stateBadge, { backgroundColor: colors.brandSoft, alignSelf: "center", marginTop: 24 }]}>
+              <Feather name="users" size={22} color={colors.brand} />
+            </View>
+          )}
+          {restUsers.length === 0 && (
+            <Text style={[styles.topThreeOnly, { color: colors.textMuted }]}>
+              Only the top 3 so far — invite friends to explore!
+            </Text>
           )}
         </ScrollView>
+
+        {showMyRankBar && (
+          <View style={[styles.myRankBar, { backgroundColor: colors.brand, bottom: insets.bottom + 92 }, shadow.lg]}>
+            <View style={[styles.myRankCoin, { backgroundColor: "rgba(255,255,255,0.2)" }]}>
+              <Text style={[styles.myRankCoinText, { color: colors.onBrand }]}>{myRank}</Text>
+            </View>
+            <View style={styles.rowAvatarWrap}>
+              <Avatar user={allUsers[myIndex]} size={36} />
+            </View>
+            <Text style={[styles.myRankName, { color: colors.onBrand }]} numberOfLines={1}>
+              You
+            </Text>
+            <View style={styles.rowPtsWrap}>
+              <Feather name="star" size={13} color={colors.onBrand} />
+              <Text style={[styles.myRankPts, { color: colors.onBrand }]}>{fmtPts(allUsers[myIndex].points)}</Text>
+            </View>
+          </View>
+        )}
       </View>
     </View>
   );
@@ -268,135 +333,184 @@ export default function Leaderboard() {
 
 const styles = StyleSheet.create({
   fullScreen: { flex: 1 },
-  centered:   { flex: 1, justifyContent: "center", alignItems: "center", paddingHorizontal: 30 },
-  loadingText: { marginTop: 12, fontSize: 14 },
+  centered:   { flex: 1, justifyContent: "center", alignItems: "center", paddingHorizontal: 32 },
+  loadingText: { marginTop: 12, fontSize: 13.5, fontWeight: "500" },
 
   hero: {
     overflow: "hidden",
     paddingBottom: 0,
   },
-
-  ray: {
+  heroBlob: {
     position: "absolute",
-    alignSelf: "center",
-    top: "50%",
-    width: SW * 2,
-    height: 1.5,
-    backgroundColor: "rgba(255,255,255,0.07)",
+    top: -SW * 0.35,
+    right: -SW * 0.25,
+    width: SW * 0.9,
+    height: SW * 0.9,
+    borderRadius: SW * 0.45,
   },
 
   heroNav: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingHorizontal: 20,
-    paddingTop: 54,
-    paddingBottom: 20,
+    paddingHorizontal: 16,
+    paddingTop: 6,
+    paddingBottom: 4,
   },
-  backBtn:   { width: 40, height: 40, justifyContent: "center" },
-  heroTitle: { fontSize: 20, fontWeight: "700" },
+  backBtn: {
+    width: 40, height: 40, borderRadius: 20,
+    justifyContent: "center", alignItems: "center",
+    ...shadow.sm,
+  },
+  heroTitle: { fontSize: 20, fontWeight: "800", letterSpacing: -0.3 },
+  heroSub:   { fontSize: 12.5, fontWeight: "600", textAlign: "center", marginTop: 2, marginBottom: 4 },
 
   podiumRow: {
     flexDirection: "row",
     alignItems: "flex-end",
     justifyContent: "space-evenly",
-    paddingHorizontal: 16,
+    paddingHorizontal: 14,
+    marginTop: 12,
   },
   podiumCol: { flex: 1, alignItems: "center" },
 
-  crown: { fontSize: 24, marginBottom: 2 },
-
   avatarRing: {
     borderRadius: 999,
-    borderWidth: 2.5,
-    marginBottom: 6,
-    shadowColor: "#000",
-    shadowOpacity: 0.2,
-    shadowRadius: 6,
-    shadowOffset: { width: 0, height: 3 },
-    elevation: 4,
+    borderWidth: 3,
+    padding: 2,
+    marginBottom: 8,
+    backgroundColor: "rgba(255,255,255,0.5)",
+    ...shadow.md,
   },
+  medalCoin: {
+    position: "absolute",
+    bottom: -2,
+    right: -2,
+    minWidth: 22,
+    height: 22,
+    borderRadius: 11,
+    paddingHorizontal: 5,
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 2,
+    borderColor: "#fff",
+  },
+  medalCoinText: { fontSize: 11, fontWeight: "900" },
 
   podiumName: {
-    fontSize: 11,
+    fontSize: 12,
     fontWeight: "700",
     textAlign: "center",
-    marginBottom: 2,
-    maxWidth: SW / 3 - 20,
+    marginBottom: 5,
+    maxWidth: SW / 3 - 16,
   },
   podiumPts: {
-    fontSize: 11,
-    marginBottom: 6,
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 3,
+    paddingHorizontal: 9,
+    paddingVertical: 3,
+    borderRadius: 999,
+    marginBottom: 8,
+    ...shadow.sm,
   },
+  podiumPtsText: { fontSize: 11.5, fontWeight: "800" },
 
   podiumBlock: {
-    width: "100%",
-    borderTopLeftRadius: 8,
-    borderTopRightRadius: 8,
+    width: "82%",
+    borderTopLeftRadius: 14,
+    borderTopRightRadius: 14,
     justifyContent: "center",
     alignItems: "center",
   },
-  podiumNum: {
-    fontSize: 28,
-    fontWeight: "800",
-    color: "rgba(255,255,255,0.9)",
-  },
+  podiumNum: { fontSize: 26, fontWeight: "900", opacity: 0.6 },
 
   card: {
     flex: 1,
-    borderTopLeftRadius: 24,
-    borderTopRightRadius: 24,
-    marginTop: -24,
+    borderTopLeftRadius: 28,
+    borderTopRightRadius: 28,
     paddingTop: 20,
-    paddingHorizontal: 20,
-    shadowColor: "#000",
-    shadowOpacity: 0.07,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: -4 },
-    elevation: 8,
+    paddingHorizontal: 18,
+    shadowColor: "#0B2E31",
+    shadowOpacity: 0.08,
+    shadowRadius: 28,
+    shadowOffset: { width: 0, height: -12 },
+    elevation: 12,
   },
-  listContent: { paddingBottom: 40 },
+  sheetHeaderRow: {
+    flexDirection: "row",
+    alignItems: "baseline",
+    justifyContent: "space-between",
+    paddingHorizontal: 6,
+    marginBottom: 12,
+  },
+  sheetTitle: { fontSize: 18, fontWeight: "800", letterSpacing: -0.3 },
+  sheetCount: { fontSize: 12, fontWeight: "600" },
+
+  listContent: { paddingTop: 2 },
 
   row: {
     flexDirection: "row",
     alignItems: "center",
-    paddingVertical: 10,
-    paddingHorizontal: 6,
-    marginBottom: 4,
-    borderRadius: 12,
-    overflow: "hidden",
+    paddingVertical: 9,
+    paddingHorizontal: 10,
+    marginBottom: 8,
+    borderRadius: radius.md,
+    borderWidth: 1,
   },
-  rowAccent: {
-    position: "absolute",
-    left: 0,
-    top: 0,
-    bottom: 0,
-    width: 4,
-    borderRadius: 4,
+  rankCoin: {
+    width: 30, height: 30, borderRadius: 15,
+    justifyContent: "center", alignItems: "center",
+    marginRight: 10,
   },
-  rowRank: {
-    width: 30,
-    fontSize: 15,
-    fontWeight: "700",
-    textAlign: "center",
-  },
+  rankCoinText: { fontSize: 13, fontWeight: "800" },
   rowAvatarWrap: {
-    marginRight: 12,
+    marginRight: 11,
     borderRadius: 21,
+    borderWidth: 1.5,
     overflow: "hidden",
   },
-  rowName: {
-    flex: 1,
-    fontSize: 15,
-    fontWeight: "500",
+  rowName: { flex: 1, fontSize: 14.5, fontWeight: "600" },
+  rowPtsPill: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 999,
+    borderWidth: 1,
   },
   rowPtsWrap: { flexDirection: "row", alignItems: "center", gap: 4 },
-  rowPts:     { fontSize: 13, fontWeight: "600" },
+  rowPts:     { fontSize: 12.5, fontWeight: "800" },
 
-  topThreeOnly: { textAlign: "center", fontSize: 13, marginTop: 20 },
+  myRankBar: {
+    position: "absolute",
+    left: 18,
+    right: 18,
+    flexDirection: "row",
+    alignItems: "center",
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    borderRadius: radius.lg,
+  },
+  myRankCoin: {
+    width: 30, height: 30, borderRadius: 15,
+    justifyContent: "center", alignItems: "center",
+    marginRight: 10,
+  },
+  myRankCoinText: { fontSize: 13, fontWeight: "900" },
+  myRankName: { flex: 1, fontSize: 14.5, fontWeight: "800" },
+  myRankPts:  { fontSize: 13, fontWeight: "800" },
 
-  emptyTitle: { fontSize: 18, fontWeight: "700", marginBottom: 6, textAlign: "center" },
+  topThreeOnly: { textAlign: "center", fontSize: 13, marginTop: 12, fontWeight: "500" },
+
+  stateBadge: {
+    width: 60, height: 60, borderRadius: 30,
+    justifyContent: "center", alignItems: "center",
+    marginBottom: 14,
+  },
+  emptyTitle: { fontSize: 19, fontWeight: "800", letterSpacing: -0.3, marginBottom: 8, textAlign: "center" },
   emptySub:   { fontSize: 13, textAlign: "center", lineHeight: 20 },
-  retryBtn:   { marginTop: 20, paddingHorizontal: 28, paddingVertical: 10, borderRadius: 20 },
-  retryText:  { fontWeight: "700", fontSize: 14 },
+  retryBtn:   { marginTop: 20, paddingHorizontal: 28, paddingVertical: 12, borderRadius: 999 },
+  retryText:  { fontWeight: "800", fontSize: 13.5 },
 });

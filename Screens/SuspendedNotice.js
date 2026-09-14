@@ -1,5 +1,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Modal } from 'react-native';
+import { Feather } from '@expo/vector-icons';
+import { useTheme, spacing, radius, typography } from '../context/ThemeContext';
 
 function daysLeft(dateStr) {
   if (!dateStr) return 0;
@@ -7,31 +9,44 @@ function daysLeft(dateStr) {
 }
 
 export default function SuspendedNotice({ visible, suspensionInfo, onDismiss }) {
+  const { colors } = useTheme();
   if (!suspensionInfo) return null;
 
   return (
     <Modal visible={!!visible} transparent animationType="fade" onRequestClose={onDismiss}>
-      <View style={s.overlay}>
-        <View style={s.card}>
-          <Text style={s.icon}>⏸</Text>
-          <Text style={s.title}>Account temporarily suspended</Text>
-          <Text style={s.body}>
+      <View style={[s.overlay, { backgroundColor: colors.overlay }]}>
+        <View style={[s.card, { backgroundColor: colors.card }]}>
+          <View style={[s.iconWrap, { backgroundColor: colors.warningBg }]}>
+            <Feather name="pause" size={26} color={colors.warning} />
+          </View>
+          <Text style={[typography.h3, s.title, { color: colors.textPrimary }]}>
+            Account temporarily suspended
+          </Text>
+          <Text style={[typography.body, s.body, { color: colors.textSecondary }]}>
             Your account was suspended following a report review. You can still browse,
             but you won't be able to post comments until the suspension lifts.
           </Text>
 
-          <View style={s.deadlineBox}>
-            <Text style={s.deadlineLabel}>Lifts in</Text>
-            <Text style={s.deadlineDays}>{daysLeft(suspensionInfo?.suspendedUntil)} days</Text>
+          <View style={[s.deadlineBox, { backgroundColor: colors.warningBg }]}>
+            <Text style={[typography.caption, { color: colors.warning, fontWeight: '600', marginBottom: 2 }]}>
+              Lifts in
+            </Text>
+            <Text style={[s.deadlineDays, { color: colors.warning }]}>
+              {daysLeft(suspensionInfo?.suspendedUntil)} days
+            </Text>
             {suspensionInfo?.suspendedUntil && (
-              <Text style={s.deadlineDate}>
+              <Text style={[typography.caption, { color: colors.warning, marginTop: 4 }]}>
                 {new Date(suspensionInfo.suspendedUntil).toDateString()}
               </Text>
             )}
           </View>
 
-          <TouchableOpacity style={s.btn} onPress={onDismiss} activeOpacity={0.85}>
-            <Text style={s.btnText}>Got it</Text>
+          <TouchableOpacity
+            style={[s.btn, { backgroundColor: colors.accent }]}
+            onPress={onDismiss}
+            activeOpacity={0.85}
+          >
+            <Text style={[typography.title, { color: colors.onAccent }]}>Got it</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -40,15 +55,18 @@ export default function SuspendedNotice({ visible, suspensionInfo, onDismiss }) 
 }
 
 const s = StyleSheet.create({
-  overlay:      { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 24 },
-  card:         { width: '100%', maxWidth: 360, backgroundColor: '#fff', borderRadius: 20, padding: 24, alignItems: 'center' },
-  icon:         { fontSize: 40, marginBottom: 10 },
-  title:        { fontSize: 18, fontWeight: '700', color: '#2d1f1e', textAlign: 'center', marginBottom: 8 },
-  body:         { fontSize: 13.5, color: '#7a5a58', textAlign: 'center', lineHeight: 20, marginBottom: 18 },
-  deadlineBox:  { width: '100%', backgroundColor: '#FEF3C7', borderRadius: 12, padding: 14, alignItems: 'center', marginBottom: 18 },
-  deadlineLabel:{ fontSize: 11, color: '#92400E', fontWeight: '600', marginBottom: 2 },
-  deadlineDays: { fontSize: 26, fontWeight: '800', color: '#92400E' },
-  deadlineDate: { fontSize: 11, color: '#92400E', marginTop: 4 },
-  btn:          { backgroundColor: '#6b4b45', borderRadius: 10, paddingVertical: 13, alignItems: 'center', width: '100%' },
-  btnText:      { color: '#fff', fontWeight: '700', fontSize: 14.5 },
+  overlay:     { flex: 1, justifyContent: 'center', alignItems: 'center', padding: spacing.xl },
+  card:        { width: '100%', maxWidth: 360, borderRadius: radius.xl, padding: spacing.xl, alignItems: 'center' },
+  iconWrap:    {
+    width: 56, height: 56, borderRadius: radius.pill,
+    alignItems: 'center', justifyContent: 'center', marginBottom: spacing.md,
+  },
+  title:       { textAlign: 'center', marginBottom: spacing.sm },
+  body:        { textAlign: 'center', marginBottom: spacing.lg },
+  deadlineBox: {
+    width: '100%', borderRadius: radius.md, padding: spacing.md,
+    alignItems: 'center', marginBottom: spacing.lg,
+  },
+  deadlineDays: { fontSize: 26, fontWeight: '800' },
+  btn:         { borderRadius: radius.md, paddingVertical: spacing.md, alignItems: 'center', width: '100%' },
 });
