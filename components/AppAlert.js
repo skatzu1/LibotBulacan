@@ -4,8 +4,8 @@ import React, {
 import {
   View, Text, Pressable, StyleSheet, Animated, Easing, Modal, BackHandler,
 } from "react-native";
-import { Feather } from "@expo/vector-icons";
 import { useTheme, spacing, radius, typography, shadow } from "../context/ThemeContext";
+import Icon from "./Icon";
 
 /*
  * In-app alert / toast system that replaces the OS `Alert.alert` dialog and any
@@ -78,7 +78,7 @@ function Toast({ data, colors, onDone }) {
         ]}
       >
         <View style={[styles.toastIcon, { backgroundColor: tone.bg }]}>
-          <Feather name={tone.icon} size={15} color={tone.color} />
+          <Icon name={tone.icon} size={15} color={tone.color} />
         </View>
         <Text style={[typography.bodyStrong, { color: colors.textPrimary, flex: 1 }]} numberOfLines={2}>
           {data.message}
@@ -139,6 +139,7 @@ function AlertCard({ data, colors, onClose }) {
     <View style={styles.centerWrap}>
       <Animated.View style={[StyleSheet.absoluteFill, styles.backdrop, { opacity: anim, backgroundColor: colors.overlay }]}>
         <Pressable
+          accessibilityRole="button"
           style={StyleSheet.absoluteFill}
           onPress={() => { if (data.dismissable !== false) close(cancelBtn); }}
         />
@@ -153,7 +154,7 @@ function AlertCard({ data, colors, onClose }) {
       >
         {!!iconName && (
           <View style={[styles.cardIcon, { backgroundColor: iconBg }]}>
-            <Feather name={iconName} size={24} color={iconColor} />
+            <Icon name={iconName} size={24} color={iconColor} />
           </View>
         )}
         {!!data.title && (
@@ -168,6 +169,7 @@ function AlertCard({ data, colors, onClose }) {
             const s = btnStyle(b, i);
             return (
               <Pressable
+                accessibilityRole="button"
                 key={i}
                 onPress={() => close(b)}
                 style={({ pressed }) => [

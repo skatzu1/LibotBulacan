@@ -8,20 +8,14 @@ import {
   Platform,
   Image,
   Modal,
-  ScrollView,
-  KeyboardAvoidingView,
-  Keyboard,
-  TouchableWithoutFeedback,
-  StatusBar,
 } from "react-native";
 import { showAlert } from "../components/AppAlert";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { useState, useEffect } from "react";
 import { useSignIn, useOAuth } from "@clerk/clerk-expo";
 import * as WebBrowser from "expo-web-browser";
-import { Feather } from "@expo/vector-icons";
-import { useTheme, spacing, radius, typography, shadow } from "../context/ThemeContext";
-import Logo from "../components/Logo";
+import { auth as A, fonts, MAX_FONT_SCALE } from "../context/ThemeContext";
+import AuthScaffold, { authStyles as a } from "../components/AuthScaffold";
+import Icon from "../components/Icon";
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -29,9 +23,12 @@ function isValidEmail(email) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
 }
 
-// ── Forgot Password Modal ────────────────────────────────────────
+/* ── Forgot Password ──────────────────────────────────────────────────────
+   The mockup draws this as a full screen, not a dialog on top of Login — so it
+   presents as a full-screen modal built from the same scaffold, with the back
+   chevron returning to sign-in. The two-step Clerk flow (send code → verify
+   code + set password) is unchanged. */
 function ForgotPasswordModal({ visible, onClose, signIn }) {
-  const { colors } = useTheme();
   const [step, setStep]               = useState("email");
   const [email, setEmail]             = useState("");
   const [code, setCode]               = useState("");
@@ -58,8 +55,8 @@ function ForgotPasswordModal({ visible, onClose, signIn }) {
     try {
       await signIn.create({ strategy: "reset_password_email_code", identifier: email.trim() });
       setStep("otp");
-    } catch (err) {
-      // Generic message — don't reveal whether email exists
+    } catch {
+      // Generic message — don't reveal whether the email exists
       setEmailError("Could not send reset code. Check your email and try again.");
     } finally {
       setLoading(false);
@@ -86,153 +83,133 @@ function ForgotPasswordModal({ visible, onClose, signIn }) {
       } else {
         showAlert("Error", "Could not complete password reset. Please try again.");
       }
-    } catch (err) {
+    } catch {
       showAlert("Error", "Invalid or expired code. Please request a new one.");
     } finally {
       setLoading(false);
     }
   };
 
-  const inputStyle = [
-    styles.modalInput,
-    { backgroundColor: colors.inputBg, borderColor: colors.inputBorder, color: colors.textPrimary },
-  ];
-
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={handleClose}>
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === "ios" ? "padding" : "height"}
+    <Modal visible={visible} animationType="slide" onRequestClose={handleClose}>
+      <AuthScaffold
+        onBack={step === "otp" ? () => setStep("email") : handleClose}
+        title="Forgot Password?"
+        subtitle={
+          step === "email"
+            ? "Enter the email linked to your account and we'll send you a reset code"
+            : `We sent a 6-digit code to ${email}. Enter it below with your new password.`
+        }
       >
-        <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
-          <View style={[styles.modalOverlayInner, { backgroundColor: colors.overlay }]}>
-            <TouchableWithoutFeedback>
-              <View style={[styles.modalCard, { backgroundColor: colors.background }]}>
-                {/* Header */}
-                <View style={styles.modalHeader}>
-                  <Text style={[typography.h2, { color: colors.textPrimary }]}>
-                    {step === "email" ? "Reset Password" : "Enter Code"}
-                  </Text>
-                  <TouchableOpacity onPress={handleClose} hitSlop={8}>
-                    <Feather name="x" size={22} color={colors.textPrimary} />
-                  </TouchableOpacity>
-                </View>
+        {step === "email" ? (
+          <>
+            <View>
+              <TextInput
+                style={[a.field, { backgroundColor: A.cyanField }]}
+                placeholder="EMAIL"
+                placeholderTextColor={A.muted}
+                autoCapitalize="none"
+                keyboardType="email-address"
+                value={email}
+                onChangeText={(v) => { setEmail(v); if (emailError) setEmailError(""); }}
+                editable={!loading}
+                accessibilityLabel="Email address for password reset"
+                maxFontSizeMultiplier={MAX_FONT_SCALE}
+              />
+              {!!emailError && <Text style={a.errorText}>{emailError}</Text>}
+            </View>
 
-                {step === "email" ? (
-                  <>
-                    <Text style={[typography.body, styles.modalSubtitle, { color: colors.textSecondary }]}>
-                      Enter the email linked to your account and we'll send you a reset code.
-                    </Text>
-                    <TextInput
-                      style={[inputStyle, emailError ? { borderColor: colors.danger, backgroundColor: colors.dangerBg } : null]}
-                      placeholder="Email address"
-                      placeholderTextColor={colors.placeholder}
-                      autoCapitalize="none"
-                      keyboardType="email-address"
-                      value={email}
-                      onChangeText={(v) => { setEmail(v); if (emailError) setEmailError(""); }}
-                      editable={!loading}
-                      accessibilityLabel="Email address for password reset"
-                    />
-                    {emailError ? (
-                      <Text style={[typography.caption, styles.errorText, { color: colors.danger }]}>
-                        {emailError}
-                      </Text>
-                    ) : null}
-                    <TouchableOpacity
-                      style={[styles.primaryBtn, { backgroundColor: colors.accent }, loading && styles.disabled]}
-                      onPress={handleSendCode}
-                      disabled={loading}
-                      activeOpacity={0.85}
-                    >
-                      {loading
-                        ? <ActivityIndicator color={colors.onAccent} />
-                        : <Text style={[typography.title, { color: colors.onAccent }]}>Send Reset Code</Text>
-                      }
-                    </TouchableOpacity>
-                  </>
-                ) : (
-                  <>
-                    <Text style={[typography.body, styles.modalSubtitle, { color: colors.textSecondary }]}>
-                      We sent a 6-digit code to{" "}
-                      <Text style={{ fontWeight: "700", color: colors.textPrimary }}>{email}</Text>.
-                      Enter it below with your new password.
-                    </Text>
+            <TouchableOpacity
+              style={[a.cta, loading && styles.disabled]}
+              onPress={handleSendCode}
+              disabled={loading}
+              activeOpacity={0.88}
+              accessibilityRole="button"
+              accessibilityLabel="Send reset code"
+            >
+              {loading ? <ActivityIndicator color={A.onCta} /> : <Text style={a.ctaText}>Send Reset Code</Text>}
+            </TouchableOpacity>
+          </>
+        ) : (
+          <>
+            <TextInput
+              style={[a.field, { backgroundColor: A.cyanField, letterSpacing: 6, textAlign: "center" }]}
+              placeholder="000000"
+              placeholderTextColor={A.muted}
+              keyboardType="number-pad"
+              maxLength={6}
+              value={code}
+              onChangeText={setCode}
+              editable={!loading}
+              accessibilityLabel="6-digit reset code"
+              maxFontSizeMultiplier={MAX_FONT_SCALE}
+            />
 
-                    <TextInput
-                      style={inputStyle}
-                      placeholder="6-digit code"
-                      placeholderTextColor={colors.placeholder}
-                      keyboardType="number-pad"
-                      maxLength={6}
-                      value={code}
-                      onChangeText={setCode}
-                      editable={!loading}
-                      accessibilityLabel="6-digit reset code"
-                    />
+            <View style={a.fieldRow}>
+              <TextInput
+                style={[a.field, { backgroundColor: A.cyanField, paddingRight: 60 }]}
+                placeholder="NEW PASSWORD"
+                placeholderTextColor={A.muted}
+                secureTextEntry={!showNew}
+                value={newPassword}
+                onChangeText={setNewPassword}
+                editable={!loading}
+                accessibilityLabel="New password"
+                maxFontSizeMultiplier={MAX_FONT_SCALE}
+              />
+              <TouchableOpacity
+                onPress={() => setShowNew((v) => !v)}
+                style={a.eyeBtn}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel={showNew ? "Hide password" : "Show password"}
+              >
+                <Icon name={showNew ? "eye-off" : "eye"} size={20} color={A.muted} />
+              </TouchableOpacity>
+            </View>
 
-                    <View style={styles.passwordRow}>
-                      <TextInput
-                        style={[inputStyle, styles.flex]}
-                        placeholder="New password"
-                        placeholderTextColor={colors.placeholder}
-                        secureTextEntry={!showNew}
-                        value={newPassword}
-                        onChangeText={setNewPassword}
-                        editable={!loading}
-                        accessibilityLabel="New password"
-                      />
-                      <TouchableOpacity onPress={() => setShowNew((v) => !v)} style={styles.eyeBtn} hitSlop={8}>
-                        <Feather name={showNew ? "eye-off" : "eye"} size={18} color={colors.textSecondary} />
-                      </TouchableOpacity>
-                    </View>
+            <View style={a.fieldRow}>
+              <TextInput
+                style={[a.field, { backgroundColor: A.cyanField, paddingRight: 60 }]}
+                placeholder="CONFIRM PASSWORD"
+                placeholderTextColor={A.muted}
+                secureTextEntry={!showConfirm}
+                value={confirmPassword}
+                onChangeText={setConfirmPassword}
+                editable={!loading}
+                accessibilityLabel="Confirm new password"
+                maxFontSizeMultiplier={MAX_FONT_SCALE}
+              />
+              <TouchableOpacity
+                onPress={() => setShowConfirm((v) => !v)}
+                style={a.eyeBtn}
+                hitSlop={8}
+                accessibilityRole="button"
+                accessibilityLabel={showConfirm ? "Hide password" : "Show password"}
+              >
+                <Icon name={showConfirm ? "eye-off" : "eye"} size={20} color={A.muted} />
+              </TouchableOpacity>
+            </View>
 
-                    <View style={styles.passwordRow}>
-                      <TextInput
-                        style={[inputStyle, styles.flex]}
-                        placeholder="Confirm new password"
-                        placeholderTextColor={colors.placeholder}
-                        secureTextEntry={!showConfirm}
-                        value={confirmPassword}
-                        onChangeText={setConfirmPassword}
-                        editable={!loading}
-                        accessibilityLabel="Confirm new password"
-                      />
-                      <TouchableOpacity onPress={() => setShowConfirm((v) => !v)} style={styles.eyeBtn} hitSlop={8}>
-                        <Feather name={showConfirm ? "eye-off" : "eye"} size={18} color={colors.textSecondary} />
-                      </TouchableOpacity>
-                    </View>
-
-                    <TouchableOpacity
-                      style={[styles.primaryBtn, { backgroundColor: colors.accent }, loading && styles.disabled]}
-                      onPress={handleResetPassword}
-                      disabled={loading}
-                      activeOpacity={0.85}
-                    >
-                      {loading
-                        ? <ActivityIndicator color={colors.onAccent} />
-                        : <Text style={[typography.title, { color: colors.onAccent }]}>Reset Password</Text>
-                      }
-                    </TouchableOpacity>
-
-                    <TouchableOpacity onPress={() => setStep("email")} style={styles.backLink}>
-                      <Feather name="arrow-left" size={14} color={colors.textSecondary} />
-                      <Text style={[typography.bodyStrong, { color: colors.textPrimary }]}>Use a different email</Text>
-                    </TouchableOpacity>
-                  </>
-                )}
-              </View>
-            </TouchableWithoutFeedback>
-          </View>
-        </TouchableWithoutFeedback>
-      </KeyboardAvoidingView>
+            <TouchableOpacity
+              style={[a.cta, loading && styles.disabled]}
+              onPress={handleResetPassword}
+              disabled={loading}
+              activeOpacity={0.88}
+              accessibilityRole="button"
+              accessibilityLabel="Reset password"
+            >
+              {loading ? <ActivityIndicator color={A.onCta} /> : <Text style={a.ctaText}>Reset Password</Text>}
+            </TouchableOpacity>
+          </>
+        )}
+      </AuthScaffold>
     </Modal>
   );
 }
 
-// ── Main Login Screen ────────────────────────────────────────────
+/* ── Sign in ──────────────────────────────────────────────────────────── */
 export default function Login({ navigation }) {
-  const { colors, isDark } = useTheme();
   const { isLoaded, signIn, setActive } = useSignIn();
   const { startOAuthFlow } = useOAuth({ strategy: "oauth_google" });
 
@@ -246,7 +223,7 @@ export default function Login({ navigation }) {
   // Inline errors
   const [emailError, setEmailError]       = useState("");
   const [authError, setAuthError]         = useState("");   // shown below login button
-  const [emailTouched, setEmailTouched]   = useState(false);
+  const [, setEmailTouched]               = useState(false);
 
   useEffect(() => {
     WebBrowser.warmUpAsync();
@@ -311,6 +288,20 @@ export default function Login({ navigation }) {
       await setActive({ session: signInResult.createdSessionId });
     } catch (err) {
       console.error("Email Login Error:", err);
+
+      // Lockout is the one case worth naming. The generic message below would
+      // send someone into an endless retry loop against an account that cannot
+      // accept a password right now, however correct it is. Clerk's longMessage
+      // already carries the remaining wait, so prefer it when present.
+      const lockout = err?.errors?.find((e) => e.code === "user_locked");
+      if (lockout) {
+        setAuthError(
+          lockout.longMessage ||
+            "Too many failed attempts. This account is temporarily locked — please try again later."
+        );
+        return;
+      }
+
       // Always show a generic message — avoids email enumeration
       setAuthError("Incorrect email or password. Please try again.");
     } finally {
@@ -328,6 +319,14 @@ export default function Login({ navigation }) {
       await setActive({ session: createdSessionId });
     } catch (err) {
       if (err.code === "user-cancelled" || err.code === "browser-closed") return;
+      if (__DEV__) {
+        console.error("[google-oauth] failed:", {
+          message: err?.message,
+          code:    err?.code,
+          status:  err?.status,
+          clerk:   err?.errors,
+        });
+      }
       showAlert("Sign-in failed", "Unable to sign in with Google. Please try again.");
     } finally {
       setIsGoogleLoading(false);
@@ -337,157 +336,124 @@ export default function Login({ navigation }) {
   const anyLoading = isLoading || isGoogleLoading;
   const disabled   = anyLoading || !isLoaded;
 
-  const inputStyle = [
-    styles.input,
-    { backgroundColor: colors.inputBg, borderColor: colors.inputBorder, color: colors.textPrimary },
-  ];
-
   return (
-    <SafeAreaView style={[styles.screen, { backgroundColor: colors.background }]} edges={["top", "bottom"]}>
-      <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={colors.background} />
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-      >
-        <ScrollView
-          contentContainerStyle={styles.scroll}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
+    <>
+      <AuthScaffold title="Welcome" subtitle="Sign in to continue.">
+        {/* Google */}
+        <TouchableOpacity
+          style={[a.googleBtn, disabled && styles.disabled]}
+          onPress={handleGoogleLogin}
+          disabled={disabled}
+          activeOpacity={0.88}
+          accessibilityRole="button"
+          accessibilityLabel="Continue with Google"
         >
-          <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.cardBorder }, shadow.md]}>
+          {isGoogleLoading ? (
+            <ActivityIndicator color={A.muted} />
+          ) : (
+            <>
+              <Image source={require("../assets/googlelogo.png")} style={a.googleLogo} />
+              <Text style={a.googleText} maxFontSizeMultiplier={MAX_FONT_SCALE}>Continue with Google</Text>
+            </>
+          )}
+        </TouchableOpacity>
 
-            <View style={styles.titleContainer}>
-              <Logo size={64} style={styles.logo} />
-              <Text style={[typography.h1, { color: colors.textPrimary }]}>Welcome Back</Text>
-              <Text style={[typography.body, styles.subtitle, { color: colors.textSecondary }]}>
-                Sign in to continue
-              </Text>
-            </View>
+        {/* Divider */}
+        <View style={a.dividerRow}>
+          <View style={a.dividerLine} />
+          <Text style={a.dividerText}>OR</Text>
+          <View style={a.dividerLine} />
+        </View>
 
-            {/* Google login */}
-            <TouchableOpacity
-              style={[
-                styles.googleButton,
-                { backgroundColor: colors.inputBg, borderColor: colors.inputBorder },
-                disabled && styles.disabled,
-              ]}
-              onPress={handleGoogleLogin}
-              disabled={disabled}
-              activeOpacity={0.85}
-              accessibilityLabel="Sign in with Google"
-            >
-              {isGoogleLoading ? (
-                <ActivityIndicator color={colors.textSecondary} />
-              ) : (
-                <>
-                  <Image source={require("../assets/googlelogo.png")} style={styles.googleLogo} />
-                  <Text style={[typography.bodyStrong, { color: colors.textPrimary }]}>
-                    Sign in with Google
-                  </Text>
-                </>
-              )}
-            </TouchableOpacity>
+        {/* Email */}
+        <View>
+          <TextInput
+            style={[a.field, { backgroundColor: A.cyanField }, !!emailError && styles.fieldError]}
+            placeholder="EMAIL"
+            placeholderTextColor={A.muted}
+            autoCapitalize="none"
+            keyboardType="email-address"
+            value={email}
+            onChangeText={(v) => {
+              setEmail(v);
+              if (emailError) setEmailError("");
+              if (authError) setAuthError("");
+            }}
+            onBlur={handleEmailBlur}
+            editable={!disabled}
+            accessibilityLabel="Email address"
+            maxFontSizeMultiplier={MAX_FONT_SCALE}
+          />
+          {!!emailError && <Text style={a.errorText}>{emailError}</Text>}
+        </View>
 
-            {/* Divider */}
-            <View style={styles.dividerContainer}>
-              <View style={[styles.dividerLine, { backgroundColor: colors.divider }]} />
-              <Text style={[typography.label, styles.dividerText, { color: colors.textSecondary }]}>OR</Text>
-              <View style={[styles.dividerLine, { backgroundColor: colors.divider }]} />
-            </View>
+        {/* Password */}
+        <View style={a.fieldRow}>
+          <TextInput
+            style={[a.field, { backgroundColor: A.cyanField, paddingRight: 60 }]}
+            placeholder="PASSWORD"
+            placeholderTextColor={A.muted}
+            secureTextEntry={!passwordVisible}
+            value={password}
+            onChangeText={(v) => { setPassword(v); if (authError) setAuthError(""); }}
+            editable={!disabled}
+            accessibilityLabel="Password"
+            maxFontSizeMultiplier={MAX_FONT_SCALE}
+          />
+          <TouchableOpacity
+            onPress={() => setPasswordVisible((v) => !v)}
+            style={a.eyeBtn}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={passwordVisible ? "Hide password" : "Show password"}
+          >
+            <Icon name={passwordVisible ? "eye-off" : "eye"} size={20} color={A.muted} />
+          </TouchableOpacity>
+        </View>
 
-            {/* Email / Password */}
-            <View style={styles.inputContainer}>
-              <View>
-                <TextInput
-                  style={[inputStyle, emailError ? { borderColor: colors.danger, backgroundColor: colors.dangerBg } : null]}
-                  placeholder="Email"
-                  autoCapitalize="none"
-                  placeholderTextColor={colors.placeholder}
-                  keyboardType="email-address"
-                  value={email}
-                  onChangeText={(v) => {
-                    setEmail(v);
-                    if (emailError) setEmailError("");
-                    if (authError) setAuthError("");
-                  }}
-                  onBlur={handleEmailBlur}
-                  editable={!disabled}
-                  accessibilityLabel="Email address"
-                />
-                {emailError ? (
-                  <Text style={[typography.caption, styles.errorText, { color: colors.danger }]}>
-                    {emailError}
-                  </Text>
-                ) : null}
-              </View>
-
-              {/* Password with eye icon */}
-              <View style={styles.passwordInputRow}>
-                <TextInput
-                  style={[inputStyle, styles.passwordInput]}
-                  placeholder="Password"
-                  placeholderTextColor={colors.placeholder}
-                  secureTextEntry={!passwordVisible}
-                  value={password}
-                  onChangeText={(v) => { setPassword(v); if (authError) setAuthError(""); }}
-                  editable={!disabled}
-                  accessibilityLabel="Password"
-                />
-                <TouchableOpacity
-                  onPress={() => setPasswordVisible((v) => !v)}
-                  style={styles.eyeIconBtn}
-                  hitSlop={8}
-                  accessibilityLabel={passwordVisible ? "Hide password" : "Show password"}
-                >
-                  <Feather name={passwordVisible ? "eye-off" : "eye"} size={18} color={colors.textSecondary} />
-                </TouchableOpacity>
-              </View>
-            </View>
-
-            {/* Auth error (generic, shown below inputs) */}
-            {authError ? (
-              <View style={[styles.authErrorBox, { backgroundColor: colors.dangerBg, borderColor: colors.danger }]}>
-                <Feather name="alert-circle" size={14} color={colors.danger} />
-                <Text style={[typography.body, styles.authErrorText, { color: colors.danger }]}>{authError}</Text>
-              </View>
-            ) : null}
-
-            {/* Login button */}
-            <TouchableOpacity
-              style={[styles.primaryBtn, { backgroundColor: colors.accent }, disabled && styles.disabled]}
-              onPress={handleLogin}
-              disabled={disabled}
-              activeOpacity={0.85}
-              accessibilityLabel="Login"
-            >
-              {isLoading
-                ? <ActivityIndicator color={colors.onAccent} />
-                : <Text style={[typography.title, { color: colors.onAccent }]}>Login</Text>
-              }
-            </TouchableOpacity>
-
-            {/* Forgot password */}
-            <TouchableOpacity
-              style={styles.forgotRow}
-              onPress={() => setShowForgot(true)}
-              accessibilityLabel="Forgot password"
-            >
-              <Text style={[typography.bodyStrong, { color: colors.textPrimary }]}>Forgot password?</Text>
-            </TouchableOpacity>
-
-            {/* Register link */}
-            <View style={styles.linkRow}>
-              <Text style={[typography.body, { color: colors.textSecondary }]}>Don't have an account? </Text>
-              <TouchableOpacity onPress={() => navigation.navigate("Register")} accessibilityLabel="Sign up">
-                <Text style={[typography.bodyStrong, { color: colors.textPrimary, fontWeight: "700" }]}>Sign Up</Text>
-              </TouchableOpacity>
-            </View>
-
+        {/* Generic auth error */}
+        {!!authError && (
+          <View style={a.errorBox}>
+            <Icon name="alert-circle" size={15} color="#8E1F16" />
+            <Text style={a.errorBoxText}>{authError}</Text>
           </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
+        )}
 
-      {/* Forgot Password Modal */}
+        {/* Log in */}
+        <TouchableOpacity
+          style={[a.cta, styles.ctaSpace, disabled && styles.disabled]}
+          onPress={handleLogin}
+          disabled={disabled}
+          activeOpacity={0.88}
+          accessibilityRole="button"
+          accessibilityLabel="Log in"
+        >
+          {isLoading ? <ActivityIndicator color={A.onCta} /> : <Text style={a.ctaText}>Log in</Text>}
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          onPress={() => setShowForgot(true)}
+          style={styles.forgotRow}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel="Forgot password"
+        >
+          <Text style={[a.linkBold, styles.forgotText]}>Forgot Password?</Text>
+        </TouchableOpacity>
+
+        <View style={a.linkRow}>
+          <Text style={a.linkMuted}>Don't have an account? </Text>
+          <TouchableOpacity
+            onPress={() => navigation.navigate("Register")}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Sign up for an account"
+          >
+            <Text style={a.linkBold}>Signup</Text>
+          </TouchableOpacity>
+        </View>
+      </AuthScaffold>
+
       {isLoaded && (
         <ForgotPasswordModal
           visible={showForgot}
@@ -495,117 +461,14 @@ export default function Login({ navigation }) {
           signIn={signIn}
         />
       )}
-    </SafeAreaView>
+    </>
   );
 }
 
 const styles = StyleSheet.create({
-  flex: { flex: 1 },
-  screen: { flex: 1 },
-  scroll: {
-    flexGrow: 1,
-    justifyContent: "center",
-    padding: spacing.xl,
-  },
-
-  card: {
-    borderRadius: radius.xl,
-    borderWidth: 1,
-    padding: spacing.xl,
-  },
-
-  titleContainer: { alignItems: "center", marginBottom: spacing.xl },
-  logo: { marginBottom: spacing.md },
-  subtitle: { marginTop: spacing.xs },
-
-  googleButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: radius.md,
-    paddingVertical: spacing.lg,
-    paddingHorizontal: spacing.xl,
-    marginBottom: spacing.xl,
-    borderWidth: 1.5,
-    gap: spacing.sm,
-  },
-  googleLogo: { width: 22, height: 22, resizeMode: "contain" },
-
-  dividerContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    marginBottom: spacing.xl,
-  },
-  dividerLine: { flex: 1, height: 1 },
-  dividerText: { marginHorizontal: spacing.md },
-
-  inputContainer: { gap: spacing.md, marginBottom: spacing.lg },
-  input: {
-    paddingVertical: spacing.lg,
-    paddingHorizontal: spacing.lg,
-    borderRadius: radius.md,
-    fontSize: 15,
-    borderWidth: 1.5,
-  },
-  errorText: { marginTop: spacing.xs, marginLeft: spacing.xs, fontWeight: "500" },
-  passwordInputRow: { flexDirection: "row", alignItems: "center" },
-  passwordInput: { flex: 1, paddingRight: 48 },
-  eyeIconBtn: { position: "absolute", right: spacing.md, padding: spacing.xs },
-
-  authErrorBox: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: spacing.sm,
-    borderRadius: radius.sm,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.md,
-    marginBottom: spacing.md,
-    borderWidth: 1,
-  },
-  authErrorText: { flex: 1, fontWeight: "500" },
-
-  primaryBtn: {
-    paddingVertical: spacing.lg,
-    borderRadius: radius.md,
-    alignItems: "center",
-    marginBottom: spacing.lg,
-    marginTop: spacing.xs,
-  },
-  disabled: { opacity: 0.55 },
-
-  forgotRow: { alignItems: "center", marginBottom: spacing.lg },
-  linkRow: { flexDirection: "row", justifyContent: "center", alignItems: "center" },
-
-  // ── Forgot Password Modal ──
-  modalOverlayInner: { flex: 1, justifyContent: "flex-end" },
-  modalCard: {
-    borderTopLeftRadius: radius.xl,
-    borderTopRightRadius: radius.xl,
-    padding: spacing.xl,
-    paddingBottom: Platform.OS === "ios" ? spacing.xxl : spacing.xl,
-  },
-  modalHeader: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    marginBottom: spacing.md,
-  },
-  modalSubtitle: { marginBottom: spacing.lg },
-  modalInput: {
-    paddingVertical: spacing.lg,
-    paddingHorizontal: spacing.lg,
-    borderRadius: radius.md,
-    fontSize: 15,
-    borderWidth: 1.5,
-    marginBottom: spacing.md,
-  },
-  passwordRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
-  eyeBtn: { paddingHorizontal: spacing.sm, paddingBottom: spacing.md },
-  backLink: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: spacing.xs,
-    marginTop: spacing.lg,
-  },
+  disabled:   { opacity: 0.6 },
+  fieldError: { borderWidth: 1.5, borderColor: "#8E1F16" },
+  ctaSpace:   { marginTop: 8 },
+  forgotRow:  { alignSelf: "center", paddingVertical: 4 },
+  forgotText: { fontFamily: fonts.sansBold },
 });

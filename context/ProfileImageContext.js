@@ -8,8 +8,9 @@ import React, {
 } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useAuth } from "@clerk/clerk-expo";
+import { BASE_URL } from "../api";
 
-const BASE_URL = "https://libotbackend.onrender.com";
+// Single source of truth for the backend host — see api.js.
 const ProfileImageContext = createContext(null);
 
 export function ProfileImageProvider({ children }) {

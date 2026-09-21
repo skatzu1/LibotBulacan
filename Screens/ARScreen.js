@@ -17,7 +17,6 @@ import {
 } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import Geolocation from "@react-native-community/geolocation";
-import { Feather } from "@expo/vector-icons";
 import * as Haptics from "expo-haptics";
 import { useMissions } from "../context/MissionContext";
 import {
@@ -25,14 +24,25 @@ import {
   ViroARSceneNavigator,
   ViroARPlane,
   Viro3DObject,
+  ViroBox,
   ViroNode,
   ViroText,
   ViroAmbientLight,
   ViroSpotLight,
   ViroAnimations,
+  ViroMaterials,
   isARSupportedOnDevice,
   ViroTrackingStateConstants,
 } from "@reactvision/react-viro";
+import { GpsSmoother, isBetterFix, MAX_USABLE_ACCURACY_M } from "../utils/gpsFilter";
+// `explainReason` is exported by the module but deliberately not used here:
+// the absence of precise placement needs no explanation to the user, since
+// plane placement is the normal experience. It's there for debugging and for
+// any future screen that wants to surface the reason.
+import { evaluateGeospatial, anchorAtLocation, releaseAnchor } from "../utils/geospatial";
+import { resolveTrail } from "../utils/arTrail";
+import { fonts } from "../context/ThemeContext";
+import Icon from "../components/Icon";
 
 // ─────────────────────────────────────────────
 // COMPASS HEADING HOOK  (tilt-aware, real-time)
@@ -184,7 +194,51 @@ const TOKEN = {
 // ─────────────────────────────────────────────
 // CONSTANTS
 // ─────────────────────────────────────────────
-const BASE_MODEL_RADIUS_METERS = 90;
+// How close you have to be for an AR model to appear.
+//
+// Room level: 6 m is about the width of a chapel side-aisle or a gallery room,
+// so an anchor now means "this corner of the building" rather than "somewhere
+// on these grounds". Each model at a spot gets its own findable place instead
+// of all of them firing the moment you reach the site.
+//
+// ── The catch, stated plainly ────────────────────────────────────────────
+// 6 m is BELOW what a phone's GPS can resolve. Standing exactly on the pinned
+// coordinate, an Android device typically reports you 5–20 m away, and 20–40 m
+// away beside a large building — which is precisely where these spots are.
+// Taken alone, a 6 m gate would therefore fail for a user standing on the
+// exact spot, with nothing they could do about it. That was the original bug
+// on this screen and it is why this number used to be 30.
+//
+// What makes the smaller number safe is the slack below: the radius is widened
+// by however wrong the device itself says the fix might be. In good conditions
+// (±4 m) the gate is ~10 m and genuinely room-scale; in poor conditions it
+// opens up rather than becoming unreachable. The experience is as tight as the
+// hardware allows at that moment, which is the most this can honestly promise
+// while the position comes from GPS.
+const BASE_MODEL_RADIUS_METERS = 6;
+
+// Floor for the shrink applied when two anchors sit close together. At 3 m two
+// models in the same room stay separately findable; below that they would be
+// inside each other's error bars and the gate would be meaningless.
+const MIN_MODEL_RADIUS_METERS = 3;
+
+// Ceiling on how far a poor fix may widen the radius, lowered with the base
+// (was 35, for a 30 m base). Two jobs: a junk indoor fix (±150 m) must not
+// report every anchor as in range at once, and a room-level gate that has
+// stretched to three rooms has stopped being room-level — past ±12 m the
+// device simply cannot support this experience, so there is nothing to gain by
+// widening further.
+const MAX_ACCURACY_SLACK_METERS = 12;
+
+// ── AR model geometry ────────────────────────────────────────────────────
+// Derived from the asset by applying its full node transform hierarchy:
+//   world bounds  X -3.992..3.997   Y -4.525..8.593   Z -0.987..0.987
+// At MODEL_SCALE that is 0.64 m wide, 1.05 m tall, 0.16 m deep.
+const MODEL_SCALE = 0.08;
+// The asset's origin is 4.525 units above its own base, so without this lift
+// the bottom third of the model is buried under the plane it stands on.
+const MODEL_BASE_OFFSET_Y = 4.525 * MODEL_SCALE;   // 0.362 m
+const MODEL_HEIGHT_M = (8.593 + 4.525) * MODEL_SCALE; // 1.05 m
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get("window");
 
 // ─────────────────────────────────────────────
@@ -258,7 +312,7 @@ const EncounterFlash = ({ trigger, label }) => {
           },
         ]}
       >
-        <Feather name="zap" size={15} color={TOKEN.ctaText} />
+        <Icon name="zap" size={15} color={TOKEN.ctaText} />
         <Text style={flashSt.bannerText} numberOfLines={1}>
           {label ? `${label.toUpperCase()} FOUND!` : "OBJECT FOUND!"}
         </Text>
@@ -268,91 +322,43 @@ const EncounterFlash = ({ trigger, label }) => {
 };
 
 // ─────────────────────────────────────────────
-// PROXIMITY RADAR
+// DISTANCE FORMATTING
 // ─────────────────────────────────────────────
-// Replaces the old linear progress bar for the "still walking there" state.
-// Concentric rings sweep outward and the pulse speeds up as the target gets
-// closer, so distance is felt rather than read — the radar reads at a glance
-// while walking, which a thin progress bar never did.
 // Metres are only readable up to a point: a spot 30 km away rendered as
-// "30284 m", which both overflowed the radar dial and told the user nothing
-// useful. Switch to km past 1000 m, and keep the digit count short so it
-// always fits inside the circle.
-function formatDistance(m) {
-  if (m >= 1000) {
-    const km = m / 1000;
-    return { value: km >= 10 ? String(Math.round(km)) : km.toFixed(1), unit: "km" };
-  }
-  return { value: String(Math.round(m)), unit: "m" };
+// "30284 m", which told the user nothing useful. Switch to km past 1000 m.
+//
+// The second job is honesty about precision. The distance itself is computed
+// correctly (the Haversine here matches reference values to within 0.2%), but
+// it is built from a GPS fix that is typically +/- 5-20 m. Printing "142 m"
+// from a +/- 12 m measurement claims a precision that does not exist, and it
+// is why the readout looks wrong: it changes to 139, then 144, while the user
+// is standing still, and disagrees with whatever their Maps app says.
+//
+// So the displayed figure is rounded to a step the fix can actually support,
+// and marked approximate when the uncertainty is material. `accuracy` is the
+// device's own horizontal accuracy in metres; omit it to get an exact value.
+function distanceStep(accuracy) {
+  if (!Number.isFinite(accuracy)) return 1;
+  if (accuracy <= 5)  return 1;
+  if (accuracy <= 15) return 5;
+  if (accuracy <= 40) return 10;
+  return 25;
 }
 
-const ProximityRadar = ({ metersToEdge, radius }) => {
-  const wave1 = useRef(new Animated.Value(0)).current;
-  const wave2 = useRef(new Animated.Value(0)).current;
+function formatDistance(m, accuracy) {
+  if (m >= 1000) {
+    const km = m / 1000;
+    // Past a kilometre the rounding already exceeds any GPS error.
+    return { value: km >= 10 ? String(Math.round(km)) : km.toFixed(1), unit: "km", approx: false };
+  }
 
-  // 0 (far) → 1 (at the edge). Drives both colour and pulse speed.
-  const closeness = Math.max(0, Math.min(1, 1 - metersToEdge / Math.max(radius * 4, 1)));
-  const period    = 1600 - closeness * 900; // 1600ms far → 700ms near
-
-  useEffect(() => {
-    const mk = (v, delay) =>
-      Animated.loop(
-        Animated.sequence([
-          Animated.delay(delay),
-          Animated.timing(v, { toValue: 1, duration: period, easing: Easing.out(Easing.quad), useNativeDriver: true }),
-          Animated.timing(v, { toValue: 0, duration: 0, useNativeDriver: true }),
-        ])
-      );
-    const a = mk(wave1, 0);
-    const b = mk(wave2, period / 2);
-    a.start(); b.start();
-    return () => { a.stop(); b.stop(); };
-  }, [period]);
-
-  const tint = closeness > 0.75 ? TOKEN.gold : closeness > 0.4 ? TOKEN.infoLight : TOKEN.info;
-  const dist = formatDistance(metersToEdge);
-
-  const waveStyle = (v) => ({
-    opacity:   v.interpolate({ inputRange: [0, 1], outputRange: [0.5, 0] }),
-    transform: [{ scale: v.interpolate({ inputRange: [0, 1], outputRange: [0.45, 1.35] }) }],
-    borderColor: tint,
-  });
-
-  return (
-    <View style={radarSt.wrap}>
-      <View style={radarSt.radar}>
-        <Animated.View style={[radarSt.wave, waveStyle(wave1)]} />
-        <Animated.View style={[radarSt.wave, waveStyle(wave2)]} />
-        <View style={[radarSt.core, { borderColor: tint }]}>
-          <Text
-            style={[radarSt.coreNum, { color: tint, fontSize: dist.value.length >= 4 ? 20 : 26 }]}
-            numberOfLines={1}
-            adjustsFontSizeToFit
-          >
-            {dist.value}
-          </Text>
-          <Text style={radarSt.coreUnit}>{dist.unit}</Text>
-        </View>
-      </View>
-    </View>
-  );
-};
-
-// ─────────────────────────────────────────────
-// PROGRESS PIPS
-// ─────────────────────────────────────────────
-// Visual stand-in for the old "2 / 5 tapped" text — reads instantly at a
-// glance the way Pokémon GO's catch indicators do.
-const ProgressPips = ({ total, done }) => {
-  if (!total || total < 2) return null;
-  return (
-    <View style={pipSt.row}>
-      {Array.from({ length: total }).map((_, i) => (
-        <View key={i} style={[pipSt.pip, i < done && pipSt.pipDone]} />
-      ))}
-    </View>
-  );
-};
+  const step = distanceStep(accuracy);
+  if (step > 1) {
+    const rounded = Math.max(step, Math.round(m / step) * step);
+    return { value: String(rounded), unit: "m", approx: true };
+  }
+  return { value: String(Math.round(m)), unit: "m", approx: false };
+}
 
 const flashSt = StyleSheet.create({
   overlay: { ...StyleSheet.absoluteFillObject, alignItems: "center", justifyContent: "center" },
@@ -378,31 +384,188 @@ const flashSt = StyleSheet.create({
     elevation:     16,
   },
   bannerText: {
-    color: TOKEN.ctaText, fontSize: 14, fontWeight: "900", letterSpacing: 0.8,
+    color: TOKEN.ctaText, fontSize: 14, fontFamily: fonts.sansBold, letterSpacing: 0.8,
   },
 });
 
-const RADAR = 132;
-const radarSt = StyleSheet.create({
-  wrap:  { alignItems: "center", justifyContent: "center", paddingVertical: 4 },
-  radar: { width: RADAR, height: RADAR, alignItems: "center", justifyContent: "center" },
-  wave: {
-    position:    "absolute",
-    width:       RADAR,
-    height:      RADAR,
-    borderRadius: RADAR / 2,
-    borderWidth: 2,
-  },
-  core: {
-    width: 74, height: 74, borderRadius: 37,
-    borderWidth: 2,
-    backgroundColor: TOKEN.surfaceHigh,
+// ─────────────────────────────────────────────
+// RADAR MAP
+// ─────────────────────────────────────────────
+// Top-down view with the user at the centre, replacing the bare metre count.
+//
+// A number alone answers "how far" but not "where", and it can't show the one
+// thing that actually governs the experience: the model has an activation
+// radius, and nothing appears until you are inside it. Here that radius is
+// drawn to scale around the model, so "walk until the dot is inside the ring"
+// is something you can see rather than infer from a shrinking number.
+//
+// Orientation is camera-relative — the top of the radar is wherever the phone
+// is pointing — so the blip sits in the direction you would actually turn.
+const RADAR_PX = 148;                       // drawing area
+const RADAR_R  = RADAR_PX / 2 - 12;         // usable radius, leaving an edge margin
+
+// No `inRange` prop: this radar only ever renders in step 1, which by
+// definition is the out-of-range state — the card switches to "point at the
+// ground" the moment you cross in. An in-range styling branch here would be
+// unreachable code pretending to be a feature.
+const RadarMap = ({ distance, bearing, heading, modelRadius, label }) => {
+  const sweep = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.timing(sweep, { toValue: 1, duration: 2600, easing: Easing.linear, useNativeDriver: true })
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [sweep]);
+
+  // Scale so both the model and its whole radius ring always fit. Adaptive
+  // rather than fixed: a 15 m walk and a 900 m walk both need to be readable.
+  const span  = Math.max(distance + modelRadius * 1.3, modelRadius * 2.4, 12);
+  const toPx  = (m) => (m / span) * RADAR_R;
+
+  // Screen angle: 0 = straight ahead. Bearing and heading are both compass
+  // degrees, so the difference is how far to turn.
+  const rel   = ((bearing - heading + 360) % 360) * (Math.PI / 180);
+  const blipX = Math.sin(rel) * toPx(distance);
+  const blipY = -Math.cos(rel) * toPx(distance);
+
+  // Legibility floor on the activation ring.
+  //
+  // The ring is drawn to scale, and at room level that scale disappears: a 6 m
+  // radius seen from 200 m away is under 2 px, so "walk until the dot is
+  // inside the circle" refers to something the user cannot see. 5 px keeps it
+  // on screen as a target from any distance. The floor only ever applies when
+  // you are far enough away that the ring would be a speck anyway — by the
+  // time the distance matters the true scale has taken over.
+  const ringPx = Math.max(toPx(modelRadius), 5);
+
+  const spin = sweep.interpolate({ inputRange: [0, 1], outputRange: ["0deg", "360deg"] });
+
+  return (
+    <View style={radar.wrap}>
+      <View style={radar.face}>
+        {/* Range rings, purely for depth perception */}
+        <View style={[radar.grid, { width: RADAR_R * 2, height: RADAR_R * 2, borderRadius: RADAR_R }]} />
+        <View style={[radar.grid, { width: RADAR_R, height: RADAR_R, borderRadius: RADAR_R / 2 }]} />
+
+        {/* Sweep hand */}
+        <Animated.View style={[radar.sweep, { transform: [{ rotate: spin }] }]}>
+          <View style={radar.sweepArm} />
+        </Animated.View>
+
+        {/* The model's activation radius, drawn around the model itself —
+            this is the thing the user is trying to get inside. */}
+        <View
+          style={[
+            radar.radiusRing,
+            {
+              width: ringPx * 2, height: ringPx * 2, borderRadius: ringPx,
+              left: RADAR_PX / 2 + blipX - ringPx,
+              top:  RADAR_PX / 2 + blipY - ringPx,
+              borderColor: TOKEN.info,
+              backgroundColor: "rgba(79,208,220,0.10)",
+            },
+          ]}
+        />
+
+        {/* The model */}
+        <View
+          style={[
+            radar.blip,
+            {
+              left: RADAR_PX / 2 + blipX - 5,
+              top:  RADAR_PX / 2 + blipY - 5,
+              backgroundColor: TOKEN.gold,
+            },
+          ]}
+        />
+
+        {/* You, always dead centre, pointing up */}
+        <View style={radar.you} />
+      </View>
+
+      <Text style={radar.label}>{label}</Text>
+    </View>
+  );
+};
+
+const radar = StyleSheet.create({
+  wrap: { alignItems: "center", gap: 8 },
+  face: {
+    width: RADAR_PX, height: RADAR_PX, borderRadius: RADAR_PX / 2,
+    backgroundColor: "rgba(8,26,28,0.72)",
+    borderWidth: 1, borderColor: TOKEN.borderAccent,
     alignItems: "center", justifyContent: "center",
-    flexDirection: "row",
+    overflow: "hidden",
   },
-  coreNum:  { fontSize: 26, fontWeight: "900", letterSpacing: -1 },
-  coreUnit: { fontSize: 12, fontWeight: "700", color: TOKEN.textSecond, marginLeft: 2, marginTop: 6 },
+  grid: {
+    position: "absolute",
+    borderWidth: 1, borderColor: "rgba(120,204,208,0.16)",
+  },
+  sweep: { position: "absolute", width: RADAR_PX, height: RADAR_PX, alignItems: "center" },
+  sweepArm: {
+    width: 1.5, height: RADAR_PX / 2,
+    backgroundColor: "rgba(79,208,220,0.45)",
+  },
+  radiusRing: { position: "absolute", borderWidth: 1.5 },
+  blip: {
+    position: "absolute", width: 10, height: 10, borderRadius: 5,
+    borderWidth: 1.5, borderColor: "rgba(0,0,0,0.35)",
+  },
+  you: {
+    width: 9, height: 9, borderRadius: 4.5,
+    backgroundColor: TOKEN.textPrimary,
+    borderWidth: 2, borderColor: "rgba(8,26,28,0.9)",
+  },
+  label: { color: TOKEN.textSecond, fontSize: 13, fontFamily: fonts.sansSemi },
 });
+
+// ─────────────────────────────────────────────
+// STEP CARD  — the main HUD
+// ─────────────────────────────────────────────
+// One card, one instruction, always answering "what do I do right now?".
+//
+// It replaces a panel that showed a radar dial, progress pips, a nearest-target
+// label and a cue line all at once, and left the user to work out which of them
+// was the current task. The three steps below are the three physical actions an
+// AR mission actually requires, and exactly one is ever active.
+// The pulsing frame drawn over the lower half of the camera during step 2.
+// Pointing the phone DOWN at the ground is the single least obvious part of the
+// whole flow — ARCore needs a horizontal surface before it can place anything —
+// so it gets a target on screen rather than only a sentence.
+const GroundReticle = () => {
+  const pulse = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 1, duration: 1100, easing: Easing.out(Easing.quad), useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 0, duration: 0, useNativeDriver: true }),
+      ])
+    );
+    loop.start();
+    return () => loop.stop();
+  }, []);
+
+  return (
+    <View style={step.reticleWrap} pointerEvents="none">
+      <Animated.View
+        style={[
+          step.reticle,
+          {
+            opacity:   pulse.interpolate({ inputRange: [0, 1], outputRange: [0.85, 0] }),
+            transform: [{ scale: pulse.interpolate({ inputRange: [0, 1], outputRange: [0.9, 1.15] }) }],
+          },
+        ]}
+      />
+      <View style={step.reticleStatic} />
+      <View style={step.reticleArrowWrap}>
+        <Icon name="chevrons-down" size={22} color={TOKEN.info} />
+      </View>
+    </View>
+  );
+};
 
 // ─────────────────────────────────────────────
 // HOW-IT-WORKS GUIDE
@@ -414,13 +577,16 @@ const radarSt = StyleSheet.create({
 const AR_GUIDE_SEEN_KEY = "arGuideSeen_v1";
 
 const HowItWorks = ({ visible, onClose }) => {
+  // These are the same three steps the card at the bottom of the screen walks
+  // through, in the same order and the same words. The guide teaches them once;
+  // the card then says which one you're on. They must not drift apart.
   const steps = [
-    { icon: "navigation", title: "Walk to the landmark",
-      body: "The arrow and radar point the way. The object only appears once you're close enough." },
-    { icon: "camera",     title: "Look around slowly",
-      body: "Point your camera at the ground or a flat surface nearby so the object can settle into place." },
+    { icon: "navigation", title: "Walk closer",
+      body: "The radar shows where the object is. Walk until the white dot is inside the blue circle — nothing appears until you are there." },
+    { icon: "chevrons-down", title: "Point your phone at the ground",
+      body: "Aim at the floor a few steps ahead and move the phone slowly. Patterned ground — tiles, grass, paving — works far better than a plain wall or bare floor." },
     { icon: "aperture",   title: "Tap the object",
-      body: "Tap it to read its story. Tap every object at this landmark to finish the mission." },
+      body: "It appears near where you are standing, so turn and look down until you see it. Find every object here to finish." },
   ];
 
   return (
@@ -428,14 +594,14 @@ const HowItWorks = ({ visible, onClose }) => {
       <View style={guideSt.backdrop}>
         <View style={guideSt.card}>
           <View style={guideSt.header}>
-            <Feather name="compass" size={18} color={TOKEN.gold} />
-            <Text style={guideSt.title}>How AR missions work</Text>
+            <Icon name="compass" size={18} color={TOKEN.gold} />
+            <Text style={guideSt.title}>How the AR activity works</Text>
           </View>
 
           {steps.map((s, i) => (
             <View key={s.title} style={guideSt.step}>
               <View style={guideSt.stepIcon}>
-                <Feather name={s.icon} size={15} color={TOKEN.gold} />
+                <Icon name={s.icon} size={15} color={TOKEN.gold} />
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={guideSt.stepTitle}>{i + 1}. {s.title}</Text>
@@ -472,31 +638,20 @@ const guideSt = StyleSheet.create({
     padding: 22, gap: 16,
   },
   header: { flexDirection: "row", alignItems: "center", gap: 9 },
-  title:  { color: TOKEN.textPrimary, fontSize: 17, fontWeight: "800", letterSpacing: -0.2 },
+  title:  { color: TOKEN.textPrimary, fontSize: 17, fontFamily: fonts.sansBold, letterSpacing: -0.2 },
   step:   { flexDirection: "row", gap: 12, alignItems: "flex-start" },
   stepIcon: {
     width: 34, height: 34, borderRadius: 17,
     backgroundColor: TOKEN.goldDim,
     alignItems: "center", justifyContent: "center",
   },
-  stepTitle: { color: TOKEN.textPrimary, fontSize: 14, fontWeight: "700", marginBottom: 3 },
+  stepTitle: { color: TOKEN.textPrimary, fontSize: 14, fontFamily: fonts.sansBold, marginBottom: 3 },
   stepBody:  { color: TOKEN.textSecond, fontSize: 12.5, lineHeight: 18 },
   cta: {
     backgroundColor: TOKEN.cta, borderRadius: TOKEN.radiusXl,
     paddingVertical: 13, alignItems: "center", marginTop: 2,
   },
-  ctaText: { color: TOKEN.ctaText, fontSize: 14, fontWeight: "900", letterSpacing: 0.6 },
-});
-
-const pipSt = StyleSheet.create({
-  row: { flexDirection: "row", alignItems: "center", gap: 5 },
-  pip: {
-    width: 7, height: 7, borderRadius: 4,
-    backgroundColor: "transparent",
-    borderWidth: 1.5,
-    borderColor: TOKEN.textMuted,
-  },
-  pipDone: { backgroundColor: TOKEN.gold, borderColor: TOKEN.gold },
+  ctaText: { color: TOKEN.ctaText, fontSize: 14, fontFamily: fonts.sansBold, letterSpacing: 0.6 },
 });
 
 // ─────────────────────────────────────────────
@@ -506,6 +661,21 @@ ViroAnimations.registerAnimations({
   fadeIn:   { properties: { opacity: 1 }, duration: 600 },
   slowSpin: { properties: { rotateY: "+=360" }, duration: 6000, easing: "Linear" },
   wiggle:   { properties: { rotateY: "+=20" },  duration: 250,  easing: "EaseInEaseOut" },
+});
+
+// ─────────────────────────────────────────────
+// MATERIALS
+// ─────────────────────────────────────────────
+// Material for the invisible tap target that wraps each model (see
+// ModelOnPlane). `writesToDepthBuffer: false` is the important part: a
+// transparent box that still wrote depth would sit in front of the model and
+// hide it, trading a click bug for an invisibility bug.
+ViroMaterials.createMaterials({
+  hitTarget: {
+    diffuseColor: "#FFFFFF01",
+    writesToDepthBuffer: false,
+    readsFromDepthBuffer: false,
+  },
 });
 
 // ─────────────────────────────────────────────
@@ -540,7 +710,15 @@ function assignRadii(anchors) {
       const d    = distanceMeters(anchors[i].lat, anchors[i].lng, anchors[j].lat, anchors[j].lng);
       const half = d / 2;
       if (half < BASE_MODEL_RADIUS_METERS) {
-        const cap = Math.max(15, half);
+        // Split the gap so two nearby anchors don't both claim the same
+        // ground, but never go below the floor.
+        //
+        // The floor must stay BELOW the base radius or this whole pass
+        // silently does nothing. It was once hardcoded to `Math.max(15, half)`
+        // against a base of 5, so the guard `cap < radii[i]` compared 15 < 5
+        // and was never true. With 3 against a base of 6, `cap` lands in 3..6
+        // and the guard bites whenever two anchors are under 12 m apart.
+        const cap = Math.max(MIN_MODEL_RADIUS_METERS, half);
         if (cap < radii[i]) radii[i] = cap;
         if (cap < radii[j]) radii[j] = cap;
       }
@@ -549,13 +727,20 @@ function assignRadii(anchors) {
   return radii;
 }
 
-function computeAnchorProximities(spot, userLat, userLon) {
+function computeAnchorProximities(spot, userLat, userLon, accuracyMeters) {
   const anchors = spot.modelsCoordinates ?? [];
   const radii   = assignRadii(anchors);
+
+  // Widen the trigger by however wrong the device itself says the fix might
+  // be. The alternative is holding the user responsible for their phone's
+  // error: they stand on the exact coordinate, the phone reports them 40 m
+  // away, nothing appears, and there is no action they can take to fix it.
+  const slack = Math.min(Math.max(accuracyMeters ?? 0, 0), MAX_ACCURACY_SLACK_METERS);
+
   return anchors
     .map((anchor, index) => {
       const distance = Math.round(distanceMeters(userLat, userLon, anchor.lat, anchor.lng));
-      const radius   = radii[index];
+      const radius   = Math.round(radii[index] + slack);
       return {
         index,
         label:     anchor.label ?? `Model ${index + 1}`,
@@ -572,370 +757,26 @@ function computeAnchorProximities(spot, userLat, userLon) {
 // ─────────────────────────────────────────────
 // DIRECTIONAL ARROW INDICATOR
 // ─────────────────────────────────────────────
-const DirectionalArrow = ({ anchors, tappedIndices, userLocation, compassHeading }) => {
-  const rotateAnim = useRef(new Animated.Value(0)).current;
-  const pulseAnim  = useRef(new Animated.Value(1)).current;
-  const fadeAnim   = useRef(new Animated.Value(0)).current;
-
-  // Cumulative absolute rotation for shortest-arc animation
-  const currentDeg  = useRef(0);
-
-  // Distance trend tracking
-  const prevDistRef = useRef(null);
-  const [distTrend, setDistTrend] = useState(null); // 'closer' | 'farther' | null
-
-  // ── Find next untapped anchor (by original index order) ──
-  const nextTarget = anchors
-    .map((a, i) => ({ ...a, originalIndex: i }))
-    .find((a) => !tappedIndices.has(a.originalIndex));
-
-  const allDone      = !nextTarget;
-  const targetNumber = nextTarget ? nextTarget.originalIndex + 1 : anchors.length;
-
-  const ordinal = (n) => {
-    const s = ["th", "st", "nd", "rd"];
-    const v = n % 100;
-    return n + (s[(v - 20) % 10] || s[v] || s[0]);
-  };
-
-  // ── Distance to next target ──
-  const dist =
-    nextTarget && userLocation
-      ? Math.round(distanceMeters(
-          userLocation.latitude, userLocation.longitude,
-          nextTarget.lat, nextTarget.lng,
-        ))
-      : null;
-
-  // Update distance trend whenever dist changes
-  useEffect(() => {
-    if (dist === null) return;
-    if (prevDistRef.current !== null) {
-      const delta = dist - prevDistRef.current;
-      if (Math.abs(delta) >= 3) {
-        setDistTrend(delta < 0 ? "closer" : "farther");
-      }
-    }
-    prevDistRef.current = dist;
-  }, [dist]);
-
-  // ── Alignment angle: degrees between user's facing and target bearing ──
-  const alignmentAngle = (() => {
-    if (!nextTarget || !userLocation) return null;
-    const targetBearing = bearingDegrees(
-      userLocation.latitude, userLocation.longitude,
-      nextTarget.lat, nextTarget.lng,
-    );
-    let diff = Math.abs(targetBearing - compassHeading);
-    if (diff > 180) diff = 360 - diff;
-    return diff; // 0 = perfectly aligned, 180 = facing directly away
-  })();
-
-  // ── Color + guidance label from alignment ──
-  const getDirectionState = (angle) => {
-    if (angle === null) return { color: TOKEN.goldLight, label: null };
-    if (angle <= 25) {
-      return { color: TOKEN.success, label: "On track ✓" };
-    }
-    if (angle <= 90) {
-      const targetBearing = bearingDegrees(
-        userLocation.latitude, userLocation.longitude,
-        nextTarget.lat, nextTarget.lng,
-      );
-      const signedDiff = ((targetBearing - compassHeading) + 360) % 360;
-      const side = signedDiff < 180 ? "right →" : "← left";
-      return { color: TOKEN.warn, label: `Bear ${side}` };
-    }
-    return { color: TOKEN.danger, label: "Turn around ↩" };
-  };
-
-  const { color: arrowColor, label: statusLabel } = getDirectionState(alignmentAngle);
-
-  // ── Distance trend display ──
-  const distDisplay = (() => {
-    if (dist === null) return null;
-    const d = formatDistance(dist);
-    const text = `${d.value} ${d.unit}`;
-    if (distTrend === "closer")  return { text, icon: "trending-down", color: TOKEN.success  };
-    if (distTrend === "farther") return { text, icon: "trending-up",   color: TOKEN.danger   };
-    return                              { text, icon: "navigation",    color: TOKEN.infoLight };
-  })();
-
-  // Fade in on mount
-  useEffect(() => {
-    Animated.timing(fadeAnim, { toValue: 1, duration: 400, useNativeDriver: true }).start();
-  }, []);
-
-  // Pulse loop
-  useEffect(() => {
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulseAnim, { toValue: 1.12, duration: 800, useNativeDriver: true }),
-        Animated.timing(pulseAnim, { toValue: 1.00, duration: 800, useNativeDriver: true }),
-      ])
-    );
-    loop.start();
-    return () => loop.stop();
-  }, []);
-
-  // ── Arrow rotation ──
-  useEffect(() => {
-    if (!nextTarget || !userLocation) return;
-
-    const targetBearing = bearingDegrees(
-      userLocation.latitude, userLocation.longitude,
-      nextTarget.lat, nextTarget.lng,
-    );
-
-    // Screen angle = compass bearing to target, relative to device facing
-    const rawAngle = (targetBearing - compassHeading + 360) % 360;
-
-    // Always take the shortest angular path
-    let delta = rawAngle - (currentDeg.current % 360);
-    if (delta >  180) delta -= 360;
-    if (delta < -180) delta += 360;
-
-    const nextDeg = currentDeg.current + delta;
-    currentDeg.current = nextDeg;
-
-    Animated.spring(rotateAnim, {
-      toValue:           nextDeg,
-      useNativeDriver:   true,
-      tension:           40,
-      friction:          7,
-      overshootClamping: false,
-    }).start();
-  }, [compassHeading, nextTarget?.originalIndex, userLocation?.latitude, userLocation?.longitude]);
-
-  // Wide input range so interpolation never clamps regardless of full rotations
-  const spin = rotateAnim.interpolate({
-    inputRange:  [-7200, 7200],
-    outputRange: ["-7200deg", "7200deg"],
-    extrapolate: "extend",
-  });
-
-  // ── All done ──
-  if (allDone) {
-    return (
-      <Animated.View style={[arrowSt.wrapper, { opacity: fadeAnim }]}>
-        <View style={arrowSt.allDoneContainer}>
-          <Feather name="check-circle" size={20} color={TOKEN.success} />
-          <Text style={arrowSt.allDoneText}>All found!</Text>
-        </View>
-      </Animated.View>
-    );
-  }
-
-  return (
-    <Animated.View style={[arrowSt.wrapper, { opacity: fadeAnim }]}>
-
-      {/* Ordinal label + model name */}
-      <View style={arrowSt.sequenceRow}>
-        <View style={arrowSt.sequenceBadge}>
-          <Text style={arrowSt.sequenceNum}>{ordinal(targetNumber)}</Text>
-        </View>
-        <Text style={arrowSt.sequenceLabel} numberOfLines={1}>
-          {nextTarget.label ?? `Model ${targetNumber}`}
-        </Text>
-      </View>
-
-      {/* Rotating arrow — color and icon driven by alignment angle */}
-      <View style={arrowSt.arrowRow}>
-        <Animated.View
-          style={[
-            arrowSt.arrowCircle,
-            {
-              borderColor: arrowColor,
-              shadowColor: arrowColor,
-              transform:   [{ scale: pulseAnim }, { rotate: spin }],
-            },
-          ]}
-        >
-          {/*
-            Feather arrow-right points right at 0°.
-            A fixed -90° base rotation makes it point UP at rest so the
-            parent's dynamic rotation maps correctly to compass directions.
-          */}
-          <View style={{ transform: [{ rotate: "-90deg" }] }}>
-            <Feather name="arrow-right" size={24} color={arrowColor} />
-          </View>
-        </Animated.View>
-
-        {/* Distance badge with trend icon */}
-        {distDisplay && (
-          <View style={[arrowSt.distBadge, { borderColor: `${arrowColor}55` }]}>
-            <Feather
-              name={distDisplay.icon}
-              size={9}
-              color={distDisplay.color}
-              style={{ marginRight: 3 }}
-            />
-            <Text style={[arrowSt.distText, { color: distDisplay.color }]}>
-              {distDisplay.text}
-            </Text>
-          </View>
-        )}
-      </View>
-
-      {/* Alignment guidance label */}
-      {statusLabel && (
-        <View
-          style={[
-            arrowSt.statusBadge,
-            { backgroundColor: `${arrowColor}22`, borderColor: `${arrowColor}55` },
-          ]}
-        >
-          <Text style={[arrowSt.statusText, { color: arrowColor }]}>
-            {statusLabel}
-          </Text>
-        </View>
-      )}
-
-      {/* Step dots — grey / active (matches arrow color) / done */}
-      <View style={arrowSt.dotsRow}>
-        {anchors.map((_, i) => (
-          <View
-            key={i}
-            style={[
-              arrowSt.dot,
-              tappedIndices.has(i) && arrowSt.dotDone,
-              !tappedIndices.has(i) &&
-                i === nextTarget.originalIndex && {
-                  ...arrowSt.dotActive,
-                  backgroundColor: arrowColor,
-                  shadowColor:     arrowColor,
-                },
-            ]}
-          />
-        ))}
-      </View>
-    </Animated.View>
-  );
-};
-
-const arrowSt = StyleSheet.create({
-  wrapper: {
-    position:   "absolute",
-    right:      16,
-    top:        Platform.OS === "ios" ? 110 : 96,
-    alignItems: "center",
-    gap:        6,
-    zIndex:     200,
-  },
-  sequenceRow: {
-    flexDirection:     "row",
-    alignItems:        "center",
-    gap:               5,
-    backgroundColor:   TOKEN.surface,
-    borderRadius:      TOKEN.radiusSm,
-    paddingHorizontal: 8,
-    paddingVertical:   4,
-    borderWidth:       1,
-    borderColor:       TOKEN.borderAccent,
-    maxWidth:          130,
-  },
-  sequenceBadge: {
-    backgroundColor:   TOKEN.goldDim,
-    borderRadius:      4,
-    paddingHorizontal: 5,
-    paddingVertical:   1,
-    borderWidth:       1,
-    borderColor:       TOKEN.borderAccent,
-  },
-  sequenceNum: {
-    color:         TOKEN.goldLight,
-    fontSize:      9,
-    fontWeight:    "800",
-    letterSpacing: 0.5,
-  },
-  sequenceLabel: {
-    color:      TOKEN.textSecond,
-    fontSize:   10,
-    fontWeight: "600",
-    flex:       1,
-  },
-  arrowRow:    { alignItems: "center", gap: 4 },
-  arrowCircle: {
-    width:           56,
-    height:          56,
-    borderRadius:    28,
-    backgroundColor: TOKEN.surface,
-    borderWidth:     2,
-    borderColor:     TOKEN.cta,       // overridden dynamically
-    alignItems:      "center",
-    justifyContent:  "center",
-    shadowColor:     TOKEN.cta,       // overridden dynamically
-    shadowOffset:    { width: 0, height: 0 },
-    shadowOpacity:   0.55,
-    shadowRadius:    10,
-    elevation:       10,
-  },
-  distBadge: {
-    flexDirection:     "row",
-    alignItems:        "center",
-    backgroundColor:   TOKEN.surface,
-    borderRadius:      10,
-    paddingHorizontal: 7,
-    paddingVertical:   3,
-    borderWidth:       1,
-    borderColor:       TOKEN.borderAccent,
-  },
-  distText:   { color: TOKEN.infoLight, fontSize: 10, fontWeight: "700" },
-  statusBadge: {
-    borderRadius:      TOKEN.radiusSm,
-    paddingHorizontal: 8,
-    paddingVertical:   3,
-    borderWidth:       1,
-    alignItems:        "center",
-    minWidth:          80,
-  },
-  statusText: {
-    fontSize:      9,
-    fontWeight:    "700",
-    letterSpacing: 0.4,
-  },
-  dotsRow: { flexDirection: "row", gap: 5, marginTop: 2 },
-  dot: {
-    width:           6,
-    height:          6,
-    borderRadius:    3,
-    backgroundColor: TOKEN.border,
-  },
-  dotActive: {
-    shadowOffset:  { width: 0, height: 0 },
-    shadowOpacity: 0.7,
-    shadowRadius:  4,
-    elevation:     4,
-  },
-  dotDone: { backgroundColor: TOKEN.success },
-  allDoneContainer: {
-    alignItems:      "center",
-    gap:             4,
-    backgroundColor: TOKEN.surface,
-    borderRadius:    TOKEN.radiusMd,
-    padding:         10,
-    borderWidth:     1,
-    borderColor:     TOKEN.successDim,
-  },
-  allDoneText: { color: TOKEN.success, fontSize: 10, fontWeight: "700" },
-});
-
 // ─────────────────────────────────────────────
 // AR SCENE
 // ─────────────────────────────────────────────
-const ModelOnPlane = ({ spot, anchorLabel, tapped, onModelClick }) => {
-  const [placed, setPlaced]               = useState(false);
+// `geoPosition`, when set, is a world position resolved from a real latitude
+// and longitude by ARCore Geospatial. When it's null the component falls back
+// to the original behaviour: find a floor plane and stand the model on it.
+// There is no `tapped` prop any more. A model that has been explored is
+// removed from the scene outright and cannot come back until the user leaves
+// AR and re-enters, so "this one is already done" is not a state this
+// component can ever be in.
+const ModelOnPlane = ({ spot, anchorLabel, onModelClick, onModelError, onPlacedChange, geoPosition = null }) => {
+  // The model only renders once ARCore finds a HORIZONTAL surface — i.e. once
+  // the camera has actually seen the ground. That's the step users get stuck
+  // on, and nothing was reporting it outward: the HUD said "TAP THE OBJECT" as
+  // soon as ARCore tracking went normal, which happens well before any plane is
+  // found. People were being told to tap something that wasn't on screen yet.
+  const [, setPlaced]                     = useState(false);
   const [animationName, setAnimationName] = useState("slowSpin");
   const [animationLoop, setAnimationLoop] = useState(true);
   const [animationRun, setAnimationRun]   = useState(true);
-
-  useEffect(() => {
-    if (tapped) {
-      setAnimationName("slowSpin");
-      setAnimationLoop(true);
-      setAnimationRun(true);
-    }
-  }, [tapped]);
 
   const handleClick = () => {
     setAnimationName("wiggle");
@@ -952,58 +793,150 @@ const ModelOnPlane = ({ spot, anchorLabel, tapped, onModelClick }) => {
     }
   };
 
+  // The model, its lights, its tap target and its label. Identical whether it
+  // hangs off a detected floor plane or a real-world geospatial anchor, so it
+  // lives in one place and both placements render it.
+  //
+  // `offsetZ` differs between the two: on a plane the anchor is the patch of
+  // floor the camera found, so the model is stood 1.4 m clear of it to be
+  // lookable. A geospatial anchor is already AT the landmark's coordinates, so
+  // any offset would push it off the real spot — it renders at the origin.
+  const content = (offsetZ) => (
+    <>
+      <ViroAmbientLight color="#fff8f5" intensity={300} />
+      <ViroSpotLight
+        innerAngle={5}
+        outerAngle={90}
+        direction={[0, -1, -0.2]}
+        position={[0, 3, 1]}
+        color="#fff8f5"
+        castsShadow
+      />
+      <Viro3DObject
+        source={{ uri: spot.AR3DModelURL }}
+        type="GLB"
+        // Dimensions measured by walking the asset's node hierarchy and
+        // applying every transform — NOT by reading the raw accessor bounds,
+        // which describe the mesh before its parent matrices are applied.
+        //
+        // That distinction matters here: this file came from an FBX export and
+        // its root matrices swap Y and Z (the usual Z-up to Y-up conversion).
+        // Read raw, the asset looks 13.12 m DEEP and 1.97 m tall; in world
+        // space it is actually 1.97 m deep and 13.12 m TALL. At scale 0.08 it
+        // is 0.64 m wide, 1.05 m tall, 0.16 m deep — an upright panel, not the
+        // shin-high slab an earlier reading of this file suggested.
+        //
+        // Its origin also sits 0.36 m above its own base (world Y runs -4.525
+        // to +8.593), so placing the origin at plane level buried the bottom
+        // third of it in the floor. MODEL_BASE_OFFSET_Y lifts it to rest ON
+        // the surface.
+        scale={[0.08, 0.08, 0.08]}
+        position={[0, MODEL_BASE_OFFSET_Y, offsetZ]}
+        rotation={[0, 0, 0]}
+        animation={{
+          name:     animationName,
+          run:      animationRun,
+          loop:     animationLoop,
+          onFinish: handleAnimationFinish,
+        }}
+        // `onClick`, not `onClickState` with state 1.
+        //
+        // State 1 is CLICK_DOWN — it fires the moment a press *begins* on
+        // the object. Viro calls `onClick` exactly when clickState == CLICKED
+        // (see ViroBase.tsx), i.e. a completed down+up on this object.
+        onClick={handleClick}
+        // Report upward as well as logging. A console.warn alone meant a
+        // failed model (404, dead link, corrupt .glb) looked identical to
+        // "the object just hasn't appeared yet" — the user stood there
+        // waiting for something that was never going to load.
+        onError={(e) => {
+          console.warn(`[AR] Model load error "${spot.name}"(${anchorLabel}):`, e);
+          onModelError?.();
+        }}
+      />
+
+      {/* Invisible tap target.
+          The model is only 0.16 m deep, so seen from the side it is a thin
+          sliver — Viro hit-tests against that geometry, which is why a drag
+          (sweeping a line across the screen) registered and a tap (a single
+          point) usually missed.
+          This box wraps the model's real extent — 0.64 m wide, 1.05 m tall,
+          0.16 m deep, standing on the plane — and pads it out to something
+          hand-sized. It is sized from the measured bounds, NOT from the raw
+          accessor values, which have Y and Z the wrong way round for this
+          asset.
+          opacity 0.01 rather than 0: a fully transparent node is not
+          guaranteed to stay in the hit-test pass, and 1% is invisible in
+          practice. */}
+      <ViroBox
+        position={[0, MODEL_HEIGHT_M / 2, offsetZ]}
+        scale={[1.0, MODEL_HEIGHT_M + 0.3, 0.9]}
+        opacity={0.01}
+        materials={["hitTarget"]}
+        onClick={handleClick}
+      />
+      {/* Sits just above the model's head rather than through its middle. */}
+      <ViroText
+        text={`Tap to explore\n${anchorLabel}`}
+        position={[0, MODEL_HEIGHT_M + 0.25, offsetZ]}
+        scale={[0.32, 0.32, 0.32]}
+        style={arStyles.tapHint}
+      />
+    </>
+  );
+
+  // Geospatial placement: ARCore resolved the landmark's real latitude and
+  // longitude, so the model is rendered at that world position and stays put
+  // as the user walks around it. No plane detection involved.
+  if (geoPosition) {
+    return <ViroNode position={geoPosition}>{content(0)}</ViroNode>;
+  }
+
+  // Automatic placement: the object appears as soon as ARCore finds a floor,
+  // with no tap required. The geofence is what gates it — ARScene renders an
+  // empty scene unless an anchor is in range, so a plane found while the user
+  // is still walking there can never produce a model.
+  //
+  // The trade-off to know about: ARCore picks the surface, and indoors it often
+  // locks onto a table or a bed before the floor, which puts the object
+  // waist-high. Two things here soften that — requiring half a metre of surface
+  // rather than a scrap, so it waits for something floor-sized, and standing the
+  // model 1.4 m back from the anchor so it isn't under the user's feet.
   return (
-    <ViroARPlane minHeight={0.1} minWidth={0.1} alignment="Horizontal" onAnchorFound={() => setPlaced(true)}>
-      {placed ? (
-        <ViroNode position={[0, 0, 0]}>
-          <ViroAmbientLight color="#fff8f5" intensity={300} />
-          <ViroSpotLight
-            innerAngle={5}
-            outerAngle={90}
-            direction={[0, -1, -0.2]}
-            position={[0, 3, 1]}
-            color="#fff8f5"
-            castsShadow
-          />
-          <Viro3DObject
-            source={{ uri: spot.AR3DModelURL }}
-            type="GLB"
-            scale={[0.1, 0.1, 0.1]}
-            position={[0, 0, 0]}
-            rotation={[0, 0, 0]}
-            animation={{
-              name:     animationName,
-              run:      animationRun,
-              loop:     animationLoop,
-              onFinish: handleAnimationFinish,
-            }}
-            onClickState={(state) => { if (state === 1) handleClick(); }}
-            onError={(e) =>
-              console.warn(`[AR] Model load error "${spot.name}" (${anchorLabel}):`, e)
-            }
-          />
-          <ViroText
-            text={tapped ? `✓ Explored\n${anchorLabel}` : `Tap to explore\n${anchorLabel}`}
-            position={[1, 1, 1]}
-            scale={[0.32, 0.32, 0.32]}
-            style={tapped ? arStyles.tapHintDone : arStyles.tapHint}
-          />
-        </ViroNode>
-      ) : (
-        <ViroText
-          text={`Scanning surface…\n${anchorLabel}`}
-          position={[0, 0, -1.5]}
-          scale={[0.38, 0.38, 0.38]}
-          style={arStyles.scanning}
-        />
-      )}
+    <ViroARPlane
+      // 0.1 x 0.1 was a 10 cm square: ARCore latched onto the first scrap of
+      // floor it resolved, which is almost always the patch directly underfoot.
+      minHeight={0.5}
+      minWidth={0.5}
+      alignment="Horizontal"
+      onAnchorFound={()   => { setPlaced(true);  onPlacedChange?.(true); }}
+      onAnchorRemoved={() => { setPlaced(false); onPlacedChange?.(false); }}
+    >
+      {/* Stood 1.4 m clear of the anchor. The anchor is an arbitrary patch of
+          detected floor rather than a point the user chose, so placing the
+          model on it directly put the object under their nose. */}
+      {content(-1.4)}
     </ViroARPlane>
   );
 };
 
 const ARScene = ({ sceneNavigator }) => {
-  const { spot, activeAnchors, tappedIndices, onModelClick, onTrackingChange } =
+  const { spot, activeAnchors, focusAnchor, onModelClick, onTrackingChange, onModelError, onPlacedChange, onGeoStatus } =
     sceneNavigator.viroAppProps;
+
+  // ── ARCore Geospatial ────────────────────────────────────────────────────
+  // Where VPS has coverage, the model is anchored to the landmark's actual
+  // latitude/longitude instead of to a floor plane, so it stays where the
+  // landmark really is as the user walks around it.
+  //
+  // This is strictly an upgrade path: every failure — old device, no API key,
+  // no VPS coverage here, Earth not yet tracking, pose too coarse — leaves
+  // geoAnchors empty and the plane-based placement runs exactly as before.
+  // Bulacan's VPS coverage is unknown and patchy outside the main highways, so
+  // the fallback is expected to be the common case, not an edge case.
+  const [geoAnchors, setGeoAnchors] = useState({});   // anchor.index -> position
+  const geoTriedRef = useRef(false);
+  const geoIdsRef   = useRef([]);
 
   // Nothing may be added to the scene until ARCore reports real tracking.
   // Mounting children earlier makes Viro call nativeCreateAnchoredNode against
@@ -1021,42 +954,139 @@ const ARScene = ({ sceneNavigator }) => {
     onTrackingChange?.(ok);
   };
 
+  // Try geospatial once ARCore is tracking and we know which anchors are in
+  // range. Earth tracking needs a few seconds and some camera movement to
+  // converge, so a "not tracking yet" result is retried rather than treated as
+  // a refusal — but only for a bounded number of attempts.
+  useEffect(() => {
+    if (!tracking || !activeAnchors?.length || geoTriedRef.current) return;
+
+    // Claim the guard BEFORE any await.
+    //
+    // It used to be set only after the async work finished, and the effect's
+    // deps include `activeAnchors` (a fresh array from .filter() on every
+    // render) and a callback recreated each render — so the effect re-ran
+    // constantly and a dozen evaluations were all in flight before the first
+    // one could set the flag. On the device that showed up as
+    // "Geospatial mode applied: enabled" twenty times inside 0.4 seconds,
+    // each one re-configuring the ARCore session while the others were still
+    // resolving. One attempt, claimed synchronously.
+    geoTriedRef.current = true;
+
+    let cancelled = false;
+    let attempts = 0;
+    let timer = null;
+
+    const attempt = async () => {
+      if (cancelled) return;
+      attempts += 1;
+
+      const first = activeAnchors[0];
+      const verdict = await evaluateGeospatial(sceneNavigator, first.lat, first.lng);
+      if (cancelled) return;
+
+      if (!verdict.usable) {
+        // VPS coverage here is confirmed, so the expectation is that this
+        // succeeds — it just needs time. Earth tracking converges only once
+        // ARCore has seen enough of the surroundings, and a poor initial pose
+        // tightens as it does, so both of those are retried for a real window
+        // (15 attempts x 2s = 30s) rather than the token few tries that were
+        // appropriate when coverage itself was in doubt.
+        const retryable = verdict.reason === "earth-not-tracking"
+          || verdict.reason === "low-accuracy"
+          || verdict.reason === "no-pose";
+
+        if (retryable && attempts < 15) {
+          timer = setTimeout(attempt, 2000);
+          return;
+        }
+        onGeoStatus?.({ active: false, reason: verdict.reason, accuracy: verdict.accuracy });
+        return;
+      }
+
+      // Resolve one terrain anchor per in-range model.
+      const resolved = {};
+      const ids = [];
+      for (const a of activeAnchors) {
+        const anchor = await anchorAtLocation(sceneNavigator, a.lat, a.lng, 0);
+        if (cancelled) return;
+        if (anchor) {
+          resolved[a.index] = anchor.position;
+          ids.push(anchor.anchorId);
+        }
+      }
+
+      geoIdsRef.current = ids;
+      setGeoAnchors(resolved);
+      onGeoStatus?.({
+        active: Object.keys(resolved).length > 0,
+        reason: Object.keys(resolved).length ? "ok" : "anchor-failed",
+        accuracy: verdict.accuracy,
+      });
+    };
+
+    attempt();
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
+  }, [tracking, activeAnchors, sceneNavigator, onGeoStatus]);
+
+  // Release anchors when the scene goes away, so a re-entry starts clean
+  // rather than accumulating them in the ARCore session.
+  useEffect(() => () => {
+    geoIdsRef.current.forEach((id) => releaseAnchor(sceneNavigator, id));
+    geoIdsRef.current = [];
+  }, [sceneNavigator]);
+
   if (!tracking) {
     return <ViroARScene onTrackingUpdated={handleTracking} />;
   }
 
-  // Out of range: render an empty scene. There used to be a floating ViroText
-  // here ("Walk closer to …") anchored at [0,0,-2] — that is precisely the
-  // node whose nativeCreateAnchoredNode call segfaulted the app, because a
-  // bare world-positioned node needs an ARCore anchor that may never arrive
-  // (poor light, blank wall, session still starting). The HUD's radar,
-  // distance and directional arrow already say the same thing far more
-  // clearly, and they're plain React Native views that cannot crash.
-  if (!activeAnchors || activeAnchors.length === 0) {
+  // EXACTLY ONE model, and only when it is that model's turn.
+  //
+  // Which model that is — and whether there is one at all — is decided in
+  // ARScreen (see `focusAnchor`), because the rule needs the full anchor list
+  // and the popup state, neither of which the scene has. The scene's whole job
+  // here is to render what it is handed, or nothing.
+  //
+  // `null` is a normal state, not an error: it means the next object in the
+  // sequence isn't in range yet, its trivia card is still open, or everything
+  // at this spot has been explored.
+  //
+  // An empty scene, specifically — not a placeholder. There used to be a
+  // floating ViroText here ("Walk closer to …") anchored at [0,0,-2], and that
+  // is precisely the node whose nativeCreateAnchoredNode call segfaulted the
+  // app: a bare world-positioned node needs an ARCore anchor that may never
+  // arrive (poor light, blank wall, session still starting). The HUD says the
+  // same thing in plain React Native views that cannot crash.
+  if (!focusAnchor) {
     return <ViroARScene onTrackingUpdated={handleTracking} />;
   }
 
   return (
     <ViroARScene onTrackingUpdated={handleTracking}>
-      {activeAnchors.map((anchor) => (
-        <ModelOnPlane
-          key={anchor.index}
-          spot={spot}
-          anchorLabel={anchor.label}
-          tapped={tappedIndices.has(anchor.index)}
-          onModelClick={() => onModelClick(anchor)}
-        />
-      ))}
+      <ModelOnPlane
+        key={focusAnchor.index}
+        spot={spot}
+        anchorLabel={focusAnchor.label}
+        onModelClick={() => onModelClick(focusAnchor)}
+        onModelError={onModelError}
+        onPlacedChange={onPlacedChange}
+        geoPosition={geoAnchors[focusAnchor.index] || null}
+      />
     </ViroARScene>
   );
 };
 
 const arStyles = {
-  tapHint:     { fontFamily: "Arial", fontSize: 10, color: TOKEN.goldLight,   textAlign: "center", textAlignVertical: "center" },
-  tapHintDone: { fontFamily: "Arial", fontSize: 10, color: TOKEN.success,     textAlign: "center", textAlignVertical: "center" },
-  scanning:    { fontFamily: "Arial", fontSize: 11, color: TOKEN.warn,        textAlign: "center", textAlignVertical: "center" },
-  // (outOfRange removed with the floating "walk closer" ViroText — the HUD
-  //  handles that state now.)
+  tapHint: { fontFamily: fonts.sansMedium, fontSize: 10, color: TOKEN.goldLight, textAlign: "center", textAlignVertical: "center" },
+  // `tapHintDone` is gone with the `tapped` prop — an explored model is
+  // removed from the scene, so there is nothing left to label "Explored".
+  // `scanning` and `outOfRange` are gone with their floating ViroTexts. Both
+  // said in 3D what the HUD now says in plain React Native — and a world-
+  // positioned node rendered before its anchor exists is the exact pattern that
+  // segfaulted this screen before.
 };
 
 // ─────────────────────────────────────────────
@@ -1109,7 +1139,8 @@ const TriviaPopup = ({
   return (
     <Modal transparent visible={modalMounted} animationType="none" onRequestClose={onClose}>
       <Animated.View style={[popup.scrim, { opacity: fadeAnim }]}>
-        <TouchableOpacity style={{ flex: 1 }} activeOpacity={1} onPress={onClose} />
+        <TouchableOpacity
+          accessibilityRole="button" style={{ flex: 1 }} activeOpacity={1} onPress={onClose} />
       </Animated.View>
 
       <Animated.View
@@ -1119,15 +1150,16 @@ const TriviaPopup = ({
 
         <View style={popup.header}>
           <View style={popup.categoryBadge}>
-            <Feather name="book-open" size={10} color={TOKEN.goldLight} style={{ marginRight: 5 }} />
-            <Text style={popup.categoryText}>HERITAGE INFO</Text>
+            <Icon name="book-open" size={10} color={TOKEN.goldLight} style={{ marginRight: 5 }} />
+            <Text style={popup.categoryText}>ImpactFeedbackStyle</Text>
           </View>
           <TouchableOpacity
+            accessibilityRole="button"
             onPress={onClose}
             style={popup.closeBtn}
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
           >
-            <Feather name="x" size={16} color={TOKEN.textSecond} />
+            <Icon name="x" size={16} color={TOKEN.textSecond} />
           </TouchableOpacity>
         </View>
 
@@ -1135,22 +1167,22 @@ const TriviaPopup = ({
 
         {activeAnchor?.label ? (
           <View style={popup.anchorBadge}>
-            <Feather name="map-pin" size={10} color={TOKEN.cta} style={{ marginRight: 5 }} />
+            <Icon name="map-pin" size={10} color={TOKEN.cta} style={{ marginRight: 5 }} />
             <Text style={popup.anchorBadgeText}>{activeAnchor.label}</Text>
           </View>
         ) : null}
 
         {missionJustCompleted ? (
           <View style={popup.missionCompleteBanner}>
-            <Feather name="check-circle" size={13} color={TOKEN.success} style={{ marginRight: 7 }} />
+            <Icon name="check-circle" size={13} color={TOKEN.success} style={{ marginRight: 7 }} />
             <Text style={popup.missionCompleteText}>AR mission completed! All models explored.</Text>
           </View>
         ) : (
           <View style={popup.missionProgressBanner}>
-            <Feather name="aperture" size={13} color={TOKEN.goldLight} style={{ marginRight: 7 }} />
+            <Icon name="aperture" size={13} color={TOKEN.goldLight} style={{ marginRight: 7 }} />
             <Text style={popup.missionProgressText}>
               {tappedCount} / {totalCount} models explored
-              {remaining > 0 ? ` — ${remaining} more to complete mission` : ""}
+              {remaining > 0 ? ` — ${remaining} more to finish this activity` : ""}
             </Text>
           </View>
         )}
@@ -1171,6 +1203,7 @@ const TriviaPopup = ({
             <View style={popup.dotsRow}>
               {trivia.map((_, i) => (
                 <TouchableOpacity
+                  accessibilityRole="button"
                   key={i}
                   onPress={() => setCurrentIdx(i)}
                   style={[popup.dot, i === currentIdx && popup.dotActive]}
@@ -1179,30 +1212,33 @@ const TriviaPopup = ({
             </View>
             <View style={popup.navRow}>
               <TouchableOpacity
+                accessibilityRole="button"
                 style={[popup.navBtn, isFirst && popup.navBtnDisabled]}
                 onPress={goPrev}
                 disabled={isFirst}
                 activeOpacity={0.7}
               >
-                <Feather name="chevron-left" size={16} color={isFirst ? TOKEN.textMuted : TOKEN.goldLight} />
+                <Icon name="chevron-left" size={16} color={isFirst ? TOKEN.textMuted : TOKEN.goldLight} />
                 <Text style={[popup.navText, isFirst && popup.navTextDisabled]}>Previous</Text>
               </TouchableOpacity>
               <Text style={popup.counter}>{currentIdx + 1} of {trivia.length}</Text>
               <TouchableOpacity
+                accessibilityRole="button"
                 style={[popup.navBtn, isLast && popup.navBtnDisabled]}
                 onPress={goNext}
                 disabled={isLast}
                 activeOpacity={0.7}
               >
                 <Text style={[popup.navText, isLast && popup.navTextDisabled]}>Next</Text>
-                <Feather name="chevron-right" size={16} color={isLast ? TOKEN.textMuted : TOKEN.goldLight} />
+                <Icon name="chevron-right" size={16} color={isLast ? TOKEN.textMuted : TOKEN.goldLight} />
               </TouchableOpacity>
             </View>
           </>
         )}
 
-        <TouchableOpacity style={popup.doneBtn} onPress={onClose} activeOpacity={0.85}>
-          <Feather name="arrow-left" size={15} color={TOKEN.ctaText} style={{ marginRight: 8 }} />
+        <TouchableOpacity
+          accessibilityRole="button" style={popup.doneBtn} onPress={onClose} activeOpacity={0.85}>
+          <Icon name="arrow-left" size={15} color={TOKEN.ctaText} style={{ marginRight: 8 }} />
           <Text style={popup.doneBtnText}>Return to AR View</Text>
         </TouchableOpacity>
       </Animated.View>
@@ -1248,7 +1284,7 @@ const popup = StyleSheet.create({
     borderWidth:       1,
     borderColor:       TOKEN.border,
   },
-  categoryText:    { color: TOKEN.goldLight, fontSize: 9, fontWeight: "800", letterSpacing: 1.5 },
+  categoryText:    { color: TOKEN.goldLight, fontSize: 9, fontFamily: fonts.sansBold, letterSpacing: 1.5 },
   closeBtn: {
     width:           32,
     height:          32,
@@ -1259,7 +1295,7 @@ const popup = StyleSheet.create({
     borderWidth:     1,
     borderColor:     TOKEN.border,
   },
-  spotTitle:   { color: TOKEN.textPrimary, fontSize: 22, fontWeight: "800", letterSpacing: 0.2, lineHeight: 30, marginBottom: 8 },
+  spotTitle:   { color: TOKEN.textPrimary, fontSize: 22, fontFamily: fonts.sansBold, letterSpacing: 0.2, lineHeight: 30, marginBottom: 8 },
   anchorBadge: {
     flexDirection:     "row",
     alignItems:        "center",
@@ -1272,7 +1308,7 @@ const popup = StyleSheet.create({
     borderWidth:       1,
     borderColor:       TOKEN.border,
   },
-  anchorBadgeText: { color: TOKEN.infoLight, fontSize: 11, fontWeight: "600" },
+  anchorBadgeText: { color: TOKEN.infoLight, fontSize: 11, fontFamily: fonts.sansSemi },
   missionCompleteBanner: {
     flexDirection:     "row",
     alignItems:        "center",
@@ -1285,7 +1321,7 @@ const popup = StyleSheet.create({
     borderWidth:       1,
     borderColor:       TOKEN.successDim,
   },
-  missionCompleteText: { color: TOKEN.success, fontSize: 12, fontWeight: "700", letterSpacing: 0.3 },
+  missionCompleteText: { color: TOKEN.success, fontSize: 12, fontFamily: fonts.sansBold, letterSpacing: 0.3 },
   missionProgressBanner: {
     flexDirection:     "row",
     alignItems:        "center",
@@ -1298,7 +1334,7 @@ const popup = StyleSheet.create({
     borderWidth:       1,
     borderColor:       TOKEN.border,
   },
-  missionProgressText: { color: TOKEN.goldLight, fontSize: 12, fontWeight: "600", letterSpacing: 0.2, flex: 1 },
+  missionProgressText: { color: TOKEN.goldLight, fontSize: 12, fontFamily: fonts.sansSemi, letterSpacing: 0.2, flex: 1 },
   divider:    { height: 1, backgroundColor: TOKEN.border, marginBottom: 16 },
   triviaBox: {
     flexDirection:   "row",
@@ -1324,7 +1360,7 @@ const popup = StyleSheet.create({
     flexShrink:      0,
     marginTop:       1,
   },
-  triviaIndexText: { color: TOKEN.goldLight, fontSize: 12, fontWeight: "700" },
+  triviaIndexText: { color: TOKEN.goldLight, fontSize: 12, fontFamily: fonts.sansBold },
   triviaText:      { color: TOKEN.textPrimary, fontSize: 14, lineHeight: 22, flex: 1, flexShrink: 1, opacity: 0.92 },
   dotsRow:         { flexDirection: "row", justifyContent: "center", gap: 6, marginBottom: 14 },
   dot:             { width: 6, height: 6, borderRadius: 3, backgroundColor: TOKEN.border },
@@ -1344,9 +1380,9 @@ const popup = StyleSheet.create({
     justifyContent:    "center",
   },
   navBtnDisabled:  { opacity: 0.3 },
-  navText:         { color: TOKEN.textPrimary, fontSize: 13, fontWeight: "600" },
+  navText:         { color: TOKEN.textPrimary, fontSize: 13, fontFamily: fonts.sansSemi },
   navTextDisabled: { color: TOKEN.textMuted },
-  counter:         { color: TOKEN.textSecond, fontSize: 12, fontWeight: "500" },
+  counter:         { color: TOKEN.textSecond, fontSize: 12, fontFamily: fonts.sansMedium },
   doneBtn: {
     flexDirection:   "row",
     alignItems:      "center",
@@ -1360,7 +1396,7 @@ const popup = StyleSheet.create({
     shadowRadius:    6,
     elevation:       6,
   },
-  doneBtnText: { color: TOKEN.ctaText, fontSize: 14, fontWeight: "700", letterSpacing: 0.3 },
+  doneBtnText: { color: TOKEN.ctaText, fontSize: 14, fontFamily: fonts.sansBold, letterSpacing: 0.3 },
 });
 
 // ─────────────────────────────────────────────
@@ -1381,9 +1417,11 @@ export default function ARScreen({ route, navigation }) {
   const anchorProximities = useMemo(
     () =>
       userLocation
-        ? computeAnchorProximities(spot, userLocation.latitude, userLocation.longitude)
+        ? computeAnchorProximities(
+            spot, userLocation.latitude, userLocation.longitude, userLocation.accuracy
+          )
         : [],
-    [spot, userLocation?.latitude, userLocation?.longitude]
+    [spot, userLocation?.latitude, userLocation?.longitude, userLocation?.accuracy]
   );
   const [locationError, setLocationError]         = useState(null);
 
@@ -1401,6 +1439,25 @@ export default function ARScreen({ route, navigation }) {
   // Whether ARCore currently has a solid fix on the room. Reported up from
   // ARScene; drives the "camera can't see enough yet" hint below.
   const [arTracking, setArTracking] = useState(false);
+
+  // Set when Viro fails to load the .glb. Distinguishes "the model is broken"
+  // from "the model hasn't appeared yet", which look the same through a camera.
+  const [modelFailed, setModelFailed] = useState(false);
+
+  // True once ARCore has found a horizontal surface and the model is actually
+  // on screen. This is the difference between "tap it" being true and being a
+  // lie — see the note in ModelOnPlane.
+  const [modelPlaced, setModelPlaced] = useState(false);
+
+  // Whether the model is pinned to the landmark's real coordinates (ARCore
+  // Geospatial) or stood on a detected floor plane. Logged rather than shown:
+  // the old crosshair badge was an unlabeled icon that meant nothing to a
+  // user, and this is developer diagnostics.
+  const geoStatusRef = useRef(null);
+  const setGeoStatus = (s) => {
+    geoStatusRef.current = s;
+    console.log("[Geospatial] placement:", s?.active ? `active (±${s.accuracy?.toFixed?.(1)} m)` : `off — ${s?.reason}`);
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -1454,7 +1511,6 @@ export default function ARScreen({ route, navigation }) {
   const hudOpacity = useRef(new Animated.Value(0)).current;
 
   const totalAnchors    = spot.modelsCoordinates?.length ?? 0;
-  const originalAnchors = spot.modelsCoordinates ?? [];
 
   useEffect(() => {
     Animated.timing(hudOpacity, {
@@ -1468,10 +1524,35 @@ export default function ARScreen({ route, navigation }) {
   useEffect(() => {
     let cancelled = false;
 
+    // Raw last-accepted fix, used only to judge whether the next one is an
+    // improvement. What the screen actually renders is the smoothed output.
+    const bestRef  = { current: null };
+    const smoother = new GpsSmoother();
+
     const applyFix = (pos) => {
       if (cancelled) return;
       const { latitude, longitude, accuracy } = pos.coords;
-      setUserLocation({ latitude, longitude, accuracy });
+      const next = { latitude, longitude, accuracy, timestamp: pos.timestamp || Date.now() };
+
+      // A reading this vague says almost nothing — indoors a phone will
+      // happily report ±500 m, which would put every anchor "in range" at once.
+      if (Number.isFinite(accuracy) && accuracy > MAX_USABLE_ACCURACY_M) return;
+
+      // Don't let a coarse network fix overwrite a good satellite one. Fixes
+      // arrive from several providers and not in quality order, so taking
+      // whatever came last made the reported position get *worse* at random.
+      if (!isBetterFix(bestRef.current, next)) return;
+      bestRef.current = next;
+
+      const smoothed = smoother.push(next);
+      setUserLocation({
+        latitude:  smoothed.latitude,
+        longitude: smoothed.longitude,
+        accuracy:  smoothed.accuracy,
+        // Kept so the HUD can warn on a genuinely poor fix rather than on the
+        // filter's (always better) estimate of its own confidence.
+        rawAccuracy: accuracy,
+      });
       setLocationError(null);
     };
 
@@ -1503,7 +1584,19 @@ export default function ARScreen({ route, navigation }) {
           }
           watchId.current = Geolocation.watchPosition(
             applyFix,
-            (err2) => { if (!cancelled) setLocationError(err2.message); },
+            (err2) => {
+              if (cancelled) return;
+              // A watch error once we already have a fix is almost always just
+              // a timeout waiting for the NEXT update — the position we have
+              // is still perfectly good. Reporting "Can't find your location"
+              // then is simply false, and it replaced a working screen with an
+              // error card. Only surface it if we have nothing at all.
+              if (bestRef.current) {
+                console.warn("[Location] watch error, keeping last fix:", err2.message);
+                return;
+              }
+              setLocationError(err2.message);
+            },
             { enableHighAccuracy: false, distanceFilter: 0, interval: 3000, timeout: 30000, maximumAge: 30000 }
           );
         },
@@ -1513,13 +1606,31 @@ export default function ARScreen({ route, navigation }) {
           interval:           1000,
           fastestInterval:    500,
           timeout:            20000,
-          maximumAge:         15000,
+          // Was 15000, which let the OS hand back a fix up to fifteen seconds
+          // old — on a screen whose whole job is "how far away am I right
+          // now". 0 forces every callback to be a fresh reading.
+          maximumAge:         0,
         }
       );
     };
 
     const init = async () => {
       if (Platform.OS === "android") {
+        // Use Google Play Services' fused provider instead of the bare
+        // platform LocationManager. It merges GPS, wifi and cell signals, so
+        // the first fix arrives in a couple of seconds rather than tens of
+        // seconds, and subsequent fixes are tighter. The dependency was
+        // already in android/app/build.gradle; nothing was selecting it.
+        try {
+          Geolocation.setRNConfiguration({
+            skipPermissionRequests: false,
+            authorizationLevel: "whenInUse",
+            locationProvider: "playServices",
+          });
+        } catch {
+          // Older builds / no Play Services — the platform provider still works.
+        }
+
         const granted = await PermissionsAndroid.request(
           PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION
         );
@@ -1536,6 +1647,7 @@ export default function ARScreen({ route, navigation }) {
     init();
     return () => {
       cancelled = true;
+      smoother.reset();
       if (watchId.current != null) Geolocation.clearWatch(watchId.current);
     };
   }, []);
@@ -1569,29 +1681,76 @@ export default function ARScreen({ route, navigation }) {
     setTriviaVisible(true);
   };
 
-  const activeAnchors  = anchorProximities.filter((a) => a.isInRange);
-  const anyActive      = activeAnchors.length > 0;
-  const nearestPending = anchorProximities.find((a) => !a.isInRange);
+  const activeAnchors = anchorProximities.filter((a) => a.isInRange);
+
+  // ── The one object the whole screen agrees on ─────────────────────────
+  //
+  // The models at a spot are a numbered trail, walked in the order the
+  // moderator listed them. See utils/arTrail.js for the rule itself.
+  //
+  // It used to pick the *nearest* model you hadn't collected. Two things went
+  // wrong with that. The order depended on which way you happened to walk in,
+  // so no two users saw the same trail; and because all the anchors at a spot
+  // are usually within range of each other, collecting one made the next appear
+  // instantly on the same patch of floor — objects that were meant to be a
+  // sequence read as one pile flickering between shapes.
+  //
+  // A collected model is never rendered again: `tappedIndices` lives only as
+  // long as this screen is mounted, so the only way to see one a second time is
+  // to leave AR and come back, which starts the trail over.
+  const trail = useMemo(
+    () => resolveTrail(anchorProximities, tappedIndices, triviaVisible),
+    [anchorProximities, tappedIndices, triviaVisible]
+  );
+  // `trail.next` is not pulled out here: everything on screen keys off either
+  // `focus` (what is drawn) or `pending` (where to walk), and having a third
+  // "the anchor whose turn it is" in scope is how the arrow and the radar came
+  // to track two different objects last time.
+  const { inRange: nextInRange, focus: focusAnchor, pending: targetPending } = trail;
+
+  // Nothing on screen means nothing is placed. `onAnchorRemoved` is not
+  // guaranteed to fire when ModelOnPlane unmounts, and a stale `modelPlaced`
+  // would leave the HUD on "look around for the object" with no object.
+  useEffect(() => {
+    if (!focusAnchor) setModelPlaced(false);
+  }, [focusAnchor]);
 
   // ── Encounter moment ──────────────────────────────────────────────────
-  // Fires the flash + haptic exactly once per crossing into an AR zone
-  // (not on every GPS tick while standing inside one).
-  const wasActiveRef = useRef(false);
+  // Fires the flash + haptic exactly once per crossing into range of the
+  // object whose turn it is (not on every GPS tick while standing inside one).
+  //
+  // Keyed to the sequence, so it also fires when you collect one object and
+  // are already standing close enough for the next — that is an arrival at the
+  // next stop on the trail and deserves the same beat.
+  // Which anchor the flash has already been spent on. An index rather than a
+  // boolean: with a boolean, collecting the first object while already standing
+  // at the second meant "in range" never went false, so the second object slid
+  // in with no arrival beat at all.
+  const announcedRef = useRef(null);
   const [encounterTrigger, setEncounterTrigger] = useState(0);
   const [encounterLabel, setEncounterLabel]     = useState(null);
 
   useEffect(() => {
-    if (anyActive && !wasActiveRef.current) {
-      setEncounterLabel(activeAnchors[0]?.label ?? null);
-      setEncounterTrigger((n) => n + 1);
-      buzz.encounter();
-    }
-    wasActiveRef.current = anyActive;
-  }, [anyActive]);
+    // Walked away: forget it, so coming back announces again.
+    if (!nextInRange) { announcedRef.current = null; return; }
+    // In range but nothing drawn yet — the trivia card from the previous
+    // object is still up. Announcing now would fire the flash underneath it.
+    if (!focusAnchor) return;
+    if (announcedRef.current === focusAnchor.index) return;
+
+    announcedRef.current = focusAnchor.index;
+    setEncounterLabel(focusAnchor.label);
+    setEncounterTrigger((n) => n + 1);
+    buzz.encounter();
+  }, [nextInRange, focusAnchor?.index]);
 
   // ── HUD ──────────────────────────────────────────────────────────────
   const renderHUD = () => {
-    if (locationError) {
+    // `!userLocation` as well as the error: a location error only matters if
+    // it left us with nothing to show. With a fix in hand the screen stays
+    // usable, which is why this no longer takes over the moment a watch
+    // times out.
+    if (locationError && !userLocation) {
       // A raw error string ("Location permission denied") left the user at a
       // dead end — nothing to tap, and no hint that the fix lives in system
       // settings. Explain it in plain words and give them the way out.
@@ -1600,7 +1759,7 @@ export default function ARScreen({ route, navigation }) {
         <Animated.View style={[hud.container, hud.errorContainer, { opacity: hudOpacity }]}>
           <View style={hud.errorRow}>
             <View style={hud.errorIconWrap}>
-              <Feather name="map-pin" size={14} color={TOKEN.danger} />
+              <Icon name="map-pin" size={14} color={TOKEN.danger} />
             </View>
             <View style={{ flex: 1 }}>
               <Text style={hud.errorTitle}>
@@ -1608,7 +1767,7 @@ export default function ARScreen({ route, navigation }) {
               </Text>
               <Text style={hud.errorMsg}>
                 {isPermission
-                  ? "AR missions need your location to know when you've reached the landmark."
+                  ? "The AR activity needs your location to know when you've reached the landmark."
                   : "We couldn't get a location fix. Check that location is turned on, then try again."}
               </Text>
             </View>
@@ -1623,7 +1782,7 @@ export default function ARScreen({ route, navigation }) {
                 accessibilityRole="button"
                 accessibilityLabel="Open app settings to allow location access"
               >
-                <Feather name="settings" size={12} color={TOKEN.ctaText} style={{ marginRight: 6 }} />
+                <Icon name="settings" size={12} color={TOKEN.ctaText} style={{ marginRight: 6 }} />
                 <Text style={hud.errorBtnText}>Open Settings</Text>
               </TouchableOpacity>
             )}
@@ -1643,7 +1802,7 @@ export default function ARScreen({ route, navigation }) {
 
     if (!userLocation) {
       return (
-        <Animated.View style={[hud.container, { opacity: hudOpacity }]}>
+        <Animated.View style={[hud.container, { opacity: hudOpacity }]} pointerEvents="box-none">
           <View style={hud.loadingRow}>
             <ActivityIndicator size="small" color={TOKEN.goldLight} style={{ marginRight: 10 }} />
             <View style={{ flex: 1 }}>
@@ -1657,117 +1816,183 @@ export default function ARScreen({ route, navigation }) {
       );
     }
 
+    // ── Which of the three steps is the user actually on? ──────────────
+    // Exactly one, always. Everything the card shows is derived from this, so
+    // it can't tell them to tap an object while also telling them to walk.
+    const allCollected = totalAnchors > 0 && tappedIndices.size >= totalAnchors;
+    // Three steps: placement is automatic again, so "find a surface" and
+    // "object appears" are one event rather than two instructions.
+    const TOTAL_STEPS = 3;
+    const stepIndex =
+      allCollected ? TOTAL_STEPS                       // done
+      : !nextInRange ? 0                               // walk there
+      : !arTracking || !modelPlaced ? 1                // point at the ground
+      : 2;                                             // tap the object
+
+    // rawAccuracy, not the smoothed figure: the question is how much the
+    // underlying fix could be out by, not how confident the filter is.
+    const dist = targetPending
+      ? formatDistance(targetPending.distance, userLocation?.rawAccuracy)
+      : null;
+
     return (
-      <Animated.View style={[hud.container, { opacity: hudOpacity }]}>
-        <View style={hud.spotRow}>
-          <View style={[hud.spotDot, anyActive && hud.spotDotActive]} />
-          <Text style={hud.spotName} numberOfLines={1}>{spot.name}</Text>
-          {/* GPS quality as a plain "Weak signal" warning instead of a "±37 m"
-              readout. A good fix needs no comment at all; only a poor one is
-              worth telling the user about, because it explains why the object
-              might not appear exactly where they expect. */}
-          {userLocation.accuracy != null && userLocation.accuracy >= 20 && (
-            <View style={hud.gpsChip} accessibilityLabel="Weak GPS signal">
-              <Feather name="wifi-off" size={9} color={TOKEN.warn} style={{ marginRight: 4 }} />
-              <Text style={[hud.gpsChipText, { color: TOKEN.warn }]}>Weak signal</Text>
-            </View>
+      <Animated.View style={[hud.container, { opacity: hudOpacity }]} pointerEvents="box-none">
+
+        {/* Header: the place, and progress in words.
+            Everything unlabeled is gone. There used to be a "2/3" badge, a
+            wifi-off glyph and a crosshair glyph here, none of which said what
+            they meant — and the three bars below them had to be asked about to
+            be understood. A stranger should not have to decode an icon to use
+            this screen, and a panel should not have to be told what a bar is.
+            "Found 1 of 3" and "Step 2 of 3" carry the same information and
+            need no key. */}
+        <View style={step.header}>
+          <Text style={step.spotName} numberOfLines={1}>{spot.name}</Text>
+          {totalAnchors > 1 && !allCollected && (
+            <Text style={step.count}>Found {tappedIndices.size} of {totalAnchors}</Text>
           )}
         </View>
 
-        {/* Collected-so-far, as pips rather than a "2 / 5 tapped" readout —
-            glanceable while walking, and it keeps the panel short. */}
-        {totalAnchors > 1 && (
-          <View style={hud.pipRow}>
-            <ProgressPips total={totalAnchors} done={tappedIndices.size} />
-            <Text style={hud.pipCount}>
-              {tappedIndices.size}/{totalAnchors}
-            </Text>
-          </View>
+        {!modelFailed && !allCollected && targetPending !== undefined && (
+          <Text style={step.stepLine}>Step {stepIndex + 1} of {TOTAL_STEPS}</Text>
         )}
 
-        <View style={hud.divider} />
-
-        {anyActive ? (
-          <View style={hud.insideRow}>
-            <View style={hud.insideBadge}>
-              <Feather name="check-circle" size={13} color={TOKEN.success} style={{ marginRight: 6 }} />
-              <Text style={hud.insideBadgeText}>YOU'RE HERE</Text>
+        {modelFailed ? (
+          <View style={step.body}>
+            <View style={[step.iconWrap, { backgroundColor: TOKEN.dangerDim }]}>
+              <Icon name="alert-triangle" size={22} color={TOKEN.warn} />
             </View>
+            <Text style={step.title}>This model couldn't load</Text>
+            <Text style={step.sub}>
+              Something's wrong with this spot's 3D file. The other missions here
+              still work.
+            </Text>
+          </View>
+        ) : allCollected ? (
+          <View style={step.body}>
+            <View style={[step.iconWrap, { backgroundColor: TOKEN.successDim }]}>
+              <Icon name="check-circle" size={22} color={TOKEN.success} />
+            </View>
+            <Text style={step.title}>All found!</Text>
+            <Text style={step.sub}>
+              You've explored everything at {spot.name}.
+            </Text>
+          </View>
 
-            {totalAnchors > 1 && (
-              <ScrollView
-                horizontal
-                showsHorizontalScrollIndicator={false}
-                style={{ marginTop: 6 }}
-                contentContainerStyle={{ gap: 6 }}
-              >
-                {activeAnchors.map((a) => (
-                  <View
-                    key={a.index}
-                    style={[hud.activeLabelPill, tappedIndices.has(a.index) && hud.activeLabelPillDone]}
-                  >
-                    <Feather
-                      name={tappedIndices.has(a.index) ? "check" : "circle"}
-                      size={9}
-                      color={tappedIndices.has(a.index) ? TOKEN.goldLight : TOKEN.success}
-                      style={{ marginRight: 4 }}
-                    />
-                    <Text style={[hud.activeLabelText, tappedIndices.has(a.index) && { color: TOKEN.goldLight }]}>
-                      {a.label}
-                    </Text>
-                  </View>
-                ))}
-              </ScrollView>
-            )}
-
-            {/* In range, but ARCore hasn't locked onto the surroundings yet —
-                without this the user just stares at an empty camera view with
-                no idea the app is waiting on them to move/light the scene. */}
-            {arTracking ? (
-              <View style={hud.tapCue}>
-                <Feather name="aperture" size={12} color={TOKEN.ctaText} style={{ marginRight: 6 }} />
-                <Text style={hud.tapCueText}>TAP THE OBJECT</Text>
-              </View>
-            ) : (
-              <View style={hud.scanCue}>
-                <ActivityIndicator size="small" color={TOKEN.infoLight} style={{ marginRight: 8 }} />
-                <Text style={hud.scanCueText}>
-                  Move your phone slowly to look around — needs a bit of light
+        // ── Step 1: walk there ──────────────────────────────────────────
+        ) : stepIndex === 0 ? (
+          <View style={step.body}>
+            {targetPending ? (
+              <>
+                <RadarMap
+                  distance={targetPending.distance}
+                  bearing={bearingDegrees(
+                    userLocation.latitude, userLocation.longitude,
+                    targetPending.lat, targetPending.lng
+                  )}
+                  heading={compassHeading}
+                  modelRadius={targetPending.radius}
+                  // The tilde still carries the honesty about precision; it
+                  // just sits under the radar now instead of being the whole
+                  // display.
+                  label={dist ? `${dist.approx ? "~" : ""}${dist.value} ${dist.unit} away` : "Finding the way…"}
+                />
+                <Text style={step.title}>Walk closer</Text>
+                <Text style={step.sub}>
+                  The white dot is you. Walk until it is inside the blue circle
+                  — that is where the object is hiding.
                 </Text>
-              </View>
+              </>
+            ) : (
+              <>
+                <View style={[step.iconWrap, { backgroundColor: TOKEN.dangerDim }]}>
+                  <Icon name="map-pin" size={22} color={TOKEN.warn} />
+                </View>
+                <Text style={step.title}>No AR spots set here yet</Text>
+                <Text style={step.sub}>
+                  This landmark has a 3D model but nobody has pinned where it
+                  should appear. The other missions here still work.
+                </Text>
+              </>
             )}
           </View>
+
+        // ── Step 2: point at the ground ─────────────────────────────────
+        // The step people got stuck on. ARCore needs to see a flat horizontal
+        // surface before it can place anything, and nothing in the old UI ever
+        // said so — it just said "look around", which people did at eye level.
+        ) : stepIndex === 1 ? (
+          <View style={step.body}>
+            <View style={[step.iconWrap, { backgroundColor: "rgba(79,208,220,0.16)" }]}>
+              <Icon name="chevrons-down" size={22} color={TOKEN.info} />
+            </View>
+            <Text style={step.title}>Point your phone at the ground</Text>
+            <Text style={step.sub}>
+              You have arrived. Aim at the floor a few steps ahead and move the
+              phone slowly. Patterned ground works best — tiles, grass, paving.
+              A plain wall or a bare white floor gives it nothing to lock onto.
+            </Text>
+          </View>
+
+        // ── Step 3: tap it ──────────────────────────────────────────────
         ) : (
-          (() => {
-            if (!nearestPending) return null;
-            const metersToEdge = Math.max(0, Math.round(nearestPending.distance - nearestPending.radius));
-            return (
-              <View style={hud.outsideWrap}>
-                {totalAnchors > 1 && (
-                  <Text style={hud.nearestLabel}>
-                    Nearest:{" "}
-                    <Text style={{ color: TOKEN.goldLight }}>{nearestPending.label}</Text>
-                  </Text>
-                )}
-
-                {/* Radar replaces the old number + linear progress bar: the
-                    pulse rate itself encodes "how close am I". */}
-                <ProximityRadar metersToEdge={metersToEdge} radius={nearestPending.radius} />
-
-                <Text style={hud.distanceHint}>
-                  {metersToEdge > nearestPending.radius * 3
-                    ? "Head toward the landmark — the object appears when you're close"
-                    : metersToEdge > nearestPending.radius
-                    ? "Getting closer — keep walking"
-                    : "Almost there — look around for the object"}
-                </Text>
-              </View>
-            );
-          })()
+          <View style={step.body}>
+            <View style={[step.iconWrap, { backgroundColor: TOKEN.goldDim }]}>
+              <Icon name="aperture" size={22} color={TOKEN.gold} />
+            </View>
+            <Text style={step.title}>Look around for the object</Text>
+            {/* NOT "it is on screen now".
+                `modelPlaced` means a plane was found and the model attached to
+                it — it says nothing about whether the object is in view. The
+                model stands 1.4 m from the anchor in whatever direction that
+                plane faces, so the user is often looking the other way. Claiming
+                it is on screen when they are staring at a blank wall is exactly
+                the "tap something that isn't there" problem from before, moved
+                one step along. */}
+            <Text style={step.sub}>
+              It is placed near you — turn slowly and look down until you see it,
+              then tap it to read the story behind this place
+              {totalAnchors > 1 ? ` — ${totalAnchors - tappedIndices.size} still to find here.` : "."}
+            </Text>
+          </View>
         )}
       </Animated.View>
     );
   };
+
+  // No model uploaded for this spot — bail out before mounting an AR session.
+  //
+  // Viro3DObject was being handed `source={{ uri: undefined }}`, which fails
+  // inside the renderer: nothing ever appears, the mission can't be completed,
+  // and in a dev build it surfaces as a load error with no explanation. Most
+  // spots are in this state today, because the AR mission is auto-created for
+  // every spot while the .glb has to be uploaded by hand afterwards.
+  if (!spot.AR3DModelURL) {
+    return (
+      <View style={[main.root, main.unsupportedRoot]}>
+        <StatusBar barStyle="light-content" backgroundColor={TOKEN.bg} />
+        <View style={main.unsupportedCard}>
+          <View style={main.unsupportedIcon}>
+            <Icon name="box" size={26} color={TOKEN.warn} />
+          </View>
+          <Text style={main.unsupportedTitle}>No 3D model here yet</Text>
+          <Text style={main.unsupportedBody}>
+            {spot.name} doesn't have its AR model set up yet, so there's nothing to
+            find here for now. The other missions at this spot still work.
+          </Text>
+          <TouchableOpacity
+            style={main.unsupportedBtn}
+            onPress={() => navigation.goBack()}
+            activeOpacity={0.85}
+            accessibilityRole="button"
+            accessibilityLabel="Go back to the spot"
+          >
+            <Text style={main.unsupportedBtnText}>Back to {spot.name}</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    );
+  }
 
   // Device can't do AR — say so plainly instead of mounting the navigator and
   // leaving the user on a black screen wondering what broke.
@@ -1777,7 +2002,7 @@ export default function ARScreen({ route, navigation }) {
         <StatusBar barStyle="light-content" backgroundColor={TOKEN.bg} />
         <View style={main.unsupportedCard}>
           <View style={main.unsupportedIcon}>
-            <Feather name="camera-off" size={26} color={TOKEN.warn} />
+            <Icon name="camera-off" size={26} color={TOKEN.warn} />
           </View>
           <Text style={main.unsupportedTitle}>AR isn't available on this phone</Text>
           <Text style={main.unsupportedBody}>
@@ -1806,13 +2031,33 @@ export default function ARScreen({ route, navigation }) {
         initialScene={{ scene: ARScene }}
         viroAppProps={{
           spot,
+          // `activeAnchors` is still every in-range anchor, because the
+          // geospatial pass resolves terrain anchors for all of them up front —
+          // the trail should not stall for a network round trip each time the
+          // next object's turn comes around. `focusAnchor` is the only one that
+          // gets rendered.
           activeAnchors,
-          tappedIndices,
+          focusAnchor,
           onModelClick:     handleModelClick,
           onTrackingChange: setArTracking,
+          onModelError:     () => setModelFailed(true),
+          onPlacedChange:   setModelPlaced,
+          onGeoStatus:      setGeoStatus,
         }}
         style={{ flex: 1 }}
       />
+
+      {/* While the user still has to walk somewhere, the camera feed is not the
+          task — it's a distraction that makes the screen look like it should
+          already be showing something. Dimming it says "not yet, keep walking"
+          far better than any sentence, and it lifts the moment they arrive. */}
+      {!nextInRange && <View style={main.travelScrim} pointerEvents="none" />}
+
+      {/* In range but nothing placed yet: put the target on the screen instead
+          of only describing it. Suppressed while the trivia card is up —
+          `focusAnchor` is null then, so there is no object being placed and a
+          reticle would be hunting for a surface nothing is waiting on. */}
+      {focusAnchor && arTracking && !modelPlaced && !modelFailed && <GroundReticle />}
 
       {/* ── Top bar ── */}
       <View style={main.topBar}>
@@ -1822,38 +2067,35 @@ export default function ARScreen({ route, navigation }) {
           activeOpacity={0.8}
           hitSlop={8}
           accessibilityRole="button"
-          accessibilityLabel="Leave AR mission"
+          accessibilityLabel="Leave AR activity"
         >
-          <Feather name="arrow-left" size={18} color={TOKEN.textPrimary} />
+          <Icon name="arrow-left" size={18} color={TOKEN.textPrimary} />
         </TouchableOpacity>
-        <View style={main.topLabel}>
-          <Feather name="layers" size={12} color={TOKEN.goldLight} style={{ marginRight: 5 }} />
-          <Text style={main.topLabelText}>AR MISSION</Text>
-        </View>
+        {/* "AR ACTIVITY" in tracked capitals was branding, not information —
+            the user already knows they opened AR, and the spot's name is on
+            the card below. Removed rather than reworded. */}
 
         <View style={main.topRight}>
           <TouchableOpacity
-            style={main.iconBtn}
+            style={main.helpBtn}
             onPress={() => setGuideVisible(true)}
             activeOpacity={0.8}
             hitSlop={8}
             accessibilityRole="button"
-            accessibilityLabel="How AR missions work"
+            accessibilityLabel="How this works"
           >
-            <Feather name="help-circle" size={17} color={TOKEN.textPrimary} />
+            <Icon name="help-circle" size={15} color={TOKEN.textPrimary} />
+            <Text style={main.helpBtnText}>How this works</Text>
           </TouchableOpacity>
         </View>
       </View>
 
-      {/* ── Directional Arrow (only for multi-anchor spots) ── */}
-      {userLocation && originalAnchors.length > 1 && (
-        <DirectionalArrow
-          anchors={originalAnchors}
-          tappedIndices={tappedIndices}
-          userLocation={userLocation}
-          compassHeading={compassHeading}
-        />
-      )}
+      {/* The floating direction arrow is gone. It answered the same question as
+          the radar — which way to turn — while sitting in a different corner of
+          the screen with its own colour language and its own status badge
+          ("Bear right", "Turn around"). Two navigation aids competing is the
+          main reason this screen felt busy; the radar shows bearing, distance
+          and the activation ring in one place. */}
 
       {/* ── HUD ── */}
       {renderHUD()}
@@ -1880,6 +2122,54 @@ export default function ARScreen({ route, navigation }) {
 }
 
 // ─────────────────────────────────────────────
+// STEP CARD STYLES
+// ─────────────────────────────────────────────
+// Deliberately roomy. This card is read at arm's length, outdoors, in sunlight,
+// by someone who is walking — so the instruction is set large and centred with
+// nothing competing beside it.
+const step = StyleSheet.create({
+  header:      { flexDirection: "row", alignItems: "center", gap: 8 },
+  spotName:    { flex: 1, color: TOKEN.textPrimary, fontSize: 13.5, fontFamily: fonts.sansBold },
+  count:       { color: TOKEN.textSecond, fontSize: 12.5, fontFamily: fonts.sansSemi },
+  // Plain words where three unlabeled bars used to be.
+  stepLine:    { color: TOKEN.textMuted, fontSize: 11.5, fontFamily: fonts.sansBold, letterSpacing: 0.4, textAlign: "center" },
+
+  body:     { alignItems: "center", gap: 6, paddingTop: 6, paddingBottom: 2 },
+  iconWrap: {
+    width: 46, height: 46, borderRadius: 23,
+    alignItems: "center", justifyContent: "center", marginBottom: 2,
+  },
+  title: {
+    color: TOKEN.textPrimary, fontSize: 17, fontFamily: fonts.sansBold,
+    textAlign: "center", letterSpacing: -0.3,
+  },
+  sub: {
+    color: TOKEN.textSecond, fontSize: 13, lineHeight: 18, textAlign: "center",
+    paddingHorizontal: 4,
+  },
+
+
+  // Ground-scanning target, lower-centre so it sits where the floor is when
+  // the phone is tilted down.
+  reticleWrap: {
+    position: "absolute", left: 0, right: 0,
+    top: SCREEN_H * 0.42,
+    alignItems: "center", justifyContent: "center",
+  },
+  reticle: {
+    position: "absolute",
+    width: 150, height: 150, borderRadius: 75,
+    borderWidth: 2, borderColor: TOKEN.info,
+  },
+  reticleStatic: {
+    width: 150, height: 150, borderRadius: 75,
+    borderWidth: 1.5, borderColor: "rgba(79,208,220,0.35)",
+    borderStyle: "dashed",
+  },
+  reticleArrowWrap: { position: "absolute" },
+});
+
+// ─────────────────────────────────────────────
 // HUD STYLES
 // ─────────────────────────────────────────────
 const hud = StyleSheet.create({
@@ -1888,8 +2178,8 @@ const hud = StyleSheet.create({
     bottom:          Platform.OS === "ios" ? 52 : 40,
     left: 16, right: 16,
     backgroundColor: TOKEN.surface,
-    borderRadius:    TOKEN.radiusMd,
-    padding:         14,
+    borderRadius:    TOKEN.radiusLg,
+    padding:         16,
     borderWidth:     1,
     borderColor:     TOKEN.borderAccent,
     gap:             8,
@@ -1909,7 +2199,7 @@ const hud = StyleSheet.create({
     alignItems:      "center",
     justifyContent:  "center",
   },
-  errorTitle:   { color: TOKEN.textPrimary, fontSize: 13, fontWeight: "800", marginBottom: 3 },
+  errorTitle:   { color: TOKEN.textPrimary, fontSize: 13, fontFamily: fonts.sansBold, marginBottom: 3 },
   errorMsg:     { color: TOKEN.textSecond,  fontSize: 12, lineHeight: 17 },
   errorActions: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 2 },
   errorBtn: {
@@ -1918,98 +2208,19 @@ const hud = StyleSheet.create({
     borderRadius: TOKEN.radiusXl,
     paddingHorizontal: 14, paddingVertical: 9,
   },
-  errorBtnText: { color: TOKEN.ctaText, fontSize: 12, fontWeight: "800" },
+  errorBtnText: { color: TOKEN.ctaText, fontSize: 12, fontFamily: fonts.sansBold },
   errorBtnGhost: {
     borderRadius: TOKEN.radiusXl,
     paddingHorizontal: 14, paddingVertical: 9,
     borderWidth: 1, borderColor: TOKEN.border,
   },
-  errorBtnGhostText: { color: TOKEN.textSecond, fontSize: 12, fontWeight: "700" },
+  errorBtnGhostText: { color: TOKEN.textSecond, fontSize: 12, fontFamily: fonts.sansBold },
   loadingRow:   { flexDirection: "row", alignItems: "center" },
   loadingText:  { color: TOKEN.textSecond, fontSize: 13 },
   loadingHint:  { color: TOKEN.textMuted, fontSize: 11, marginTop: 2, lineHeight: 15 },
-  spotRow:      { flexDirection: "row", alignItems: "center", gap: 7 },
-  spotDot: {
-    width:           7,
-    height:          7,
-    borderRadius:    4,
-    backgroundColor: TOKEN.goldLight,
-    shadowColor:     TOKEN.goldLight,
-    shadowOffset:    { width: 0, height: 0 },
-    shadowOpacity:   0.9,
-    shadowRadius:    4,
-    elevation:       3,
-  },
-  spotDotActive:  { backgroundColor: TOKEN.success, shadowColor: TOKEN.success },
-  spotName:       { color: TOKEN.textPrimary, fontSize: 14, fontWeight: "700", letterSpacing: 0.2, flex: 1 },
-  gpsChip: {
-    flexDirection:     "row",
-    alignItems:        "center",
-    backgroundColor:   TOKEN.surfaceHigh,
-    borderRadius:      20,
-    paddingHorizontal: 8,
-    paddingVertical:   4,
-    borderWidth:       1,
-    borderColor:       TOKEN.border,
-  },
-  gpsChipText:            { fontSize: 10, fontWeight: "700" },
   // Collected-progress pips (replaced the two "x / y" stat badges)
-  pipRow:                 { flexDirection: "row", alignItems: "center", gap: 8 },
-  pipCount:               { color: TOKEN.textMuted, fontSize: 10, fontWeight: "800", letterSpacing: 0.5 },
-  divider:                { height: 1, backgroundColor: TOKEN.border },
-  insideRow:              { gap: 8 },
-  insideBadge: {
-    flexDirection:     "row",
-    alignItems:        "center",
-    backgroundColor:   TOKEN.successDim,
-    borderRadius:      TOKEN.radiusSm,
-    paddingHorizontal: 10,
-    paddingVertical:   6,
-    alignSelf:         "flex-start",
-    borderWidth:       1,
-    borderColor:       TOKEN.successDim,
-  },
-  insideBadgeText:     { color: TOKEN.success, fontSize: 10, fontWeight: "800", letterSpacing: 1.5 },
-  activeLabelPill: {
-    flexDirection:     "row",
-    alignItems:        "center",
-    backgroundColor:   TOKEN.successDim,
-    borderRadius:      20,
-    paddingHorizontal: 9,
-    paddingVertical:   4,
-    borderWidth:       1,
-    borderColor:       TOKEN.successDim,
-  },
-  activeLabelPillDone: { backgroundColor: TOKEN.goldDim, borderColor: TOKEN.border },
-  activeLabelText:     { color: TOKEN.success, fontSize: 10, fontWeight: "600" },
   // In-zone call to action — replaces the small grey "point camera…" line
   // with the one instruction that matters, styled as the primary action.
-  tapCue: {
-    flexDirection:     "row",
-    alignItems:        "center",
-    alignSelf:         "flex-start",
-    backgroundColor:   TOKEN.cta,
-    borderRadius:      TOKEN.radiusXl,
-    paddingHorizontal: 14,
-    paddingVertical:   8,
-    shadowColor:   TOKEN.gold,
-    shadowOffset:  { width: 0, height: 0 },
-    shadowOpacity: 0.55,
-    shadowRadius:  12,
-    elevation:     8,
-  },
-  tapCueText:          { color: TOKEN.ctaText, fontSize: 11, fontWeight: "900", letterSpacing: 1.1 },
-  scanCue: {
-    flexDirection: "row", alignItems: "center",
-    backgroundColor: TOKEN.surfaceHigh,
-    borderRadius: TOKEN.radiusXl,
-    paddingHorizontal: 12, paddingVertical: 8,
-    borderWidth: 1, borderColor: TOKEN.border,
-  },
-  scanCueText:         { color: TOKEN.textSecond, fontSize: 11.5, fontWeight: "600", flex: 1 },
-  outsideWrap:         { gap: 7, alignItems: "center" },
-  nearestLabel:        { color: TOKEN.textSecond, fontSize: 11, fontWeight: "500", alignSelf: "flex-start" },
-  distanceHint:        { color: TOKEN.textMuted, fontSize: 11, fontWeight: "500", letterSpacing: 0.2, textAlign: "center" },
 });
 
 // ─────────────────────────────────────────────
@@ -2017,6 +2228,9 @@ const hud = StyleSheet.create({
 // ─────────────────────────────────────────────
 const main = StyleSheet.create({
   root: { flex: 1, backgroundColor: TOKEN.bg },
+  // Not opaque — the camera stays visible so the phone doesn't feel broken,
+  // just clearly backgrounded while walking is the job.
+  travelScrim: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(6,18,20,0.62)" },
   topBar: {
     position:       "absolute",
     top:            Platform.OS === "ios" ? 54 : 36,
@@ -2057,22 +2271,20 @@ const main = StyleSheet.create({
     backgroundColor: TOKEN.goldDim,
     alignItems: "center", justifyContent: "center",
   },
-  unsupportedTitle: { color: TOKEN.textPrimary, fontSize: 17, fontWeight: "800", textAlign: "center" },
+  unsupportedTitle: { color: TOKEN.textPrimary, fontSize: 17, fontFamily: fonts.sansBold, textAlign: "center" },
   unsupportedBody:  { color: TOKEN.textSecond, fontSize: 13, lineHeight: 19, textAlign: "center" },
   unsupportedBtn: {
     backgroundColor: TOKEN.cta, borderRadius: TOKEN.radiusXl,
     paddingVertical: 12, paddingHorizontal: 22, marginTop: 4,
   },
-  unsupportedBtnText: { color: TOKEN.ctaText, fontSize: 13.5, fontWeight: "900" },
-  topLabel: {
-    flexDirection:     "row",
-    alignItems:        "center",
-    backgroundColor:   TOKEN.surface,
-    borderRadius:      20,
-    paddingHorizontal: 14,
-    paddingVertical:   9,
-    borderWidth:       1,
-    borderColor:       TOKEN.borderAccent,
+  unsupportedBtnText: { color: TOKEN.ctaText, fontSize: 13.5, fontFamily: fonts.sansBold },
+  // A labelled button, not a bare "?" glyph — the one control on this
+  // screen a first-time user most needs to find is the explanation.
+  helpBtn: {
+    flexDirection: "row", alignItems: "center", gap: 6,
+    backgroundColor: TOKEN.surface,
+    borderRadius: 20, paddingHorizontal: 12, paddingVertical: 8,
+    borderWidth: 1, borderColor: TOKEN.borderAccent,
   },
-  topLabelText: { color: TOKEN.textSecond, fontSize: 10, fontWeight: "800", letterSpacing: 2 },
+  helpBtnText: { color: TOKEN.textPrimary, fontSize: 12, fontFamily: fonts.sansBold },
 });

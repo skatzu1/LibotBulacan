@@ -9,16 +9,15 @@ import {
   Image,
   RefreshControl,
   ActivityIndicator,
-  Dimensions,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
-import { Feather } from "@expo/vector-icons";
 import { useAuth } from "@clerk/clerk-expo";
-import { useTheme } from "../context/ThemeContext";
+import { useTheme, fonts } from "../context/ThemeContext";
 import { ScreenHeader } from "../components/ui";
-
-const { width } = Dimensions.get("window");
-const BASE_URL  = "https://libotbackend.onrender.com";
+// Was a hardcoded "https://libotbackend.onrender.com".
+import { BASE_URL } from "../api";
+import { spotImage } from "../utils/image";
+import Icon from "../components/Icon";
 
 export default function PreviousTripsScreen() {
   const navigation   = useNavigation();
@@ -96,10 +95,10 @@ export default function PreviousTripsScreen() {
       <View style={[styles.card, { backgroundColor: colors.background }]}>
         <View style={styles.imageWrapper}>
           {spot.image ? (
-            <Image source={{ uri: spot.image }} style={styles.spotImage} />
+            <Image source={{ uri: spotImage(spot.image, 400, 170) }} style={styles.spotImage} />
           ) : (
             <View style={[styles.imagePlaceholder, { backgroundColor: colors.brandLight }]}>
-              <Feather name="map-pin" size={28} color={colors.textMuted} />
+              <Icon name="map-pin" size={28} color={colors.textMuted} />
             </View>
           )}
           <View style={[styles.tripNumberBadge, { backgroundColor: "rgba(107,75,69,0.9)" }]}>
@@ -116,7 +115,7 @@ export default function PreviousTripsScreen() {
           <Text style={[styles.spotName, { color: colors.textPrimary }]} numberOfLines={1}>{spot.name}</Text>
 
           <View style={styles.infoRow}>
-            <Feather name="map-pin" size={13} color={colors.brand} />
+            <Icon name="map-pin" size={13} color={colors.brand} />
             <Text style={[styles.infoText, { color: colors.textSecondary }]} numberOfLines={1}>{spot.location}</Text>
           </View>
 
@@ -124,11 +123,11 @@ export default function PreviousTripsScreen() {
 
           <View style={styles.metaRow}>
             <View style={styles.metaItem}>
-              <Feather name="calendar" size={12} color={colors.textSecondary} />
+              <Icon name="calendar" size={12} color={colors.textSecondary} />
               <Text style={[styles.metaText, { color: colors.textSecondary }]}>{formatDate(item.visitedAt)}</Text>
             </View>
             <View style={styles.metaItem}>
-              <Feather name="clock" size={12} color={colors.textSecondary} />
+              <Icon name="clock" size={12} color={colors.textSecondary} />
               <Text style={[styles.metaText, { color: colors.textSecondary }]}>{formatTime(item.visitedAt)}</Text>
             </View>
           </View>
@@ -136,13 +135,13 @@ export default function PreviousTripsScreen() {
           <View style={styles.detailsRow}>
             {spot.visitingHours ? (
               <View style={[styles.detailChip, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
-                <Feather name="sun" size={11} color={colors.brand} />
+                <Icon name="sun" size={11} color={colors.brand} />
                 <Text style={[styles.detailChipText, { color: colors.brand }]}>{spot.visitingHours}</Text>
               </View>
             ) : null}
             {spot.entranceFee ? (
               <View style={[styles.detailChip, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
-                <Feather name="tag" size={11} color={colors.brand} />
+                <Icon name="tag" size={11} color={colors.brand} />
                 <Text style={[styles.detailChipText, { color: colors.brand }]}>{spot.entranceFee}</Text>
               </View>
             ) : null}
@@ -152,17 +151,11 @@ export default function PreviousTripsScreen() {
     );
   }, [visited.length, colors]);
 
-  if (loading) {
-    return (
-      <View style={[styles.centered, { backgroundColor: colors.backgroundHero }]}>
-        <ActivityIndicator size="large" color={colors.brand} />
-        <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Loading your trips...</Text>
-      </View>
-    );
-  }
-
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
+      {/* The header stays mounted through the load so the back button is always
+          available — the loading branch used to replace the whole screen with a
+          bare spinner, stranding the user on a cold backend. */}
       <ScreenHeader
         title="Previous Trips"
         onBack={() => navigation.goBack()}
@@ -175,9 +168,18 @@ export default function PreviousTripsScreen() {
         }
       />
 
+      {loading ? (
+        <View style={styles.centered}>
+          <ActivityIndicator size="large" color={colors.brand} />
+          <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Loading your trips...</Text>
+        </View>
+      ) : (
+      <>
+
       {error ? (
-        <TouchableOpacity onPress={() => loadVisited(true)} style={[styles.errorBanner, { backgroundColor: colors.dangerBg, borderColor: colors.danger }]}>
-          <Feather name="alert-circle" size={14} color={colors.danger} />
+        <TouchableOpacity
+          accessibilityRole="button" onPress={() => loadVisited(true)} style={[styles.errorBanner, { backgroundColor: colors.dangerBg, borderColor: colors.danger }]}>
+          <Icon name="alert-circle" size={14} color={colors.danger} />
           <Text style={[styles.errorText, { color: colors.danger }]}>{error}</Text>
         </TouchableOpacity>
       ) : null}
@@ -203,7 +205,7 @@ export default function PreviousTripsScreen() {
         ListEmptyComponent={
           !error ? (
             <View style={styles.emptyState}>
-              <Text style={styles.emptyEmoji}>🗺️</Text>
+              <Icon name="map" size={52} color={colors.brand} style={styles.emptyIcon} />
               <Text style={[styles.emptyTitle, { color: colors.brandDark }]}>No trips yet</Text>
               <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
                 Start navigating to a spot — arriving there will log it as a trip!
@@ -213,6 +215,8 @@ export default function PreviousTripsScreen() {
         }
         ListFooterComponent={<View style={{ height: 40 }} />}
       />
+      </>
+      )}
     </View>
   );
 }
@@ -220,7 +224,7 @@ export default function PreviousTripsScreen() {
 const styles = StyleSheet.create({
   container:   { flex: 1 },
   centered:    { flex: 1, justifyContent: "center", alignItems: "center" },
-  loadingText: { marginTop: 12, fontSize: 14, fontWeight: "500" },
+  loadingText: { marginTop: 12, fontSize: 14, fontFamily: fonts.sansMedium },
 
   header: {
     flexDirection: "row",
@@ -230,7 +234,7 @@ const styles = StyleSheet.create({
     marginBottom: 16,
   },
   backButton:  { width: 40, height: 40, justifyContent: "center", alignItems: "flex-start" },
-  headerTitle: { fontSize: 22, fontWeight: "800", letterSpacing: -0.3 },
+  headerTitle: { fontSize: 22, fontFamily: fonts.sansBold, letterSpacing: -0.3 },
   countPill: {
     borderRadius: 20,
     minWidth: 32,
@@ -238,7 +242,7 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     alignItems: "center",
   },
-  countText: { fontWeight: "700", fontSize: 13 },
+  countText: { fontFamily: fonts.sansBold, fontSize: 13 },
 
   errorBanner: {
     flexDirection: "row",
@@ -250,7 +254,7 @@ const styles = StyleSheet.create({
     padding: 12,
     borderWidth: 1,
   },
-  errorText: { fontSize: 13, fontWeight: "500", flex: 1 },
+  errorText: { fontSize: 13, fontFamily: fonts.sansMedium, flex: 1 },
 
   listContent: { paddingHorizontal: 20 },
 
@@ -280,7 +284,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 4,
   },
-  tripNumberText: { color: "#fff", fontSize: 12, fontWeight: "700" },
+  tripNumberText: { color: "#fff", fontSize: 12, fontFamily: fonts.sansBold },
   categoryPill: {
     position: "absolute",
     top: 10,
@@ -290,10 +294,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     paddingVertical: 4,
   },
-  categoryText: { color: "#fff", fontSize: 11, fontWeight: "600" },
+  categoryText: { color: "#fff", fontSize: 11, fontFamily: fonts.sansSemi },
 
   cardBody:  { padding: 14 },
-  spotName:  { fontSize: 18, fontWeight: "700", letterSpacing: -0.2, marginBottom: 6 },
+  spotName:  { fontSize: 18, fontFamily: fonts.sansBold, letterSpacing: -0.2, marginBottom: 6 },
   infoRow:   { flexDirection: "row", alignItems: "center", gap: 5, marginBottom: 10 },
   infoText:  { fontSize: 13, flex: 1 },
   divider:   { height: 1, marginBottom: 10 },
@@ -310,10 +314,10 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
     borderWidth: 1,
   },
-  detailChipText: { fontSize: 11, fontWeight: "500" },
+  detailChipText: { fontSize: 11, fontFamily: fonts.sansMedium },
 
   emptyState:    { alignItems: "center", marginTop: 80, paddingHorizontal: 40 },
-  emptyEmoji:    { fontSize: 56, marginBottom: 14 },
-  emptyTitle:    { fontSize: 20, fontWeight: "800", letterSpacing: -0.3, marginBottom: 6 },
+  emptyIcon:     { marginBottom: 14 },
+  emptyTitle:    { fontSize: 20, fontFamily: fonts.sansBold, letterSpacing: -0.3, marginBottom: 6 },
   emptySubtitle: { fontSize: 13, textAlign: "center", lineHeight: 19 },
 });

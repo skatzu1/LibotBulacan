@@ -5,22 +5,18 @@ import {
   TextInput,
   Text,
   ActivityIndicator,
-  ScrollView,
-  KeyboardAvoidingView,
-  Platform,
-  StatusBar,
 } from "react-native";
 import { showAlert, showToast } from "../components/AppAlert";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { useState, useRef } from "react";
 import { useSignUp, useSignIn } from "@clerk/clerk-expo";
-import { Feather } from "@expo/vector-icons";
-import { useTheme, spacing, radius, typography } from "../context/ThemeContext";
+import { auth as A, fonts, MAX_FONT_SCALE } from "../context/ThemeContext";
+import AuthScaffold, { authStyles as a } from "../components/AuthScaffold";
+import Icon from "../components/Icon";
 
 const EMPTY_CODE = ["", "", "", "", "", ""];
 
 export default function EmailVerification({ navigation, route }) {
-  const { colors, isDark } = useTheme();
+
   const { email, fromLogin } = route.params || {};
   const { isLoaded: signUpLoaded, signUp, setActive: setActiveSignUp } = useSignUp();
   const { isLoaded: signInLoaded, signIn, setActive: setActiveSignIn } = useSignIn();
@@ -179,154 +175,113 @@ export default function EmailVerification({ navigation, route }) {
   const busy = isLoading || isResending;
 
   return (
-    <SafeAreaView style={[styles.screen, { backgroundColor: colors.background }]} edges={["top", "bottom"]}>
-      <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={colors.background} />
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
+    // Same cyan surface as Login / Forgot Password. This screen isn't in the
+    // mockups, but it sits in the middle of both the sign-up and sign-in flows
+    // — leaving it on the in-app palette would break the front door in half.
+    <AuthScaffold
+      onBack={busy ? undefined : () => navigation.goBack()}
+      title="Verify Your Email"
+      subtitle={`We've sent a 6-digit code to ${email}`}
+    >
+      <Text style={styles.hint} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+        Please check your inbox and spam folder
+      </Text>
+
+      <View style={styles.codeContainer}>
+        {code.map((digit, index) => (
+          <TextInput
+            key={index}
+            ref={(ref) => (inputRefs.current[index] = ref)}
+            style={[
+              styles.codeInput,
+              { backgroundColor: A.cyanField, color: A.ink },
+              !!digit && styles.codeInputFilled,
+            ]}
+            value={digit}
+            onChangeText={(text) => handleCodeChange(text, index)}
+            onKeyPress={(e) => handleKeyPress(e, index)}
+            keyboardType="number-pad"
+            maxLength={1}
+            selectTextOnFocus
+            editable={!busy}
+            accessibilityLabel={`Verification code, digit ${index + 1} of 6`}
+            maxFontSizeMultiplier={1}
+          />
+        ))}
+      </View>
+
+      <TouchableOpacity
+        style={[a.cta, busy && styles.disabled]}
+        onPress={handleVerify}
+        disabled={busy}
+        activeOpacity={0.88}
+        accessibilityRole="button"
+        accessibilityLabel="Verify email"
       >
-        <ScrollView
-          contentContainerStyle={styles.scroll}
-          keyboardShouldPersistTaps="handled"
-          showsVerticalScrollIndicator={false}
+        {isLoading ? <ActivityIndicator color={A.onCta} /> : <Text style={a.ctaText}>Verify Email</Text>}
+      </TouchableOpacity>
+
+      <View style={a.linkRow}>
+        <Text style={a.linkMuted}>Didn't receive the code? </Text>
+        <TouchableOpacity
+          onPress={handleResendCode}
+          disabled={busy}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel="Resend verification code"
         >
-          <View style={[styles.iconCircle, { backgroundColor: colors.card }]}>
-            <Feather name="mail" size={30} color={colors.brand} />
-          </View>
+          {isResending
+            ? <ActivityIndicator size="small" color={A.ink} />
+            : <Text style={a.linkBold}>Resend</Text>}
+        </TouchableOpacity>
+      </View>
 
-          <View style={styles.titleContainer}>
-            <Text style={[typography.h1, styles.center, { color: colors.textPrimary }]}>Verify Your Email</Text>
-            <Text style={[typography.body, styles.center, { color: colors.textSecondary, marginTop: spacing.sm }]}>
-              We've sent a 6-digit code to
-            </Text>
-            <Text style={[typography.bodyStrong, styles.center, { color: colors.brand, marginTop: spacing.xs }]}>
-              {email}
-            </Text>
-            <Text style={[typography.caption, styles.center, { color: colors.textMuted, marginTop: spacing.sm }]}>
-              Please check your inbox and spam folder
-            </Text>
-          </View>
-
-          <View style={styles.codeContainer}>
-            {code.map((digit, index) => (
-              <TextInput
-                key={index}
-                ref={(ref) => (inputRefs.current[index] = ref)}
-                style={[
-                  styles.codeInput,
-                  {
-                    backgroundColor: colors.inputBg,
-                    color: colors.textPrimary,
-                    borderColor: digit ? colors.brand : colors.inputBorder,
-                  },
-                ]}
-                value={digit}
-                onChangeText={(text) => handleCodeChange(text, index)}
-                onKeyPress={(e) => handleKeyPress(e, index)}
-                keyboardType="number-pad"
-                maxLength={1}
-                selectTextOnFocus
-                editable={!busy}
-              />
-            ))}
-          </View>
-
-          <TouchableOpacity
-            style={[styles.verifyButton, { backgroundColor: colors.accent }, busy && styles.disabled]}
-            onPress={handleVerify}
-            disabled={busy}
-            activeOpacity={0.85}
-          >
-            {isLoading
-              ? <ActivityIndicator color={colors.onAccent} />
-              : <Text style={[typography.title, { color: colors.onAccent }]}>Verify Email</Text>
-            }
-          </TouchableOpacity>
-
-          <View style={styles.resendContainer}>
-            <Text style={[typography.body, { color: colors.textSecondary }]}>Didn't receive the code? </Text>
-            <TouchableOpacity onPress={handleResendCode} disabled={busy}>
-              {isResending
-                ? <ActivityIndicator size="small" color={colors.brand} />
-                : <Text style={[typography.bodyStrong, { color: colors.textPrimary, fontWeight: "700" }]}>Resend</Text>
-              }
-            </TouchableOpacity>
-          </View>
-
-          <TouchableOpacity
-            style={styles.backContainer}
-            onPress={() => navigation.goBack()}
-            disabled={busy}
-          >
-            <Feather name="arrow-left" size={14} color={colors.textSecondary} />
-            <Text style={[typography.bodyStrong, { color: colors.textPrimary }]}>
-              Back to {fromLogin ? "Login" : "Register"}
-            </Text>
-          </TouchableOpacity>
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+      <TouchableOpacity
+        style={styles.backRow}
+        onPress={() => navigation.goBack()}
+        disabled={busy}
+        hitSlop={8}
+        accessibilityRole="button"
+        accessibilityLabel={`Back to ${fromLogin ? "login" : "register"}`}
+      >
+        <Icon name="arrow-left" size={15} color={A.muted} />
+        <Text style={styles.backText}>Back to {fromLogin ? "Login" : "Register"}</Text>
+      </TouchableOpacity>
+    </AuthScaffold>
   );
 }
 
 const styles = StyleSheet.create({
-  flex: { flex: 1 },
-  screen: { flex: 1 },
-  scroll: {
-    flexGrow: 1,
-    justifyContent: "center",
-    padding: spacing.xl,
-  },
-  center: { textAlign: "center" },
-
-  iconCircle: {
-    width: 64,
-    height: 64,
-    borderRadius: radius.pill,
-    alignItems: "center",
-    justifyContent: "center",
-    alignSelf: "center",
-    marginBottom: spacing.lg,
-  },
-
-  titleContainer: { alignItems: "center", marginBottom: spacing.xxl },
-
-  codeContainer: {
-    flexDirection: "row",
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: spacing.xxl,
-    gap: spacing.sm,
-  },
-  codeInput: {
-    width: 48,
-    height: 58,
-    borderRadius: radius.md,
-    fontSize: 24,
-    fontWeight: "700",
-    textAlign: "center",
-    borderWidth: 2,
-  },
-
-  verifyButton: {
-    paddingVertical: spacing.lg,
-    borderRadius: radius.md,
-    alignItems: "center",
-    width: "100%",
-  },
   disabled: { opacity: 0.55 },
 
-  resendContainer: {
-    flexDirection: "row",
-    justifyContent: "center",
-    alignItems: "center",
-    marginTop: spacing.xl,
+  hint: {
+    fontFamily: fonts.sansMedium, fontSize: 13, color: A.muted,
+    textAlign: 'center', marginTop: -10,
   },
-  backContainer: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    gap: spacing.xs,
-    marginTop: spacing.xl,
+
+  codeContainer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginVertical: 6,
+    gap: 8,
   },
+  codeInput: {
+    flex: 1,
+    maxWidth: 54,
+    height: 62,
+    borderRadius: 16,
+    fontSize: 24,
+    fontFamily: fonts.sansBold,
+    textAlign: 'center',
+    borderWidth: 2,
+    borderColor: 'transparent',
+  },
+  codeInputFilled: { borderColor: A.ink },
+
+  backRow: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
+    gap: 7, marginTop: 4, paddingVertical: 4,
+  },
+  backText: { fontFamily: fonts.sansSemi, fontSize: 14.5, color: A.muted },
 });

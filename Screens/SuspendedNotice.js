@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Modal } from 'react-native';
-import { Feather } from '@expo/vector-icons';
-import { useTheme, spacing, radius, typography } from '../context/ThemeContext';
+import { useTheme, spacing, radius, typography, fonts } from '../context/ThemeContext';
+import Icon from "../components/Icon";
 
 function daysLeft(dateStr) {
   if (!dateStr) return 0;
@@ -17,7 +17,7 @@ export default function SuspendedNotice({ visible, suspensionInfo, onDismiss }) 
       <View style={[s.overlay, { backgroundColor: colors.overlay }]}>
         <View style={[s.card, { backgroundColor: colors.card }]}>
           <View style={[s.iconWrap, { backgroundColor: colors.warningBg }]}>
-            <Feather name="pause" size={26} color={colors.warning} />
+            <Icon name="pause" size={26} color={colors.warning} />
           </View>
           <Text style={[typography.h3, s.title, { color: colors.textPrimary }]}>
             Account temporarily suspended
@@ -28,7 +28,7 @@ export default function SuspendedNotice({ visible, suspensionInfo, onDismiss }) 
           </Text>
 
           <View style={[s.deadlineBox, { backgroundColor: colors.warningBg }]}>
-            <Text style={[typography.caption, { color: colors.warning, fontWeight: '600', marginBottom: 2 }]}>
+            <Text style={[typography.caption, { color: colors.warning, fontFamily: fonts.sansSemi, marginBottom: 2 }]}>
               Lifts in
             </Text>
             <Text style={[s.deadlineDays, { color: colors.warning }]}>
@@ -42,6 +42,7 @@ export default function SuspendedNotice({ visible, suspensionInfo, onDismiss }) 
           </View>
 
           <TouchableOpacity
+            accessibilityRole="button"
             style={[s.btn, { backgroundColor: colors.accent }]}
             onPress={onDismiss}
             activeOpacity={0.85}
@@ -67,6 +68,6 @@ const s = StyleSheet.create({
     width: '100%', borderRadius: radius.md, padding: spacing.md,
     alignItems: 'center', marginBottom: spacing.lg,
   },
-  deadlineDays: { fontSize: 26, fontWeight: '800' },
+  deadlineDays: { fontSize: 26, fontFamily: fonts.sansBold },
   btn:         { borderRadius: radius.md, paddingVertical: spacing.md, alignItems: 'center', width: '100%' },
 });

@@ -9,12 +9,12 @@ import {
   Switch,
 } from "react-native";
 import { showAlert } from "../components/AppAlert";
-import { Feather } from "@expo/vector-icons";
 import { useAuth } from "../context/AuthContext";
-import { useTheme } from "../context/ThemeContext";
+import { useTheme, fonts } from "../context/ThemeContext";
 import { ScreenHeader } from "../components/ui";
 import * as Notifications from "expo-notifications";
 import { HELP_URL, ABOUT_URL, TERMS_URL, PRIVACY_URL } from "../utils/legalLinks";
+import Icon from "../components/Icon";
 
 const openURL = async (url) => {
   const supported = await Linking.canOpenURL(url);
@@ -22,9 +22,15 @@ const openURL = async (url) => {
   else showAlert("Unavailable", "This page isn't available right now.");
 };
 
+const THEME_OPTIONS = [
+  { key: "light",  label: "Light",  icon: "sun" },
+  { key: "dark",   label: "Dark",   icon: "moon" },
+  { key: "system", label: "System", icon: "smartphone" },
+];
+
 const Settings = ({ navigation }) => {
   const { logout } = useAuth();
-  const { isDark, toggleTheme, colors } = useTheme();
+  const { pref, setThemePref, colors } = useTheme();
 
   const [isLoggingOut, setIsLoggingOut] = React.useState(false);
   const [notifEnabled, setNotifEnabled] = React.useState(null);
@@ -115,6 +121,7 @@ const Settings = ({ navigation }) => {
   // ── Reusable row ──────────────────────────────────────────────
   const MenuItem = ({ icon, title, onPress, accessLabel, rightElement, danger }) => (
     <TouchableOpacity
+      accessibilityRole="button"
       style={[styles.menuItem, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}
       onPress={onPress}
       activeOpacity={rightElement ? 1 : 0.7}
@@ -125,14 +132,14 @@ const Settings = ({ navigation }) => {
           styles.iconContainer,
           { backgroundColor: danger ? colors.dangerBg : colors.brandLight },
         ]}>
-          <Feather name={icon} size={18} color={danger ? colors.danger : colors.brand} />
+          <Icon name={icon} size={18} color={danger ? colors.danger : colors.brand} />
         </View>
         <Text style={[styles.menuText, { color: danger ? colors.danger : colors.textPrimary }]}>
           {title}
         </Text>
       </View>
       {rightElement || (
-        <Feather name="chevron-right" size={18} color={danger ? colors.danger : colors.textMuted} />
+        <Icon name="chevron-right" size={18} color={danger ? colors.danger : colors.textMuted} />
       )}
     </TouchableOpacity>
   );
@@ -190,20 +197,34 @@ const Settings = ({ navigation }) => {
         {/* Appearance */}
         <View style={styles.section}>
           <Text style={[styles.sectionTitle, { color: colors.textMuted }]}>Appearance</Text>
-          <MenuItem
-            icon={isDark ? "moon" : "sun"}
-            title="Dark Mode"
-            accessLabel={isDark ? "Dark mode on" : "Dark mode off"}
-            rightElement={
-              <Switch
-                value={isDark}
-                onValueChange={toggleTheme}
-                trackColor={{ false: colors.cardBorder, true: colors.brand }}
-                thumbColor="#fff"
-                accessibilityLabel="Toggle dark mode"
-              />
-            }
-          />
+          {/* A two-state switch could not express "follow my phone", so a user
+              with the OS in dark mode got a light app with dark native keyboards
+              and share sheets. app.json declares userInterfaceStyle:"automatic",
+              and this is what actually honours it. */}
+          <View
+            style={[styles.segment, { backgroundColor: colors.backgroundSoft, borderColor: colors.cardBorder }]}
+            accessibilityRole="radiogroup"
+          >
+            {THEME_OPTIONS.map((opt) => {
+              const on = pref === opt.key;
+              return (
+                <TouchableOpacity
+                  key={opt.key}
+                  style={[styles.segmentItem, on && { backgroundColor: colors.card }]}
+                  onPress={() => setThemePref(opt.key)}
+                  activeOpacity={0.85}
+                  accessibilityRole="radio"
+                  accessibilityState={{ selected: on }}
+                  accessibilityLabel={`${opt.label} appearance`}
+                >
+                  <Icon name={opt.icon} size={15} color={on ? colors.brand : colors.textMuted} />
+                  <Text style={[styles.segmentText, { color: on ? colors.brand : colors.textMuted }]}>
+                    {opt.label}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
         </View>
 
         {/* Support & About */}
@@ -231,11 +252,18 @@ const styles = StyleSheet.create({
   container:     { flex: 1 },
   scrollContent: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 60 },
   section:       { marginBottom: 28 },
-  sectionTitle:  { fontSize: 13, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 10, marginLeft: 4 },
+  sectionTitle:  { fontSize: 13, fontFamily: fonts.sansBold, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 10, marginLeft: 4 },
   menuItem:      { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 15, paddingHorizontal: 15, marginBottom: 8, borderRadius: 16, borderWidth: 1 },
   menuLeft:      { flexDirection: "row", alignItems: "center" },
   iconContainer: { width: 36, height: 36, borderRadius: 12, justifyContent: "center", alignItems: "center", marginRight: 12 },
-  menuText:      { fontSize: 15, fontWeight: "600" },
+  menuText:      { fontSize: 15, fontFamily: fonts.sansSemi },
+
+  segment:     { flexDirection: "row", borderRadius: 16, padding: 4, gap: 4, borderWidth: 1 },
+  segmentItem: {
+    flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center",
+    gap: 6, paddingVertical: 11, borderRadius: 12,
+  },
+  segmentText: { fontSize: 13, fontFamily: fonts.sansSemi },
 });
 
 export default Settings;

@@ -5,14 +5,16 @@ import {
   KeyboardAvoidingView, Platform,
 } from "react-native";
 import { showAlert } from "../components/AppAlert";
-import { Feather } from "@expo/vector-icons";
 import { useUser, useAuth } from "@clerk/clerk-expo";
 import ImageCropPicker from "react-native-image-crop-picker";
 import { useProfileImage } from "../context/ProfileImageContext";
-import { useTheme } from "../context/ThemeContext";
+import { useTheme, fonts } from "../context/ThemeContext";
 import { ScreenHeader } from "../components/ui";
+import { BASE_URL } from "../api";
+import { avatarImage } from "../utils/image";
+import Icon from "../components/Icon";
 
-const BASE_URL = "https://libotbackend.onrender.com";
+// Single source of truth for the backend host — see api.js.
 
 function toCloudinarySquare(url, size = 400) {
   if (!url || typeof url !== "string") return url;
@@ -31,7 +33,7 @@ const Field = ({ label, icon, value, onChangeText, placeholder, keyboardType,
       !editable && styles.fieldRowDisabled,
     ]}>
       <View style={[styles.fieldIcon, { backgroundColor: colors.brandLight }]}>
-        <Feather name={icon} size={16} color={colors.brand} />
+        <Icon name={icon} size={16} color={colors.brand} />
       </View>
       <TextInput
         style={[styles.fieldInput, { color: colors.textPrimary }]}
@@ -251,6 +253,7 @@ export default function EditProfile({ navigation }) {
           onBack={() => navigation.goBack()}
           right={
             <TouchableOpacity
+              accessibilityRole="button"
               style={[
                 styles.saveButton,
                 { backgroundColor: colors.accent },
@@ -277,10 +280,11 @@ export default function EditProfile({ navigation }) {
           keyboardShouldPersistTaps="handled"
         >
           <View style={styles.avatarSection}>
-            <TouchableOpacity onPress={handlePickAvatar} disabled={pickingImage} activeOpacity={0.8}>
+            <TouchableOpacity
+              accessibilityRole="button" onPress={handlePickAvatar} disabled={pickingImage} activeOpacity={0.8}>
               <View style={[styles.profilePhotoWrapper, { backgroundColor: colors.brand }]}>
                 {avatar ? (
-                  <Image source={{ uri: avatar }} style={styles.profilePhoto} />
+                  <Image source={{ uri: avatarImage(avatar, 110) }} style={styles.profilePhoto} />
                 ) : (
                   <View style={[styles.profilePhotoPlaceholder, { backgroundColor: colors.brand }]}>
                     <Text style={[styles.avatarInitials, { color: colors.textInverse }]}>{initials}</Text>
@@ -289,7 +293,7 @@ export default function EditProfile({ navigation }) {
                 <View style={[styles.avatarBadge, { backgroundColor: colors.brandDark, borderColor: colors.background }]}>
                   {pickingImage
                     ? <ActivityIndicator size="small" color={colors.textInverse} />
-                    : <Feather name="camera" size={14} color={colors.textInverse} />
+                    : <Icon name="camera" size={14} color={colors.textInverse} />
                   }
                 </View>
               </View>
@@ -299,7 +303,7 @@ export default function EditProfile({ navigation }) {
             <Text style={[styles.avatarHint, { color: colors.textMuted }]}>Tap photo to change</Text>
             {isGoogleUser && (
               <View style={[styles.googleBadge, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
-                <Feather name="globe" size={12} color={colors.brand} />
+                <Icon name="globe" size={12} color={colors.brand} />
                 <Text style={[styles.googleBadgeText, { color: colors.brand }]}>Signed in with Google</Text>
               </View>
             )}
@@ -315,17 +319,18 @@ export default function EditProfile({ navigation }) {
           <View style={styles.section}>
             <Text style={[styles.sectionTitle, { color: colors.textMuted }]}>Danger Zone</Text>
             <TouchableOpacity
+              accessibilityRole="button"
               style={[styles.menuItem, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}
               onPress={handleDeleteAccount}
               activeOpacity={0.7}
             >
               <View style={styles.menuLeft}>
                 <View style={[styles.iconContainer, { backgroundColor: colors.dangerBg }]}>
-                  <Feather name="trash-2" size={18} color={colors.danger} />
+                  <Icon name="trash-2" size={18} color={colors.danger} />
                 </View>
                 <Text style={[styles.menuText, { color: colors.danger }]}>Delete Account</Text>
               </View>
-              <Feather name="chevron-right" size={18} color={colors.danger} />
+              <Icon name="chevron-right" size={18} color={colors.danger} />
             </TouchableOpacity>
           </View>
 
@@ -341,7 +346,7 @@ const styles = StyleSheet.create({
   centered:  { justifyContent: "center", alignItems: "center" },
 
   saveButton:  { paddingHorizontal: 18, paddingVertical: 8, borderRadius: 999, minWidth: 58, alignItems: "center" },
-  saveButtonText: { fontWeight: "700", fontSize: 14 },
+  saveButtonText: { fontFamily: fonts.sansBold, fontSize: 14 },
 
   scrollContent: { paddingHorizontal: 20 },
 
@@ -349,26 +354,26 @@ const styles = StyleSheet.create({
   profilePhotoWrapper:     { width: 100, height: 100, borderRadius: 50, overflow: "hidden", justifyContent: "center", alignItems: "center", position: "relative" },
   profilePhoto:            { width: "100%", height: "100%", resizeMode: "cover" },
   profilePhotoPlaceholder: { width: "100%", height: "100%", justifyContent: "center", alignItems: "center" },
-  avatarInitials:          { fontSize: 32, fontWeight: "700" },
+  avatarInitials:          { fontSize: 32, fontFamily: fonts.sansBold },
   avatarBadge:             { position: "absolute", bottom: 2, right: 2, width: 26, height: 26, borderRadius: 13, justifyContent: "center", alignItems: "center", borderWidth: 2 },
-  fullNameLabel:           { fontSize: 21, fontWeight: "800", letterSpacing: -0.3, marginTop: 14, marginBottom: 2 },
+  fullNameLabel:           { fontSize: 21, fontFamily: fonts.sansBold, letterSpacing: -0.3, marginTop: 14, marginBottom: 2 },
   emailLabel:              { fontSize: 13, marginBottom: 4 },
   avatarHint:              { fontSize: 12, marginBottom: 8 },
   googleBadge:             { flexDirection: "row", alignItems: "center", borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4, borderWidth: 1, gap: 5, marginTop: 4 },
-  googleBadgeText:         { fontSize: 12, fontWeight: "600" },
+  googleBadgeText:         { fontSize: 12, fontFamily: fonts.sansSemi },
 
   section:      { marginBottom: 28 },
-  sectionTitle: { fontSize: 13, fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 6, marginLeft: 4 },
+  sectionTitle: { fontSize: 13, fontFamily: fonts.sansBold, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 6, marginLeft: 4 },
 
   fieldWrapper: { marginBottom: 10 },
-  fieldLabel:   { fontSize: 12, fontWeight: "600", marginBottom: 5, marginLeft: 4 },
+  fieldLabel:   { fontSize: 12, fontFamily: fonts.sansSemi, marginBottom: 5, marginLeft: 4 },
   fieldRow:     { flexDirection: "row", alignItems: "center", borderRadius: 14, borderWidth: 1, paddingHorizontal: 13, paddingVertical: 13 },
   fieldRowDisabled: { opacity: 0.5 },
   fieldIcon:    { width: 28, height: 28, borderRadius: 8, justifyContent: "center", alignItems: "center", marginRight: 10 },
-  fieldInput:   { flex: 1, fontSize: 15, fontWeight: "500", padding: 0 },
+  fieldInput:   { flex: 1, fontSize: 15, fontFamily: fonts.sansMedium, padding: 0 },
 
   menuItem:      { flexDirection: "row", justifyContent: "space-between", alignItems: "center", borderRadius: 16, paddingVertical: 15, paddingHorizontal: 15, marginBottom: 10, borderWidth: 1 },
   menuLeft:      { flexDirection: "row", alignItems: "center" },
   iconContainer: { width: 38, height: 38, borderRadius: 12, justifyContent: "center", alignItems: "center", marginRight: 12 },
-  menuText:      { fontSize: 15, fontWeight: "600" },
+  menuText:      { fontSize: 15, fontFamily: fonts.sansSemi },
 });

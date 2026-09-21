@@ -16,12 +16,13 @@ import {
 import { showAlert } from "../components/AppAlert";
 import { Camera, useCameraDevice, useCameraPermission } from 'react-native-vision-camera';
 import * as ImageManipulator from 'expo-image-manipulator';
-import { Feather } from '@expo/vector-icons';
 import { useIsFocused } from '@react-navigation/native';
 import { useAuth } from '@clerk/clerk-expo';
 import { loadModel, runPrediction } from '../utils/missionAI';
-import { useTheme } from '../context/ThemeContext';
+import * as Haptics from "expo-haptics";
+import { useTheme, fonts } from '../context/ThemeContext';
 import { useMissions } from '../context/MissionContext';
+import Icon from "../components/Icon";
 
 const { width, height } = Dimensions.get('window');
 
@@ -160,7 +161,7 @@ function StepRow({ number, icon, text, isLast }) {
         {!isLast && <View style={stepStyles.connector} />}
       </View>
       <View style={stepStyles.content}>
-        <Feather name={icon} size={13} color={C.inkMuted} style={{ marginRight: 8, marginTop: 1 }} />
+        <Icon name={icon} size={13} color={C.inkMuted} style={{ marginRight: 8, marginTop: 1 }} />
         <Text style={stepStyles.text}>{text}</Text>
       </View>
     </View>
@@ -175,7 +176,7 @@ const makeStepStyles = (COLORS) => StyleSheet.create({
     backgroundColor: COLORS.brandTint,
     alignItems: 'center', justifyContent: 'center',
   },
-  numText:   { fontSize: 11, fontWeight: '700', color: COLORS.brandDeep },
+  numText:   { fontSize: 11, fontFamily: fonts.sansBold, color: COLORS.brandDeep },
   connector: { width: 1.5, flex: 1, backgroundColor: COLORS.border, marginTop: 4 },
   content:   { flexDirection: 'row', alignItems: 'flex-start', flex: 1, paddingTop: 3 },
   text:      { fontSize: 13.5, color: COLORS.inkSub, flex: 1, lineHeight: 20 },
@@ -207,8 +208,8 @@ const makeMeterStyles = (COLORS) => StyleSheet.create({
     flexDirection: 'row', justifyContent: 'space-between',
     alignItems: 'center', marginBottom: 6,
   },
-  label: { fontSize: 12, fontWeight: '600', color: COLORS.inkMuted },
-  value: { fontSize: 13, fontWeight: '800' },
+  label: { fontSize: 12, fontFamily: fonts.sansSemi, color: COLORS.inkMuted },
+  value: { fontSize: 13, fontFamily: fonts.sansBold },
   track: {
     width: '100%', height: 8, borderRadius: 4,
     backgroundColor: COLORS.border, overflow: 'hidden',
@@ -462,13 +463,17 @@ export default function Mission({ navigation, route }) {
   const closeCamera = () => { setCameraOpen(false); setStatus('pending'); };
 
   const completeMission = () => {
+    // Completing a mission is one of the few genuine reward moments in the app
+    // and it awards points — it should register physically, not just visually.
+    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+
     // Persists to the backend (awards points + survives app restarts) and
     // updates local state so InformationScreen's mission list reflects it
     // immediately. Fire-and-forget — the confirmation shows regardless, and
     // completeMission() is idempotent server-side if it's retried.
     persistMissionComplete(mission._id);
     showAlert(
-      '🎉 Nice spotting!',
+      'Nice spotting!',
       `"${mission.title}" is confirmed and logged as complete.`,
       [{ text: 'Back to Missions', onPress: () => navigation.goBack() }]
     );
@@ -482,7 +487,7 @@ export default function Mission({ navigation, route }) {
         <View style={{ flex: 1 }} {...gestureResponder.panHandlers}>
           {device == null ? (
             <View style={[StyleSheet.absoluteFill, styles.noCamera]}>
-              <Feather name="camera-off" size={28} color="rgba(255,255,255,0.7)" />
+              <Icon name="camera-off" size={28} color="rgba(255,255,255,0.7)" />
               <Text style={styles.noCameraText}>Camera unavailable</Text>
             </View>
           ) : (
@@ -499,15 +504,17 @@ export default function Mission({ navigation, route }) {
           )}
 
             <SafeAreaView style={styles.cameraTopBar}>
-              <TouchableOpacity onPress={closeCamera} style={styles.cameraIconBtn}>
-                <Feather name="x" size={20} color="white" />
+              <TouchableOpacity
+                accessibilityRole="button" onPress={closeCamera} style={styles.cameraIconBtn}>
+                <Icon name="x" size={20} color="white" />
               </TouchableOpacity>
               <View style={styles.cameraTitleWrap}>
                 <Text style={styles.cameraLabel}>On the hunt</Text>
                 <Text style={styles.cameraTitle}>{config.product}</Text>
               </View>
-              <TouchableOpacity onPress={flipCamera} style={styles.cameraIconBtn}>
-                <Feather name="refresh-cw" size={18} color="white" />
+              <TouchableOpacity
+                accessibilityRole="button" onPress={flipCamera} style={styles.cameraIconBtn}>
+                <Icon name="refresh-cw" size={18} color="white" />
               </TouchableOpacity>
             </SafeAreaView>
 
@@ -553,13 +560,13 @@ export default function Mission({ navigation, route }) {
             />
 
             <View style={styles.scanHintWrap} pointerEvents="none">
-              <Feather name="maximize" size={12} color="rgba(255,255,255,0.85)" style={{ marginRight: 6 }} />
+              <Icon name="maximize" size={12} color="rgba(255,255,255,0.85)" style={{ marginRight: 6 }} />
               <Text style={styles.scanHint}>Keep {config.product} inside the frame</Text>
             </View>
 
             {/* Zoom slider */}
             <View style={styles.zoomTrackWrap}>
-              <Feather name="zoom-in" size={14} color="rgba(255,255,255,0.8)" />
+              <Icon name="zoom-in" size={14} color="rgba(255,255,255,0.8)" />
               <View style={styles.zoomTrack} {...zoomSliderResponder.panHandlers}>
                 <View
                   style={[
@@ -574,11 +581,12 @@ export default function Mission({ navigation, route }) {
                   ]}
                 />
               </View>
-              <Feather name="zoom-out" size={14} color="rgba(255,255,255,0.8)" />
+              <Icon name="zoom-out" size={14} color="rgba(255,255,255,0.8)" />
             </View>
 
             <View style={styles.cameraBottomBar}>
-              <TouchableOpacity style={styles.captureButton} onPress={takePhoto} activeOpacity={0.8}>
+              <TouchableOpacity
+                accessibilityRole="button" style={styles.captureButton} onPress={takePhoto} activeOpacity={0.8}>
                 <View style={styles.captureInner} />
               </TouchableOpacity>
             </View>
@@ -598,10 +606,11 @@ export default function Mission({ navigation, route }) {
       >
         {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn}>
-            <Feather name="chevron-left" size={20} color={C.ink} />
+          <TouchableOpacity
+            accessibilityRole="button" onPress={() => navigation.goBack()} style={styles.backBtn}>
+            <Icon name="chevron-left" size={20} color={C.ink} />
           </TouchableOpacity>
-          <Text style={styles.headerTitle}>Mission</Text>
+          <Text style={styles.headerTitle}>Bakit List</Text>
           <View style={{ width: 36 }} />
         </View>
 
@@ -615,7 +624,7 @@ export default function Mission({ navigation, route }) {
         <View style={styles.ticketCard}>
           <View style={styles.ticketMain}>
             <View style={[styles.iconWrap, { backgroundColor: accentColor + '18' }]}>
-              <Feather name={config.iconName} size={24} color={accentColor} />
+              <Icon name={config.iconName} size={24} color={accentColor} />
             </View>
             <View style={{ flex: 1 }}>
               <Text style={styles.ticketCategory}>{config.category} sighting</Text>
@@ -636,12 +645,12 @@ export default function Mission({ navigation, route }) {
           </View>
 
           <Text style={styles.ticketBrief}>
-            Spot <Text style={styles.ticketBriefStrong}>{config.product}</Text> to complete this mission.
+            Spot <Text style={styles.ticketBriefStrong}>{config.product}</Text> to complete this activity.
           </Text>
 
           {spot?.name && (
             <View style={styles.spotRow}>
-              <Feather name="map-pin" size={12} color={C.inkSub} />
+              <Icon name="map-pin" size={12} color={C.inkSub} />
               <Text style={styles.spotRowText}>{spot.name}</Text>
             </View>
           )}
@@ -675,14 +684,14 @@ export default function Mission({ navigation, route }) {
 
           {config.hint && (
             <View style={styles.hintBox}>
-              <Feather name="info" size={13} color={C.brandDeep} style={{ marginRight: 8, marginTop: 1 }} />
+              <Icon name="info" size={13} color={C.brandDeep} style={{ marginRight: 8, marginTop: 1 }} />
               <Text style={styles.hintText}>{config.hint}</Text>
             </View>
           )}
 
           {alreadyCompleted && status === 'pending' && (
             <View style={[styles.hintBox, { backgroundColor: C.successTint, marginTop: 10 }]}>
-              <Feather name="check-circle" size={13} color={C.success} style={{ marginRight: 8, marginTop: 1 }} />
+              <Icon name="check-circle" size={13} color={C.success} style={{ marginRight: 8, marginTop: 1 }} />
               <Text style={[styles.hintText, { color: C.success }]}>
                 Already logged — feel free to scan again just for fun.
               </Text>
@@ -697,19 +706,20 @@ export default function Mission({ navigation, route }) {
           {status === 'pending' && (
             <View style={styles.statusInner}>
               <View style={styles.statusIconCircle}>
-                <Feather name="compass" size={28} color={C.brand} />
+                <Icon name="compass" size={28} color={C.brand} />
               </View>
               <Text style={styles.statusTitle}>Ready when you are</Text>
               <Text style={styles.statusDesc}>
                 Open the camera and point it at {config.product.toLowerCase()} to log the sighting.
               </Text>
               <TouchableOpacity
+                accessibilityRole="button"
                 style={[styles.primaryBtn, !modelReady && styles.disabledBtn]}
                 onPress={openCamera}
                 disabled={!modelReady}
                 activeOpacity={0.85}
               >
-                <Feather name="camera" size={16} color={C.onGold} style={{ marginRight: 8 }} />
+                <Icon name="camera" size={16} color={C.onGold} style={{ marginRight: 8 }} />
                 <Text style={styles.primaryBtnText}>
                   {modelReady ? 'Open Camera' : 'Loading scanner…'}
                 </Text>
@@ -738,19 +748,21 @@ export default function Mission({ navigation, route }) {
               )}
               <ConfidenceMeter confidence={confidence} color={C.success} />
               <View style={[styles.statusBanner, { backgroundColor: C.successTint }]}>
-                <Feather name="check-circle" size={18} color={C.success} style={{ marginRight: 8 }} />
+                <Icon name="check-circle" size={18} color={C.success} style={{ marginRight: 8 }} />
                 <Text style={[styles.statusBannerText, { color: C.success }]}>Sighting confirmed</Text>
               </View>
               <TouchableOpacity
+                accessibilityRole="button"
                 style={styles.primaryBtn}
                 onPress={completeMission}
                 activeOpacity={0.85}
               >
-                <Feather name="check" size={16} color={C.onGold} style={{ marginRight: 8 }} />
+                <Icon name="check" size={16} color={C.onGold} style={{ marginRight: 8 }} />
                 <Text style={styles.primaryBtnText}>Mark as Done</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={styles.outlineBtn} onPress={openCamera} activeOpacity={0.8}>
-                <Feather name="refresh-cw" size={14} color={C.brand} style={{ marginRight: 6 }} />
+              <TouchableOpacity
+                accessibilityRole="button" style={styles.outlineBtn} onPress={openCamera} activeOpacity={0.8}>
+                <Icon name="refresh-cw" size={14} color={C.brand} style={{ marginRight: 6 }} />
                 <Text style={styles.outlineBtnText}>Scan Again</Text>
               </TouchableOpacity>
             </View>
@@ -764,14 +776,15 @@ export default function Mission({ navigation, route }) {
               )}
               <ConfidenceMeter confidence={confidence} color={C.danger} />
               <View style={[styles.statusBanner, { backgroundColor: C.dangerTint }]}>
-                <Feather name="x-circle" size={18} color={C.danger} style={{ marginRight: 8 }} />
+                <Icon name="x-circle" size={18} color={C.danger} style={{ marginRight: 8 }} />
                 <Text style={[styles.statusBannerText, { color: C.danger }]}>No match yet</Text>
               </View>
               <Text style={styles.failedTip}>
-                Make sure <Text style={{ fontWeight: '700' }}>{config.product}</Text> is clearly visible and well-lit, then try again.
+                Make sure <Text style={{ fontFamily: fonts.sansBold }}>{config.product}</Text> is clearly visible and well-lit, then try again.
               </Text>
-              <TouchableOpacity style={styles.primaryBtn} onPress={openCamera} activeOpacity={0.85}>
-                <Feather name="camera" size={16} color={C.onGold} style={{ marginRight: 8 }} />
+              <TouchableOpacity
+                accessibilityRole="button" style={styles.primaryBtn} onPress={openCamera} activeOpacity={0.85}>
+                <Icon name="camera" size={16} color={C.onGold} style={{ marginRight: 8 }} />
                 <Text style={styles.primaryBtnText}>Try Again</Text>
               </TouchableOpacity>
             </View>
@@ -800,14 +813,14 @@ const makeStyles = (COLORS) => StyleSheet.create({
     backgroundColor: COLORS.surface, alignItems: 'center', justifyContent: 'center',
     borderWidth: 1, borderColor: COLORS.border,
   },
-  headerTitle: { fontSize: 15, fontWeight: '600', color: COLORS.inkSub },
+  headerTitle: { fontSize: 15, fontFamily: fonts.sansSemi, color: COLORS.inkSub },
 
   greetingBlock: { width: '100%', marginBottom: 18, marginTop: 4 },
   greetingHello: {
-    fontSize: 26, fontWeight: '800', color: COLORS.ink, letterSpacing: -0.3,
+    fontSize: 26, fontFamily: fonts.sansBold, color: COLORS.ink, letterSpacing: -0.3,
     marginBottom: 4,
   },
-  greetingSub: { fontSize: 15, color: COLORS.brand, fontWeight: '600' },
+  greetingSub: { fontSize: 15, color: COLORS.brand, fontFamily: fonts.sansSemi },
 
   // ── Mission "ticket" — the one signature visual moment on this screen ──
   ticketCard: {
@@ -822,11 +835,11 @@ const makeStyles = (COLORS) => StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
   },
   ticketCategory: {
-    fontSize: 12, color: COLORS.inkMuted, fontWeight: '600', marginBottom: 3,
+    fontSize: 12, color: COLORS.inkMuted, fontFamily: fonts.sansSemi, marginBottom: 3,
   },
-  ticketTitle: { fontSize: 17, fontWeight: '800', color: COLORS.ink },
+  ticketTitle: { fontSize: 17, fontFamily: fonts.sansBold, color: COLORS.ink },
   attemptsBadge: { alignItems: 'center', paddingLeft: 8 },
-  attemptsNum:   { fontSize: 20, fontWeight: '800', color: COLORS.brand },
+  attemptsNum:   { fontSize: 20, fontFamily: fonts.sansBold, color: COLORS.brand },
   attemptsLabel: { fontSize: 10, color: COLORS.inkMuted },
 
   ticketDividerRow: { position: 'relative', marginVertical: 16 },
@@ -841,12 +854,12 @@ const makeStyles = (COLORS) => StyleSheet.create({
   ticketNotchRight: { right: -32 },
 
   ticketBrief: { fontSize: 14.5, color: COLORS.inkSub, lineHeight: 21 },
-  ticketBriefStrong: { color: COLORS.ink, fontWeight: '700' },
+  ticketBriefStrong: { color: COLORS.ink, fontFamily: fonts.sansBold },
 
   spotRow: {
     flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 12,
   },
-  spotRowText: { fontSize: 12.5, color: COLORS.inkSub, fontWeight: '500' },
+  spotRowText: { fontSize: 12.5, color: COLORS.inkSub, fontFamily: fonts.sansMedium },
 
   loadingRow: {
     flexDirection: 'row', alignItems: 'center',
@@ -861,7 +874,7 @@ const makeStyles = (COLORS) => StyleSheet.create({
     shadowRadius: 18, shadowOffset: { width: 0, height: 8 }, elevation: 2,
   },
   cardLabel: {
-    fontSize: 13, fontWeight: '700', color: COLORS.ink, marginBottom: 20,
+    fontSize: 13, fontFamily: fonts.sansBold, color: COLORS.ink, marginBottom: 20,
   },
 
   hintBox: {
@@ -877,7 +890,7 @@ const makeStyles = (COLORS) => StyleSheet.create({
     alignItems: 'center', justifyContent: 'center', marginBottom: 16,
   },
   statusTitle: {
-    fontSize: 20, fontWeight: '800', color: COLORS.ink,
+    fontSize: 20, fontFamily: fonts.sansBold, color: COLORS.ink,
     marginBottom: 8, textAlign: 'center',
   },
   statusDesc: {
@@ -897,7 +910,7 @@ const makeStyles = (COLORS) => StyleSheet.create({
     borderRadius: 14, paddingHorizontal: 16, paddingVertical: 11,
     marginBottom: 18, width: '100%', justifyContent: 'center',
   },
-  statusBannerText: { fontSize: 15, fontWeight: '700' },
+  statusBannerText: { fontSize: 15, fontFamily: fonts.sansBold },
 
   failedTip: {
     fontSize: 13, color: COLORS.inkSub,
@@ -909,7 +922,7 @@ const makeStyles = (COLORS) => StyleSheet.create({
     backgroundColor: COLORS.brandTint, paddingHorizontal: 16,
     paddingVertical: 11, borderRadius: 14, width: '100%', justifyContent: 'center',
   },
-  scanningText: { fontSize: 14, color: COLORS.brandDeep, fontWeight: '600' },
+  scanningText: { fontSize: 14, color: COLORS.brandDeep, fontFamily: fonts.sansSemi },
 
   primaryBtn: {
     backgroundColor: COLORS.gold, paddingVertical: 14,
@@ -917,13 +930,13 @@ const makeStyles = (COLORS) => StyleSheet.create({
     width: '100%', alignItems: 'center', justifyContent: 'center', flexDirection: 'row',
   },
   disabledBtn:     { backgroundColor: COLORS.border },
-  primaryBtnText:  { color: COLORS.onGold, fontSize: 15, fontWeight: '700', letterSpacing: 0.2 },
+  primaryBtnText:  { color: COLORS.onGold, fontSize: 15, fontFamily: fonts.sansBold, letterSpacing: 0.2 },
   outlineBtn: {
     borderWidth: 1.5, borderColor: COLORS.border,
     paddingVertical: 13, paddingHorizontal: 28, borderRadius: 16,
     width: '100%', alignItems: 'center', flexDirection: 'row', justifyContent: 'center',
   },
-  outlineBtnText: { color: COLORS.brand, fontSize: 14, fontWeight: '600' },
+  outlineBtnText: { color: COLORS.brand, fontSize: 14, fontFamily: fonts.sansSemi },
 
   cameraContainer: { flex: 1, backgroundColor: '#000' },
   camera:          { flex: 1 },
@@ -942,9 +955,9 @@ const makeStyles = (COLORS) => StyleSheet.create({
   },
   cameraTitleWrap: { alignItems: 'center' },
   cameraLabel: {
-    fontSize: 11, color: 'rgba(255,255,255,0.65)', fontWeight: '600', marginBottom: 2,
+    fontSize: 11, color: 'rgba(255,255,255,0.65)', fontFamily: fonts.sansSemi, marginBottom: 2,
   },
-  cameraTitle: { color: 'white', fontSize: 15, fontWeight: '700' },
+  cameraTitle: { color: 'white', fontSize: 15, fontFamily: fonts.sansBold },
 
   scanFrame: {
     position: 'absolute', top: height * 0.22,

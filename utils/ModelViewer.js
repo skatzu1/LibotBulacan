@@ -5,6 +5,7 @@ import {
   Gesture,
 } from "react-native-gesture-handler";
 
+import Icon from "../components/Icon";
 import {
   Viro3DSceneNavigator,
   ViroScene,
@@ -15,7 +16,6 @@ import {
   ViroMaterials,
 } from "@reactvision/react-viro";
 
-import { MaterialCommunityIcons, Feather } from "@expo/vector-icons";
 
 const VIEW_DISTANCE     = -20;
 const SENSITIVITY       = 0.3;
@@ -313,15 +313,15 @@ export default function ModelViewer({
 
       <View style={styles.zoomButtons}>
         <TouchableOpacity style={styles.iconBtn} onPress={zoomIn}>
-          <Feather name="plus" size={18} color="#555" />
+          <Icon name="plus" size={18} color="#555" />
         </TouchableOpacity>
         <TouchableOpacity style={styles.iconBtn} onPress={zoomOut}>
-          <Feather name="minus" size={18} color="#555" />
+          <Icon name="minus" size={18} color="#555" />
         </TouchableOpacity>
       </View>
 
       <TouchableOpacity style={styles.resetBtn} onPress={reset}>
-        <MaterialCommunityIcons name="rotate-3d-variant" size={18} color="#555" />
+        <Icon name="rotate-3d-variant" size={18} color="#555" />
       </TouchableOpacity>
     </View>
   );
@@ -329,7 +329,7 @@ export default function ModelViewer({
 
 const styles = StyleSheet.create({
   wrapper: {
-    backgroundColor: "#ffffff",   // ← white container
+    backgroundColor: "#ffffff",   // <- white container
     borderRadius: 20,
     overflow: "hidden",
   },
@@ -338,7 +338,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   loadingOverlay: {
-    backgroundColor: "#ffffff",   // ← white loading overlay
+    backgroundColor: "#ffffff",   // <- white loading overlay
   },
   zoomButtons: {
     position: "absolute",

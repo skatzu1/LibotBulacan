@@ -25,6 +25,17 @@ import { ThemeProvider, useTheme } from "./context/ThemeContext";
 import { AppAlertProvider }     from "./components/AppAlert";
 import ErrorBoundary            from "./utils/ErrorBoundary";
 
+// Fonts. Every weight is a separate family because React Native does not
+// synthesize weights for custom fonts — see the note in ThemeContext.
+import {
+  Newsreader_600SemiBold, Newsreader_700Bold, Newsreader_800ExtraBold,
+} from "@expo-google-fonts/newsreader";
+import {
+  SchibstedGrotesk_400Regular, SchibstedGrotesk_500Medium,
+  SchibstedGrotesk_600SemiBold, SchibstedGrotesk_700Bold,
+} from "@expo-google-fonts/schibsted-grotesk";
+import { useFonts } from "expo-font";
+
 // Screens
 import WelcomePage        from "./Screens/WelcomePage";
 import WelcomePage2       from "./Screens/WelcomePage2";
@@ -48,21 +59,24 @@ import ARSpotSelect       from './Screens/ARspotSelect';
 import MissionsSpotSelect from './Screens/MissionsSpotSelect';
 import TrackSpotSelect    from './Screens/TrackSpotSelect';
 import EditProfile        from './Screens/EditProfile';
+import ProfileScreen      from './Screens/Profilescreen';
 import BannedScreen       from './Screens/BannedScreen';
 import SuspendedNotice    from './Screens/SuspendedNotice';
 import LoginSecurity       from './Screens/LoginSecurity';
 
-// Set EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY in .env (and as an EAS build secret).
-// Use the PRODUCTION Clerk instance key (pk_live_…) for release builds.
-// The pk_test_… fallback only applies to local dev — a production build with no
-// key set fails fast rather than silently shipping the dev instance.
-const DEV_CLERK_KEY = 'pk_test_cHJpbWUtY2hpY2tlbi0yNS5jbGVyay5hY2NvdW50cy5kZXYk';
+// Clerk publishable keys are public by design — they ship inside the JS bundle
+// either way, so they live here rather than in EAS secrets.
+// Release builds (preview + production) get the live instance; local dev gets the
+// test instance. Set EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY in .env to override either
+// one — e.g. to run a dev build against production while testing Google SSO.
+const DEV_CLERK_KEY  = 'pk_test_cHJpbWUtY2hpY2tlbi0yNS5jbGVyay5hY2NvdW50cy5kZXYk'; // prime-chicken-25.clerk.accounts.dev
+const PROD_CLERK_KEY = 'pk_live_Y2xlcmsubGlib3RidWxhY2FuLmNvbSQ';                  // clerk.libotbulacan.com
 const CLERK_PUBLISHABLE_KEY =
-  process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY ?? (__DEV__ ? DEV_CLERK_KEY : undefined);
+  process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY ?? (__DEV__ ? DEV_CLERK_KEY : PROD_CLERK_KEY);
 
 if (!CLERK_PUBLISHABLE_KEY) {
   throw new Error(
-    'EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY is not set. Add it to your environment / EAS secrets before building for release.',
+    'EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY is set but empty. Unset it to use the built-in default, or give it a valid pk_… key.',
   );
 }
 
@@ -209,6 +223,11 @@ function AppNavigator() {
                         {isSignedIn ? (
                           <>
                             <Stack.Screen name="Home"              component={Home}               options={{ gestureEnabled: false }} />
+                            {/* Profile used to live inside the Home drawer. The drawer
+                                was removed (it duplicated the tabs and quick actions and
+                                owned no unique destination), so Profile is a stack screen
+                                reached from the Home header avatar. */}
+                            <Stack.Screen name="Profile"           component={ProfileScreen} />
                             <Stack.Screen name="Leaderboard"       component={Leaderboard} />
                             <Stack.Screen name="InformationScreen" component={InformationScreen} />
                             <Stack.Screen name="Categories"        component={Categories} />
@@ -262,6 +281,20 @@ function AppNavigator() {
 }
 
 export default function App() {
+  const [fontsLoaded, fontError] = useFonts({
+    Newsreader_600SemiBold, Newsreader_700Bold, Newsreader_800ExtraBold,
+    SchibstedGrotesk_400Regular, SchibstedGrotesk_500Medium,
+    SchibstedGrotesk_600SemiBold, SchibstedGrotesk_700Bold,
+  });
+
+  // Hold the tree until the faces are resolved, otherwise the first frame
+  // renders in the system font and visibly reflows. `fontError` still lets the
+  // app through — a missing font should degrade to the system face, never be a
+  // blank screen.
+  if (!fontsLoaded && !fontError) {
+    return <View style={[styles.loadingContainer, { backgroundColor: "#FBF8F2" }]} />;
+  }
+
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <SafeAreaProvider>
