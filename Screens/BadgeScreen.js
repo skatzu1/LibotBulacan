@@ -8,7 +8,7 @@ import {
   FlatList,
   Image,
   Animated,
-  Dimensions,
+  useWindowDimensions,
   ActivityIndicator,
   RefreshControl,
   Modal,
@@ -17,17 +17,23 @@ import {
 } from "react-native";
 import { showAlert } from "../components/AppAlert";
 import { useNavigation } from "@react-navigation/native";
-import { Feather } from "@expo/vector-icons";
 import { useAuth } from "@clerk/clerk-expo";
 import { captureRef } from "react-native-view-shot";
 import RNShare from "react-native-share";
-import { useTheme } from "../context/ThemeContext";
+import * as Haptics from "expo-haptics";
+import { useTheme, fonts, typography } from "../context/ThemeContext";
 import { ScreenHeader } from "../components/ui";
+import { BASE_URL } from "../api";
+import { badgeImage } from "../utils/image";
+import Icon from "../components/Icon";
 
-const { width } = Dimensions.get("window");
-const GRID_GAP  = 16;
-const CARD_SIZE = (width - 40 - GRID_GAP * 2) / 3; // 40 = horizontal screen padding
-const BASE_URL  = "https://libotbackend.onrender.com";
+const GRID_GAP = 16;
+const H_GUTTER = 40; // total horizontal screen padding
+
+// Columns scale with the viewport instead of being pinned at 3 — on a tablet or
+// in split-screen the old fixed grid produced either giant cells or clipping.
+const columnsFor = (w) => (w >= 900 ? 6 : w >= 600 ? 4 : 3);
+const cardSizeFor = (w) => (w - H_GUTTER - GRID_GAP * (columnsFor(w) - 1)) / columnsFor(w);
 
 // Self-contained fade-in wrapper — safe with FlatList recycling since each
 // mounted cell owns its own Animated.Value instead of indexing into a shared
@@ -52,6 +58,9 @@ export default function BadgeScreen() {
   const navigation   = useNavigation();
   const { getToken } = useAuth();
   const { colors, isDark } = useTheme();
+  const { width: winWidth } = useWindowDimensions();
+  const columns  = columnsFor(winWidth);
+  const cardSize = cardSizeFor(winWidth);
 
   const [badges, setBadges]             = useState([]); // full catalog, each tagged with .claimed
   const [loading, setLoading]           = useState(true);
@@ -141,15 +150,30 @@ export default function BadgeScreen() {
   }, [badges, filter]);
 
   const openBadge = (badge) => {
+    // Opening a badge you actually earned is the reward moment of the whole
+    // points system — it should feel like something. A locked badge gets the
+    // lighter selection tick instead, so the two are distinguishable by touch.
+    if (badge.claimed) {
+      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+    } else {
+      Haptics.selectionAsync().catch(() => {});
+    }
+
     setSelectedBadge(badge);
     setModalVisible(true);
     modalOpacity.setValue(0);
-    modalScale.setValue(0.85);
+    modalScale.setValue(badge.claimed ? 0.7 : 0.85);
     modalTranslate.setValue(40);
 
     Animated.parallel([
       Animated.timing(modalOpacity, { toValue: 1, duration: 300, useNativeDriver: true }),
-      Animated.spring(modalScale, { toValue: 1, tension: 120, friction: 9, useNativeDriver: true }),
+      // A claimed badge overshoots on the way in; a locked one just settles.
+      Animated.spring(modalScale, {
+        toValue: 1,
+        tension: badge.claimed ? 90 : 120,
+        friction: badge.claimed ? 6 : 9,
+        useNativeDriver: true,
+      }),
       Animated.timing(modalTranslate, { toValue: 0, duration: 300, useNativeDriver: true }),
     ]).start();
   };
@@ -185,7 +209,7 @@ export default function BadgeScreen() {
         title: `${selectedBadge.name} Badge`,
         url: uri,
         type: "image/png",
-        message: `🏅 I just earned the "${selectedBadge.name}" badge on Libot! Discover Bulacan\'s history!`,
+        message: `I just earned the "${selectedBadge.name}" badge on Libot! Discover Bulacan\'s history!`,
         failOnCancel: false,
       });
     } catch (e) {
@@ -203,31 +227,42 @@ export default function BadgeScreen() {
       <TouchableOpacity
         activeOpacity={0.75}
         onPress={() => openBadge(badge)}
-        style={[styles.badgeWrapper, { width: CARD_SIZE }]}
+        style={[styles.badgeWrapper, { width: cardSize }]}
+        accessibilityRole="button"
+        accessibilityLabel={
+          badge.claimed
+            ? `${badge.name} badge, earned${badge.claimedAt ? ` on ${new Date(badge.claimedAt).toLocaleDateString("en-PH", { month: "long", day: "numeric", year: "numeric" })}` : ""}`
+            : `${badge.name} badge, locked`
+        }
+        accessibilityHint="Opens the badge details"
       >
+        {/* Claimed badges sit on a white card so they LIFT off the warm page;
+            locked ones recede into the page tint. Previously this was inverted,
+            so the thing you earned looked flatter than the thing you hadn't. */}
         <View style={[
           styles.badgeCard,
-          { backgroundColor: colors.background },
-          !badge.claimed && { backgroundColor: colors.card },
+          badge.claimed
+            ? { backgroundColor: colors.card, borderColor: colors.cardBorder, borderWidth: 1 }
+            : { backgroundColor: colors.backgroundSoft },
         ]}>
           <View style={styles.iconCircle}>
             {badge.image ? (
               <Image
-                source={{ uri: badge.image }}
+                source={{ uri: badgeImage(badge.image, Math.round(cardSize)) }}
                 style={[styles.badgeImage, !badge.claimed && styles.badgeImageLocked]}
                 resizeMode="contain"
               />
             ) : (
-              <Feather name="award" size={26} color={badge.claimed ? colors.brand : colors.textMuted} />
+              <Icon name="award" size={26} color={badge.claimed ? colors.brand : colors.textMuted} />
             )}
             {!badge.claimed && (
               <View style={[styles.lockOverlay, { backgroundColor: colors.overlay }]}>
-                <Feather name="lock" size={16} color={colors.textInverse} />
+                <Icon name="lock" size={16} color={colors.textInverse} />
               </View>
             )}
             {badge.claimed && (
               <View style={[styles.checkOverlay, { backgroundColor: colors.background }]}>
-                <Feather name="check-circle" size={16} color={colors.brand} />
+                <Icon name="check-circle" size={16} color={colors.brand} />
               </View>
             )}
           </View>
@@ -254,7 +289,7 @@ export default function BadgeScreen() {
               </Text>
               {typeof badge.points === "number" && badge.points > 0 && (
                 <View style={[styles.ptsChip, { backgroundColor: colors.brandLight }]}>
-                  <Feather name="star" size={9} color={colors.brand} />
+                  <Icon name="star" size={9} color={colors.brand} />
                   <Text style={[styles.ptsChipText, { color: colors.brand }]}>+{badge.points}</Text>
                 </View>
               )}
@@ -263,11 +298,11 @@ export default function BadgeScreen() {
         </View>
       </TouchableOpacity>
     </AnimatedCell>
-  ), [colors]);
+  ), [colors, cardSize]);
 
   if (loading) {
     return (
-      <View style={[styles.centered, { backgroundColor: colors.backgroundHero }]}>
+      <View style={[styles.centered, { backgroundColor: colors.background }]}>
         <ActivityIndicator size="large" color={colors.brand} />
         <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Loading badges...</Text>
       </View>
@@ -275,7 +310,7 @@ export default function BadgeScreen() {
   }
 
   return (
-    <View style={[styles.container, { backgroundColor: colors.backgroundHero }]}>
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
       <StatusBar barStyle={isDark ? "light-content" : "dark-content"} />
 
       {/* ── Hidden shareable badge card, captured as PNG ──
@@ -312,7 +347,10 @@ export default function BadgeScreen() {
         data={visibleBadges}
         keyExtractor={(item) => item._id}
         renderItem={renderBadge}
-        numColumns={3}
+        // FlatList cannot change numColumns in place, so the key forces a
+        // remount when the viewport crosses a breakpoint.
+        key={columns}
+        numColumns={columns}
         columnWrapperStyle={styles.row}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
@@ -333,7 +371,8 @@ export default function BadgeScreen() {
         ListHeaderComponent={
           <>
             {error && (
-              <TouchableOpacity onPress={onRefresh} style={[styles.errorBanner, { backgroundColor: colors.dangerBg, borderColor: colors.danger }]}>
+              <TouchableOpacity
+                accessibilityRole="button" onPress={onRefresh} style={[styles.errorBanner, { backgroundColor: colors.dangerBg, borderColor: colors.danger }]}>
                 <Text style={[styles.errorText, { color: colors.danger }]}>{error}</Text>
                 <Text style={[styles.retryText, { color: colors.danger }]}>Tap to retry</Text>
               </TouchableOpacity>
@@ -346,6 +385,7 @@ export default function BadgeScreen() {
                   const active = filter === f.key;
                   return (
                     <TouchableOpacity
+                      accessibilityRole="button"
                       key={f.key}
                       onPress={() => setFilter(f.key)}
                       style={[styles.filterTab, active && { backgroundColor: colors.brand }]}
@@ -364,7 +404,7 @@ export default function BadgeScreen() {
         ListEmptyComponent={
           !error && badges.length === 0 ? (
             <View style={styles.emptyState}>
-              <Text style={styles.emptyEmoji}>🏅</Text>
+              <Icon name="award" size={52} color={colors.brand} style={styles.emptyIcon} />
               <Text style={[styles.emptyTitle, { color: colors.brandDark }]}>No badges yet</Text>
               <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
                 Navigate to a historical spot and arrive to earn your first badge!
@@ -372,7 +412,7 @@ export default function BadgeScreen() {
             </View>
           ) : !error && visibleBadges.length === 0 ? (
             <View style={styles.emptyState}>
-              <Text style={styles.emptyEmoji}>{filter === "claimed" ? "🎯" : "🎉"}</Text>
+              <Icon name={filter === "claimed" ? "target" : "check-circle"} size={52} color={colors.brand} style={styles.emptyIcon} />
               <Text style={[styles.emptyTitle, { color: colors.brandDark }]}>
                 {filter === "claimed" ? "Nothing claimed yet" : "All badges unlocked!"}
               </Text>
@@ -391,20 +431,25 @@ export default function BadgeScreen() {
         onRequestClose={closeBadge}
       >
         <Animated.View style={[styles.modalOverlay, { opacity: modalOpacity, backgroundColor: colors.overlay }]}>
-          <Pressable style={styles.modalBackdrop} onPress={closeBadge} />
+          <Pressable
+            accessibilityRole="button" style={styles.modalBackdrop} onPress={closeBadge} />
 
           <Animated.View
             style={[
               styles.modalCard,
-              { backgroundColor: colors.background },
+              // Width comes from the live viewport, capped so the card doesn't
+              // stretch edge-to-edge on a tablet. It used to read a module-scope
+              // `Dimensions.get("window")` that no longer exists.
+              { width: Math.min(winWidth - 48, 420), backgroundColor: colors.background },
               {
                 opacity: modalOpacity,
                 transform: [{ scale: modalScale }, { translateY: modalTranslate }],
               },
             ]}
           >
-            <TouchableOpacity style={[styles.modalClose, { backgroundColor: colors.card }]} onPress={closeBadge}>
-              <Feather name="x" size={20} color={colors.textSecondary} />
+            <TouchableOpacity
+              accessibilityRole="button" style={[styles.modalClose, { backgroundColor: colors.card }]} onPress={closeBadge}>
+              <Icon name="x" size={20} color={colors.textSecondary} />
             </TouchableOpacity>
 
             <View style={styles.modalIconRing}>
@@ -416,11 +461,11 @@ export default function BadgeScreen() {
                     resizeMode="contain"
                   />
                 ) : (
-                  <Feather name="award" size={52} color={selectedBadge?.claimed ? colors.brand : colors.textMuted} />
+                  <Icon name="award" size={52} color={selectedBadge?.claimed ? colors.brand : colors.textMuted} />
                 )}
                 {!selectedBadge?.claimed && (
                   <View style={[styles.modalLockOverlay, { backgroundColor: colors.overlay }]}>
-                    <Feather name="lock" size={30} color={colors.textInverse} />
+                    <Icon name="lock" size={30} color={colors.textInverse} />
                   </View>
                 )}
               </View>
@@ -445,7 +490,7 @@ export default function BadgeScreen() {
               styles.earnedPill,
               { backgroundColor: selectedBadge?.claimed ? colors.brand : colors.textMuted },
             ]}>
-              <Feather
+              <Icon
                 name={selectedBadge?.claimed ? "check-circle" : "lock"}
                 size={11}
                 color={colors.textInverse}
@@ -460,7 +505,7 @@ export default function BadgeScreen() {
 
             {!selectedBadge?.claimed && (
               <View style={styles.modalSpotRow}>
-                <Feather name="map-pin" size={12} color={colors.brand} />
+                <Icon name="map-pin" size={12} color={colors.brand} />
                 <Text style={[styles.modalSpotText, { color: colors.brand }]}>
                   {" "}{selectedBadge?.spotId?.name || "Unknown spot"}
                   {typeof selectedBadge?.points === "number" && selectedBadge.points > 0
@@ -485,7 +530,7 @@ export default function BadgeScreen() {
 
             {selectedBadge?.claimed && selectedBadge?.claimedAt && (
               <View style={styles.modalDateRow}>
-                <Feather name="calendar" size={12} color={colors.textMuted} />
+                <Icon name="calendar" size={12} color={colors.textMuted} />
                 <Text style={[styles.modalDate, { color: colors.textMuted }]}>
                   {" "}Claimed on{" "}
                   {new Date(selectedBadge.claimedAt).toLocaleDateString("en-PH", {
@@ -499,6 +544,7 @@ export default function BadgeScreen() {
 
             {selectedBadge?.claimed ? (
               <TouchableOpacity
+                accessibilityRole="button"
                 style={[styles.shareButton, { backgroundColor: colors.accent }, sharing && { opacity: 0.7 }]}
                 onPress={handleShare}
                 activeOpacity={0.82}
@@ -507,7 +553,7 @@ export default function BadgeScreen() {
                 {sharing ? (
                   <ActivityIndicator size="small" color={colors.onAccent} style={{ marginRight: 8 }} />
                 ) : (
-                  <Feather name="share-2" size={17} color={colors.onAccent} style={{ marginRight: 8 }} />
+                  <Icon name="share-2" size={17} color={colors.onAccent} style={{ marginRight: 8 }} />
                 )}
                 <Text style={[styles.shareButtonText, { color: colors.onAccent }]}>
                   {sharing ? "Preparing..." : "Share This Badge"}
@@ -515,11 +561,12 @@ export default function BadgeScreen() {
               </TouchableOpacity>
             ) : (
               <TouchableOpacity
+                accessibilityRole="button"
                 style={[styles.shareButton, { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.cardBorder }]}
                 onPress={closeBadge}
                 activeOpacity={0.82}
               >
-                <Feather name="map-pin" size={17} color={colors.brand} style={{ marginRight: 8 }} />
+                <Icon name="map-pin" size={17} color={colors.brand} style={{ marginRight: 8 }} />
                 <Text style={[styles.shareButtonText, { color: colors.brand }]}>Go Explore</Text>
               </TouchableOpacity>
             )}
@@ -533,7 +580,7 @@ export default function BadgeScreen() {
 const styles = StyleSheet.create({
   container:   { flex: 1 },
   centered:    { flex: 1, justifyContent: "center", alignItems: "center" },
-  loadingText: { marginTop: 12, fontSize: 14, fontWeight: "500" },
+  loadingText: { marginTop: 12, fontSize: 14, fontFamily: fonts.sansMedium },
 
   offscreen: {
     position: "absolute",
@@ -554,17 +601,19 @@ const styles = StyleSheet.create({
     height: 200,
     backgroundColor: "transparent",
   },
+  // The shared image is the app's billboard — it goes out to Facebook and
+  // Messenger, so it carries the serif.
   shareCardName: {
-    fontSize: 26,
-    fontWeight: "800",
+    ...typography.display,
+    fontSize: 27,
     textAlign: "center",
     marginTop: 16,
-    lineHeight: 32,
+    lineHeight: 33,
   },
   shareCardSub: {
     fontSize: 14,
     marginTop: 8,
-    fontWeight: "600",
+    fontFamily: fonts.sansSemi,
     letterSpacing: 0.3,
   },
 
@@ -576,9 +625,9 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   backButton:  { width: 40, height: 40, justifyContent: "center", alignItems: "flex-start" },
-  headerTitle: { fontSize: 20, fontWeight: "700" },
+  headerTitle: { fontSize: 20, fontFamily: fonts.sansBold },
   countBadge:  { borderRadius: 999, paddingHorizontal: 12, paddingVertical: 5 },
-  countText:   { fontWeight: "700", fontSize: 13 },
+  countText:   { fontFamily: fonts.sansBold, fontSize: 13 },
 
   scrollContent: { paddingHorizontal: 20, paddingTop: 15 },
   row: { justifyContent: "flex-start", gap: GRID_GAP, marginBottom: GRID_GAP },
@@ -596,7 +645,7 @@ const styles = StyleSheet.create({
     borderRadius: 9,
     alignItems: "center",
   },
-  filterTabText: { fontSize: 12, fontWeight: "700" },
+  filterTabText: { fontSize: 12, fontFamily: fonts.sansBold },
 
   errorBanner: {
     borderRadius: 12,
@@ -605,12 +654,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
     borderWidth: 1,
   },
-  errorText: { fontSize: 13, fontWeight: "600", textAlign: "center" },
+  errorText: { fontSize: 13, fontFamily: fonts.sansSemi, textAlign: "center" },
   retryText: { fontSize: 12, marginTop: 4 },
 
   emptyState:    { alignItems: "center", marginTop: 60, paddingHorizontal: 30 },
-  emptyEmoji:    { fontSize: 56, marginBottom: 14 },
-  emptyTitle:    { fontSize: 18, fontWeight: "700", marginBottom: 6, textAlign: "center" },
+  emptyIcon:     { marginBottom: 14 },
+  emptyTitle:    { fontSize: 18, fontFamily: fonts.sansBold, marginBottom: 6, textAlign: "center" },
   emptySubtitle: { fontSize: 13, textAlign: "center", lineHeight: 19 },
 
   badgeWrapper: {},
@@ -650,7 +699,7 @@ const styles = StyleSheet.create({
   },
   badgeName: {
     fontSize: 10,
-    fontWeight: "600",
+    fontFamily: fonts.sansSemi,
     textAlign: "center",
     lineHeight: 13,
   },
@@ -673,7 +722,7 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     marginTop: 4,
   },
-  ptsChipText: { fontSize: 9, fontWeight: "700" },
+  ptsChipText: { fontSize: 9, fontFamily: fonts.sansBold },
 
   modalOverlay: {
     flex: 1,
@@ -682,7 +731,6 @@ const styles = StyleSheet.create({
   },
   modalBackdrop: { ...StyleSheet.absoluteFillObject },
   modalCard: {
-    width: width - 48,
     borderRadius: 28,
     paddingTop: 36,
     paddingBottom: 28,
@@ -746,17 +794,16 @@ const styles = StyleSheet.create({
     paddingVertical: 5,
     marginBottom: 12,
   },
-  earnedPillText: { fontSize: 11, fontWeight: "700", letterSpacing: 0.3 },
+  earnedPillText: { fontSize: 11, fontFamily: fonts.sansBold, letterSpacing: 0.3 },
   modalBadgeName: {
-    fontSize: 20,
-    fontWeight: "800",
+    ...typography.display,
+    fontSize: 22,
     textAlign: "center",
     marginBottom: 4,
-    letterSpacing: -0.3,
-    lineHeight: 26,
+    lineHeight: 28,
   },
   modalSpotRow: { flexDirection: "row", alignItems: "center", marginBottom: 8 },
-  modalSpotText: { fontSize: 12, fontWeight: "700" },
+  modalSpotText: { fontSize: 12, fontFamily: fonts.sansBold },
   modalDescription: {
     fontSize: 13,
     textAlign: "center",
@@ -771,7 +818,7 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   modalDateRow: { flexDirection: "row", alignItems: "center", marginTop: 2, marginBottom: 4 },
-  modalDate:    { fontSize: 11, fontWeight: "500" },
+  modalDate:    { fontSize: 11, fontFamily: fonts.sansMedium },
   divider: {
     width: "100%",
     height: 1,
@@ -791,5 +838,5 @@ const styles = StyleSheet.create({
     shadowRadius: 10,
     elevation: 6,
   },
-  shareButtonText: { fontSize: 15, fontWeight: "700", letterSpacing: 0.2 },
+  shareButtonText: { fontSize: 15, fontFamily: fonts.sansBold, letterSpacing: 0.2 },
 });

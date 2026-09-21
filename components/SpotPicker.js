@@ -2,7 +2,7 @@ import React from "react";
 import { View, Text, StyleSheet, ActivityIndicator, StatusBar, FlatList } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { useArrival } from "../context/ArrivalContext";
-import { useTheme } from "../context/ThemeContext";
+import { useTheme, fonts } from "../context/ThemeContext";
 import { ScreenHeader, SpotCard, EmptyState, H_PAD } from "./ui";
 
 /**
@@ -56,6 +56,6 @@ const styles = StyleSheet.create({
   screen:   { flex: 1 },
   centered: { flex: 1, alignItems: "center", justifyContent: "center" },
   list:     { paddingHorizontal: H_PAD, paddingBottom: 140 },
-  subtitle: { fontSize: 13.5, fontWeight: "500", marginTop: 4, marginBottom: 16 },
+  subtitle: { fontSize: 13.5, fontFamily: fonts.sansMedium, marginTop: 4, marginBottom: 16 },
   card:     { marginBottom: 12 },
 });

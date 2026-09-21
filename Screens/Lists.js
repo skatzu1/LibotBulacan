@@ -5,21 +5,18 @@ import {
   StyleSheet,
   TouchableOpacity,
   ScrollView,
-  Image,
-  TextInput,
   StatusBar,
 } from "react-native";
 import { useNavigation, useRoute } from "@react-navigation/native";
-import { Feather } from "@expo/vector-icons";
-import { FontAwesome5 } from "@expo/vector-icons";
 import { useArrival } from "../context/ArrivalContext";
 import { useBookmark } from "../context/BookmarkContext";
-import { useTheme } from "../context/ThemeContext";
-import { ScreenHeader, SpotCard, EmptyState, H_PAD } from "../components/ui";
+import { useTheme, fonts } from "../context/ThemeContext";
+import { ScreenHeader, SpotCard, EmptyState, SearchField, H_PAD, TAP } from "../components/ui";
 import { BASE_URL } from '../api';
 
 // ── Skeleton import ───────────────────────────────────────────────────────────
 import ListsSkeleton from "../components/ListsSkeleton";
+import Icon from "../components/Icon";
 
 // Cloudinary delivery-side resize/crop/optimize. No-ops safely on any
 // non-Cloudinary URL (e.g. old Unsplash fallback images), so it's safe
@@ -126,15 +123,16 @@ export default function Lists() {
         onPress={() => navigation.navigate("InformationScreen", { spot: item })}
         right={
           <TouchableOpacity
+            accessibilityRole="button"
             style={styles.bookmarkButton}
             onPress={(e) => { e.stopPropagation(); toggleBookmark(item); }}
             activeOpacity={0.8}
             accessibilityLabel={spotIsBookmarked ? "Remove bookmark" : "Add bookmark"}
           >
-            <FontAwesome5
+            <Icon
               name="bookmark"
               size={17}
-              solid={spotIsBookmarked}
+              weight={spotIsBookmarked ? "fill" : "regular"}
               color={spotIsBookmarked ? colors.star : "#fff"}
             />
           </TouchableOpacity>
@@ -143,49 +141,44 @@ export default function Lists() {
     );
   };
 
-  // ── CHANGED: skeleton replaces ActivityIndicator ──────────────────────────
-  if (loading) return <ListsSkeleton cardCount={4} />;
-
   return (
     <View style={styles.container}>
       <StatusBar barStyle={isDark ? "light-content" : "dark-content"} />
 
-      {searchActive ? (
-        <View style={styles.searchHeader}>
-          <TouchableOpacity onPress={closeSearch} style={styles.backButton} hitSlop={8}>
-            <Feather name="chevron-left" size={24} color={colors.textPrimary} />
-          </TouchableOpacity>
-          <View style={styles.searchInputWrapper}>
-            <Feather name="search" size={16} color={colors.textMuted} style={{ marginRight: 8 }} />
-            <TextInput
-              ref={searchInputRef}
-              style={styles.searchInput}
-              placeholder={`Search in ${displayName}...`}
-              placeholderTextColor={colors.textMuted}
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-              returnKeyType="search"
-              autoCorrect={false}
-            />
-            {searchQuery.length > 0 && (
-              <TouchableOpacity onPress={() => setSearchQuery("")} hitSlop={8}>
-                <Feather name="x" size={18} color={colors.textMuted} />
-              </TouchableOpacity>
-            )}
-          </View>
-        </View>
-      ) : (
-        <ScreenHeader
-          title={displayName}
-          onBack={() => navigation.goBack()}
-          right={
-            <TouchableOpacity onPress={openSearch} hitSlop={8} accessibilityLabel="Search">
-              <Feather name="search" size={21} color={colors.textPrimary} />
+      {/* The header stays put whether searching or loading — it used to be
+          swapped for a bespoke search bar (with its own hardcoded paddingTop:52
+          that disagreed with every other screen), and replaced entirely by the
+          skeleton while loading. */}
+      <ScreenHeader
+        title={displayName}
+        onBack={searchActive ? closeSearch : () => navigation.goBack()}
+        right={
+          searchActive ? null : (
+            <TouchableOpacity
+              onPress={openSearch}
+              hitSlop={12}
+              accessibilityRole="button"
+              accessibilityLabel={`Search in ${displayName}`}
+            >
+              <Icon name="search" size={21} color={colors.textPrimary} />
             </TouchableOpacity>
-          }
-        />
+          )
+        }
+      />
+
+      {searchActive && (
+        <View style={styles.searchWrap}>
+          <SearchField
+            ref={searchInputRef}
+            value={searchQuery}
+            onChangeText={setSearchQuery}
+            onClear={() => setSearchQuery("")}
+            placeholder={`Search in ${displayName}`}
+          />
+        </View>
       )}
 
+      {loading ? <ListsSkeleton cardCount={4} /> : (
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
@@ -213,6 +206,7 @@ export default function Lists() {
 
         <View style={{ height: 40 }} />
       </ScrollView>
+      )}
     </View>
   );
 }
@@ -220,37 +214,17 @@ export default function Lists() {
 const getStyles = (colors) => StyleSheet.create({
   container: { flex: 1, backgroundColor: colors.background },
 
-  // ── Search header (only while search is active) ──
-  searchHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    paddingTop: 52,
-    paddingHorizontal: H_PAD,
-    paddingBottom: 10,
-  },
-  backButton: { width: 36, height: 40, justifyContent: "center", alignItems: "flex-start" },
-  searchInputWrapper: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: colors.card,
-    borderRadius: 999,
-    paddingHorizontal: 16,
-    height: 42,
-    borderWidth: 1,
-    borderColor: colors.cardBorder,
-  },
-  searchInput: { flex: 1, fontSize: 15, color: colors.textPrimary, padding: 0 },
+  searchWrap: { paddingHorizontal: H_PAD, paddingBottom: 6 },
 
   scrollContent: { paddingHorizontal: H_PAD, paddingTop: 8 },
-  infoText: { fontSize: 13.5, color: colors.textSecondary, fontWeight: "500", marginBottom: 16 },
+  infoText: { fontSize: 13.5, color: colors.textSecondary, fontFamily: fonts.sansMedium, marginBottom: 16 },
 
   cardsContainer: {},
   bookmarkButton: {
-    width: 34,
-    height: 34,
-    borderRadius: 17,
-    backgroundColor: "rgba(0,0,0,0.4)",
+    width: TAP,
+    height: TAP,
+    borderRadius: TAP / 2,
+    backgroundColor: "rgba(0,0,0,0.45)",
     justifyContent: "center",
     alignItems: "center",
   },

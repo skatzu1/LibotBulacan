@@ -9,10 +9,11 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import * as Location from "expo-location";
-import { Feather } from "@expo/vector-icons";
 import { showAlert } from "../components/AppAlert";
 import { useMissions } from "../context/MissionContext";
-import { useTheme, spacing, radius, typography, shadow } from "../context/ThemeContext";
+import { useTheme, spacing, radius, typography, shadow, fonts } from "../context/ThemeContext";
+import Icon from "../components/Icon";
+import { spotImage } from "../utils/image";
 
 function distanceMeters(lat1, lng1, lat2, lng2) {
   const R = 6371000;
@@ -103,18 +104,18 @@ export default function LocationMission({ navigation, route }) {
     if (data.tooFar) {
       showAlert(
         "You're not close enough",
-        `You're about ${data.distance}m away — get within ${data.radiusMeters}m to complete this mission.`,
+        `You're about ${data.distance}m away — get within ${data.radiusMeters}m to complete this activity.`,
         undefined,
         { tone: "warning", icon: "map-pin" },
       );
       return;
     }
     showAlert(
-      "🎉 Nice work!",
+      "Nice work!",
       data.alreadyCompleted
-        ? "You've already completed this mission."
+        ? "You've already completed this activity."
         : `"${mission.title}" is confirmed and logged as complete.`,
-      [{ text: "Back to Missions", onPress: () => navigation.goBack() }],
+      [{ text: "Back to Bakit List", onPress: () => navigation.goBack() }],
     );
   };
 
@@ -123,8 +124,9 @@ export default function LocationMission({ navigation, route }) {
       <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={colors.background} />
 
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backBtn} hitSlop={8}>
-          <Feather name="chevron-left" size={24} color={colors.textPrimary} />
+        <TouchableOpacity
+          accessibilityRole="button" onPress={() => navigation.goBack()} style={styles.backBtn} hitSlop={8}>
+          <Icon name="chevron-left" size={24} color={colors.textPrimary} />
         </TouchableOpacity>
         <Text style={[typography.h3, { color: colors.textPrimary, flex: 1 }]} numberOfLines={1}>
           {mission.title}
@@ -133,10 +135,10 @@ export default function LocationMission({ navigation, route }) {
 
       <View style={styles.body}>
         {mission.image ? (
-          <Image source={{ uri: mission.image }} style={[styles.restaurantImage, shadow.md]} resizeMode="cover" />
+          <Image source={{ uri: spotImage(mission.image, 400, 200) }} style={[styles.restaurantImage, shadow.md]} resizeMode="cover" />
         ) : (
           <View style={[styles.iconWrap, { backgroundColor: colors.brandSoft }]}>
-            <Feather name="map-pin" size={30} color={colors.brand} />
+            <Icon name="map-pin" size={30} color={colors.brand} />
           </View>
         )}
 
@@ -157,7 +159,7 @@ export default function LocationMission({ navigation, route }) {
 
         {!configured ? (
           <View style={[styles.statusCard, { backgroundColor: colors.card, marginTop: spacing.xl }]}>
-            <Feather name="clock" size={24} color={colors.textMuted} style={{ marginBottom: spacing.sm }} />
+            <Icon name="clock" size={24} color={colors.textMuted} style={{ marginBottom: spacing.sm }} />
             <Text style={[typography.title, { color: colors.textPrimary }]}>Not ready yet</Text>
             <Text style={[typography.body, styles.center, { color: colors.textSecondary, marginTop: spacing.xs }]}>
               This mission's location hasn't been set up yet. Check back soon!
@@ -165,7 +167,7 @@ export default function LocationMission({ navigation, route }) {
           </View>
         ) : locError ? (
           <View style={[styles.statusCard, { backgroundColor: colors.dangerBg, marginTop: spacing.xl }]}>
-            <Feather name="alert-triangle" size={24} color={colors.danger} style={{ marginBottom: spacing.sm }} />
+            <Icon name="alert-triangle" size={24} color={colors.danger} style={{ marginBottom: spacing.sm }} />
             <Text style={[typography.body, styles.center, { color: colors.danger }]}>{locError}</Text>
           </View>
         ) : (
@@ -180,7 +182,7 @@ export default function LocationMission({ navigation, route }) {
               </>
             ) : (
               <>
-                <Feather
+                <Icon
                   name={inRange ? "check-circle" : "navigation"}
                   size={28}
                   color={inRange ? colors.success : colors.brand}
@@ -191,7 +193,7 @@ export default function LocationMission({ navigation, route }) {
                 </Text>
                 <Text style={[typography.caption, styles.center, { color: colors.textMuted, marginTop: spacing.xs }]}>
                   {inRange
-                    ? "You're within range — complete the mission below."
+                    ? "You're within range — complete the activity below."
                     : `Get within ${radiusMeters} m of ${mission.locationName || "this spot"} to complete it.`}
                 </Text>
               </>
@@ -201,7 +203,7 @@ export default function LocationMission({ navigation, route }) {
 
         {alreadyCompleted && (
           <View style={[styles.doneNote, { backgroundColor: colors.successBg }]}>
-            <Feather name="check-circle" size={13} color={colors.success} />
+            <Icon name="check-circle" size={13} color={colors.success} />
             <Text style={[typography.caption, { color: colors.success, marginLeft: spacing.xs }]}>
               Already logged — you can still check in again.
             </Text>
@@ -210,6 +212,7 @@ export default function LocationMission({ navigation, route }) {
 
         {configured && !locError && (
           <TouchableOpacity
+            accessibilityRole="button"
             style={[
               styles.completeBtn,
               { backgroundColor: colors.accent },
@@ -222,7 +225,7 @@ export default function LocationMission({ navigation, route }) {
           >
             {submitting
               ? <ActivityIndicator color={colors.onAccent} />
-              : <Text style={[typography.title, { color: colors.onAccent }]}>Complete Mission</Text>}
+              : <Text style={[typography.title, { color: colors.onAccent }]}>Complete Activity</Text>}
           </TouchableOpacity>
         )}
       </View>
@@ -257,7 +260,7 @@ const styles = StyleSheet.create({
     width: "100%", borderRadius: radius.card, padding: spacing.xl,
     alignItems: "center",
   },
-  distanceText: { fontSize: 24, fontWeight: "800", letterSpacing: -0.4 },
+  distanceText: { fontSize: 24, fontFamily: fonts.sansBold, letterSpacing: -0.4 },
 
   doneNote: {
     flexDirection: "row", alignItems: "center", borderRadius: radius.pill,

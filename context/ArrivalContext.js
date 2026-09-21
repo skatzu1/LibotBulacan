@@ -25,11 +25,13 @@ import * as Notifications from "expo-notifications";
 import * as TaskManager from "expo-task-manager";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useAuth, useUser } from "@clerk/clerk-expo";
-import { Feather } from "@expo/vector-icons";
+import Icon from "../components/Icon";
 import { navigationRef } from "../navigation/navigationRef";
 import { useTheme } from "./ThemeContext";
+import { BASE_URL } from "../api";
+import { badgeImage } from "../utils/image";
 
-const BASE_URL                 = "https://libotbackend.onrender.com";
+// Single source of truth for the backend host — see api.js.
 const ARRIVAL_RADIUS_METERS    = 50;
 const POINTS_PER_VISIT         = 10;
 const ACTIVE_SPOT_KEY          = "activeSpot";
@@ -131,7 +133,7 @@ async function handleBackgroundArrival(coords) {
 
         await Notifications.scheduleNotificationAsync({
           content: {
-            title: isFirstVisit ? "🏅 You arrived!" : "📍 Welcome back!",
+            title: isFirstVisit ? "You arrived!" : "Welcome back!",
             body: isFirstVisit
               ? `You've reached ${spot.name}! Open Libot to claim your badge.`
               : `You've arrived at ${spot.name}. Open Libot Bulacan to explore!`,
@@ -142,14 +144,14 @@ async function handleBackgroundArrival(coords) {
 
         console.log(
           isFirstVisit
-            ? `[BG Arrival] ✅ First visit at: ${spot.name}`
-            : `[BG Arrival] 🔁 Return visit at: ${spot.name}`
+            ? `[BG Arrival] First visit at: ${spot.name}`
+            : `[BG Arrival] Return visit at: ${spot.name}`
         );
       } else if (!isInside && wasInside) {
         // Left the radius — clear so the next arrival notifies again.
         insideSet.delete(spotId);
         changed = true;
-        console.log(`[BG Arrival] 🚶 Left: ${spot.name}`);
+        console.log(`[BG Arrival] Left: ${spot.name}`);
       }
     }
 
@@ -184,7 +186,7 @@ async function setupNotifications() {
       }),
     });
 
-    console.log("[Notifications] ✅ Configured");
+    console.log("[Notifications] Configured");
   } catch (e) {
     console.error("[Notifications] Setup error:", e);
   }
@@ -212,7 +214,7 @@ function confirmAsync(title, message, opts = {}) {
 async function requestAllLocationPermissions() {
   const current = await Location.getForegroundPermissionsAsync();
 
-  // First-time ask → show a short Libot-branded rationale BEFORE the OS dialog
+  // First-time ask -> show a short Libot-branded rationale BEFORE the OS dialog
   // (better grant rates, and the OS "Precise / While using the app / …" sheet
   // makes more sense once the user knows why).
   if (current.status !== "granted" && current.canAskAgain) {
@@ -239,7 +241,7 @@ async function requestAllLocationPermissions() {
     return { foreground: true, background: false };
   }
 
-  console.log("[Location] ✅ Foreground + background permissions granted");
+  console.log("[Location] Foreground + background permissions granted");
   return { foreground: true, background: true };
 }
 
@@ -260,7 +262,7 @@ async function promptForAllTimeLocation() {
   const openStep2 = () => {
     showAlert(
       `Libot's location features only work if it can access your location "all the time"`,
-      `In Settings → Permissions → Location, choose "Allow all the time".`,
+      `In Settings > Permissions > Location, choose "Allow all the time".`,
       [
         { text: "Not now", style: "cancel" },
         { text: "Go to Settings", onPress: () => Linking.openSettings() },
@@ -327,8 +329,8 @@ export function ArrivalProvider({ children }) {
 
   // In-memory mirror of INSIDE_SPOTS_KEY_PREFIX for the current user.
   // A spotId is in this set exactly while the user is currently within
-  // ARRIVAL_RADIUS_METERS of it. Entering (not in set → in set) triggers
-  // a notification; leaving (in set → not in set) clears it silently so
+  // ARRIVAL_RADIUS_METERS of it. Entering (not in set -> in set) triggers
+  // a notification; leaving (in set -> not in set) clears it silently so
   // the *next* arrival notifies again.
   const insideSpotsRef = useRef(new Set());
 
@@ -357,7 +359,7 @@ export function ArrivalProvider({ children }) {
       if (Array.isArray(data?.spotIds)) {
         const cacheKey = `claimedSpotIds_${userId}`;
         await AsyncStorage.setItem(cacheKey, JSON.stringify(data.spotIds));
-        console.log("[Cache Sync] ✅ Synced", data.spotIds.length, "claimed spots from backend");
+        console.log("[Cache Sync] Synced", data.spotIds.length, "claimed spots from backend");
       }
     } catch (e) {
       console.warn("[Cache Sync] Error:", e.message);
@@ -425,7 +427,7 @@ export function ArrivalProvider({ children }) {
   }, [isSignedIn]);
 
   // ─────────────────────────────────────────
-  // 2. AppState → start/stop background tracking
+  // 2. AppState -> start/stop background tracking
   // ─────────────────────────────────────────
   useEffect(() => {
     if (!isSignedIn) return;
@@ -465,7 +467,7 @@ export function ArrivalProvider({ children }) {
                   notificationColor: "#0C7A84",
                 },
               });
-              console.log("[Location] ✅ Background tracking started");
+              console.log("[Location] Background tracking started");
             }
           } catch (e) {
             console.warn("[Location] Could not start background tracking:", e.message);
@@ -513,7 +515,7 @@ export function ArrivalProvider({ children }) {
     const newUserId = clerkUser?.id ?? null;
     if (newUserId === currentUserIdRef.current) return;
 
-    console.log("[Arrival] 🔄 User changed:", currentUserIdRef.current, "→", newUserId);
+    console.log("[Arrival] User changed:", currentUserIdRef.current, "->", newUserId);
 
     if (newUserId) AsyncStorage.setItem("currentUserId", newUserId);
 
@@ -631,14 +633,14 @@ export function ArrivalProvider({ children }) {
 
   // ─────────────────────────────────────────
   // Award rewards (foreground)
-  // Called only when checkArrival detects a fresh outside→inside
+  // Called only when checkArrival detects a fresh outside->inside
   // transition, so no extra dedupe guard is needed in here.
   // ─────────────────────────────────────────
   const awardRewards = useCallback(async (spot) => {
     const spotId = String(spot._id ?? "").trim();
     if (!spotId) return;
 
-    console.log("[Arrival] ✅ Arrived at:", spot.name, "| spotId:", spotId);
+    console.log("[Arrival] Arrived at:", spot.name, "| spotId:", spotId);
 
     // ── Determine first vs return visit ───────────────────────────────────
     // Cache is the fast path. Backend is the source of truth —
@@ -663,7 +665,7 @@ export function ArrivalProvider({ children }) {
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
       });
       const visitData = await safeJson(visitRes);
-      console.log("[Visit]", visitData?.alreadyVisited ? "⚠️ Already visited" : `✅ visitCount → ${visitData?.visitCount}`);
+      console.log("[Visit]", visitData?.alreadyVisited ? "Already visited": `visitCount -> ${visitData?.visitCount}`);
     } catch (e) { console.warn("[Visit] Failed:", e); }
 
     // ── Points (first visit only) ──────────────────────────────────────────
@@ -693,13 +695,13 @@ export function ArrivalProvider({ children }) {
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body:    JSON.stringify({ spotId }),
       });
-      console.log("[VisitLog] ✅ Logged visit for:", spot.name);
+      console.log("[VisitLog] Logged visit for:", spot.name);
     } catch (e) { console.warn("[VisitLog] Failed:", e); }
 
     // ── Notification (every fresh arrival) ─────────────────────────────────
     await Notifications.scheduleNotificationAsync({
       content: {
-        title: isFirstVisit ? "🏅 You arrived!" : "📍 Welcome back!",
+        title: isFirstVisit ? "You arrived!" : "Welcome back!",
         body: isFirstVisit
           ? `You've reached ${spot.name}! Open Libot to claim your badge.`
           : `You've arrived at ${spot.name}. Open Libot Bulacan to explore!`,
@@ -733,7 +735,7 @@ export function ArrivalProvider({ children }) {
         return;
       }
 
-      console.log("[Badge] ✅ Claimed:", data.claimed?.name);
+      console.log("[Badge] Claimed:", data.claimed?.name);
       setTimeout(() => triggerBadgeBanner(data.claimed), pointsJustEarned ? 1500 : 0);
 
     } catch (e) { console.error("[Badge] Error:", e); }
@@ -741,8 +743,8 @@ export function ArrivalProvider({ children }) {
 
   // ─────────────────────────────────────────
   // Foreground location watcher
-  // Detects outside→inside and inside→outside transitions per spot.
-  // Only the outside→inside transition triggers awardRewards/notification.
+  // Detects outside->inside and inside->outside transitions per spot.
+  // Only the outside->inside transition triggers awardRewards/notification.
   // ─────────────────────────────────────────
   const checkArrival = useCallback((coords) => {
     let changed = false;
@@ -767,7 +769,7 @@ export function ArrivalProvider({ children }) {
       } else if (!isInside && wasInside) {
         insideSpotsRef.current.delete(spotId);
         changed = true;
-        console.log("[Arrival] 🚶 Left:", spot.name);
+        console.log("[Arrival] Left:", spot.name);
       }
     }
 
@@ -826,7 +828,7 @@ export function ArrivalProvider({ children }) {
               transform: [{ translateY: pointsTranslateY }, { scale: pointsScale }],
             }]}
           >
-            <Text style={styles.pointsEmoji}>🎉</Text>
+            <Icon name="award" size={34} color={colors.accent} style={styles.pointsIcon} />
             <Text style={[styles.pointsTitle, { color: colors.textSecondary }]}>You arrived!</Text>
             <Text style={[styles.pointsEarned, { color: colors.brand }]}>+{String(popupPoints.earned)} Points</Text>
             <Text style={[styles.pointsTotal, { color: colors.textMuted }]}>Total: {String(popupPoints.total)} pts</Text>
@@ -848,14 +850,14 @@ export function ArrivalProvider({ children }) {
             <TouchableOpacity onPress={handleBadgeBannerPress} style={styles.bannerTouchable} activeOpacity={0.75}>
               <View style={styles.bannerLeft}>
                 {earnedBadge?.image ? (
-                  <Image source={{ uri: earnedBadge.image }} style={styles.bannerImage} />
+                  <Image source={{ uri: badgeImage(earnedBadge.image, 64) }} style={styles.bannerImage} />
                 ) : (
                   <View style={[styles.bannerPlaceholder, { backgroundColor: colors.brandSoft }]}>
-                    <Feather name="award" size={22} color={colors.brand} />
+                    <Icon name="award" size={22} color={colors.brand} />
                   </View>
                 )}
                 <View style={{ flex: 1 }}>
-                  <Text style={[styles.bannerLabel, { color: colors.brand }]}>🏅 Badge Earned!</Text>
+                  <Text style={[styles.bannerLabel, { color: colors.brand }]}>Badge Earned!</Text>
                   <Text style={[styles.bannerName, { color: colors.brandDark }]} numberOfLines={2}>{String(earnedBadge?.name ?? "")}</Text>
                   <Text style={[styles.bannerSub, { color: colors.textMuted }]}>Tap to view · Auto-dismiss in 5s</Text>
                 </View>
@@ -878,7 +880,7 @@ const styles = StyleSheet.create({
     alignItems: "center", shadowColor: "#000", shadowOffset: { width: 0, height: 6 },
     shadowOpacity: 0.25, shadowRadius: 10, elevation: 25, borderWidth: 2, borderColor: "#F2CE1B", minWidth: 200,
   },
-  pointsEmoji:  { fontSize: 38, marginBottom: 6 },
+  pointsIcon:   { marginBottom: 6 },
   pointsTitle:  { fontSize: 18, fontWeight: "700", color: "#4C5A5B", marginBottom: 4 },
   pointsEarned: { fontSize: 28, fontWeight: "800", color: "#0C7A84", marginBottom: 2 },
   pointsTotal:  { fontSize: 13, color: "#66787A", fontWeight: "500" },

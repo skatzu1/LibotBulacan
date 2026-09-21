@@ -8,6 +8,7 @@ export const API_ENDPOINTS = {
   spotById:     (id)  => `${BASE_URL}/api/spots/${id}`,
   topVisited:   `${BASE_URL}/api/spots/top/visited`,
   spotCategory: (cat) => `${BASE_URL}/api/spots/category/${cat}`,
+  categories:   `${BASE_URL}/api/categories`,
   reviews:      (spotId)    => `${BASE_URL}/api/reviews/${spotId}`,
   addReview:    `${BASE_URL}/api/reviews`,
   deleteReview: (reviewId)  => `${BASE_URL}/api/reviews/${reviewId}`,
@@ -136,6 +137,18 @@ export const spotAPI = {
     } catch (error) {
       throw error.response?.data || { message: 'Network error' };
     }
+  },
+};
+
+// ─── Categories API ───────────────────────────────────────────────────────────
+// The four categories used to be a hardcoded array in Screens/Categories.js,
+// which meant adding or renaming one required an app store release. They now
+// live in the database and an admin can edit them through /api/categories.
+// Public endpoint — no auth, same as the spots list.
+export const categoryAPI = {
+  getAll: async () => {
+    const response = await api.get(API_ENDPOINTS.categories);
+    return response.data.categories || [];
   },
 };
 

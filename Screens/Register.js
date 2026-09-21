@@ -7,23 +7,18 @@ import {
   ActivityIndicator,
   Platform,
   Image,
-  ScrollView,
-  KeyboardAvoidingView,
-  Keyboard,
-  TouchableWithoutFeedback,
   Linking,
-  StatusBar,
 } from "react-native";
 import { showAlert, showToast } from "../components/AppAlert";
-import { SafeAreaView } from "react-native-safe-area-context";
 import { useState, useEffect, useCallback } from "react";
 import CheckBox from "expo-checkbox";
-import { useSignUp, useOAuth, useUser } from "@clerk/clerk-expo";
+import { useSignUp, useOAuth } from "@clerk/clerk-expo";
 import * as WebBrowser from "expo-web-browser";
-import { Feather } from "@expo/vector-icons";
 import { authAPI } from "../api";
-import { useTheme, spacing, radius, typography, shadow } from "../context/ThemeContext";
+import { auth as A, fonts, MAX_FONT_SCALE } from "../context/ThemeContext";
 import { TERMS_URL as TERMS_OF_SERVICE_URL, PRIVACY_URL as PRIVACY_POLICY_URL } from "../utils/legalLinks";
+import AuthScaffold, { authStyles as a } from "../components/AuthScaffold";
+import Icon from "../components/Icon";
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -35,13 +30,21 @@ const PASSWORD_RULES = [
   { id: "special", label: "One special character (!@#$…)",   test: (p) => /[^A-Za-z0-9]/.test(p) },
 ];
 
-// Returns { level, label, colorKey } — colorKey resolves against theme colors.
+// Strength colours are picked to sit on the YELLOW panel, not on the app's
+// cards — the in-app `danger`/`warning` tokens wash out against #F8E27E.
+const STRENGTH = [
+  { label: "Weak",   color: "#8E1F16" },
+  { label: "Fair",   color: "#8A4B0A" },
+  { label: "Good",   color: "#5C5A10" },
+  { label: "Strong", color: "#1C5E3F" },
+];
+
 function getStrength(password) {
   const passed = PASSWORD_RULES.filter((r) => r.test(password)).length;
-  if (passed <= 1)  return { level: 0, label: "Weak",   colorKey: "danger" };
-  if (passed === 2) return { level: 1, label: "Fair",   colorKey: "warning" };
-  if (passed === 3) return { level: 2, label: "Good",   colorKey: "star" };
-  return               { level: 3, label: "Strong", colorKey: "success" };
+  if (passed <= 1)  return { level: 0, ...STRENGTH[0] };
+  if (passed === 2) return { level: 1, ...STRENGTH[1] };
+  if (passed === 3) return { level: 2, ...STRENGTH[2] };
+  return              { level: 3, ...STRENGTH[3] };
 }
 
 function isValidEmail(email) {
@@ -64,37 +67,34 @@ async function openLink(url) {
 
 // ── Password Strength Widget ───────────────────────────────────────
 function PasswordStrengthPanel({ password }) {
-  const { colors } = useTheme();
   if (!password) return null;
   const strength = getStrength(password);
-  const strengthColor = colors[strength.colorKey];
   return (
-    <View style={styles.strengthPanel}>
-      <View style={styles.strengthBarTrack}>
+    <View style={styles.strengthPanel} accessibilityLiveRegion="polite">
+      <View style={styles.strengthTrack}>
         {[0, 1, 2, 3].map((i) => (
           <View
             key={i}
             style={[
-              styles.strengthBarSegment,
-              { backgroundColor: i <= strength.level ? strengthColor : colors.inputBorder },
+              styles.strengthSeg,
+              { backgroundColor: i <= strength.level ? strength.color : "rgba(56,65,66,0.18)" },
             ]}
           />
         ))}
       </View>
-      <Text style={[typography.caption, styles.strengthLabel, { color: strengthColor }]}>
-        {strength.label}
-      </Text>
+      <Text style={[styles.strengthLabel, { color: strength.color }]}>{strength.label}</Text>
       <View style={styles.criteriaList}>
         {PASSWORD_RULES.map((rule) => {
           const ok = rule.test(password);
           return (
             <View key={rule.id} style={styles.criteriaRow}>
-              <Feather
+              <Icon
                 name={ok ? "check-circle" : "circle"}
                 size={13}
-                color={ok ? colors.success : colors.textMuted}
+                weight={ok ? "fill" : "regular"}
+                color={ok ? "#1C5E3F" : A.muted}
               />
-              <Text style={[typography.caption, { color: ok ? colors.success : colors.textMuted }]}>
+              <Text style={[styles.criteriaText, { color: ok ? "#1C5E3F" : A.muted }]}>
                 {rule.label}
               </Text>
             </View>
@@ -107,10 +107,8 @@ function PasswordStrengthPanel({ password }) {
 
 // ── Main Component ────────────────────────────────────────────────
 export default function Register({ navigation }) {
-  const { colors, isDark } = useTheme();
   const { isLoaded, signUp, setActive } = useSignUp();
   const { startOAuthFlow }              = useOAuth({ strategy: "oauth_google" });
-  const { user }                        = useUser();
 
   const [name, setName]                   = useState("");
   const [email, setEmail]                 = useState("");
@@ -251,287 +249,207 @@ export default function Register({ navigation }) {
   const anyLoading = isLoading || isGoogleLoading;
   const disabled   = anyLoading || !isLoaded;
 
-  const inputStyle = [
-    styles.input,
-    { backgroundColor: colors.inputBg, borderColor: colors.inputBorder, color: colors.textPrimary },
+  const field = (hasError) => [
+    a.field,
+    { backgroundColor: A.yellowField },
+    hasError && styles.fieldError,
   ];
-  const errStyle = { borderColor: colors.danger, backgroundColor: colors.dangerBg };
 
   return (
-    <SafeAreaView style={[styles.screen, { backgroundColor: colors.background }]} edges={["top", "bottom"]}>
-      <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={colors.background} />
-      <KeyboardAvoidingView
-        style={styles.flex}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
+    <AuthScaffold
+      variant="yellow"
+      hero="bubbles"
+      showLogo={false}
+      onBack={() => navigation.navigate("Login")}
+      title="Create an Account"
+      subtitle="Fill in the form to continue"
+    >
+      {/* Google */}
+      <TouchableOpacity
+        style={[a.googleBtn, disabled && styles.disabled]}
+        onPress={handleGoogleSignUp}
+        disabled={disabled}
+        activeOpacity={0.88}
+        accessibilityRole="button"
+        accessibilityLabel="Continue with Google"
       >
-        <TouchableWithoutFeedback onPress={Keyboard.dismiss} accessible={false}>
-          <ScrollView
-            contentContainerStyle={styles.scrollContent}
-            showsVerticalScrollIndicator={false}
-            keyboardShouldPersistTaps="handled"
+        {isGoogleLoading ? (
+          <ActivityIndicator color={A.muted} />
+        ) : (
+          <>
+            <Image source={require("../assets/googlelogo.png")} style={a.googleLogo} />
+            <Text style={a.googleText} maxFontSizeMultiplier={MAX_FONT_SCALE}>Continue with Google</Text>
+          </>
+        )}
+      </TouchableOpacity>
+
+      {/* Divider */}
+      <View style={a.dividerRow}>
+        <View style={a.dividerLine} />
+        <Text style={a.dividerText}>OR</Text>
+        <View style={a.dividerLine} />
+      </View>
+
+      {/* Full name */}
+      <View>
+        <TextInput
+          style={field(fieldError("name"))}
+          placeholder="FULL NAME"
+          placeholderTextColor={A.muted}
+          value={name}
+          onChangeText={setName}
+          onBlur={() => handleBlur("name")}
+          editable={!anyLoading}
+          accessibilityLabel="Full name"
+          maxFontSizeMultiplier={MAX_FONT_SCALE}
+        />
+        {!!fieldError("name") && <Text style={a.errorText}>{fieldError("name")}</Text>}
+      </View>
+
+      {/* Email */}
+      <View>
+        <TextInput
+          style={field(fieldError("email"))}
+          placeholder="EMAIL"
+          placeholderTextColor={A.muted}
+          value={email}
+          onChangeText={setEmail}
+          onBlur={() => handleBlur("email")}
+          keyboardType="email-address"
+          autoCapitalize="none"
+          editable={!anyLoading}
+          accessibilityLabel="Email address"
+          maxFontSizeMultiplier={MAX_FONT_SCALE}
+        />
+        {!!fieldError("email") && <Text style={a.errorText}>{fieldError("email")}</Text>}
+      </View>
+
+      {/* Password */}
+      <View>
+        <View style={a.fieldRow}>
+          <TextInput
+            style={[...field(fieldError("password")), { paddingRight: 60 }]}
+            placeholder="PASSWORD"
+            placeholderTextColor={A.muted}
+            secureTextEntry={!passwordVisible}
+            value={password}
+            onChangeText={setPassword}
+            onBlur={() => handleBlur("password")}
+            editable={!anyLoading}
+            accessibilityLabel="Password"
+            maxFontSizeMultiplier={MAX_FONT_SCALE}
+          />
+          <TouchableOpacity
+            onPress={() => setPasswordVisible((v) => !v)}
+            style={a.eyeBtn}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={passwordVisible ? "Hide password" : "Show password"}
           >
-            <View style={[styles.card, { backgroundColor: colors.card, borderColor: colors.cardBorder }, shadow.md]}>
+            <Icon name={passwordVisible ? "eye-off" : "eye"} size={20} color={A.muted} />
+          </TouchableOpacity>
+        </View>
+        {!!fieldError("password") && <Text style={a.errorText}>{fieldError("password")}</Text>}
+        <PasswordStrengthPanel password={password} />
+      </View>
 
-              <View style={styles.titleContainer}>
-                <Text style={[typography.h1, { color: colors.textPrimary }]}>Create Account</Text>
-                <Text style={[typography.body, styles.subtitle, { color: colors.textSecondary }]}>
-                  Fill in the form to continue
-                </Text>
-              </View>
+      {/* Date of birth */}
+      <View>
+        <Text style={a.label}>DATE OF BIRTH</Text>
+        <TextInput
+          style={field(fieldError("dob"))}
+          placeholder="MM/DD/YYYY"
+          placeholderTextColor={A.muted}
+          value={dob}
+          onChangeText={handleDobChange}
+          onBlur={handleDobBlur}
+          keyboardType="number-pad"
+          maxLength={10}
+          editable={!anyLoading}
+          accessibilityLabel="Date of birth, month slash day slash year"
+          maxFontSizeMultiplier={MAX_FONT_SCALE}
+        />
+        {!!fieldError("dob") && <Text style={a.errorText}>{fieldError("dob")}</Text>}
+      </View>
 
-              {/* Google signup */}
-              <TouchableOpacity
-                style={[
-                  styles.googleButton,
-                  { backgroundColor: colors.inputBg, borderColor: colors.inputBorder },
-                  disabled && styles.disabled,
-                ]}
-                onPress={handleGoogleSignUp}
-                disabled={disabled}
-                activeOpacity={0.85}
-                accessibilityLabel="Sign up with Google"
-              >
-                {isGoogleLoading ? (
-                  <ActivityIndicator color={colors.textSecondary} />
-                ) : (
-                  <>
-                    <Image source={require("../assets/googlelogo.png")} style={styles.googleLogo} />
-                    <Text style={[typography.bodyStrong, { color: colors.textPrimary }]}>
-                      Sign up with Google
-                    </Text>
-                  </>
-                )}
-              </TouchableOpacity>
+      {/* Terms */}
+      <View style={styles.termsRow}>
+        <CheckBox
+          value={agreeToTerms}
+          onValueChange={setAgreeToTerms}
+          color={agreeToTerms ? A.ink : undefined}
+          style={styles.checkbox}
+          accessibilityLabel="Agree to the Terms and Conditions"
+        />
+        <Text style={styles.termsText} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+          Agree to the{" "}
+          <Text style={styles.termsLink} onPress={() => openLink(TERMS_OF_SERVICE_URL)}>
+            Terms and Conditions
+          </Text>
+          {" "}and{" "}
+          <Text style={styles.termsLink} onPress={() => openLink(PRIVACY_POLICY_URL)}>
+            Privacy Policy
+          </Text>
+        </Text>
+      </View>
 
-              {/* Divider */}
-              <View style={styles.dividerContainer}>
-                <View style={[styles.dividerLine, { backgroundColor: colors.divider }]} />
-                <Text style={[typography.label, styles.dividerText, { color: colors.textSecondary }]}>OR</Text>
-                <View style={[styles.dividerLine, { backgroundColor: colors.divider }]} />
-              </View>
+      {/* Sign up — WHITE, not the CTA yellow: a yellow button on a yellow panel
+          has nothing to sit against. The mockup makes the same call. */}
+      <TouchableOpacity
+        style={[styles.signupBtn, disabled && styles.disabled]}
+        onPress={handleRegister}
+        disabled={disabled}
+        activeOpacity={0.88}
+        accessibilityRole="button"
+        accessibilityLabel="Sign up"
+      >
+        {isLoading ? <ActivityIndicator color={A.ink} /> : <Text style={styles.signupText}>Sign up</Text>}
+      </TouchableOpacity>
 
-              {/* ── Input fields ── */}
-              <View style={styles.inputContainer}>
-
-                {/* Full Name */}
-                <View>
-                  <TextInput
-                    style={[inputStyle, fieldError("name") && errStyle]}
-                    placeholder="Full Name"
-                    placeholderTextColor={colors.placeholder}
-                    value={name}
-                    onChangeText={setName}
-                    onBlur={() => handleBlur("name")}
-                    editable={!anyLoading}
-                    accessibilityLabel="Full name"
-                  />
-                  {fieldError("name") ? (
-                    <Text style={[typography.caption, styles.errorText, { color: colors.danger }]}>
-                      {fieldError("name")}
-                    </Text>
-                  ) : null}
-                </View>
-
-                {/* Email */}
-                <View>
-                  <TextInput
-                    style={[inputStyle, fieldError("email") && errStyle]}
-                    placeholder="Email"
-                    placeholderTextColor={colors.placeholder}
-                    value={email}
-                    onChangeText={setEmail}
-                    onBlur={() => handleBlur("email")}
-                    keyboardType="email-address"
-                    autoCapitalize="none"
-                    editable={!anyLoading}
-                    accessibilityLabel="Email address"
-                  />
-                  {fieldError("email") ? (
-                    <Text style={[typography.caption, styles.errorText, { color: colors.danger }]}>
-                      {fieldError("email")}
-                    </Text>
-                  ) : null}
-                </View>
-
-                {/* Password with eye icon */}
-                <View>
-                  <View style={styles.passwordInputRow}>
-                    <TextInput
-                      style={[inputStyle, styles.passwordInput, fieldError("password") && errStyle]}
-                      placeholder="Password"
-                      placeholderTextColor={colors.placeholder}
-                      secureTextEntry={!passwordVisible}
-                      value={password}
-                      onChangeText={setPassword}
-                      onBlur={() => handleBlur("password")}
-                      editable={!anyLoading}
-                      accessibilityLabel="Password"
-                    />
-                    <TouchableOpacity
-                      onPress={() => setPasswordVisible((v) => !v)}
-                      style={styles.eyeIconBtn}
-                      hitSlop={8}
-                      accessibilityLabel={passwordVisible ? "Hide password" : "Show password"}
-                    >
-                      <Feather name={passwordVisible ? "eye-off" : "eye"} size={18} color={colors.textSecondary} />
-                    </TouchableOpacity>
-                  </View>
-                  {fieldError("password") ? (
-                    <Text style={[typography.caption, styles.errorText, { color: colors.danger }]}>
-                      {fieldError("password")}
-                    </Text>
-                  ) : null}
-                  <PasswordStrengthPanel password={password} />
-                </View>
-
-                {/* Date of Birth */}
-                <View>
-                  <Text style={[typography.label, styles.fieldLabel, { color: colors.textSecondary }]}>
-                    Date of Birth
-                  </Text>
-                  <TextInput
-                    style={[inputStyle, fieldError("dob") && errStyle]}
-                    placeholder="MM/DD/YYYY"
-                    placeholderTextColor={colors.placeholder}
-                    value={dob}
-                    onChangeText={handleDobChange}
-                    onBlur={handleDobBlur}
-                    keyboardType="number-pad"
-                    maxLength={10}
-                    editable={!anyLoading}
-                    accessibilityLabel="Date of birth"
-                  />
-                  {fieldError("dob") ? (
-                    <Text style={[typography.caption, styles.errorText, { color: colors.danger }]}>
-                      {fieldError("dob")}
-                    </Text>
-                  ) : null}
-                </View>
-              </View>
-
-              {/* Terms */}
-              <View style={styles.termsContainer}>
-                <CheckBox
-                  value={agreeToTerms}
-                  onValueChange={setAgreeToTerms}
-                  color={agreeToTerms ? colors.success : undefined}
-                />
-                <Text style={[typography.body, styles.termsText, { color: colors.textSecondary }]}>
-                  I hereby confirm that I have read and agree with the{" "}
-                  <Text style={[styles.termsLink, { color: colors.brand }]} onPress={() => openLink(TERMS_OF_SERVICE_URL)}>
-                    Terms of Service
-                  </Text>{" "}
-                  and{" "}
-                  <Text style={[styles.termsLink, { color: colors.brand }]} onPress={() => openLink(PRIVACY_POLICY_URL)}>
-                    Privacy Policy
-                  </Text>
-                  .
-                </Text>
-              </View>
-
-              {/* Register button */}
-              <TouchableOpacity
-                style={[styles.button, { backgroundColor: colors.accent }, disabled && styles.disabled]}
-                onPress={handleRegister}
-                disabled={disabled}
-                activeOpacity={0.85}
-                accessibilityLabel="Create account"
-              >
-                {isLoading
-                  ? <ActivityIndicator color={colors.onAccent} />
-                  : <Text style={[typography.title, { color: colors.onAccent }]}>Create Account</Text>
-                }
-              </TouchableOpacity>
-
-              {/* Login link */}
-              <View style={styles.linkRow}>
-                <Text style={[typography.body, { color: colors.textSecondary }]}>Already have an account? </Text>
-                <TouchableOpacity onPress={() => navigation.navigate("Login")}>
-                  <Text style={[typography.bodyStrong, { color: colors.textPrimary, fontWeight: "700" }]}>Sign In</Text>
-                </TouchableOpacity>
-              </View>
-
-            </View>
-          </ScrollView>
-        </TouchableWithoutFeedback>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+      <View style={a.linkRow}>
+        <Text style={a.linkMuted}>Already Registered? </Text>
+        <TouchableOpacity
+          onPress={() => navigation.navigate("Login")}
+          hitSlop={8}
+          accessibilityRole="button"
+          accessibilityLabel="Log in to an existing account"
+        >
+          <Text style={a.linkBold}>Log in here</Text>
+        </TouchableOpacity>
+      </View>
+    </AuthScaffold>
   );
 }
 
 const styles = StyleSheet.create({
-  flex: { flex: 1 },
-  screen: { flex: 1 },
-  scrollContent: {
-    padding: spacing.xl,
-    justifyContent: "center",
-    flexGrow: 1,
-  },
+  disabled:   { opacity: 0.6 },
+  fieldError: { borderWidth: 1.5, borderColor: "#8E1F16" },
 
-  card: {
-    borderRadius: radius.xl,
-    borderWidth: 1,
-    padding: spacing.xl,
-  },
+  strengthPanel: { marginTop: 12, paddingHorizontal: 8, gap: 8 },
+  strengthTrack: { flexDirection: "row", gap: 5 },
+  strengthSeg:   { flex: 1, height: 4, borderRadius: 2 },
+  strengthLabel: { fontFamily: fonts.sansBold, fontSize: 12, letterSpacing: 0.3 },
+  criteriaList:  { gap: 4 },
+  criteriaRow:   { flexDirection: "row", alignItems: "center", gap: 7 },
+  criteriaText:  { fontFamily: fonts.sansMedium, fontSize: 12.5 },
 
-  titleContainer: { alignItems: "center", marginBottom: spacing.xl },
-  subtitle: { marginTop: spacing.xs },
+  termsRow:  { flexDirection: "row", alignItems: "flex-start", gap: 11, paddingHorizontal: 6, marginTop: 4 },
+  checkbox:  { width: 20, height: 20, borderRadius: 5, marginTop: 1 },
+  termsText: { flex: 1, fontFamily: fonts.sansSemi, fontSize: 14, lineHeight: 20, color: A.ink },
+  termsLink: { fontFamily: fonts.sansBold, textDecorationLine: "underline" },
 
-  googleButton: {
-    flexDirection: "row",
+  signupBtn: {
+    height: 62,
+    borderRadius: 31,
     alignItems: "center",
     justifyContent: "center",
-    borderRadius: radius.md,
-    paddingVertical: spacing.lg,
-    paddingHorizontal: spacing.xl,
-    marginBottom: spacing.xl,
-    borderWidth: 1.5,
-    gap: spacing.sm,
+    backgroundColor: "#FFFFFF",
+    marginTop: 4,
+    shadowColor: "#6A5A00",
+    shadowOpacity: 0.18,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 3,
   },
-  googleLogo: { width: 22, height: 22, resizeMode: "contain" },
-
-  dividerContainer: { flexDirection: "row", alignItems: "center", marginBottom: spacing.xl },
-  dividerLine: { flex: 1, height: 1 },
-  dividerText: { marginHorizontal: spacing.md },
-
-  inputContainer: { gap: spacing.md, marginBottom: spacing.xl },
-  input: {
-    paddingVertical: spacing.lg,
-    paddingHorizontal: spacing.lg,
-    borderRadius: radius.md,
-    fontSize: 15,
-    borderWidth: 1.5,
-  },
-  errorText: { marginTop: spacing.xs, marginLeft: spacing.xs, fontWeight: "500" },
-  passwordInputRow: { flexDirection: "row", alignItems: "center" },
-  passwordInput: { flex: 1, paddingRight: 48 },
-  eyeIconBtn: { position: "absolute", right: spacing.md, padding: spacing.xs },
-
-  strengthPanel: { marginTop: spacing.sm },
-  strengthBarTrack: { flexDirection: "row", gap: spacing.xs, marginBottom: spacing.xs },
-  strengthBarSegment: { flex: 1, height: 4, borderRadius: 2 },
-  strengthLabel: { fontWeight: "700", marginBottom: spacing.sm, textAlign: "right" },
-  criteriaList: { gap: spacing.xs },
-  criteriaRow: { flexDirection: "row", alignItems: "center", gap: spacing.sm },
-
-  fieldLabel: { marginBottom: spacing.xs, marginLeft: 2 },
-
-  termsContainer: {
-    flexDirection: "row",
-    alignItems: "flex-start",
-    marginBottom: spacing.xl,
-    gap: spacing.sm,
-  },
-  termsText: { flex: 1, lineHeight: 18 },
-  termsLink: { fontWeight: "700", textDecorationLine: "underline" },
-
-  button: {
-    paddingVertical: spacing.lg,
-    borderRadius: radius.md,
-    alignItems: "center",
-    marginBottom: spacing.lg,
-  },
-  disabled: { opacity: 0.55 },
-
-  linkRow: { flexDirection: "row", justifyContent: "center", alignItems: "center" },
+  signupText: { fontFamily: fonts.sansBold, fontSize: 17, color: A.ink, letterSpacing: 0.2 },
 });

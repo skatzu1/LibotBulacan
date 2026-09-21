@@ -4,10 +4,10 @@ import {
   ActivityIndicator, StatusBar,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
-import { FontAwesome5 } from "@expo/vector-icons";
 import { useBookmark } from "../context/BookmarkContext";
-import { useTheme } from "../context/ThemeContext";
+import { useTheme, fonts } from "../context/ThemeContext";
 import { ScreenHeader, SpotCard, EmptyState, H_PAD } from "../components/ui";
+import Icon from "../components/Icon";
 
 export default function Bookmark() {
   const navigation = useNavigation();
@@ -58,12 +58,13 @@ export default function Bookmark() {
                 onPress={() => navigation.navigate("InformationScreen", { spot })}
                 right={
                   <TouchableOpacity
+                    accessibilityRole="button"
                     style={[styles.bmBtn, { backgroundColor: "rgba(0,0,0,0.4)" }]}
                     onPress={() => toggleBookmark(spot)}
                     activeOpacity={0.8}
                     accessibilityLabel="Remove bookmark"
                   >
-                    <FontAwesome5 name="bookmark" size={17} solid color={colors.star} />
+                    <Icon name="bookmark" size={17} weight="fill" color={colors.star} />
                   </TouchableOpacity>
                 }
               />
@@ -78,7 +79,7 @@ export default function Bookmark() {
 const styles = StyleSheet.create({
   container: { flex: 1 },
   scroll:    { paddingHorizontal: H_PAD, paddingBottom: 150 },
-  count:     { fontSize: 13.5, fontWeight: "500", marginTop: 4, marginBottom: 16 },
+  count:     { fontSize: 13.5, fontFamily: fonts.sansMedium, marginTop: 4, marginBottom: 16 },
   centered:  { paddingVertical: 80, alignItems: "center" },
   list:      { gap: 14 },
   bmBtn: {

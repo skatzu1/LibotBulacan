@@ -1,4 +1,4 @@
-const API_BASE = 'https://libotbackend.onrender.com';
+import { BASE_URL as API_BASE } from "../api";
 
 async function imageUriToBase64(imageUri) {
   const response = await fetch(imageUri);
@@ -42,7 +42,7 @@ export async function runPrediction(imageUri, missionId, getToken) {
     return {
       verified:   data.verified,
       confidence: data.confidence,
-      noModel:    data.noModel || false,  // ✅ pass through no-model flag
+      noModel:    data.noModel || false,  // pass through no-model flag
     };
 
   } catch (err) {
