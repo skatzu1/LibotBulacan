@@ -10,7 +10,7 @@
     "splash": {
       "image": "./assets/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#8FE1E9"
+      "backgroundColor": "#FBF8F2"
     },
     "newArchEnabled": true,
     "userInterfaceStyle": "automatic",
@@ -18,14 +18,13 @@
       "**/*"
     ],
     "plugins": [
-      "expo-router",
       "expo-font",
       "expo-asset",
       [
         "expo-notifications",
         {
           "icon": "./assets/notification-icon.png",
-          "color": "#0C7A84",
+          "color": "#0A6F78",
           "defaultChannel": "default",
           "largeIcon": "./assets/logo.png"
         }
@@ -78,7 +77,8 @@
           }
         }
       ],
-      "react-native-vision-camera"
+      "react-native-vision-camera",
+      "./plugins/withArCoreApiKey"
     ],
     "ios": {
       "supportsTablet": true,
@@ -114,7 +114,7 @@
       ],
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
-        "backgroundColor": "#F3DA3C"
+        "backgroundColor": "#F2CE1B"
       },
       "edgeToEdgeEnabled": true,
       "package": "com.skatzu15.libot.beta",

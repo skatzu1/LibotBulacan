@@ -56,7 +56,7 @@ function confirm(title, message, confirmText = "Start anyway") {
 
 /**
  * @param {object} spot  the spot the user wants to view in AR
- * @returns {Promise<boolean>}  true → caller should launch AR, false → don't
+ * @returns {Promise<boolean>}  true -> caller should launch AR, false -> don't
  */
 export async function ensureAtSpotForAR(spot) {
   const name = spot?.name || "this spot";

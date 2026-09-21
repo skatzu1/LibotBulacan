@@ -13,11 +13,12 @@ import {
 } from "react-native";
 import { WebView } from "react-native-webview";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Feather } from "@expo/vector-icons";
 import * as Location from "expo-location";
 import { useArrival } from "../context/ArrivalContext";
-import { useTheme, radius, shadow } from "../context/ThemeContext";
+import { useTheme, radius, shadow, fonts } from "../context/ThemeContext";
 import { BULACAN_BOUNDARY, BULACAN_BBOX } from "../utils/bulacanBoundary";
+import { BASE_URL } from "../api";
+import Icon from "../components/Icon";
 
 /* ── Human-readable distance / duration ───────────────────────────── */
 function fmtDistance(m) {
@@ -33,407 +34,701 @@ function fmtDuration(s) {
 }
 
 const { width, height } = Dimensions.get("window");
-const BASE_URL = "https://libotbackend.onrender.com";
+// Single source of truth for the backend host — see api.js.
 
+// Public-transport terminals across Bulacan: buses, jeepneys, modern
+// jeepneys (e-jeepneys) and UV Express, on the province's main service roads —
+// MacArthur Highway, Cagayan Valley Road, Quirino Highway and the NLEX exits.
+//
+// Every lat/lng here is taken from a terminal mapped in OpenStreetMap, and the
+// `osm` field records which element it came from (type/id — look it up at
+// openstreetmap.org/<type>/<id>) so any entry can be re-checked or corrected
+// against the source rather than taken on faith. Several of the coordinates
+// this replaced were municipality centroids rather than terminals, which put
+// pins up to ~2.5 km away from the actual terminal.
+//
+// The handful of entries carrying `approx: true` are the exception: those are
+// towns OpenStreetMap has no terminal mapped in at all, so the pin is the town
+// proper. They're labelled "(approximate location)" in the UI rather than
+// dropped, so the municipality still appears — replace each one as soon as
+// someone can stand at the real terminal and read off a coordinate.
 const TERMINALS = [
 
-  // ── San Jose del Monte ───────────────────────────────────────────
+  // ── San Jose del Monte — Quirino Highway corridor ──
   {
-    id: "tungkong-mangga",
-    name: "Tungkong Mangga Terminal",
-    lat: 14.8177,
-    lng: 121.0515,
-    address: "Tungkong Mangga, San Jose del Monte, Bulacan",
-    routes: ["Tungkong Mangga – Fairview", "Tungkong Mangga – Cubao"],
-    type: "Jeepney / UV Express Terminal",
+    id: "sampol",
+    name: "Sampol Bus Terminal",
+    lat: 14.85842,
+    lng: 121.05767,
+    address: "Sampol Market, Muzon, San Jose del Monte",
+    routes: ["Sampol – Sta. Maria – Meycauayan (Modern PUV)","Sampol – Muzon","Sampol – Quirino Highway"],
+    type: "Modern Jeepney (e-jeepney) / Bus Terminal",
+    osm: "way/1126385234",
   },
   {
-    id: "sapang-palay",
-    name: "Sapang Palay Terminal",
-    lat: 14.8587,
-    lng: 121.0484,
-    address: "Sapang Palay Proper, San Jose del Monte, Bulacan",
-    routes: ["Sapang Palay – Monumento", "Sapang Palay – SM Fairview"],
+    id: "sapang-palay-santrans",
+    name: "Santrans – Sapang Palay Terminal",
+    lat: 14.85870,
+    lng: 121.04748,
+    address: "Sapang Palay, San Jose del Monte",
+    routes: ["Sapang Palay – Cubao","Sapang Palay – Monumento"],
+    type: "Bus Terminal",
+    osm: "way/436558835",
+  },
+  {
+    id: "fvr-terminal",
+    name: "FVR Terminal",
+    lat: 14.85865,
+    lng: 121.04823,
+    address: "Sapang Palay, San Jose del Monte",
+    routes: ["Sapang Palay – Tungko","Sapang Palay – Poblacion"],
     type: "Jeepney Terminal",
+    osm: "node/926022916",
   },
   {
-    id: "poblacion-sjdm",
-    name: "Poblacion Terminal (SJDM)",
-    lat: 14.8119,
-    lng: 121.0447,
-    address: "Poblacion, San Jose del Monte, Bulacan",
-    routes: ["SJDM – Monumento", "SJDM – Cubao"],
-    type: "Bus / Jeepney Terminal",
+    id: "muzon-central",
+    name: "Muzon Central Terminal",
+    lat: 14.79679,
+    lng: 121.02855,
+    address: "Muzon, San Jose del Monte",
+    routes: ["Muzon – Monumento","Muzon – Sta. Maria","Muzon – Tungko"],
+    type: "Jeepney / UV Express Terminal",
+    osm: "way/1117580936",
+  },
+  {
+    id: "muzon-sta-maria",
+    name: "Muzon – Santa Maria Jeepney Terminal",
+    lat: 14.80290,
+    lng: 121.03288,
+    address: "Muzon, San Jose del Monte",
+    routes: ["Muzon – Sta. Maria"],
+    type: "Jeepney Terminal",
+    osm: "node/2091205724",
+  },
+  {
+    id: "muzon-tungko",
+    name: "Muzon – Tungko Jeepney Terminal",
+    lat: 14.80086,
+    lng: 121.03620,
+    address: "Muzon, San Jose del Monte",
+    routes: ["Muzon – Tungko"],
+    type: "Jeepney Terminal",
+    osm: "node/6237417988",
   },
   {
     id: "francisco-homes",
-    name: "Francisco Homes Terminal",
-    lat: 14.8083,
-    lng: 121.0583,
-    address: "Francisco Homes, San Jose del Monte, Bulacan",
-    routes: ["Francisco Homes – Fairview", "Francisco Homes – SM City"],
+    name: "Francisco Homes Jeepney Terminal",
+    lat: 14.80892,
+    lng: 121.05866,
+    address: "Francisco Homes, San Jose del Monte",
+    routes: ["Francisco Homes – Tungko","Francisco Homes – Quirino Highway"],
+    type: "Jeepney Terminal",
+    osm: "node/4218561789",
+  },
+  {
+    id: "tungko-licao",
+    name: "Tungko – Licao-Licao Jeepney Station",
+    lat: 14.78979,
+    lng: 121.07536,
+    address: "Tungko, San Jose del Monte",
+    routes: ["Tungko – Licao-Licao"],
+    type: "Jeepney Terminal",
+    osm: "node/4800807748",
+  },
+  {
+    id: "grotto-shop-n-ride",
+    name: "Grotto Shop N Ride Terminal",
+    lat: 14.79093,
+    lng: 121.06688,
+    address: "Graceville, San Jose del Monte",
+    routes: ["SJDM – Cubao","SJDM – Fairview"],
+    type: "Bus / UV Express Terminal",
+    osm: "way/331646009",
+  },
+  {
+    id: "jackpherlin",
+    name: "Jackpherlin Bus Terminal",
+    lat: 14.80148,
+    lng: 121.07166,
+    address: "Tungko, San Jose del Monte",
+    routes: ["SJDM – Cubao","SJDM – Monumento"],
+    type: "Bus Terminal",
+    osm: "node/3190448311",
+  },
+  {
+    id: "spygtsc",
+    name: "SPYGTSC Terminal",
+    lat: 14.84137,
+    lng: 121.04304,
+    address: "Sapang Palay, San Jose del Monte",
+    routes: ["Sapang Palay – Poblacion"],
+    type: "Jeepney Terminal",
+    osm: "way/1126178505",
+  },
+  {
+    id: "sjdm-poblacion-jeep",
+    name: "Poblacion Jeepney Terminal (SJDM)",
+    lat: 14.81523,
+    lng: 121.04292,
+    address: "Poblacion, San Jose del Monte",
+    routes: ["SJDM Poblacion – Tungko","SJDM Poblacion – Sapang Palay"],
+    type: "Jeepney Terminal",
+    osm: "node/339127871",
+  },
+
+  // ── Santa Maria — Governor F. Halili Ave. / Sta. Maria–Norzagaray Rd. ──
+  {
+    id: "sta-maria-public",
+    name: "Santa Maria Public Transport Terminal",
+    lat: 14.81758,
+    lng: 120.95932,
+    address: "Poblacion, Santa Maria, Bulacan",
+    routes: ["Sta. Maria – Monumento","Sta. Maria – Malolos","Sta. Maria – Meycauayan (Modern PUV)"],
+    type: "Bus / Jeepney Terminal",
+    osm: "way/817956074",
+  },
+  {
+    id: "sta-maria-jeep",
+    name: "Santa Maria Jeep Terminal",
+    lat: 14.82285,
+    lng: 120.95370,
+    address: "Poblacion, Santa Maria, Bulacan",
+    routes: ["Sta. Maria – Bocaue","Sta. Maria – Balagtas"],
+    type: "Jeepney Terminal",
+    osm: "way/348076596",
+  },
+  {
+    id: "mag-asawang-sapa",
+    name: "Mag-Asawang Sapa – Sta. Maria JODA",
+    lat: 14.82286,
+    lng: 120.96009,
+    address: "Mag-Asawang Sapa, Santa Maria, Bulacan",
+    routes: ["Mag-Asawang Sapa – Sta. Maria"],
+    type: "Jeepney Terminal",
+    osm: "node/4443332989",
+  },
+  {
+    id: "norzagaray-sta-maria",
+    name: "Norzagaray – Sta. Maria JODA",
+    lat: 14.82190,
+    lng: 120.96143,
+    address: "Poblacion, Santa Maria, Bulacan",
+    routes: ["Norzagaray – Sta. Maria"],
+    type: "Jeepney Terminal",
+    osm: "node/3601901966",
+  },
+  {
+    id: "caypombo-p2p",
+    name: "Caypombo P2P Terminal",
+    lat: 14.84848,
+    lng: 120.98129,
+    address: "Caypombo, Santa Maria, Bulacan",
+    routes: ["Caypombo – Trinoma (P2P)","Caypombo – Cubao"],
+    type: "P2P Bus Terminal",
+    osm: "way/1126178499",
+  },
+
+  // ── Meycauayan — MacArthur Highway / Meycauayan–Marilao Rd. ──
+  {
+    id: "meycauayan-common",
+    name: "Meycauayan Common Terminal",
+    lat: 14.74869,
+    lng: 120.97373,
+    address: "Calvario, Meycauayan City, Bulacan",
+    routes: ["Meycauayan – Sta. Maria – Sampol (Modern PUV)","Meycauayan – Monumento"],
+    type: "Modern Jeepney (e-jeepney) / Jeepney Terminal",
+    osm: "way/735025434",
+  },
+  {
+    id: "meycauayan-sto-nino",
+    name: "Meycauayan – Santo Niño Terminal",
+    lat: 14.73757,
+    lng: 120.96174,
+    address: "Santo Niño, Meycauayan City, Bulacan",
+    routes: ["Sto. Niño – Meycauayan Bayan","Sto. Niño – Monumento"],
+    type: "Jeepney Terminal",
+    osm: "way/614659440",
+  },
+  {
+    id: "sto-nino-common",
+    name: "Sto. Niño Common Terminal",
+    lat: 14.76448,
+    lng: 120.99382,
+    address: "Santo Niño, Meycauayan City, Bulacan",
+    routes: ["Sto. Niño – Meycauayan Town","Sto. Niño – Monumento"],
+    type: "Jeepney Terminal",
+    osm: "node/5277623924",
+  },
+  {
+    id: "five-star-depot",
+    name: "Five Star Bus Depot",
+    lat: 14.75281,
+    lng: 120.97442,
+    address: "Meycauayan City, Bulacan",
+    routes: ["Meycauayan – Cubao","Meycauayan – Balagtas"],
+    type: "Bus Terminal",
+    osm: "way/301884586",
+  },
+
+  // ── Bocaue & Marilao — MacArthur Highway ──
+  {
+    id: "north-luzon-express",
+    name: "North Luzon Express Terminal",
+    lat: 14.79561,
+    lng: 120.95526,
+    address: "MacArthur Highway, Bocaue, Bulacan",
+    routes: ["Bocaue – Monumento","Bocaue – Cubao"],
+    type: "Bus Terminal",
+    osm: "way/265762154",
+  },
+  {
+    id: "uv-dau-angeles",
+    name: "UV Express – Dau / Angeles Terminal",
+    lat: 14.80747,
+    lng: 120.94138,
+    address: "MacArthur Highway, Bocaue, Bulacan",
+    routes: ["Bocaue – Dau","Bocaue – Angeles, Pampanga"],
     type: "UV Express Terminal",
+    osm: "node/1425035225",
   },
+
+  // ── Balagtas & Bulakan — MacArthur Highway ──
   {
-    id: "muzon",
-    name: "Muzon Terminal",
-    lat: 14.8024,
-    lng: 121.0347,
-    address: "Muzon, San Jose del Monte, Bulacan",
-    routes: ["Muzon – Monumento", "Muzon – SM Fairview"],
-    type: "Jeepney Terminal",
-  },
-  {
-    id: "citihomes",
-    name: "Citihomes Terminal",
-    lat: 14.8421,
-    lng: 121.0457,
-    address: "Citihomes, San Jose del Monte, Bulacan",
-    routes: ["Citihomes – Fairview", "Citihomes – Monumento"],
+    id: "balagtas-uv",
+    name: "Balagtas UV Express Terminal",
+    lat: 14.81981,
+    lng: 120.90447,
+    address: "MacArthur Highway, Balagtas, Bulacan",
+    routes: ["Balagtas – Cubao","Balagtas – Monumento"],
     type: "UV Express Terminal",
+    osm: "node/5731987994",
   },
   {
-    id: "graceville",
-    name: "Graceville Terminal",
-    lat: 14.8210,
-    lng: 121.0590,
-    address: "Graceville, San Jose del Monte, Bulacan",
-    routes: ["Graceville – Cubao", "Graceville – SM Fairview"],
+    id: "bulakan-balagtas",
+    name: "Bulakan – Balagtas Jeepney Terminal",
+    lat: 14.79530,
+    lng: 120.87699,
+    address: "Matungao St., Bulakan, Bulacan",
+    routes: ["Bulakan – Balagtas"],
     type: "Jeepney Terminal",
+    osm: "way/1337982468",
   },
   {
-    id: "kaypian",
-    name: "Kaypian Terminal",
-    lat: 14.8370,
-    lng: 121.0630,
-    address: "Kaypian, San Jose del Monte, Bulacan",
-    routes: ["Kaypian – Fairview", "Kaypian – Monumento"],
+    id: "bulakan-malolos-jeep",
+    name: "Bulakan Jeepney Terminal (Balagtas / Malolos)",
+    lat: 14.79515,
+    lng: 120.87802,
+    address: "Matungao St., Bulakan, Bulacan",
+    routes: ["Bulakan – Balagtas","Bulakan – Malolos City"],
     type: "Jeepney Terminal",
+    osm: "way/123747898",
   },
   {
-    id: "paradise-3",
-    name: "Paradise III Terminal",
-    lat: 14.8290,
-    lng: 121.0500,
-    address: "Paradise III, San Jose del Monte, Bulacan",
-    routes: ["Paradise III – Cubao", "Paradise III – SM Fairview"],
+    id: "german-espiritu",
+    name: "German Espiritu Liner – Bulacan Terminal",
+    lat: 14.79664,
+    lng: 120.87585,
+    address: "Bulakan, Bulacan",
+    routes: ["Bulakan – Manila","Bulakan – Malolos"],
+    type: "Bus Terminal",
+    osm: "way/606746020",
+  },
+
+  // ── Guiguinto & Marilao — MacArthur Highway ──
+  {
+    id: "tabang-uv",
+    name: "Tabang UV Express Terminal",
+    lat: 14.83837,
+    lng: 120.86265,
+    address: "Tabang, Guiguinto, Bulacan",
+    routes: ["Tabang – Cubao","Tabang – Monumento"],
     type: "UV Express Terminal",
+    osm: "way/607861614",
   },
   {
-    id: "san-manuel-sjdm",
-    name: "San Manuel Terminal (SJDM)",
-    lat: 14.8450,
-    lng: 121.0390,
-    address: "San Manuel, San Jose del Monte, Bulacan",
-    routes: ["San Manuel – Monumento", "San Manuel – Fairview"],
+    id: "guiguinto-station",
+    name: "Guiguinto Transport Terminal",
+    lat: 14.82730,
+    lng: 120.87357,
+    address: "MacArthur Highway, Guiguinto, Bulacan",
+    routes: ["Guiguinto – Malolos","Guiguinto – Monumento"],
+    type: "Bus / Jeepney Terminal",
+    osm: "node/5763203384",
+  },
+  {
+    id: "tabing-ilog",
+    name: "Tabing Ilog Terminal",
+    lat: 14.76228,
+    lng: 120.94844,
+    address: "Tabing Ilog, Marilao, Bulacan",
+    routes: ["Marilao – Monumento","Marilao – Cubao"],
+    type: "Jeepney / UV Express Terminal",
+    osm: "node/882686912",
+  },
+  {
+    id: "pandi-mag-asawang-sapa",
+    name: "Mag-Asawang Sapa Terminal (Pandi side)",
+    lat: 14.87796,
+    lng: 120.98196,
+    address: "Mag-Asawang Sapa, Pandi, Bulacan",
+    routes: ["Pandi – Sta. Maria","Pandi – Bocaue"],
     type: "Jeepney Terminal",
+    osm: "node/4498010790",
   },
 
-  // ── Sta. Maria ───────────────────────────────────────────────────
-  {
-    id: "sta-maria-terminal",
-    name: "Sta. Maria Jeepney Terminal",
-    lat: 14.8150,
-    lng: 120.9597,
-    address: "McArthur Highway, Sta. Maria, Bulacan",
-    routes: ["Sta. Maria – Monumento", "Sta. Maria – Malolos", "Malinta – Sta. Maria"],
-    type: "Jeepney Terminal",
-  },
-  {
-    id: "bulak-terminal",
-    name: "Bulak / Baliuag–Malolos Jeepney Terminal",
-    lat: 14.7951,
-    lng: 120.8786,
-    address: "Matungao Street, Bulakan, Bulacan",
-    routes: ["Bulakan – Balagtas", "Bulakan – Malolos City"],
-    type: "Jeepney Terminal",
-  },
-
-  // ── Bocaue ────────────────────────────────────────────────────────
-  {
-    id: "bocaue-terminal",
-    name: "Bocaue Terminal",
-    lat: 14.7978,
-    lng: 120.9289,
-    address: "McArthur Highway, Bocaue, Bulacan",
-    routes: ["Bocaue – Monumento", "Bocaue – Malolos"],
-    type: "Jeepney Terminal",
-  },
-
-  // ── Pandi ─────────────────────────────────────────────────────────
-  {
-    id: "pandi-terminal",
-    name: "Pandi Terminal",
-    lat: 14.8635,
-    lng: 120.9524,
-    address: "McArthur Highway, Pandi, Bulacan",
-    routes: ["Pandi – Malolos", "Pandi – Bocaue", "Pandi – Trinoma (P2P)"],
-    type: "Jeepney / P2P Terminal",
-  },
-
-  // ── Balagtas ──────────────────────────────────────────────────────
-  {
-    id: "balagtas-terminal",
-    name: "Balagtas Terminal",
-    lat: 14.8162,
-    lng: 120.9079,
-    address: "McArthur Highway, Balagtas, Bulacan",
-    routes: ["Balagtas – Monumento", "Balagtas – Malolos", "Balagtas – Trinoma (P2P)"],
-    type: "Jeepney / P2P Terminal",
-  },
-
-  // ── Guiguinto ─────────────────────────────────────────────────────
-  {
-    id: "guiguinto-terminal",
-    name: "Guiguinto Terminal",
-    lat: 14.8369,
-    lng: 120.8859,
-    address: "McArthur Highway, Guiguinto, Bulacan",
-    routes: ["Guiguinto – Malolos", "Guiguinto – Monumento"],
-    type: "Jeepney Terminal",
-  },
-
-  // ── Malolos ───────────────────────────────────────────────────────
+  // ── Malolos City — MacArthur Highway / Paseo del Congreso ──
   {
     id: "malolos-central",
-    name: "Malolos Central Terminal",
-    lat: 14.8430,
-    lng: 120.8104,
-    address: "Paseo del Congreso, Malolos City, Bulacan",
-    routes: ["Malolos – Cubao (NLEX)", "Malolos – Monumento", "Malolos – Tuktukan"],
+    name: "Malolos Central Transport Terminal",
+    lat: 14.85883,
+    lng: 120.81210,
+    address: "MacArthur Highway, Malolos City, Bulacan",
+    routes: ["Malolos – Cubao (NLEX)","Malolos – Monumento","Malolos – Baliuag"],
     type: "Bus / Jeepney Terminal",
-  },
-  {
-    id: "malolos-north",
-    name: "Malolos North Bus Terminal",
-    lat: 14.8620,
-    lng: 120.8130,
-    address: "McArthur Highway, Malolos City, Bulacan",
-    routes: ["Malolos – Baliuag (via McArthur Hwy)", "Malolos – Calumpit"],
-    type: "Bus Terminal",
-  },
-  {
-    id: "malolos-paombong",
-    name: "Malolos – Paombong / Hagonoy Terminal",
-    lat: 14.8436,
-    lng: 120.8088,
-    address: "Near Malolos Cathedral, Malolos City, Bulacan",
-    routes: ["Malolos – Paombong", "Malolos – Hagonoy"],
-    type: "Jeepney Terminal",
+    osm: "way/156152238",
   },
   {
     id: "robinsons-malolos",
-    name: "Robinsons Malolos Terminal",
-    lat: 14.8558,
-    lng: 120.8154,
-    address: "McArthur Highway, Malolos City, Bulacan",
-    routes: ["Robinsons Malolos – Trinoma (P2P)", "Robinsons Malolos – Monumento"],
-    type: "P2P / UV Express Terminal",
+    name: "Robinsons Malolos Transport Terminal",
+    lat: 14.84988,
+    lng: 120.82344,
+    address: "MacArthur Highway, Malolos City, Bulacan",
+    routes: ["Robinsons Malolos – Trinoma (P2P)","Robinsons Malolos – Monumento"],
+    type: "Bus / UV Express Terminal",
+    osm: "node/3143390107",
   },
-
-  // ── Plaridel ──────────────────────────────────────────────────────
   {
-    id: "plaridel-terminal",
-    name: "Plaridel Terminal",
-    lat: 14.8851,
-    lng: 120.8594,
-    address: "McArthur Highway, Plaridel, Bulacan",
-    routes: ["Plaridel – Malolos", "Plaridel – Monumento", "Plaridel – Trinoma (P2P)"],
-    type: "Jeepney / P2P Terminal",
-  },
-
-  // ── Pulilan ────────────────────────────────────────────────────────
-  {
-    id: "pulilan-terminal",
-    name: "Pulilan Jeepney Terminal",
-    lat: 14.8994,
-    lng: 120.8473,
-    address: "Near 588 Shopping Mall, Pulilan, Bulacan",
-    routes: ["Pulilan – Malolos", "Pulilan – Baliuag"],
+    id: "malolos-paombong",
+    name: "Malolos – Paombong Jeepney Terminal",
+    lat: 14.84344,
+    lng: 120.81066,
+    address: "Near Malolos Cathedral, Malolos City, Bulacan",
+    routes: ["Malolos – Paombong"],
     type: "Jeepney Terminal",
+    osm: "node/4279241190",
   },
-
-  // ── Calumpit ───────────────────────────────────────────────────────
   {
-    id: "calumpit-terminal",
-    name: "Calumpit Terminal",
-    lat: 14.9139,
-    lng: 120.7660,
-    address: "Rizal Street, Calumpit, Bulacan",
-    routes: ["Calumpit – Malolos", "Calumpit – Manila (via NLEX)"],
-    type: "Bus / Jeepney Terminal",
-  },
-
-  // ── Hagonoy ────────────────────────────────────────────────────────
-  {
-    id: "hagonoy-terminal",
-    name: "Hagonoy Terminal",
-    lat: 14.8353,
-    lng: 120.7314,
-    address: "Near Hagonoy Municipal Park, Hagonoy, Bulacan",
-    routes: ["Hagonoy – Malolos (via BSU Crossing)", "Hagonoy – Calumpit"],
+    id: "malolos-hagonoy",
+    name: "Malolos – Paombong / Hagonoy Terminal",
+    lat: 14.84351,
+    lng: 120.81091,
+    address: "Poblacion, Malolos City, Bulacan",
+    routes: ["Malolos – Paombong","Malolos – Hagonoy"],
     type: "Jeepney Terminal",
-  },
-
-  // ── Paombong ────────────────────────────────────────────────────────
-  {
-    id: "paombong-terminal",
-    name: "Paombong Terminal",
-    lat: 14.8333,
-    lng: 120.7833,
-    address: "Poblacion, Paombong, Bulacan",
-    routes: ["Paombong – Malolos", "Paombong – Hagonoy"],
-    type: "Jeepney Terminal",
-  },
-
-  // ── Obando ─────────────────────────────────────────────────────────
-  {
-    id: "obando-terminal",
-    name: "Obando Terminal",
-    lat: 14.7028,
-    lng: 120.9222,
-    address: "Poblacion, Obando, Bulacan",
-    routes: ["Obando – Meycauayan", "Obando – Monumento"],
-    type: "Jeepney Terminal",
-  },
-
-  // ── Marilao ──────────────────────────────────────────────────────
-  {
-    id: "marilao-terminal",
-    name: "Marilao Terminal",
-    lat: 14.7619,
-    lng: 120.9487,
-    address: "McArthur Highway, Marilao, Bulacan",
-    routes: ["Marilao – Monumento", "Marilao – SM Fairview"],
-    type: "Jeepney Terminal",
-  },
-
-  // ── Meycauayan ───────────────────────────────────────────────────
-  {
-    id: "meycauayan-terminal",
-    name: "Meycauayan Transport Terminal",
-    lat: 14.7356,
-    lng: 120.9604,
-    address: "Valenzuela Road, Meycauayan City, Bulacan",
-    routes: ["Meycauayan – Monumento", "Meycauayan – SM Fairview", "Meycauayan – Cubao"],
-    type: "Jeepney / UV Express Terminal",
+    osm: "way/300720902",
   },
   {
-    id: "malhacan",
-    name: "Malhacan Terminal",
-    lat: 14.7290,
-    lng: 120.9570,
-    address: "Malhacan, Meycauayan City, Bulacan",
-    routes: ["Malhacan – Monumento", "Malhacan – EDSA"],
-    type: "Jeepney Terminal",
-  },
-  {
-    id: "meycauayan-sm",
-    name: "SM Meycauayan Terminal",
-    lat: 14.7443,
-    lng: 120.9671,
-    address: "SM City Meycauayan, Meycauayan City, Bulacan",
-    routes: ["SM Meycauayan – Monumento", "SM Meycauayan – Cubao"],
+    id: "malolos-cubao-fx",
+    name: "Cubao / Recto FX Terminal (Malolos)",
+    lat: 14.85262,
+    lng: 120.81640,
+    address: "MacArthur Highway, Malolos City, Bulacan",
+    routes: ["Malolos – Cubao","Malolos – Recto"],
     type: "UV Express Terminal",
+    osm: "way/300448306",
+  },
+  {
+    id: "malolos-dau-uv",
+    name: "Malolos – Dau UV Express Terminal",
+    lat: 14.85670,
+    lng: 120.80987,
+    address: "MacArthur Highway, Malolos City, Bulacan",
+    routes: ["Malolos – Dau, Pampanga"],
+    type: "UV Express Terminal",
+    osm: "node/6816792285",
+  },
+  {
+    id: "camella-provence",
+    name: "Camella Provence Shuttle Terminal",
+    lat: 14.87511,
+    lng: 120.79711,
+    address: "Provence, Malolos City, Bulacan",
+    routes: ["Provence – Malolos","Provence – Manila"],
+    type: "Shuttle Terminal",
+    osm: "node/9047866329",
   },
 
-  // ── Baliuag ───────────────────────────────────────────────────────
+  // ── Plaridel & Pulilan — Cagayan Valley Road ──
+  {
+    id: "plaridel-jeep",
+    name: "Plaridel Jeepney Terminal",
+    lat: 14.88179,
+    lng: 120.86644,
+    address: "Cagayan Valley Road, Plaridel, Bulacan",
+    routes: ["Plaridel – Malolos","Plaridel – Baliuag"],
+    type: "Jeepney Terminal",
+    osm: "node/4272500892",
+  },
+  {
+    id: "plaridel-malolos",
+    name: "Plaridel – Malolos Jeepney Terminal",
+    lat: 14.88693,
+    lng: 120.86440,
+    address: "Cagayan Valley Road, Plaridel, Bulacan",
+    routes: ["Plaridel – Malolos"],
+    type: "Jeepney Terminal",
+    osm: "node/3129080860",
+  },
+  {
+    id: "pulilan-jeep",
+    name: "Pulilan Jeepney Terminal",
+    lat: 14.90071,
+    lng: 120.86761,
+    address: "Cagayan Valley Road, Pulilan, Bulacan",
+    routes: ["Pulilan – Malolos","Pulilan – Baliuag"],
+    type: "Jeepney Terminal",
+    osm: "way/307812080",
+  },
+  {
+    id: "pulilan-sm",
+    name: "SM Pulilan Transport Terminal",
+    lat: 14.89969,
+    lng: 120.86858,
+    address: "SM City Pulilan, Pulilan, Bulacan",
+    routes: ["Pulilan – Cubao","Pulilan – Malolos"],
+    type: "Bus / Jeepney Terminal",
+    osm: "way/730415728",
+  },
+
+  // ── Calumpit & Hagonoy ──
+  {
+    id: "calumpit-meycauayan",
+    name: "Calumpit – Meycauayan Jeepney Terminal",
+    lat: 14.90764,
+    lng: 120.76762,
+    address: "Poblacion, Calumpit, Bulacan",
+    routes: ["Calumpit – Meycauayan","Calumpit – Malolos"],
+    type: "Jeepney Terminal",
+    osm: "node/3130564173",
+  },
+  {
+    id: "hagonoy-fnlt",
+    name: "First North Luzon Transit – Hagonoy Terminal",
+    lat: 14.83361,
+    lng: 120.73403,
+    address: "Poblacion, Hagonoy, Bulacan",
+    routes: ["Hagonoy – Manila","Hagonoy – Cubao"],
+    type: "Bus Terminal",
+    osm: "node/1319502251",
+  },
+  {
+    id: "hagonoy-malolos-bayan",
+    name: "Hagonoy – Malolos Bayan Jeepney Terminal",
+    lat: 14.83560,
+    lng: 120.73382,
+    address: "Poblacion, Hagonoy, Bulacan",
+    routes: ["Hagonoy – Malolos Bayan"],
+    type: "Jeepney Terminal",
+    osm: "node/4266675705",
+  },
+  {
+    id: "hagonoy-bsu",
+    name: "Hagonoy – BSU / Malolos Crossing Terminal",
+    lat: 14.83643,
+    lng: 120.73389,
+    address: "Poblacion, Hagonoy, Bulacan",
+    routes: ["Hagonoy – BSU / Malolos Crossing"],
+    type: "Jeepney Terminal",
+    osm: "node/4266677204",
+  },
+  {
+    id: "hagonoy-robinsons",
+    name: "Hagonoy – Robinsons Malolos Terminal",
+    lat: 14.83674,
+    lng: 120.73416,
+    address: "Poblacion, Hagonoy, Bulacan",
+    routes: ["Hagonoy – Robinsons Malolos"],
+    type: "Jeepney Terminal",
+    osm: "node/4266677301",
+  },
+
+  // ── Baliuag — Cagayan Valley Road / NLEX Exit ──
   {
     id: "baliuag-terminal",
     name: "Baliuag Terminal",
-    lat: 14.9531,
-    lng: 120.8975,
-    address: "Rizal Street, Baliuag, Bulacan",
-    routes: ["Baliuag – Cubao (NLEX)", "Baliuag – Malolos", "Baliuag – Cabanatuan"],
+    lat: 14.95410,
+    lng: 120.90032,
+    address: "Cagayan Valley Road, Baliuag, Bulacan",
+    routes: ["Baliuag – Cubao (NLEX)","Baliuag – Malolos","Baliuag – Cabanatuan"],
     type: "Bus / Jeepney Terminal",
+    osm: "way/812399230",
   },
   {
-    id: "baliuag-crossing",
-    name: "Baliuag Crossing Terminal",
-    lat: 14.9462,
-    lng: 120.9011,
-    address: "NLEX Baliuag Exit, Baliuag, Bulacan",
-    routes: ["Baliuag – Cubao (via NLEX)", "Baliuag – Monumento"],
+    id: "baliwag-transit-aircon",
+    name: "Baliwag Transit – Aircon Bus Terminal",
+    lat: 14.95359,
+    lng: 120.89957,
+    address: "Baliuag, Bulacan",
+    routes: ["Baliuag – Cubao","Baliuag – Avenida"],
     type: "Bus Terminal",
+    osm: "way/1424752700",
   },
-
-  // ── Bustos ─────────────────────────────────────────────────────────
   {
-    id: "bustos-terminal",
-    name: "Bustos Terminal",
-    lat: 14.9530,
-    lng: 120.9178,
-    address: "Poblacion, Bustos, Bulacan",
-    routes: ["Bustos – Baliuag", "Bustos – Malolos"],
-    type: "Jeepney Terminal",
+    id: "baliwag-transit-ordinary",
+    name: "Baliwag Transit – Ordinary Bus Terminal",
+    lat: 14.95409,
+    lng: 120.90013,
+    address: "Baliuag, Bulacan",
+    routes: ["Baliuag – Cubao","Baliuag – Avenida"],
+    type: "Bus Terminal",
+    osm: "way/1424752701",
   },
-
-  // ── Angat ──────────────────────────────────────────────────────────
   {
-    id: "angat-terminal",
-    name: "Angat Terminal",
-    lat: 14.9287,
-    lng: 121.0155,
-    address: "Poblacion, Angat, Bulacan",
-    routes: ["Angat – Baliuag", "Angat – San Rafael"],
-    type: "Jeepney Terminal",
-  },
-
-  // ── Norzagaray ─────────────────────────────────────────────────────
-  {
-    id: "norzagaray-terminal",
-    name: "Norzagaray Terminal",
-    lat: 14.9022,
-    lng: 121.0523,
-    address: "Poblacion, Norzagaray, Bulacan",
-    routes: ["Norzagaray – Baliuag", "Norzagaray – Monumento"],
-    type: "Jeepney Terminal",
-  },
-
-  // ── San Ildefonso ──────────────────────────────────────────────────
-  {
-    id: "san-ildefonso-terminal",
-    name: "San Ildefonso Terminal",
-    lat: 15.0712,
-    lng: 120.9972,
-    address: "Poblacion, San Ildefonso, Bulacan",
-    routes: ["San Ildefonso – Baliuag", "San Ildefonso – Malolos"],
-    type: "Jeepney Terminal",
-  },
-
-  // ── San Miguel ─────────────────────────────────────────────────────
-  {
-    id: "san-miguel-terminal",
-    name: "San Miguel Terminal",
-    lat: 15.1329,
-    lng: 121.0212,
-    address: "Poblacion, San Miguel, Bulacan",
-    routes: ["San Miguel – Baliuag", "San Miguel – Cabanatuan (via Nueva Ecija)"],
+    id: "sm-baliwag",
+    name: "SM Baliwag Central Terminal",
+    lat: 14.95861,
+    lng: 120.89098,
+    address: "SM City Baliwag, Baliuag, Bulacan",
+    routes: ["Baliuag – Cubao","Baliuag – Malolos"],
     type: "Bus / Jeepney Terminal",
+    osm: "way/1182361677",
   },
-
-  // ── San Rafael ─────────────────────────────────────────────────────
   {
-    id: "san-rafael-terminal",
-    name: "San Rafael Terminal",
-    lat: 14.9851,
-    lng: 121.0178,
-    address: "Poblacion, San Rafael, Bulacan",
-    routes: ["San Rafael – Baliuag", "San Rafael – Angat", "San Rafael – Malolos"],
-    type: "Jeepney Terminal",
+    id: "sm-baliwag-transport",
+    name: "SM Baliwag Transport Terminal",
+    lat: 14.96094,
+    lng: 120.89248,
+    address: "SM City Baliwag, Baliuag, Bulacan",
+    routes: ["Baliuag – Cubao","Baliuag – Monumento"],
+    type: "Bus / UV Express Terminal",
+    osm: "way/129509421",
   },
-
-  // ── Doña Remedios Trinidad ─────────────────────────────────────────
   {
-    id: "drt-terminal",
-    name: "Doña Remedios Trinidad Terminal",
-    lat: 15.0167,
-    lng: 121.1167,
-    address: "Poblacion, Doña Remedios Trinidad, Bulacan",
-    routes: ["DRT – Norzagaray", "DRT – San Ildefonso"],
-    type: "Jeepney Terminal",
+    id: "baliwag-transit-main",
+    name: "Baliwag Transit Terminal",
+    lat: 14.95997,
+    lng: 120.90734,
+    address: "Baliuag, Bulacan",
+    routes: ["Baliuag – Cubao","Baliuag – Cabanatuan"],
+    type: "Bus Terminal",
+    osm: "way/1371070761",
   },
 
+  // ── Angat & San Miguel — northern Bulacan ──
+  {
+    id: "agila-angat",
+    name: "Agila Bus Transport – Angat Terminal",
+    lat: 14.94374,
+    lng: 121.02642,
+    address: "Poblacion, Angat, Bulacan",
+    routes: ["Angat – Cubao","Angat – Baliuag"],
+    type: "Bus Terminal",
+    osm: "node/7330287285",
+  },
+  {
+    id: "agila-bus",
+    name: "Agila Bus Terminal",
+    lat: 14.92695,
+    lng: 121.02932,
+    address: "Angat, Bulacan",
+    routes: ["Angat – Cubao","Angat – Monumento"],
+    type: "Bus Terminal",
+    osm: "way/805866555",
+  },
+  {
+    id: "angat-bus",
+    name: "Angat Bus Terminal",
+    lat: 14.91685,
+    lng: 121.02884,
+    address: "Poblacion, Angat, Bulacan",
+    routes: ["Angat – Baliuag","Angat – San Rafael"],
+    type: "Bus / Jeepney Terminal",
+    osm: "node/9577491081",
+  },
+  {
+    id: "baliwag-transit-san-miguel",
+    name: "Baliwag Transit – San Miguel Terminal",
+    lat: 15.14838,
+    lng: 120.97873,
+    address: "San Miguel, Bulacan",
+    routes: ["San Miguel – Cubao","San Miguel – Baliuag"],
+    type: "Bus Terminal",
+    osm: "way/248969461",
+  },
+  {
+    id: "five-star-san-miguel",
+    name: "Five Star – San Miguel Terminal",
+    lat: 15.16917,
+    lng: 120.96809,
+    address: "San Miguel, Bulacan",
+    routes: ["San Miguel – Cubao","San Miguel – Cabanatuan"],
+    type: "Bus Terminal",
+    osm: "way/194620822",
+  },
+
+  // ── Towns with no terminal mapped in OpenStreetMap yet ──
+  // These pins are the town proper, not a surveyed terminal — see the note at
+  // the top of TERMINALS.
+  {
+    id: "norzagaray-town",
+    name: "Norzagaray Terminal (town proper)",
+    lat: 14.90220,
+    lng: 121.05230,
+    address: "Poblacion, Norzagaray, Bulacan — approximate",
+    routes: ["Norzagaray – Sta. Maria","Norzagaray – Baliuag"],
+    type: "Jeepney Terminal (approximate location)",
+    approx: true,
+  },
+  {
+    id: "san-rafael-town",
+    name: "San Rafael Terminal (town proper)",
+    lat: 14.98510,
+    lng: 121.01780,
+    address: "Poblacion, San Rafael, Bulacan — approximate",
+    routes: ["San Rafael – Baliuag","San Rafael – Angat"],
+    type: "Jeepney Terminal (approximate location)",
+    approx: true,
+  },
+  {
+    id: "san-ildefonso-town",
+    name: "San Ildefonso Terminal (town proper)",
+    lat: 15.07120,
+    lng: 120.99720,
+    address: "Poblacion, San Ildefonso, Bulacan — approximate",
+    routes: ["San Ildefonso – Baliuag","San Ildefonso – San Miguel"],
+    type: "Jeepney Terminal (approximate location)",
+    approx: true,
+  },
+  {
+    id: "bustos-town",
+    name: "Bustos Terminal (town proper)",
+    lat: 14.95300,
+    lng: 120.91780,
+    address: "Poblacion, Bustos, Bulacan — approximate",
+    routes: ["Bustos – Baliuag","Bustos – Malolos"],
+    type: "Jeepney Terminal (approximate location)",
+    approx: true,
+  },
+  {
+    id: "obando-town",
+    name: "Obando Terminal (town proper)",
+    lat: 14.70280,
+    lng: 120.92220,
+    address: "Poblacion, Obando, Bulacan — approximate",
+    routes: ["Obando – Meycauayan","Obando – Monumento"],
+    type: "Jeepney Terminal (approximate location)",
+    approx: true,
+  },
+  {
+    id: "paombong-town",
+    name: "Paombong Terminal (town proper)",
+    lat: 14.83330,
+    lng: 120.78330,
+    address: "Poblacion, Paombong, Bulacan — approximate",
+    routes: ["Paombong – Malolos","Paombong – Hagonoy"],
+    type: "Jeepney Terminal (approximate location)",
+    approx: true,
+  },
+  {
+    id: "drt-town",
+    name: "Doña Remedios Trinidad Terminal (town proper)",
+    lat: 15.01670,
+    lng: 121.08330,
+    address: "Poblacion, Doña Remedios Trinidad, Bulacan — approximate",
+    routes: ["DRT – Baliuag","DRT – Angat"],
+    type: "Jeepney Terminal (approximate location)",
+    approx: true,
+  },
 ];
 
 // ── Haversine distance in metres ──────────────────────────────────
@@ -1127,7 +1422,7 @@ window.updateSpotProximity = function(active) {
     return (
       <View style={[styles.loading, { backgroundColor: colors.background }]}>
         <View style={[styles.loadingBadge, { backgroundColor: colors.brandSoft }]}>
-          <Feather name="map" size={26} color={colors.brand} />
+          <Icon name="map" size={26} color={colors.brand} />
         </View>
         <ActivityIndicator size="small" color={colors.brand} style={{ marginTop: 20 }} />
         <Text style={[styles.loadingText, { color: colors.textSecondary }]}>
@@ -1141,10 +1436,11 @@ window.updateSpotProximity = function(active) {
     return (
       <View style={[styles.loading, { backgroundColor: colors.background }]}>
         <View style={[styles.loadingBadge, { backgroundColor: colors.dangerBg }]}>
-          <Feather name="alert-triangle" size={24} color={colors.danger} />
+          <Icon name="alert-triangle" size={24} color={colors.danger} />
         </View>
         <Text style={[styles.errorText, { color: colors.textSecondary, marginTop: 18 }]}>{msg}</Text>
         <TouchableOpacity
+          accessibilityRole="button"
           style={[styles.backButtonError, { backgroundColor: colors.accent }, shadow.sm]}
           onPress={() => navigation.goBack()}
           activeOpacity={0.85}
@@ -1184,16 +1480,17 @@ window.updateSpotProximity = function(active) {
       {/* Floating top bar — back button + title chip */}
       <View style={[styles.topBar, { top: insets.top + 10 }]} pointerEvents="box-none">
         <TouchableOpacity
+          accessibilityRole="button"
           onPress={() => navigation.goBack()}
           style={[styles.circleBtn, { backgroundColor: colors.background }, shadow.md]}
           activeOpacity={0.8}
           hitSlop={8}
         >
-          <Feather name="chevron-left" size={22} color={colors.brand} />
+          <Icon name="chevron-left" size={22} color={colors.brand} />
         </TouchableOpacity>
 
         <View style={[styles.titleChip, { backgroundColor: colors.background }, shadow.md]}>
-          <Feather name="map-pin" size={13} color={colors.brand} />
+          <Icon name="map-pin" size={13} color={colors.brand} />
           <Text style={[styles.titleChipText, { color: colors.textPrimary }]} numberOfLines={1}>
             {spotData.name}
           </Text>
@@ -1208,7 +1505,7 @@ window.updateSpotProximity = function(active) {
         {routeInfo ? (
           <View style={[styles.etaCard, { backgroundColor: colors.background }, shadow.lg]}>
             <View style={[styles.etaIcon, { backgroundColor: colors.brand }]}>
-              <Feather name="navigation-2" size={15} color={colors.onBrand} />
+              <Icon name="navigation-2" size={15} color={colors.onBrand} />
             </View>
             <View style={styles.etaText}>
               <Text style={[styles.etaPrimary, { color: colors.textPrimary }]} numberOfLines={1}>
@@ -1224,6 +1521,7 @@ window.updateSpotProximity = function(active) {
         )}
 
         <TouchableOpacity
+          accessibilityRole="button"
           style={[
             styles.circleBtn,
             styles.fab,
@@ -1233,7 +1531,7 @@ window.updateSpotProximity = function(active) {
           onPress={handleCenterOnMe}
           activeOpacity={0.85}
         >
-          <Feather
+          <Icon
             name="navigation"
             size={21}
             color={followMode ? colors.onBrand : colors.brand}
@@ -1245,6 +1543,7 @@ window.updateSpotProximity = function(active) {
       {selectedTerminal && (
         <>
           <TouchableOpacity
+            accessibilityRole="button"
             style={[styles.scrim, { backgroundColor: colors.overlay }]}
             activeOpacity={1}
             onPress={hideSheet}
@@ -1257,7 +1556,7 @@ window.updateSpotProximity = function(active) {
 
             <View style={styles.sheetHeader}>
               <View style={[styles.sheetIconWrap, { backgroundColor: colors.brand }]}>
-                <Feather name="truck" size={20} color={colors.onBrand} />
+                <Icon name="truck" size={20} color={colors.onBrand} />
               </View>
               <View style={styles.sheetTitleBlock}>
                 <Text style={[styles.sheetName, { color: colors.textPrimary }]} numberOfLines={2}>
@@ -1265,13 +1564,14 @@ window.updateSpotProximity = function(active) {
                 </Text>
                 <Text style={[styles.sheetType, { color: colors.textSecondary }]}>{selectedTerminal.type}</Text>
               </View>
-              <TouchableOpacity style={styles.sheetClose} onPress={hideSheet} hitSlop={8}>
-                <Feather name="x" size={18} color={colors.textMuted} />
+              <TouchableOpacity
+                accessibilityRole="button" style={styles.sheetClose} onPress={hideSheet} hitSlop={8}>
+                <Icon name="x" size={18} color={colors.textMuted} />
               </TouchableOpacity>
             </View>
 
             <View style={styles.sheetRow}>
-              <Feather name="map-pin" size={15} color={colors.brand} style={styles.sheetRowIcon} />
+              <Icon name="map-pin" size={15} color={colors.brand} style={styles.sheetRowIcon} />
               <Text style={[styles.sheetRowText, { color: colors.textPrimary }]}>{selectedTerminal.address}</Text>
             </View>
 
@@ -1279,13 +1579,14 @@ window.updateSpotProximity = function(active) {
             <Text style={[styles.sheetSectionLabel, { color: colors.textMuted }]}>Routes served</Text>
             {selectedTerminal.routes.map((r, i) => (
               <View key={i} style={styles.sheetRow}>
-                <Feather name="arrow-right-circle" size={15} color={colors.brand} style={styles.sheetRowIcon} />
+                <Icon name="arrow-right-circle" size={15} color={colors.brand} style={styles.sheetRowIcon} />
                 <Text style={[styles.sheetRowText, { color: colors.textPrimary }]}>{r}</Text>
               </View>
             ))}
 
             <View style={styles.sheetActions}>
               <TouchableOpacity
+                accessibilityRole="button"
                 style={[styles.sheetActionBtn, { backgroundColor: colors.accent }]}
                 activeOpacity={0.85}
                 onPress={() => {
@@ -1298,11 +1599,12 @@ window.updateSpotProximity = function(active) {
                   `);
                 }}
               >
-                <Feather name="crosshair" size={16} color={colors.onAccent} />
+                <Icon name="crosshair" size={16} color={colors.onAccent} />
                 <Text style={[styles.sheetActionPrimaryText, { color: colors.onAccent }]}>Show on map</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
+                accessibilityRole="button"
                 style={[styles.sheetActionBtn, { backgroundColor: colors.brandLight }]}
                 activeOpacity={0.85}
                 onPress={hideSheet}
@@ -1345,12 +1647,12 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 14,
     fontSize: 14,
-    fontWeight: "600",
+    fontFamily: fonts.sansSemi,
     textAlign: "center",
   },
   errorText: {
     fontSize: 15,
-    fontWeight: "600",
+    fontFamily: fonts.sansSemi,
     textAlign: "center",
     paddingHorizontal: 20,
     lineHeight: 22,
@@ -1363,7 +1665,7 @@ const styles = StyleSheet.create({
   },
   backButtonText: {
     fontSize: 15,
-    fontWeight: "700",
+    fontFamily: fonts.sansBold,
   },
 
   // ── Floating top bar ──
@@ -1394,7 +1696,7 @@ const styles = StyleSheet.create({
   titleChipText: {
     flex: 1,
     fontSize: 14.5,
-    fontWeight: "700",
+    fontFamily: fonts.sansBold,
     letterSpacing: -0.2,
   },
 
@@ -1429,8 +1731,8 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   etaText: { flexShrink: 1 },
-  etaPrimary: { fontSize: 14, fontWeight: "800", letterSpacing: -0.2 },
-  etaSecondary: { fontSize: 11.5, fontWeight: "500", marginTop: 1 },
+  etaPrimary: { fontSize: 14, fontFamily: fonts.sansBold, letterSpacing: -0.2 },
+  etaSecondary: { fontSize: 11.5, fontFamily: fonts.sansMedium, marginTop: 1 },
 
   // ── Bottom sheet ──
   // NOTE: no default backgroundColor here — the scrim, and the color values
@@ -1485,7 +1787,7 @@ const styles = StyleSheet.create({
   },
   sheetName: {
     fontSize: 16,
-    fontWeight: "700",
+    fontFamily: fonts.sansBold,
     lineHeight: 22,
   },
   sheetType: {
@@ -1502,7 +1804,7 @@ const styles = StyleSheet.create({
   },
   sheetSectionLabel: {
     fontSize: 12,
-    fontWeight: "700",
+    fontFamily: fonts.sansBold,
     textTransform: "uppercase",
     letterSpacing: 0.8,
     marginBottom: 8,
@@ -1538,10 +1840,10 @@ const styles = StyleSheet.create({
   },
   sheetActionPrimaryText: {
     fontSize: 14,
-    fontWeight: "700",
+    fontFamily: fonts.sansBold,
   },
   sheetActionSecondaryText: {
     fontSize: 14,
-    fontWeight: "600",
+    fontFamily: fonts.sansSemi,
   },
 });

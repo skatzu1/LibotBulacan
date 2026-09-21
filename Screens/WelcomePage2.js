@@ -1,19 +1,14 @@
 import React, { useState } from "react";
 import {
-  View,
-  Text,
-  StyleSheet,
-  TouchableOpacity,
-  Image,
-  Modal,
-  ScrollView,
-  StatusBar,
+  View, Text, StyleSheet, TouchableOpacity, Modal, ScrollView,
+  StatusBar, ImageBackground, Pressable,
 } from "react-native";
-import { showAlert } from "../components/AppAlert";
-import { SafeAreaView } from "react-native-safe-area-context";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { LinearGradient } from "expo-linear-gradient";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import { Feather } from "@expo/vector-icons";
-import { useTheme, spacing, radius, typography } from "../context/ThemeContext";
+import { showAlert } from "../components/AppAlert";
+import { auth as A, typography, fonts, radius, MAX_FONT_SCALE } from "../context/ThemeContext";
+import Icon from "../components/Icon";
 
 const BULACAN_MUNICIPALITIES = [
   "Angat", "Balagtas", "Baliuag", "Bocaue", "Bulakan", "Bustos",
@@ -24,8 +19,16 @@ const BULACAN_MUNICIPALITIES = [
   "I don't live in Bulacan",
 ];
 
+/*
+ * Onboarding, screen 2 of 2 — built from the approved mockup.
+ *
+ * Same duotone hero as screen 1 so the pair reads as one piece, with the
+ * municipality picker as a white pill. All of the original gating logic is
+ * unchanged: a selection is required, "I don't live in Bulacan" is refused, and
+ * the choice plus the hasSeenWelcome flag are persisted before Login.
+ */
 export default function WelcomePage2({ navigation }) {
-  const { colors, isDark } = useTheme();
+  const insets = useSafeAreaInsets();
   const [selected, setSelected]         = useState(null);
   const [dropdownOpen, setDropdownOpen] = useState(false);
 
@@ -55,218 +58,206 @@ export default function WelcomePage2({ navigation }) {
   };
 
   return (
-    <SafeAreaView style={[styles.screen, { backgroundColor: colors.background }]} edges={["top", "bottom"]}>
-      <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={colors.background} />
+    <View style={styles.screen}>
+      <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
 
-      <ScrollView
-        contentContainerStyle={styles.scroll}
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
+      <ImageBackground
+        source={require("../assets/welcome.jpg")}
+        style={StyleSheet.absoluteFill}
+        resizeMode="cover"
       >
-        <View style={styles.titleContainer}>
-          <Text style={[typography.h1, styles.title, { color: colors.textPrimary }]}>
-            Discover the Heart of Luzon
-          </Text>
-          <Text style={[typography.body, styles.subtitle, { color: colors.textSecondary }]}>
-            A guide for your journey through Bulacan
-          </Text>
-        </View>
+        <LinearGradient
+          colors={[A.washTop, A.washMid, A.washBottom]}
+          locations={[0, 0.55, 1]}
+          style={StyleSheet.absoluteFill}
+          pointerEvents="none"
+        />
+        <LinearGradient
+          colors={["transparent", "rgba(12,34,36,0.68)", "rgba(12,34,36,0.68)", "transparent"]}
+          locations={[0.18, 0.34, 0.74, 0.92]}
+          style={StyleSheet.absoluteFill}
+          pointerEvents="none"
+        />
+      </ImageBackground>
 
-        <View style={styles.card}>
-          <Image source={require("../assets/welcome2.png")} style={styles.image} />
-        </View>
-
-        {/* Municipality selector */}
-        <View style={styles.selectorContainer}>
-          <Text style={[typography.bodyStrong, styles.selectorLabel, { color: colors.textPrimary }]}>
-            Where do you live?
+      <View style={[styles.content, { paddingTop: insets.top, paddingBottom: Math.max(insets.bottom, 16) + 20 }]}>
+        <View style={styles.middle}>
+          <Text style={styles.headline} accessibilityRole="header" maxFontSizeMultiplier={MAX_FONT_SCALE}>
+            Where do{"\n"}you live?
           </Text>
 
           <TouchableOpacity
-            style={[
-              styles.dropdown,
-              { backgroundColor: colors.card, borderColor: colors.cardBorder },
-              isNotBulacan && { borderColor: colors.danger, backgroundColor: colors.dangerBg },
-            ]}
+            style={styles.picker}
             onPress={() => setDropdownOpen(true)}
-            activeOpacity={0.8}
+            activeOpacity={0.9}
+            accessibilityRole="button"
+            accessibilityLabel={selected ? `Municipality: ${selected}. Change it` : "Select your municipality"}
           >
             <Text
-              style={[
-                typography.body,
-                styles.dropdownText,
-                { color: selected ? colors.textPrimary : colors.placeholder },
-              ]}
+              style={[styles.pickerText, !selected && styles.pickerPlaceholder]}
               numberOfLines={1}
+              maxFontSizeMultiplier={MAX_FONT_SCALE}
             >
               {selected ?? "Select your municipality"}
             </Text>
-            <Feather
-              name="chevron-down"
-              size={18}
-              color={isNotBulacan ? colors.danger : colors.textSecondary}
-            />
+            <Icon name="chevron-down" size={22} color={A.muted} />
           </TouchableOpacity>
 
           {isNotBulacan && (
-            <Text style={[typography.caption, styles.errorText, { color: colors.danger }]}>
+            <Text style={styles.warning} maxFontSizeMultiplier={MAX_FONT_SCALE}>
               This app is only available for Bulacan residents and visitors.
             </Text>
           )}
         </View>
-      </ScrollView>
 
-      {/* Continue button */}
-      <TouchableOpacity
-        style={[
-          styles.button,
-          { backgroundColor: isNotBulacan ? colors.textMuted : colors.accent },
-        ]}
-        onPress={handleContinue}
-        activeOpacity={0.85}
-      >
-        <Text style={[typography.title, { color: colors.onAccent }]}>Continue</Text>
-      </TouchableOpacity>
+        <View style={styles.bottom}>
+          <View
+            style={styles.dots}
+            accessibilityElementsHidden
+            importantForAccessibility="no-hide-descendants"
+          >
+            <View style={styles.dot} />
+            <View style={[styles.dot, styles.dotActive]} />
+          </View>
 
-      {/* Dropdown modal */}
+          <TouchableOpacity
+            style={styles.cta}
+            onPress={handleContinue}
+            activeOpacity={0.88}
+            accessibilityRole="button"
+            accessibilityLabel="Next — continue to sign in"
+          >
+            <Text style={styles.ctaText}>Next</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+
+      {/* ── Municipality picker ── */}
       <Modal
         visible={dropdownOpen}
         transparent
         animationType="fade"
         onRequestClose={() => setDropdownOpen(false)}
+        statusBarTranslucent
       >
-        <TouchableOpacity
-          style={[styles.modalBackdrop, { backgroundColor: colors.overlay }]}
-          activeOpacity={1}
-          onPress={() => setDropdownOpen(false)}
-        >
-          <View style={[styles.modalSheet, { backgroundColor: colors.background }]}>
-            <View style={[styles.modalHeader, { borderBottomColor: colors.divider }]}>
-              <Text style={[typography.h3, { color: colors.textPrimary }]}>Select Municipality</Text>
-              <TouchableOpacity onPress={() => setDropdownOpen(false)} hitSlop={8}>
-                <Feather name="x" size={22} color={colors.textSecondary} />
-              </TouchableOpacity>
-            </View>
+        <Pressable style={styles.sheetBackdrop} onPress={() => setDropdownOpen(false)}>
+          <Pressable style={[styles.sheet, { paddingBottom: Math.max(insets.bottom, 16) }]} onPress={() => {}}>
+            <View style={styles.sheetGrabber} />
+            <Text style={styles.sheetTitle} accessibilityRole="header">Where do you live?</Text>
 
-            <ScrollView
-              showsVerticalScrollIndicator={false}
-              contentContainerStyle={styles.modalList}
-            >
+            <ScrollView showsVerticalScrollIndicator={false} style={styles.sheetScroll}>
               {BULACAN_MUNICIPALITIES.map((item) => {
-                const isChosen           = selected === item;
-                const isNotBulacanOption = item === "I don't live in Bulacan";
+                const isChosen  = selected === item;
+                const isOutside = item === "I don't live in Bulacan";
                 return (
                   <TouchableOpacity
                     key={item}
                     style={[
                       styles.option,
-                      isChosen && { backgroundColor: colors.brand },
-                      isNotBulacanOption && [styles.optionNotBulacan, { borderTopColor: colors.divider }],
+                      isChosen && styles.optionChosen,
+                      isOutside && styles.optionOutside,
                     ]}
                     onPress={() => handleSelect(item)}
-                    activeOpacity={0.7}
+                    activeOpacity={0.75}
+                    accessibilityRole="radio"
+                    accessibilityState={{ selected: isChosen }}
+                    accessibilityLabel={item}
                   >
                     <Text
                       style={[
-                        typography.body,
-                        {
-                          color: isChosen
-                            ? colors.onBrand
-                            : isNotBulacanOption
-                            ? colors.danger
-                            : colors.textPrimary,
-                          fontWeight: isChosen || isNotBulacanOption ? "700" : "500",
-                        },
+                        styles.optionText,
+                        isChosen  && styles.optionTextChosen,
+                        isOutside && styles.optionTextOutside,
                       ]}
                     >
                       {item}
                     </Text>
-                    {isChosen && <Feather name="check" size={16} color={colors.onBrand} />}
+                    {isChosen && <Icon name="check" size={18} color={A.ink} weight="bold" />}
                   </TouchableOpacity>
                 );
               })}
             </ScrollView>
-          </View>
-        </TouchableOpacity>
+          </Pressable>
+        </Pressable>
       </Modal>
-    </SafeAreaView>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1 },
-  scroll: {
-    flexGrow: 1,
-    justifyContent: "center",
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.xl,
+  screen: { flex: 1, backgroundColor: A.washTop },
+
+  content: { flex: 1, paddingHorizontal: 30, justifyContent: "space-between" },
+
+  middle: { flex: 1, justifyContent: "center", gap: 30 },
+  headline: {
+    ...typography.h1,
+    fontSize: 50,
+    lineHeight: 58,
+    color: A.onPhoto,
+    textAlign: "center",
+    textShadowColor: "rgba(12,34,36,0.45)",
+    textShadowOffset: { width: 0, height: 2 },
+    textShadowRadius: 12,
   },
 
-  titleContainer: { alignItems: "center", marginBottom: spacing.md },
-  title: { textAlign: "center" },
-  subtitle: { textAlign: "center", marginTop: spacing.sm },
-
-  card: {
-    width: "100%",
-    aspectRatio: 1,
-    maxHeight: 300,
-    alignSelf: "center",
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  image: { width: "80%", height: "80%", resizeMode: "contain" },
-
-  selectorContainer: { width: "100%", marginTop: spacing.md },
-  selectorLabel: { marginBottom: spacing.sm },
-  dropdown: {
+  picker: {
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: "#FFFFFF",
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
-    borderRadius: radius.md,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.lg,
-    borderWidth: 1.5,
-    gap: spacing.sm,
+    paddingHorizontal: 26,
+    shadowColor: "#0C2224",
+    shadowOpacity: 0.18,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 3,
   },
-  dropdownText: { flex: 1 },
-  errorText: { marginTop: spacing.xs, marginLeft: spacing.xs },
+  pickerText:        { flex: 1, fontFamily: fonts.sansMedium, fontSize: 16, color: A.ink, marginRight: 10 },
+  pickerPlaceholder: { color: A.muted },
 
-  button: {
-    marginHorizontal: spacing.xl,
-    marginBottom: spacing.md,
-    paddingVertical: spacing.lg,
-    borderRadius: radius.md,
-    alignItems: "center",
+  warning: {
+    fontFamily: fonts.sansMedium, fontSize: 13.5, color: "#FFFFFF",
+    textAlign: "center", marginTop: -14,
+    textShadowColor: "rgba(12,34,36,0.55)", textShadowRadius: 8,
   },
 
-  modalBackdrop: { flex: 1, justifyContent: "flex-end" },
-  modalSheet: {
-    borderTopLeftRadius: radius.xl,
-    borderTopRightRadius: radius.xl,
-    maxHeight: "70%",
-    paddingBottom: spacing.xl,
+  bottom: { gap: 22 },
+  dots:      { flexDirection: "row", gap: 9, alignSelf: "center" },
+  dot:       { width: 9, height: 9, borderRadius: 5, backgroundColor: "#FFFFFF" },
+  dotActive: { backgroundColor: A.cta },
+
+  cta: {
+    height: 62, borderRadius: 18, alignItems: "center", justifyContent: "center",
+    backgroundColor: A.cta,
+    shadowColor: "#4A4200", shadowOpacity: 0.28, shadowRadius: 16,
+    shadowOffset: { width: 0, height: 6 }, elevation: 4,
   },
-  modalHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: spacing.xl,
-    paddingVertical: spacing.lg,
-    borderBottomWidth: 1,
+  ctaText: { fontFamily: fonts.sansBold, fontSize: 18, color: A.onCta, letterSpacing: 0.2 },
+
+  // ── Sheet ──
+  sheetBackdrop: { flex: 1, backgroundColor: "rgba(12,34,36,0.45)", justifyContent: "flex-end" },
+  sheet: {
+    backgroundColor: "#FFFFFF",
+    borderTopLeftRadius: 32, borderTopRightRadius: 32,
+    paddingHorizontal: 20, paddingTop: 12, maxHeight: "78%",
   },
-  modalList: { paddingHorizontal: spacing.lg, paddingTop: spacing.sm },
+  sheetGrabber: {
+    width: 44, height: 5, borderRadius: 3, alignSelf: "center",
+    backgroundColor: "rgba(56,65,66,0.25)", marginBottom: 14,
+  },
+  sheetTitle:  { ...typography.h2, fontSize: 24, color: A.ink, marginBottom: 10, marginLeft: 6 },
+  sheetScroll: { marginHorizontal: -4 },
+
   option: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.md,
-    borderRadius: radius.sm,
-    marginBottom: spacing.xs,
+    flexDirection: "row", alignItems: "center", justifyContent: "space-between",
+    paddingVertical: 15, paddingHorizontal: 18, borderRadius: radius.md, marginBottom: 2,
   },
-  optionNotBulacan: {
-    marginTop: spacing.sm,
-    borderTopWidth: 1,
-    borderRadius: 0,
-  },
+  optionChosen:  { backgroundColor: A.cyanField },
+  optionOutside: { borderTopWidth: 1, borderTopColor: "rgba(56,65,66,0.14)", marginTop: 10, paddingTop: 18 },
+  optionText:        { fontFamily: fonts.sansMedium, fontSize: 15.5, color: A.ink },
+  optionTextChosen:  { fontFamily: fonts.sansBold },
+  optionTextOutside: { color: "#8E1F16", fontFamily: fonts.sansSemi },
 });

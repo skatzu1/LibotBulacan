@@ -10,20 +10,22 @@ import {
   Modal,
   TouchableWithoutFeedback,
   Animated,
-  Dimensions,
+  useWindowDimensions,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
-import { Feather } from "@expo/vector-icons";
 import { showAlert } from "../components/AppAlert";
 import { useUser, useAuth } from "@clerk/clerk-expo";
 import { useAuth as useAppAuth } from "../context/AuthContext";
 import { useProfileImage } from "../context/ProfileImageContext";
-import { useTheme } from "../context/ThemeContext";
-import { ScreenHeader, H_PAD } from "../components/ui";
+import { useTheme, fonts, typography } from "../context/ThemeContext";
+import { ScreenHeader, H_PAD, TAP } from "../components/ui";
+import { BASE_URL } from "../api";
+import { avatarImage } from "../utils/image";
+import Icon from "../components/Icon";
 
-const BASE_URL = "https://libotbackend.onrender.com";
-const { width: SCREEN_WIDTH, height: SCREEN_HEIGHT } = Dimensions.get("window");
-const MODAL_SIZE = SCREEN_WIDTH * 0.82;
+// Was a hardcoded "https://libotbackend.onrender.com" — the only place in the
+// app not reading the shared base URL, so an environment change would have
+// silently left this one screen pointing at production.
 
 export default function ProfileScreen() {
   const navigation                    = useNavigation();
@@ -32,6 +34,8 @@ export default function ProfileScreen() {
   const { user: contextUser }         = useAppAuth();
   const { profileImage }              = useProfileImage();
   const { colors, isDark }            = useTheme();
+  const { width: winWidth, height: winHeight } = useWindowDimensions();
+  const modalSize                     = winWidth * 0.82;
 
   const [userInfo, setUserInfo] = useState({
     email: "", firstName: "", lastName: "", fullName: "", profilePhoto: null,
@@ -174,11 +178,12 @@ export default function ProfileScreen() {
         onBack={navigation.canGoBack() ? () => navigation.goBack() : undefined}
         right={
           <TouchableOpacity
+            accessibilityRole="button"
             onPress={() => navigation.navigate("EditProfile")}
             hitSlop={8}
             accessibilityLabel="Edit profile"
           >
-            <Feather name="edit-2" size={18} color={colors.brand} />
+            <Icon name="edit-2" size={18} color={colors.brand} />
           </TouchableOpacity>
         }
       />
@@ -192,19 +197,22 @@ export default function ProfileScreen() {
             onPress={openPhotoModal}
             activeOpacity={displayPhoto ? 0.8 : 1}
             disabled={!displayPhoto}
+            accessibilityRole={displayPhoto ? "imagebutton" : "image"}
+            accessibilityLabel={displayPhoto ? "Your profile photo" : "No profile photo set"}
+            accessibilityHint={displayPhoto ? "Opens a larger view" : undefined}
           >
             <View style={[styles.profilePhotoWrapper, { backgroundColor: colors.brand, borderColor: colors.card }]}>
               {displayPhoto ? (
-                <Image source={{ uri: displayPhoto }} style={styles.profilePhoto} />
+                <Image source={{ uri: avatarImage(displayPhoto, 104) }} style={styles.profilePhoto} />
               ) : (
                 <View style={[styles.profilePhotoPlaceholder, { backgroundColor: colors.brand }]}>
-                  <Feather name="user" size={40} color={colors.onBrand} />
+                  <Icon name="user" size={40} color={colors.onBrand} />
                 </View>
               )}
             </View>
             {displayPhoto && (
               <View style={[styles.zoomBadge, { backgroundColor: colors.overlay }]}>
-                <Feather name="zoom-in" size={11} color={colors.textInverse} />
+                <Icon name="zoom-in" size={11} color={colors.textInverse} />
               </View>
             )}
           </TouchableOpacity>
@@ -215,21 +223,24 @@ export default function ProfileScreen() {
         ) : null}
         <Text style={[styles.email, { color: colors.textSecondary }]}>{userInfo.email || "No email available"}</Text>
 
+        {/* Each stat is grouped into a single accessibility node — otherwise a
+            screen reader reads six disconnected fragments ("Trips", "12",
+            "Points", "340"…) instead of three facts. */}
         <View style={[styles.statsRow, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
-          <View style={styles.statCard}>
-            <Feather name="map-pin" size={18} color={colors.brand} style={styles.statIcon} />
+          <View style={styles.statCard} accessible accessibilityLabel={`${tripCount} trips`}>
+            <Icon name="map-pin" size={18} color={colors.brand} style={styles.statIcon} />
             <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Trips</Text>
             <Text style={[styles.statCount, { color: colors.textPrimary }]}>{tripCount}</Text>
           </View>
           <View style={[styles.statDivider, { backgroundColor: colors.cardBorder }]} />
-          <View style={styles.statCard}>
-            <Feather name="star" size={18} color={colors.star} style={styles.statIcon} />
+          <View style={styles.statCard} accessible accessibilityLabel={`${points} points`}>
+            <Icon name="star" size={18} color={colors.star} style={styles.statIcon} />
             <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Points</Text>
             <Text style={[styles.statCount, { color: colors.brand }]}>{points}</Text>
           </View>
           <View style={[styles.statDivider, { backgroundColor: colors.cardBorder }]} />
-          <View style={styles.statCard}>
-            <Feather name="award" size={18} color={colors.brand} style={styles.statIcon} />
+          <View style={styles.statCard} accessible accessibilityLabel={`${badgeCount} badges earned`}>
+            <Icon name="award" size={18} color={colors.brand} style={styles.statIcon} />
             <Text style={[styles.statLabel, { color: colors.textSecondary }]}>Badges</Text>
             <Text style={[styles.statCount, { color: colors.brand }]}>{badgeCount}</Text>
           </View>
@@ -242,10 +253,12 @@ export default function ProfileScreen() {
               style={[styles.menuItem, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}
               onPress={item.onPress}
               activeOpacity={0.7}
+              accessibilityRole="button"
+              accessibilityLabel={item.title}
             >
               <View style={styles.menuLeft}>
                 <View style={[styles.iconContainer, { backgroundColor: colors.brandLight }]}>
-                  <Feather name={item.icon} size={18} color={colors.brand} />
+                  <Icon name={item.icon} size={18} color={colors.brand} />
                 </View>
                 <Text style={[styles.menuText, { color: colors.textPrimary }]}>{item.title}</Text>
               </View>
@@ -255,7 +268,7 @@ export default function ProfileScreen() {
                     <Text style={[styles.badgePillText, { color: colors.textInverse }]}>{item.badge}</Text>
                   </View>
                 ) : null}
-                <Feather name="chevron-right" size={18} color={colors.textMuted} />
+                <Icon name="chevron-right" size={18} color={colors.textMuted} />
               </View>
             </TouchableOpacity>
           ))}
@@ -278,21 +291,35 @@ export default function ProfileScreen() {
               <Animated.View
                 style={[
                   styles.modalRing,
+                  // Sized from the live window rather than a module-scope
+                  // Dimensions.get() captured at import, which is stale after a
+                  // rotation or in Android split-screen.
+                  { width: modalSize + 16, height: modalSize + 16, borderRadius: (modalSize + 16) / 2 },
                   { transform: [{ scale: scaleAnim }], opacity: opacityAnim },
                 ]}
               >
-                <View style={[styles.modalContent, { borderColor: colors.background }]}>
+                <View
+                  style={[
+                    styles.modalContent,
+                    { width: modalSize, height: modalSize, borderRadius: modalSize / 2, borderColor: colors.background },
+                  ]}
+                >
                   <Image
                     source={{ uri: displayPhoto }}
-                    style={styles.modalImage}
+                    style={{ width: modalSize, height: modalSize }}
                     resizeMode="cover"
                   />
                 </View>
               </Animated.View>
             </TouchableWithoutFeedback>
 
-            <TouchableOpacity style={[styles.modalCloseBtn, { backgroundColor: colors.overlay }]} onPress={closePhotoModal}>
-              <Feather name="x" size={20} color={colors.textInverse} />
+            <TouchableOpacity
+              style={[styles.modalCloseBtn, { top: winHeight * 0.08, backgroundColor: colors.overlay }]}
+              onPress={closePhotoModal}
+              accessibilityRole="button"
+              accessibilityLabel="Close photo"
+            >
+              <Icon name="x" size={20} color={colors.textInverse} />
             </TouchableOpacity>
           </Animated.View>
         </TouchableWithoutFeedback>
@@ -319,8 +346,8 @@ const styles = StyleSheet.create({
     borderRadius: 13, justifyContent: "center", alignItems: "center",
   },
 
-  userName: { fontSize: 24, fontWeight: "800", letterSpacing: -0.5, textAlign: "center", marginBottom: 4 },
-  email:    { fontSize: 13, fontWeight: "500", textAlign: "center", marginBottom: 26 },
+  userName: { ...typography.display, fontSize: 26, lineHeight: 32, textAlign: "center", marginBottom: 4 },
+  email:    { fontSize: 13, fontFamily: fonts.sansMedium, textAlign: "center", marginBottom: 26 },
 
   statsRow: {
     flexDirection: "row", borderRadius: 22, paddingVertical: 20, paddingHorizontal: 12,
@@ -329,8 +356,8 @@ const styles = StyleSheet.create({
   statCard:    { flex: 1, alignItems: "center" },
   statIcon:    { marginBottom: 5 },
   statDivider: { width: 1, height: 50, marginHorizontal: 4 },
-  statLabel:   { fontSize: 11, fontWeight: "500", marginBottom: 4 },
-  statCount:   { fontSize: 26, fontWeight: "800", letterSpacing: -0.5 },
+  statLabel:   { fontSize: 11, fontFamily: fonts.sansMedium, marginBottom: 4 },
+  statCount:   { fontSize: 26, fontFamily: fonts.sansBold, letterSpacing: -0.5 },
 
   menuContainer: { backgroundColor: "transparent" },
   menuItem: {
@@ -340,10 +367,10 @@ const styles = StyleSheet.create({
   },
   menuLeft:      { flexDirection: "row", alignItems: "center" },
   iconContainer: { width: 38, height: 38, borderRadius: 12, justifyContent: "center", alignItems: "center", marginRight: 12 },
-  menuText:      { fontSize: 15, fontWeight: "600" },
+  menuText:      { fontSize: 15, fontFamily: fonts.sansSemi },
   menuRight:     { flexDirection: "row", alignItems: "center", gap: 8 },
   badgePill:     { borderRadius: 999, paddingHorizontal: 9, paddingVertical: 3 },
-  badgePillText: { fontSize: 11, fontWeight: "700" },
+  badgePillText: { fontSize: 11, fontFamily: fonts.sansBold },
 
   // ── Modal ──
   modalBackdrop: {
@@ -353,9 +380,6 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   modalRing: {
-    width: MODAL_SIZE + 16,
-    height: MODAL_SIZE + 16,
-    borderRadius: (MODAL_SIZE + 16) / 2,
     borderWidth: 3,
     borderColor: "rgba(255,255,255,0.25)",
     justifyContent: "center",
@@ -366,9 +390,6 @@ const styles = StyleSheet.create({
     shadowRadius: 20,
   },
   modalContent: {
-    width: MODAL_SIZE,
-    height: MODAL_SIZE,
-    borderRadius: MODAL_SIZE / 2,
     overflow: "hidden",
     borderWidth: 4,
     shadowColor: "#000",
@@ -377,17 +398,12 @@ const styles = StyleSheet.create({
     shadowRadius: 24,
     elevation: 20,
   },
-  modalImage: {
-    width: MODAL_SIZE,
-    height: MODAL_SIZE,
-  },
   modalCloseBtn: {
     position: "absolute",
-    top: SCREEN_HEIGHT * 0.08,
     right: 20,
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+    width: TAP,
+    height: TAP,
+    borderRadius: TAP / 2,
     justifyContent: "center",
     alignItems: "center",
   },

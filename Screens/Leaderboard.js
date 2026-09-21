@@ -4,22 +4,23 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  ScrollView,
+  FlatList,
   Image,
   ActivityIndicator,
   RefreshControl,
-  Dimensions,
+  useWindowDimensions,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { Feather } from "@expo/vector-icons";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useUser, useAuth } from "@clerk/clerk-expo";
 import { useProfileImage } from "../context/ProfileImageContext";
-import { useTheme, radius, shadow } from "../context/ThemeContext";
+import { useTheme, radius, shadow, fonts, typography, TAB_BAR_CLEARANCE } from "../context/ThemeContext";
+import { BASE_URL } from "../api";
+import { avatarImage } from "../utils/image";
+import Icon from "../components/Icon";
 
-const BASE_URL      = "https://libotbackend.onrender.com";
-const { width: SW } = Dimensions.get("window");
+// Was a hardcoded "https://libotbackend.onrender.com".
 
 // Podium layout (sizes only — colours come from MEDAL / theme below).
 const PODIUM = {
@@ -35,11 +36,23 @@ const MEDAL = {
   3: { ring: "#E0A66B", coin: "#E0A66B", coinText: "#5E3A17" },
 };
 
+// Fixed row height so FlatList.getItemLayout can be exact: 40px avatar +
+// 9px padding top/bottom + 1px border each side, plus the 8px gap below.
+const ROW_H = 66;
+
 const fmtPts = (n) => (n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n));
 
 export default function Leaderboard() {
   const navigation                    = useNavigation();
   const insets                        = useSafeAreaInsets();
+  const { width: SW }                 = useWindowDimensions();
+  // The decorative hero blob and the podium name width both scale with the
+  // viewport instead of a Dimensions.get() frozen at module import.
+  const blob = {
+    top: -SW * 0.35, right: -SW * 0.25,
+    width: SW * 0.9, height: SW * 0.9, borderRadius: SW * 0.45,
+  };
+  const podiumNameMax = { maxWidth: SW / 3 - 16 };
   const { user: clerkUser, isLoaded } = useUser();
   const { getToken }                  = useAuth();
   const { profileImage }              = useProfileImage();
@@ -119,14 +132,14 @@ export default function Leaderboard() {
 
   const Avatar = ({ user, size }) => {
     if (user.avatar)
-      return <Image source={{ uri: user.avatar }} style={{ width: size, height: size, borderRadius: size / 2 }} />;
+      return <Image source={{ uri: avatarImage(user.avatar, size) }} style={{ width: size, height: size, borderRadius: size / 2 }} />;
     return (
       <View style={{
         width: size, height: size, borderRadius: size / 2,
         backgroundColor: user.isMe ? colors.brand : colors.brandLight,
         justifyContent: "center", alignItems: "center",
       }}>
-        <Feather name="user" size={size * 0.42} color={user.isMe ? colors.onBrand : colors.brand} />
+        <Icon name="user" size={size * 0.42} color={user.isMe ? colors.onBrand : colors.brand} />
       </View>
     );
   };
@@ -135,8 +148,9 @@ export default function Leaderboard() {
     <View style={[styles.fullScreen, { backgroundColor: colors.background }]}>
       <View style={[styles.hero, { backgroundColor: colors.backgroundHero, paddingTop: insets.top + 8 }]}>
         <View style={styles.heroNav}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={[styles.backBtn, { backgroundColor: colors.background }]}>
-            <Feather name="chevron-left" size={22} color={colors.brand} />
+          <TouchableOpacity
+            accessibilityRole="button" onPress={() => navigation.goBack()} style={[styles.backBtn, { backgroundColor: colors.background }]}>
+            <Icon name="chevron-left" size={22} color={colors.brand} />
           </TouchableOpacity>
           <Text style={[styles.heroTitle, { color: colors.brandDark }]}>Leaderboard</Text>
           <View style={{ width: 40 }} />
@@ -144,12 +158,13 @@ export default function Leaderboard() {
       </View>
       <View style={styles.centered}>
         <View style={[styles.stateBadge, { backgroundColor: tone === "error" ? colors.dangerBg : colors.brandSoft }]}>
-          <Feather name={icon} size={26} color={tone === "error" ? colors.danger : colors.brand} />
+          <Icon name={icon} size={26} color={tone === "error" ? colors.danger : colors.brand} />
         </View>
         <Text style={[styles.emptyTitle, { color: colors.brandDark }]}>{title}</Text>
         <Text style={[styles.emptySub, { color: colors.textSecondary }]}>{sub}</Text>
         {retry && (
-          <TouchableOpacity style={[styles.retryBtn, { backgroundColor: colors.accent }, shadow.sm]} onPress={retry} activeOpacity={0.85}>
+          <TouchableOpacity
+            accessibilityRole="button" style={[styles.retryBtn, { backgroundColor: colors.accent }, shadow.sm]} onPress={retry} activeOpacity={0.85}>
             <Text style={[styles.retryText, { color: colors.onAccent }]}>Try again</Text>
           </TouchableOpacity>
         )}
@@ -161,7 +176,7 @@ export default function Leaderboard() {
     return (
       <View style={[styles.fullScreen, styles.centered, { backgroundColor: colors.background }]}>
         <View style={[styles.stateBadge, { backgroundColor: colors.brandSoft }]}>
-          <Feather name="award" size={26} color={colors.brand} />
+          <Icon name="award" size={26} color={colors.brand} />
         </View>
         <ActivityIndicator size="small" color={colors.brand} style={{ marginTop: 16 }} />
         <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Loading leaderboard…</Text>
@@ -173,6 +188,39 @@ export default function Leaderboard() {
     return <StateScreen icon="alert-triangle" tone="error" title="Something went wrong" sub={error} retry={() => buildLeaderboard()} />;
   if (allUsers.length === 0)
     return <StateScreen icon="award" title="No rankings yet" sub="Visit locations around Bulacan to earn points and climb the board." />;
+
+  const renderRow = ({ item: user, index }) => {
+    const rank = index + 4;
+    return (
+      <View
+        style={[
+          styles.row,
+          { borderColor: colors.divider },
+          user.isMe && { backgroundColor: colors.brandSoft, borderColor: colors.brand },
+        ]}
+      >
+        <View style={[styles.rankCoin, { backgroundColor: colors.brandSoft }]}>
+          <Text style={[styles.rankCoinText, { color: colors.brand }]}>{rank}</Text>
+        </View>
+
+        <View style={[styles.rowAvatarWrap, { borderColor: colors.cardBorder }]}>
+          <Avatar user={user} size={40} />
+        </View>
+
+        <Text
+          style={[styles.rowName, { color: colors.textPrimary }, user.isMe && { color: colors.brand, fontFamily: fonts.sansBold }]}
+          numberOfLines={1}
+        >
+          {user.name}{user.isMe ? " · You" : ""}
+        </Text>
+
+        <View style={[styles.rowPtsPill, { backgroundColor: colors.background, borderColor: colors.divider }]}>
+          <Icon name="star" size={12} color={colors.accent} weight="fill" />
+          <Text style={[styles.rowPts, { color: colors.brandDark }]}>{fmtPts(user.points)}</Text>
+        </View>
+      </View>
+    );
+  };
 
   const top3      = allUsers.slice(0, 3);
   const restUsers = allUsers.slice(3);
@@ -188,11 +236,12 @@ export default function Leaderboard() {
 
       {/* ─── Hero ─── */}
       <View style={[styles.hero, { backgroundColor: colors.backgroundHero, paddingTop: insets.top + 8 }]}>
-        <View style={[styles.heroBlob, { backgroundColor: "rgba(255,255,255,0.22)" }]} pointerEvents="none" />
+        <View style={[styles.heroBlob, blob, { backgroundColor: "rgba(255,255,255,0.22)" }]} pointerEvents="none" />
 
         <View style={styles.heroNav}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={[styles.backBtn, { backgroundColor: colors.background }]} activeOpacity={0.8}>
-            <Feather name="chevron-left" size={22} color={colors.brand} />
+          <TouchableOpacity
+            accessibilityRole="button" onPress={() => navigation.goBack()} style={[styles.backBtn, { backgroundColor: colors.background }]} activeOpacity={0.8}>
+            <Icon name="chevron-left" size={22} color={colors.brand} />
           </TouchableOpacity>
           <Text style={[styles.heroTitle, { color: colors.brandDark }]}>Leaderboard</Text>
           <View style={{ width: 40 }} />
@@ -208,7 +257,7 @@ export default function Leaderboard() {
             const medal = MEDAL[rank];
             return (
               <View key={user.id || i} style={styles.podiumCol}>
-                {rank === 1 && <Feather name="star" size={16} color={colors.accent} style={{ marginBottom: 4 }} />}
+                {rank === 1 && <Icon name="star" size={16} color={colors.accent} style={{ marginBottom: 4 }} />}
 
                 <View style={[styles.avatarRing, { borderColor: medal.ring }, user.isMe && { borderColor: colors.brand }]}>
                   <Avatar user={user} size={cfg.avatarSz} />
@@ -218,14 +267,14 @@ export default function Leaderboard() {
                 </View>
 
                 <Text
-                  style={[styles.podiumName, { color: colors.brandDark }, user.isMe && { fontWeight: "800" }]}
+                  style={[styles.podiumName, podiumNameMax, { color: colors.brandDark }, user.isMe && { fontFamily: fonts.sansBold }]}
                   numberOfLines={1}
                 >
                   {user.isMe ? "You" : user.name}
                 </Text>
 
                 <View style={[styles.podiumPts, { backgroundColor: colors.background }]}>
-                  <Feather name="star" size={10} color={colors.accent} />
+                  <Icon name="star" size={10} color={colors.accent} />
                   <Text style={[styles.podiumPtsText, { color: colors.brandDark }]}>{fmtPts(user.points)}</Text>
                 </View>
 
@@ -248,7 +297,20 @@ export default function Leaderboard() {
           <Text style={[styles.sheetCount, { color: colors.textMuted }]}>{allUsers.length} explorers</Text>
         </View>
 
-        <ScrollView
+        {/* FlatList, not ScrollView + .map — this list is EVERY registered user,
+            so it grows with the product. A .map rendered all of them (plus an
+            <Avatar> image each) on every render. `getItemLayout` is safe to give
+            because every row is a fixed ROW_H, and it lets the list jump
+            straight to an offset without measuring. */}
+        <FlatList
+          data={restUsers}
+          keyExtractor={(user) => String(user.id)}
+          renderItem={renderRow}
+          getItemLayout={(_, index) => ({ length: ROW_H, offset: ROW_H * index, index })}
+          initialNumToRender={12}
+          maxToRenderPerBatch={10}
+          windowSize={7}
+          removeClippedSubviews
           showsVerticalScrollIndicator={false}
           contentContainerStyle={[
             styles.listContent,
@@ -262,52 +324,17 @@ export default function Leaderboard() {
               colors={[colors.brand]}
             />
           }
-        >
-          {restUsers.map((user, idx) => {
-            const rank = idx + 4;
-            return (
-              <View
-                key={user.id}
-                style={[
-                  styles.row,
-                  { borderColor: colors.divider },
-                  user.isMe && { backgroundColor: colors.brandSoft, borderColor: colors.brand },
-                ]}
-              >
-                <View style={[styles.rankCoin, { backgroundColor: colors.brandSoft }]}>
-                  <Text style={[styles.rankCoinText, { color: colors.brand }]}>{rank}</Text>
-                </View>
-
-                <View style={[styles.rowAvatarWrap, { borderColor: colors.cardBorder }]}>
-                  <Avatar user={user} size={40} />
-                </View>
-
-                <Text
-                  style={[styles.rowName, { color: colors.textPrimary }, user.isMe && { color: colors.brand, fontWeight: "800" }]}
-                  numberOfLines={1}
-                >
-                  {user.name}{user.isMe ? " · You" : ""}
-                </Text>
-
-                <View style={[styles.rowPtsPill, { backgroundColor: colors.background, borderColor: colors.divider }]}>
-                  <Feather name="star" size={12} color={colors.accent} />
-                  <Text style={[styles.rowPts, { color: colors.brandDark }]}>{fmtPts(user.points)}</Text>
-                </View>
+          ListEmptyComponent={
+            <>
+              <View style={[styles.stateBadge, { backgroundColor: colors.brandSoft, alignSelf: "center", marginTop: 24 }]}>
+                <Icon name="users" size={22} color={colors.brand} />
               </View>
-            );
-          })}
-
-          {restUsers.length === 0 && (
-            <View style={[styles.stateBadge, { backgroundColor: colors.brandSoft, alignSelf: "center", marginTop: 24 }]}>
-              <Feather name="users" size={22} color={colors.brand} />
-            </View>
-          )}
-          {restUsers.length === 0 && (
-            <Text style={[styles.topThreeOnly, { color: colors.textMuted }]}>
-              Only the top 3 so far — invite friends to explore!
-            </Text>
-          )}
-        </ScrollView>
+              <Text style={[styles.topThreeOnly, { color: colors.textMuted }]}>
+                Only the top 3 so far — invite friends to explore!
+              </Text>
+            </>
+          }
+        />
 
         {showMyRankBar && (
           <View style={[styles.myRankBar, { backgroundColor: colors.brand, bottom: insets.bottom + 92 }, shadow.lg]}>
@@ -321,7 +348,7 @@ export default function Leaderboard() {
               You
             </Text>
             <View style={styles.rowPtsWrap}>
-              <Feather name="star" size={13} color={colors.onBrand} />
+              <Icon name="star" size={13} color={colors.onBrand} />
               <Text style={[styles.myRankPts, { color: colors.onBrand }]}>{fmtPts(allUsers[myIndex].points)}</Text>
             </View>
           </View>
@@ -334,20 +361,14 @@ export default function Leaderboard() {
 const styles = StyleSheet.create({
   fullScreen: { flex: 1 },
   centered:   { flex: 1, justifyContent: "center", alignItems: "center", paddingHorizontal: 32 },
-  loadingText: { marginTop: 12, fontSize: 13.5, fontWeight: "500" },
+  loadingText: { marginTop: 12, fontSize: 13.5, fontFamily: fonts.sansMedium },
 
   hero: {
     overflow: "hidden",
     paddingBottom: 0,
   },
-  heroBlob: {
-    position: "absolute",
-    top: -SW * 0.35,
-    right: -SW * 0.25,
-    width: SW * 0.9,
-    height: SW * 0.9,
-    borderRadius: SW * 0.45,
-  },
+  // Sized inline from useWindowDimensions — see `blob` in the component.
+  heroBlob: { position: "absolute" },
 
   heroNav: {
     flexDirection: "row",
@@ -362,8 +383,8 @@ const styles = StyleSheet.create({
     justifyContent: "center", alignItems: "center",
     ...shadow.sm,
   },
-  heroTitle: { fontSize: 20, fontWeight: "800", letterSpacing: -0.3 },
-  heroSub:   { fontSize: 12.5, fontWeight: "600", textAlign: "center", marginTop: 2, marginBottom: 4 },
+  heroTitle: { fontSize: 20, fontFamily: fonts.sansBold, letterSpacing: -0.3 },
+  heroSub:   { fontSize: 12.5, fontFamily: fonts.sansSemi, textAlign: "center", marginTop: 2, marginBottom: 4 },
 
   podiumRow: {
     flexDirection: "row",
@@ -395,14 +416,13 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: "#fff",
   },
-  medalCoinText: { fontSize: 11, fontWeight: "900" },
+  medalCoinText: { fontSize: 11, fontFamily: fonts.sansBold },
 
   podiumName: {
     fontSize: 12,
-    fontWeight: "700",
+    fontFamily: fonts.sansBold,
     textAlign: "center",
     marginBottom: 5,
-    maxWidth: SW / 3 - 16,
   },
   podiumPts: {
     flexDirection: "row",
@@ -414,7 +434,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     ...shadow.sm,
   },
-  podiumPtsText: { fontSize: 11.5, fontWeight: "800" },
+  podiumPtsText: { fontSize: 11.5, fontFamily: fonts.sansBold },
 
   podiumBlock: {
     width: "82%",
@@ -423,7 +443,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  podiumNum: { fontSize: 26, fontWeight: "900", opacity: 0.6 },
+  podiumNum: { fontSize: 26, fontFamily: fonts.sansBold, opacity: 0.6 },
 
   card: {
     flex: 1,
@@ -444,14 +464,17 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     marginBottom: 12,
   },
-  sheetTitle: { fontSize: 18, fontWeight: "800", letterSpacing: -0.3 },
-  sheetCount: { fontSize: 12, fontWeight: "600" },
+  sheetTitle: { fontSize: 18, fontFamily: fonts.sansBold, letterSpacing: -0.3 },
+  sheetCount: { fontSize: 12, fontFamily: fonts.sansSemi },
 
   listContent: { paddingTop: 2 },
 
   row: {
     flexDirection: "row",
     alignItems: "center",
+    // Must stay in sync with ROW_H (height + marginBottom) — getItemLayout
+    // above assumes it.
+    height: ROW_H - 8,
     paddingVertical: 9,
     paddingHorizontal: 10,
     marginBottom: 8,
@@ -463,14 +486,14 @@ const styles = StyleSheet.create({
     justifyContent: "center", alignItems: "center",
     marginRight: 10,
   },
-  rankCoinText: { fontSize: 13, fontWeight: "800" },
+  rankCoinText: { fontSize: 13, fontFamily: fonts.sansBold },
   rowAvatarWrap: {
     marginRight: 11,
     borderRadius: 21,
     borderWidth: 1.5,
     overflow: "hidden",
   },
-  rowName: { flex: 1, fontSize: 14.5, fontWeight: "600" },
+  rowName: { flex: 1, fontSize: 14.5, fontFamily: fonts.sansSemi },
   rowPtsPill: {
     flexDirection: "row",
     alignItems: "center",
@@ -481,7 +504,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
   },
   rowPtsWrap: { flexDirection: "row", alignItems: "center", gap: 4 },
-  rowPts:     { fontSize: 12.5, fontWeight: "800" },
+  rowPts:     { fontSize: 12.5, fontFamily: fonts.sansBold },
 
   myRankBar: {
     position: "absolute",
@@ -498,19 +521,19 @@ const styles = StyleSheet.create({
     justifyContent: "center", alignItems: "center",
     marginRight: 10,
   },
-  myRankCoinText: { fontSize: 13, fontWeight: "900" },
-  myRankName: { flex: 1, fontSize: 14.5, fontWeight: "800" },
-  myRankPts:  { fontSize: 13, fontWeight: "800" },
+  myRankCoinText: { fontSize: 13, fontFamily: fonts.sansBold },
+  myRankName: { flex: 1, fontSize: 14.5, fontFamily: fonts.sansBold },
+  myRankPts:  { fontSize: 13, fontFamily: fonts.sansBold },
 
-  topThreeOnly: { textAlign: "center", fontSize: 13, marginTop: 12, fontWeight: "500" },
+  topThreeOnly: { textAlign: "center", fontSize: 13, marginTop: 12, fontFamily: fonts.sansMedium },
 
   stateBadge: {
     width: 60, height: 60, borderRadius: 30,
     justifyContent: "center", alignItems: "center",
     marginBottom: 14,
   },
-  emptyTitle: { fontSize: 19, fontWeight: "800", letterSpacing: -0.3, marginBottom: 8, textAlign: "center" },
+  emptyTitle: { fontSize: 19, fontFamily: fonts.sansBold, letterSpacing: -0.3, marginBottom: 8, textAlign: "center" },
   emptySub:   { fontSize: 13, textAlign: "center", lineHeight: 20 },
   retryBtn:   { marginTop: 20, paddingHorizontal: 28, paddingVertical: 12, borderRadius: 999 },
-  retryText:  { fontWeight: "800", fontSize: 13.5 },
+  retryText:  { fontFamily: fonts.sansBold, fontSize: 13.5 },
 });

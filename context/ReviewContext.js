@@ -33,7 +33,7 @@ export const ReviewProvider = ({ children }) => {
           }
         }
       } catch (err) {
-        console.error("❌ Error prefetching reviews:", err);
+        console.error("Error prefetching reviews:", err);
         setError(err.message);
       } finally {
         setLoading(false);
@@ -55,7 +55,7 @@ export const ReviewProvider = ({ children }) => {
         throw new Error(data.message || "Failed to fetch reviews");
       }
     } catch (err) {
-      console.error("❌ Error fetching reviews:", err);
+      console.error("Error fetching reviews:", err);
       setError(err.message);
     }
   }, []);
@@ -72,7 +72,7 @@ export const ReviewProvider = ({ children }) => {
       if (data.success) setModerationStatus(data);
       return data;
     } catch (err) {
-      console.error("❌ Error fetching moderation status:", err);
+      console.error("Error fetching moderation status:", err);
       return null;
     }
   }, []);
@@ -94,7 +94,7 @@ export const ReviewProvider = ({ children }) => {
       }
     } catch (err) {
       const message = err.response?.data?.message || err.message || "Failed to add review";
-      console.error("❌ Error adding review:", message);
+      console.error("Error adding review:", message);
       setError(message);
       // A 403 here means the user is muted/suspended/banned — refresh status
       // and hand the fresh isSuspended/suspendedUntil/isMuted/commentMuteUntil
@@ -122,11 +122,11 @@ export const ReviewProvider = ({ children }) => {
         setError(null);
         return true;
       } else {
-        console.error("❌ Report API error:", data);
+        console.error("Report API error:", data);
         throw new Error(data.message || "Failed to submit report");
       }
     } catch (err) {
-      console.error("❌ Error reporting review:", err);
+      console.error("Error reporting review:", err);
       setError(err.message);
       return false;
     }
@@ -161,7 +161,7 @@ export const ReviewProvider = ({ children }) => {
       }
     } catch (err) {
       const message = err.response?.data?.message || err.message || "Failed to react to review";
-      console.error("❌ Error reacting to review:", message);
+      console.error("Error reacting to review:", message);
       setError(message);
       return { success: false, message };
     }
@@ -188,7 +188,7 @@ export const ReviewProvider = ({ children }) => {
         throw new Error(data.message || "Failed to delete review");
       }
     } catch (err) {
-      console.error("❌ Error deleting review:", err);
+      console.error("Error deleting review:", err);
       setError(err.message);
       return false;
     }

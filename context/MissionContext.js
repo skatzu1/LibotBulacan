@@ -1,6 +1,6 @@
 import React, { createContext, useState, useContext, useCallback, useRef, useEffect } from "react";
 import { useAuth } from "@clerk/clerk-expo";
-import api from "../api";
+import api, { BASE_URL } from "../api";
 import { usePoints } from "./PointsContext";
 
 const MissionContext = createContext();
@@ -21,18 +21,18 @@ export const MissionProvider = ({ children }) => {
 
     try {
       const res = await fetch(
-        `https://libotbackend.onrender.com/api/missions/${spotId}`
+        `${BASE_URL}/api/missions/${spotId}`
       );
       const data = await res.json();
 
       if (data.success) {
         setMissionsBySpot((prev) => ({ ...prev, [spotId]: data.missions }));
       } else {
-        console.warn("⚠️ fetchMissions: server returned success=false", data.message);
+        console.warn("fetchMissions: server returned success=false", data.message);
         fetchedSpots.current.delete(spotId);
       }
     } catch (err) {
-      console.error("❌ Error fetching missions:", err);
+      console.error("Error fetching missions:", err);
       fetchedSpots.current.delete(spotId);
     }
   }, []);
@@ -40,7 +40,7 @@ export const MissionProvider = ({ children }) => {
   useEffect(() => {
     const prefetchAllMissions = async () => {
       try {
-        const res = await fetch("https://libotbackend.onrender.com/api/spots");
+        const res = await fetch(`${BASE_URL}/api/spots`);
         const data = await res.json();
         if (data.success && data.spots) {
           for (const spot of data.spots) {
@@ -48,7 +48,7 @@ export const MissionProvider = ({ children }) => {
           }
         }
       } catch (err) {
-        console.error("❌ Error prefetching missions:", err);
+        console.error("Error prefetching missions:", err);
       }
     };
     prefetchAllMissions();
@@ -71,7 +71,7 @@ export const MissionProvider = ({ children }) => {
 
     try {
       const res = await fetch(
-        `https://libotbackend.onrender.com/api/missions/${spotId}`
+        `${BASE_URL}/api/missions/${spotId}`
       );
       const data = await res.json();
       if (data.success) {
@@ -80,7 +80,7 @@ export const MissionProvider = ({ children }) => {
         fetchedSpots.current.delete(spotId);
       }
     } catch (err) {
-      console.error("❌ Error refetching missions:", err);
+      console.error("Error refetching missions:", err);
       fetchedSpots.current.delete(spotId);
     }
   }, []);

@@ -1,5 +1,6 @@
 import React, { createContext, useState, useContext, useCallback, useEffect } from 'react';
 import { useAuth } from '@clerk/clerk-expo';
+import { BASE_URL } from "../api";
 
 const BookmarkContext = createContext();
 export const useBookmark = () => useContext(BookmarkContext);
@@ -9,7 +10,7 @@ export const BookmarkProvider = ({ children }) => {
   const [bookmarks, setBookmarks] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  // ✅ Fetch bookmarks - stable function
+  // Fetch bookmarks - stable function
   const fetchBookmarks = useCallback(async () => {
     if (!userId) return;
     
@@ -18,12 +19,12 @@ export const BookmarkProvider = ({ children }) => {
       const token = await getToken();
       
       if (!token) {
-        console.warn("⚠️ No auth token available");
+        console.warn("No auth token available");
         setLoading(false);
         return;
       }
 
-      const res = await fetch("https://libotbackend.onrender.com/api/bookmarks", {
+      const res = await fetch(`${BASE_URL}/api/bookmarks`, {
         method: "GET",
         headers: { 
           Authorization: `Bearer ${token}`,
@@ -41,21 +42,21 @@ export const BookmarkProvider = ({ children }) => {
         setBookmarks([]);
       }
     } catch (err) {
-      console.error("❌ Error fetching bookmarks:", err);
+      console.error("Error fetching bookmarks:", err);
       setBookmarks([]);
     } finally {
       setLoading(false);
     }
   }, [userId, getToken]);
 
-  // ✅ Fetch bookmarks only when user loads (not in other functions)
+  // Fetch bookmarks only when user loads (not in other functions)
   useEffect(() => {
     if (isLoaded && userId) {
       fetchBookmarks();
     }
-  }, [isLoaded, userId]); // ✅ FIXED: Don't include fetchBookmarks here!
+  }, [isLoaded, userId]); // FIXED: Don't include fetchBookmarks here!
 
-  // ✅ Check if a spot is bookmarked
+  // Check if a spot is bookmarked
   const isBookmarked = useCallback((spotId) => {
     if (!spotId) return false;
     return bookmarks.some(b => {
@@ -65,28 +66,28 @@ export const BookmarkProvider = ({ children }) => {
     });
   }, [bookmarks]);
 
-  // ✅ Add a bookmark (with optimistic update)
+  // Add a bookmark (with optimistic update)
   const addBookmark = useCallback(async (spot) => {
     if (!spot?._id) {
-      console.error("❌ No spot ID provided");
+      console.error("No spot ID provided");
       return false;
     }
 
     try {
       const token = await getToken();
       if (!token) {
-        console.error("❌ No auth token");
+        console.error("No auth token");
         return false;
       }
 
-      // ✅ OPTIMISTIC UPDATE - update UI immediately
+      // OPTIMISTIC UPDATE - update UI immediately
       setBookmarks(prev => {
         const alreadyExists = prev.some(b => String(b.spotId?._id || b.spotId) === String(spot._id));
         if (alreadyExists) return prev;
         return [...prev, { _id: spot._id, spotId: spot._id, ...spot }];
       });
 
-      const res = await fetch("https://libotbackend.onrender.com/api/bookmarks", {
+      const res = await fetch(`${BASE_URL}/api/bookmarks`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -102,37 +103,37 @@ export const BookmarkProvider = ({ children }) => {
       }
 
       const data = await res.json();
-      console.log("✅ Bookmark added");
+      console.log("Bookmark added");
       
       // Refetch to sync with backend
       await fetchBookmarks();
       return true;
     } catch (err) {
-      console.error("❌ Error adding bookmark:", err);
+      console.error("Error adding bookmark:", err);
       return false;
     }
   }, [getToken, fetchBookmarks]);
 
-  // ✅ Remove a bookmark (with optimistic update)
+  // Remove a bookmark (with optimistic update)
   const removeBookmark = useCallback(async (spotId) => {
     if (!spotId) {
-      console.error("❌ No spot ID provided");
+      console.error("No spot ID provided");
       return false;
     }
 
     try {
       const token = await getToken();
       if (!token) {
-        console.error("❌ No auth token");
+        console.error("No auth token");
         return false;
       }
 
-      // ✅ OPTIMISTIC UPDATE - remove from UI immediately
+      // OPTIMISTIC UPDATE - remove from UI immediately
       const removed = bookmarks.find(b => String(b.spotId?._id || b.spotId) === String(spotId));
       setBookmarks(prev => prev.filter(b => String(b.spotId?._id || b.spotId) !== String(spotId)));
 
       const res = await fetch(
-        `https://libotbackend.onrender.com/api/bookmarks/${spotId}`,
+        `${BASE_URL}/api/bookmarks/${spotId}`,
         {
           method: "DELETE",
           headers: {
@@ -151,21 +152,21 @@ export const BookmarkProvider = ({ children }) => {
       }
 
       const data = await res.json();
-      console.log("✅ Bookmark removed");
+      console.log("Bookmark removed");
       
       // Refetch to sync with backend
       await fetchBookmarks();
       return true;
     } catch (err) {
-      console.error("❌ Error removing bookmark:", err);
+      console.error("Error removing bookmark:", err);
       return false;
     }
   }, [getToken, fetchBookmarks, bookmarks]);
 
-  // ✅ Toggle bookmark (add or remove)
+  // Toggle bookmark (add or remove)
   const toggleBookmark = useCallback(async (spot) => {
     if (!spot?._id) {
-      console.error("❌ No spot ID provided");
+      console.error("No spot ID provided");
       return false;
     }
 
@@ -175,7 +176,7 @@ export const BookmarkProvider = ({ children }) => {
       return bookmarkedSpotId === String(spot._id);
     });
 
-    console.log(`🔄 Toggle bookmark for ${spot.name} (currently: ${alreadyBookmarked ? "bookmarked" : "not bookmarked"})`);
+    console.log(`Toggle bookmark for ${spot.name} (currently: ${alreadyBookmarked ? "bookmarked": "not bookmarked"})`);
 
     if (alreadyBookmarked) {
       return await removeBookmark(spot._id);

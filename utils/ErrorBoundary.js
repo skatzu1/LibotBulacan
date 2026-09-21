@@ -1,6 +1,6 @@
 import React from "react";
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
-import { Feather } from "@expo/vector-icons";
+import Icon from "../components/Icon";
 
 // Light-only for launch — pull the static light palette so this class component
 // (no hooks) still renders on-brand.
@@ -42,7 +42,7 @@ export default class ErrorBoundary extends React.Component {
       return (
         <View style={styles.container}>
           <View style={styles.badge}>
-            <Feather name="alert-triangle" size={30} color={C.brand} />
+            <Icon name="alert-triangle" size={30} color={C.brand} />
           </View>
           <Text style={styles.title}>Oops!</Text>
           <Text style={styles.message}>{message}</Text>

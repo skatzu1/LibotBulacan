@@ -6,9 +6,9 @@ import {
 import { showAlert, showToast } from "../components/AppAlert";
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '@clerk/clerk-expo';
-import { Feather } from '@expo/vector-icons';
 import { appealAPI } from '../api';
-import { useTheme, spacing, radius, typography } from '../context/ThemeContext';
+import { useTheme, spacing, radius, typography, fonts } from '../context/ThemeContext';
+import Icon from "../components/Icon";
 
 export default function BannedScreen({ banInfo }) {
   const { colors, isDark } = useTheme();
@@ -45,7 +45,7 @@ export default function BannedScreen({ banInfo }) {
         keyboardShouldPersistTaps="handled"
       >
         <View style={[s.iconWrap, { backgroundColor: colors.dangerBg }]}>
-          <Feather name="slash" size={30} color={colors.danger} />
+          <Icon name="slash" size={30} color={colors.danger} />
         </View>
 
         <Text style={[typography.h1, s.center, { color: colors.textPrimary }]}>
@@ -67,7 +67,7 @@ export default function BannedScreen({ banInfo }) {
 
         {submitted || rejected ? (
           <View style={[s.statusBox, { backgroundColor: colors.card }]}>
-            <Feather
+            <Icon
               name={rejected ? 'x-circle' : 'inbox'}
               size={26}
               color={rejected ? colors.danger : colors.brand}
@@ -104,6 +104,7 @@ export default function BannedScreen({ banInfo }) {
               textAlignVertical="top"
             />
             <TouchableOpacity
+              accessibilityRole="button"
               style={[s.btn, { backgroundColor: colors.accent }, submitting && s.btnDisabled]}
               onPress={handleSubmit}
               disabled={submitting}
@@ -116,7 +117,8 @@ export default function BannedScreen({ banInfo }) {
           </View>
         )}
 
-        <TouchableOpacity onPress={() => signOut()} style={s.signOut}>
+        <TouchableOpacity
+          accessibilityRole="button" onPress={() => signOut()} style={s.signOut}>
           <Text style={[typography.bodyStrong, { color: colors.textSecondary }]}>Sign out</Text>
         </TouchableOpacity>
       </ScrollView>
@@ -136,7 +138,7 @@ const s = StyleSheet.create({
     width: '100%', borderRadius: radius.md, padding: spacing.lg,
     marginBottom: spacing.xl, alignItems: 'center',
   },
-  deadlineDays: { fontSize: 32, fontWeight: '800' },
+  deadlineDays: { fontSize: 32, fontFamily: fonts.sansBold },
   statusBox:   {
     width: '100%', borderRadius: radius.md, padding: spacing.xl,
     alignItems: 'center', marginBottom: spacing.xl,

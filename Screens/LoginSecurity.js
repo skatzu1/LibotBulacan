@@ -6,9 +6,9 @@ import {
 } from "react-native";
 import { showAlert } from "../components/AppAlert";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Feather } from "@expo/vector-icons";
 import { useUser } from "@clerk/clerk-expo";
-import { useTheme, spacing, radius, typography } from "../context/ThemeContext";
+import { useTheme, spacing, radius, typography, fonts } from "../context/ThemeContext";
+import Icon from "../components/Icon";
 
 // ── Reusable password field ───────────────────────────────────────
 const Field = ({ label, icon, value, onChangeText, placeholder, toggleVisible, onToggle }) => {
@@ -18,7 +18,7 @@ const Field = ({ label, icon, value, onChangeText, placeholder, toggleVisible, o
       <Text style={[typography.label, styles.fieldLabel, { color: colors.textSecondary }]}>{label}</Text>
       <View style={[styles.fieldRow, { backgroundColor: colors.inputBg, borderColor: colors.inputBorder }]}>
         <View style={[styles.fieldIcon, { backgroundColor: colors.brandLight }]}>
-          <Feather name={icon} size={16} color={colors.brand} />
+          <Icon name={icon} size={16} color={colors.brand} />
         </View>
         <TextInput
           style={[styles.fieldInput, { color: colors.textPrimary }]}
@@ -30,8 +30,9 @@ const Field = ({ label, icon, value, onChangeText, placeholder, toggleVisible, o
           autoCapitalize="none"
           autoCorrect={false}
         />
-        <TouchableOpacity onPress={onToggle} style={styles.eyeBtn} hitSlop={8}>
-          <Feather name={toggleVisible ? "eye-off" : "eye"} size={16} color={colors.textMuted} />
+        <TouchableOpacity
+          accessibilityRole="button" onPress={onToggle} style={styles.eyeBtn} hitSlop={8}>
+          <Icon name={toggleVisible ? "eye-off" : "eye"} size={16} color={colors.textMuted} />
         </TouchableOpacity>
       </View>
     </View>
@@ -39,7 +40,9 @@ const Field = ({ label, icon, value, onChangeText, placeholder, toggleVisible, o
 };
 
 export default function LoginSecurity({ navigation }) {
-  const { colors } = useTheme();
+  // `isDark` drives the StatusBar bar style further down — it was referenced
+  // there but never destructured here, which threw at render.
+  const { colors, isDark } = useTheme();
   const { user: clerkUser, isLoaded } = useUser();
 
   const [pwCurrent, setPwCurrent] = useState("");
@@ -119,11 +122,13 @@ export default function LoginSecurity({ navigation }) {
 
         {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton} hitSlop={8}>
-            <Feather name="chevron-left" size={24} color={colors.textPrimary} />
+          <TouchableOpacity
+            accessibilityRole="button" onPress={() => navigation.goBack()} style={styles.backButton} hitSlop={8}>
+            <Icon name="chevron-left" size={24} color={colors.textPrimary} />
           </TouchableOpacity>
           <Text style={[typography.h3, { color: colors.textPrimary }]}>Login & Security</Text>
           <TouchableOpacity
+            accessibilityRole="button"
             style={[
               styles.saveButton,
               { backgroundColor: saveDisabled ? colors.divider : colors.accent },
@@ -147,7 +152,7 @@ export default function LoginSecurity({ navigation }) {
           {/* Signed-in with */}
           <View style={[styles.signInMethodRow, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
             <View style={[styles.signInMethodIcon, { backgroundColor: colors.brandLight }]}>
-              <Feather name={isGoogleUser ? "globe" : "mail"} size={16} color={colors.brand} />
+              <Icon name={isGoogleUser ? "globe" : "mail"} size={16} color={colors.brand} />
             </View>
             <View>
               <Text style={[typography.label, { color: colors.textMuted }]}>SIGNED IN WITH</Text>
@@ -165,7 +170,7 @@ export default function LoginSecurity({ navigation }) {
 
             {isGoogleUser ? (
               <View style={[styles.infoBanner, { backgroundColor: colors.brandLight, borderColor: colors.cardBorder }]}>
-                <Feather name="info" size={15} color={colors.brand} style={{ marginRight: 8, marginTop: 1 }} />
+                <Icon name="info" size={15} color={colors.brand} style={{ marginRight: 8, marginTop: 1 }} />
                 <Text style={[typography.body, styles.infoBannerText, { color: colors.textSecondary }]}>
                   You registered with Google. Set a password to also log in with your email and password.
                 </Text>
@@ -262,6 +267,6 @@ const styles = StyleSheet.create({
     width: 28, height: 28, borderRadius: radius.sm,
     justifyContent: "center", alignItems: "center", marginRight: spacing.sm,
   },
-  fieldInput: { flex: 1, fontSize: 15, fontWeight: "500", padding: 0 },
+  fieldInput: { flex: 1, fontSize: 15, fontFamily: fonts.sansMedium, padding: 0 },
   eyeBtn:     { padding: spacing.xs },
 });
