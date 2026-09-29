@@ -47,6 +47,11 @@ export const API_ENDPOINTS = {
 const api = axios.create({
   baseURL: BASE_URL,
   headers: { 'Content-Type': 'application/json' },
+  // Without a timeout a request on a dead connection never settles, and the
+  // screen waiting on it spins forever instead of showing its retry state.
+  // 60 s still outlasts a sleeping free-tier Render instance waking up
+  // (30–60 s), so a cold start is slow but not an error.
+  timeout: 60_000,
 });
 
 // ─── Clerk Token Injector ─────────────────────────────────────────────────────
