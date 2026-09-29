@@ -17,6 +17,7 @@ import * as Location from "expo-location";
 import { useArrival } from "../context/ArrivalContext";
 import { useTheme, radius, shadow, fonts } from "../context/ThemeContext";
 import { BULACAN_BOUNDARY, BULACAN_BBOX } from "../utils/bulacanBoundary";
+import { GpsSmoother, isBetterFix, MAX_USABLE_ACCURACY_M } from "../utils/gpsFilter";
 import { BASE_URL } from "../api";
 import Icon from "../components/Icon";
 
@@ -944,11 +945,33 @@ export default function Track({ route, navigation }) {
           updateMarkerRef.current?.(initialCoords);
         }
 
+        // Same filtering as the AR screen (utils/gpsFilter.js): drop fixes too
+        // vague to use, don't let a coarse network fix replace a better GPS
+        // one, and smooth the jitter so the marker glides instead of jumping.
+        let best = {
+          latitude: initial.coords.latitude,
+          longitude: initial.coords.longitude,
+          accuracy: initial.coords.accuracy,
+          timestamp: initial.timestamp || Date.now(),
+        };
+        const smoother = new GpsSmoother();
+        smoother.push(best);
+
         locationSubscription.current = await Location.watchPositionAsync(
           { accuracy: Location.Accuracy.High, timeInterval: 3000, distanceInterval: 3 },
           (loc) => {
             if (!isMounted.current) return;
-            const c = { latitude: loc.coords.latitude, longitude: loc.coords.longitude };
+            const next = {
+              latitude: loc.coords.latitude,
+              longitude: loc.coords.longitude,
+              accuracy: loc.coords.accuracy,
+              timestamp: loc.timestamp || Date.now(),
+            };
+            if (Number.isFinite(next.accuracy) && next.accuracy > MAX_USABLE_ACCURACY_M) return;
+            if (!isBetterFix(best, next)) return;
+            best = next;
+            const s = smoother.push(next);
+            const c = { latitude: s.latitude, longitude: s.longitude };
             setUserLocation(c);
             updateMarkerRef.current?.(c);
           }
