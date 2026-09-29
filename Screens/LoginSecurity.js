@@ -31,7 +31,7 @@ const Field = ({ label, icon, value, onChangeText, placeholder, toggleVisible, o
           autoCorrect={false}
         />
         <TouchableOpacity
-          accessibilityRole="button" onPress={onToggle} style={styles.eyeBtn} hitSlop={8}>
+          accessibilityRole="button" accessibilityLabel={toggleVisible ? "Hide password" : "Show password"} onPress={onToggle} style={styles.eyeBtn} hitSlop={8}>
           <Icon name={toggleVisible ? "eye-off" : "eye"} size={16} color={colors.textMuted} />
         </TouchableOpacity>
       </View>
@@ -123,7 +123,7 @@ export default function LoginSecurity({ navigation }) {
         {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity
-            accessibilityRole="button" onPress={() => navigation.goBack()} style={styles.backButton} hitSlop={8}>
+            accessibilityRole="button" accessibilityLabel="Go back" onPress={() => navigation.goBack()} style={styles.backButton} hitSlop={8}>
             <Icon name="chevron-left" size={24} color={colors.textPrimary} />
           </TouchableOpacity>
           <Text style={[typography.h3, { color: colors.textPrimary }]}>Login & Security</Text>

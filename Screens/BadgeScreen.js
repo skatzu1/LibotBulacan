@@ -448,7 +448,7 @@ export default function BadgeScreen() {
             ]}
           >
             <TouchableOpacity
-              accessibilityRole="button" style={[styles.modalClose, { backgroundColor: colors.card }]} onPress={closeBadge}>
+              accessibilityRole="button" accessibilityLabel="Close badge details" style={[styles.modalClose, { backgroundColor: colors.card }]} onPress={closeBadge}>
               <Icon name="x" size={20} color={colors.textSecondary} />
             </TouchableOpacity>
 

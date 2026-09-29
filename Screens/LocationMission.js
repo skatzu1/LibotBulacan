@@ -149,7 +149,7 @@ export default function LocationMission({ navigation, route }) {
 
       <View style={styles.header}>
         <TouchableOpacity
-          accessibilityRole="button" onPress={() => navigation.goBack()} style={styles.backBtn} hitSlop={8}>
+          accessibilityRole="button" accessibilityLabel="Go back" onPress={() => navigation.goBack()} style={styles.backBtn} hitSlop={8}>
           <Icon name="chevron-left" size={24} color={colors.textPrimary} />
         </TouchableOpacity>
         <Text style={[typography.h3, { color: colors.textPrimary, flex: 1 }]} numberOfLines={1}>

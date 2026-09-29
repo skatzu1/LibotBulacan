@@ -1186,6 +1186,7 @@ const TriviaPopup = ({
           </View>
           <TouchableOpacity
             accessibilityRole="button"
+            accessibilityLabel="Close"
             onPress={onClose}
             style={popup.closeBtn}
             hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}

@@ -477,11 +477,14 @@ export default function InformationScreen({ route, navigation }) {
         <View style={styles.headerRight}>
           {spot.modelUrl && (
             <CircleBtn
+              accessibilityLabel={show3D ? "Show photo" : "Show 3D model"}
               onPress={() => setShow3D(!show3D)}
               iconNode={<Icon name={show3D ? "image-outline" : "cube-scan"} size={20} color={colors.brandDark} />}
             />
           )}
           <CircleBtn
+            accessibilityLabel={spotIsBookmarked ? "Remove bookmark" : "Bookmark this spot"}
+            accessibilityState={{ selected: spotIsBookmarked }}
             onPress={handleBookmarkToggle}
             active={spotIsBookmarked}
             iconNode={<Icon name="bookmark" size={16} weight={spotIsBookmarked ? "fill" : "regular"} color={spotIsBookmarked ? colors.onAccent : colors.brandDark} />}
@@ -668,7 +671,7 @@ export default function InformationScreen({ route, navigation }) {
               <TextInput ref={inputRef} style={[styles.commentInput, { color: colors.brandDark }]} placeholder="Write a review..." placeholderTextColor={colors.textMuted} value={newReview} onChangeText={setNewReview} onFocus={() => setShowStarPicker(true)} multiline maxLength={500} />
             </TouchableOpacity>
             <TouchableOpacity
-              accessibilityRole="button" style={[styles.sendBtn, { backgroundColor: colors.accent }, (!newReview.trim() || newRating === 0 || submittingReview) && styles.sendBtnDisabled]} onPress={handleSubmit} disabled={!newReview.trim() || newRating === 0 || submittingReview}>
+              accessibilityRole="button" accessibilityLabel={submittingReview ? "Posting review" : "Post review"} style={[styles.sendBtn, { backgroundColor: colors.accent }, (!newReview.trim() || newRating === 0 || submittingReview) && styles.sendBtnDisabled]} onPress={handleSubmit} disabled={!newReview.trim() || newRating === 0 || submittingReview}>
               {submittingReview ? <ActivityIndicator size="small" color={colors.onAccent} /> : <Icon name="send" size={17} color={colors.onAccent} />}
             </TouchableOpacity>
           </View>
@@ -700,7 +703,7 @@ export default function InformationScreen({ route, navigation }) {
             <View style={styles.modalHeader}>
               <Text style={[styles.modalTitle, { color: colors.brandDark }]}>Report review</Text>
               <TouchableOpacity
-                accessibilityRole="button" onPress={() => setShowReportModal(false)} hitSlop={8}><Icon name="x" size={22} color={colors.textMuted} /></TouchableOpacity>
+                accessibilityRole="button" accessibilityLabel="Close report" onPress={() => setShowReportModal(false)} hitSlop={8}><Icon name="x" size={22} color={colors.textMuted} /></TouchableOpacity>
             </View>
             {reportTarget && <Text style={[styles.reportSubtitle, { color: colors.textMuted }]}>Reporting comment by <Text style={{ fontFamily: fonts.sansBold, color: colors.brandDark }}>{reportTarget.userName}</Text></Text>}
             <Text style={[styles.modalLabel, { color: colors.brandDark }]}>Reason</Text>

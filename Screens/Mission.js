@@ -505,7 +505,7 @@ export default function Mission({ navigation, route }) {
 
             <SafeAreaView style={styles.cameraTopBar}>
               <TouchableOpacity
-                accessibilityRole="button" onPress={closeCamera} style={styles.cameraIconBtn}>
+                accessibilityRole="button" accessibilityLabel="Close camera" onPress={closeCamera} style={styles.cameraIconBtn}>
                 <Icon name="x" size={20} color="white" />
               </TouchableOpacity>
               <View style={styles.cameraTitleWrap}>
@@ -513,7 +513,7 @@ export default function Mission({ navigation, route }) {
                 <Text style={styles.cameraTitle}>{config.product}</Text>
               </View>
               <TouchableOpacity
-                accessibilityRole="button" onPress={flipCamera} style={styles.cameraIconBtn}>
+                accessibilityRole="button" accessibilityLabel="Switch camera" onPress={flipCamera} style={styles.cameraIconBtn}>
                 <Icon name="refresh-cw" size={18} color="white" />
               </TouchableOpacity>
             </SafeAreaView>
@@ -607,7 +607,7 @@ export default function Mission({ navigation, route }) {
         {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity
-            accessibilityRole="button" onPress={() => navigation.goBack()} style={styles.backBtn}>
+            accessibilityRole="button" accessibilityLabel="Go back" onPress={() => navigation.goBack()} style={styles.backBtn}>
             <Icon name="chevron-left" size={20} color={C.ink} />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Bakit List</Text>
