@@ -35,6 +35,7 @@ import {
   ViroTrackingStateConstants,
 } from "@reactvision/react-viro";
 import { GpsSmoother, isBetterFix, MAX_USABLE_ACCURACY_M } from "../utils/gpsFilter";
+import { HeadingFilter, shouldEmit } from "../utils/headingFilter";
 // `explainReason` is exported by the module but deliberately not used here:
 // the absence of precise placement needs no explanation to the user, since
 // plane placement is the normal experience. It's there for debugging and for
@@ -54,21 +55,30 @@ import Icon from "../components/Icon";
 //   from the accelerometer to project the mag vector into the
 //   horizontal plane before computing the bearing.
 // ─────────────────────────────────────────────
+// Smoothing is a One Euro filter (utils/headingFilter.js): steady when the
+// phone is still, responsive while turning. State only changes when the
+// smoothed heading moves ≥ 1° and at most ~30 times a second — the sensors
+// report far more often than the radar can show, and every setHeading is a
+// render.
+//
+// Returns { heading, needsCalibration }. needsCalibration is the OS saying the
+// magnetometer is unreliable (Android accuracy 0–1 of 3; iOS error > 25°) —
+// the usual reason an AR arrow points the wrong way, and fixed by moving the
+// phone in a figure 8.
 function useCompassHeading() {
   const [heading, setHeading] = useState(0);
-  const smoothedRef = useRef(null);
+  const [needsCalibration, setNeedsCalibration] = useState(false);
+  const filterRef = useRef(new HeadingFilter());
+  const emittedRef = useRef({ value: null, at: 0 });
 
-  // Exponential moving average — handles 0/360 wraparound cleanly
-  const applyEMA = useCallback((raw) => {
-    if (smoothedRef.current === null) {
-      smoothedRef.current = raw;
-      return raw;
+  const applyReading = useCallback((raw) => {
+    const now = Date.now();
+    const smoothed = filterRef.current.push(raw, now);
+    const last = emittedRef.current;
+    if (smoothed !== null && shouldEmit(last.value, smoothed, last.at, now)) {
+      emittedRef.current = { value: smoothed, at: now };
+      setHeading(smoothed);
     }
-    let diff = raw - smoothedRef.current;
-    if (diff >  180) diff -= 360;
-    if (diff < -180) diff += 360;
-    smoothedRef.current = (smoothedRef.current + diff * 0.3 + 360) % 360;
-    return smoothedRef.current;
   }, []);
 
   useEffect(() => {
@@ -83,7 +93,11 @@ function useCompassHeading() {
         headingSub = await Location.watchHeadingAsync((data) => {
           // trueHeading is -1 when GPS unavailable; fall back to magHeading
           const raw = data.trueHeading >= 0 ? data.trueHeading : data.magHeading;
-          if (raw >= 0) setHeading(applyEMA(raw));
+          if (raw >= 0) applyReading(raw);
+          if (Number.isFinite(data.accuracy)) {
+            const poor = Platform.OS === "android" ? data.accuracy <= 1 : data.accuracy > 25;
+            setNeedsCalibration((prev) => (prev === poor ? prev : poor));
+          }
         });
         return true;
       } catch (_) {
@@ -127,7 +141,7 @@ function useCompassHeading() {
 
           let angle = Math.atan2(-yh, xh) * (180 / Math.PI);
           angle = (angle + 360) % 360;
-          setHeading(applyEMA(angle));
+          applyReading(angle);
         };
 
         // Mag fires the heading update; acc keeps tilt current
@@ -148,9 +162,9 @@ function useCompassHeading() {
       magSub?.remove();
       accSub?.remove();
     };
-  }, [applyEMA]);
+  }, [applyReading]);
 
-  return heading;
+  return { heading, needsCalibration };
 }
 
 // ─────────────────────────────────────────────
@@ -487,6 +501,22 @@ const RadarMap = ({ distance, bearing, heading, modelRadius, label }) => {
 
       <Text style={radar.label}>{label}</Text>
     </View>
+  );
+};
+
+// The radar is the only thing that uses the compass, so it owns the
+// subscription. The compass used to live in the main AR component, where
+// every reading re-rendered the whole screen — AR scene, HUD and all — to
+// rotate this one widget. Owning it here also means the sensors only run while
+// the radar is on screen (the "walk there" step), not for the whole session.
+const LiveRadar = ({ label, ...props }) => {
+  const { heading, needsCalibration } = useCompassHeading();
+  return (
+    <RadarMap
+      {...props}
+      heading={heading}
+      label={needsCalibration ? `${label} · Compass unsure: move your phone in a figure 8` : label}
+    />
   );
 };
 
@@ -1424,8 +1454,6 @@ export default function ARScreen({ route, navigation }) {
   // can be walked again as often as the user likes; it just isn't re-awarded.
   const alreadyDone = !!arMissionId && !!completedMissions?.includes(arMissionId);
 
-  // Tilt-aware, real-time compass heading
-  const compassHeading = useCompassHeading();
 
   const [userLocation, setUserLocation] = useState(null);
 
@@ -1940,13 +1968,12 @@ export default function ARScreen({ route, navigation }) {
           <View style={step.body}>
             {targetPending ? (
               <>
-                <RadarMap
+                <LiveRadar
                   distance={targetPending.distance}
                   bearing={bearingDegrees(
                     userLocation.latitude, userLocation.longitude,
                     targetPending.lat, targetPending.lng
                   )}
-                  heading={compassHeading}
                   modelRadius={targetPending.radius}
                   // The tilde still carries the honesty about precision; it
                   // just sits under the radar now instead of being the whole
