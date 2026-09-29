@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Animated, Pressable, StyleSheet, Text, View } from "react-native";
-import NetInfo from "@react-native-community/netinfo";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme, MAX_FONT_SCALE } from "../context/ThemeContext";
 import Icon from "./Icon";
@@ -13,12 +12,31 @@ import Icon from "./Icon";
 
 const BACK_ONLINE_MS = 2200;
 
+// NetInfo is a native module. A binary built before it was added — an older
+// dev client, or a store build receiving a JS-only OTA update — doesn't contain
+// it, and the library throws the moment it is imported ("NativeModule.RNCNetInfo
+// is null"), which took the whole app down with it. Load it defensively: without
+// the native side the banner simply doesn't render, and everything else works.
+let NetInfo = null;
+try {
+  NetInfo = require("@react-native-community/netinfo").default;
+} catch (e) {
+  if (__DEV__) {
+    console.warn("[OfflineBanner] NetInfo native module missing — rebuild the app to enable the offline banner.", e?.message);
+  }
+}
+
 // `isInternetReachable` is null while NetInfo is still checking; treat that as
 // online so the banner never flashes on launch.
 const isOffline = (state) =>
   state.isConnected === false || state.isInternetReachable === false;
 
 export default function OfflineBanner() {
+  if (!NetInfo) return null;
+  return <Banner />;
+}
+
+function Banner() {
   const { colors, fonts } = useTheme();
   const insets = useSafeAreaInsets();
   const [offline, setOffline] = useState(false);
