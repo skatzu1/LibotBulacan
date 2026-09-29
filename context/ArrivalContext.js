@@ -39,6 +39,17 @@ const ALL_SPOTS_KEY            = "allSpots";
 const SPOTS_CACHE_TTL_MS       = 5 * 60 * 1000;
 const BACKGROUND_LOCATION_TASK = "background-location-task";
 
+// Background arrivals (alerts while Libot is closed) are OFF for launch.
+// Background location triggers Google Play's strictest review — a permission
+// declaration, a demo video, and a real chance of rejection — so the first
+// release detects arrivals only while the app is open. The background task
+// below is kept intact. To turn it back on: set this to true, remove
+// ACCESS_BACKGROUND_LOCATION / FOREGROUND_SERVICE* from `blockedPermissions`
+// in app.json, set isAndroidBackgroundLocationEnabled and
+// isAndroidForegroundServiceEnabled back to true, and restore the background
+// wording in the backend's /privacy and /help pages.
+const BACKGROUND_ARRIVALS_ENABLED = false;
+
 // Persisted set of spotIds the user is CURRENTLY inside (per user).
 // Both the foreground watcher and the background task read/write this same
 // key, so an arrival only notifies once per "stay" — the user must leave
@@ -220,7 +231,9 @@ async function requestAllLocationPermissions() {
   if (current.status !== "granted" && current.canAskAgain) {
     const proceed = await confirmAsync(
       "Libot uses your location",
-      "To show spots near you, log the places you visit, and send arrival alerts. You'll pick a permission level on the next screen.",
+      BACKGROUND_ARRIVALS_ENABLED
+        ? "To show spots near you, log the places you visit, and send arrival alerts. You'll pick a permission level on the next screen."
+        : "To show spots near you and recognise when you arrive at one while Libot is open. Libot doesn't use your location when the app is closed.",
       { confirmText: "Continue", icon: "map-pin", tone: "info" },
     );
     if (!proceed) {
@@ -233,6 +246,10 @@ async function requestAllLocationPermissions() {
   if (fg !== "granted") {
     console.warn("[Location] Foreground permission denied");
     return { foreground: false, background: false };
+  }
+
+  if (!BACKGROUND_ARRIVALS_ENABLED) {
+    return { foreground: true, background: false };
   }
 
   const { status: bg } = await Location.requestBackgroundPermissionsAsync();
@@ -401,8 +418,15 @@ export function ArrivalProvider({ children }) {
       hasLocationPerms.current = perms;
       // Only nudge for "all the time" when they've granted foreground but not
       // background — don't stack a second modal on top of a fresh "Not now".
-      if (perms.foreground && !perms.background) {
+      if (BACKGROUND_ARRIVALS_ENABLED && perms.foreground && !perms.background) {
         promptForAllTimeLocation();
+      }
+      if (!BACKGROUND_ARRIVALS_ENABLED) {
+        // A build that had background arrivals may have left the task
+        // registered; stop it so an update can't keep tracking in the background.
+        Location.hasStartedLocationUpdatesAsync(BACKGROUND_LOCATION_TASK)
+          .then((running) => running && Location.stopLocationUpdatesAsync(BACKGROUND_LOCATION_TASK))
+          .catch(() => {});
       }
 
       // Sync cache so local state matches DB
@@ -439,6 +463,7 @@ export function ArrivalProvider({ children }) {
         const prevState = appStateRef.current;
 
         if (
+          BACKGROUND_ARRIVALS_ENABLED &&
           (nextState === "inactive" || nextState === "background") &&
           prevState === "active"
         ) {
