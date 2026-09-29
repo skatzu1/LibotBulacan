@@ -66,7 +66,28 @@ concrete or a car.
 **Camera / ARCore.** Where Google's Visual Positioning Service covers the spot,
 AR anchors are placed with ARCore Geospatial (metre-level, from camera
 imagery rather than GPS); elsewhere the model is placed on the first detected
-surface (`utils/geospatial.js`). This was already in place.
+surface (`utils/geospatial.js`).
+
+*Fixed: Geospatial placement had never switched on.* The code waited for Earth
+tracking state `"TRACKING"`, but Viro reports `"Enabled" | "Paused" |
+"Stopped"` (its enum `ARScene.EarthTrackingState { ENABLED, PAUSED, STOPPED }`,
+confirmed in the library's Android bridge). Every attempt ended as "not
+tracking" after 30 s of retries and fell back to floor placement. It now
+accepts `"Enabled"`, and switches geospatial mode on once per session instead
+of on every retry. The ±10 m pose-accuracy guard is unchanged.
+
+**The radar now uses ARCore's heading where it can.** While you walk to the
+next model, the AR scene reads ARCore Geospatial's camera heading four times a
+second. When ARCore rates it accurate to ±15° or better, the radar points with
+it instead of the compass and its label says **"Precise direction"**. That
+heading comes from matching the camera image against Street View, so it isn't
+thrown off by steel, concrete or cars, and it's the direction the *camera*
+faces — which is what AR needs — rather than the top edge of the phone. When
+tracking is lost the compass takes over within 1.5 s; both go through the same
+filter, so the switch doesn't make the arrow jump. The heading reaches the
+radar through a small store, not React state, so the rest of the AR screen
+doesn't re-render for it (`hooks/useCompassHeading.js`,
+`utils/headingSource.js`).
 
 ## 3. Adaptive update rates
 
@@ -115,10 +136,9 @@ mission photos — the photo change cut its biggest cost by ~98 %.
 
 1. **Paid Render instance** — removes the 30–60 s cold start, by far the
    largest delay a user can see.
-2. **Use ARCore's own heading when Geospatial is tracking.** Its heading is
-   accurate to a few degrees and immune to magnetic interference; the radar
-   could prefer it over the compass whenever `evaluateGeospatial` reports good
-   tracking. Medium effort, big accuracy win at VPS-covered spots.
+2. **Use ARCore's position too, not just its heading.** At VPS-covered spots
+   the Geospatial pose is sub-metre; the radar's distance could use it instead
+   of GPS the same way the heading now does.
 3. **If background arrivals come back, use OS geofences, not background GPS.**
    `Location.startGeofencingAsync` with one region per spot lets the OS watch
    the 24 spots at almost no battery cost, instead of streaming GPS. It still
@@ -141,5 +161,11 @@ With the app connected to Metro, the log shows what the engine is doing:
   points show on the profile.
 - AR radar: turn slowly and quickly — the arrow should neither shake at rest
   nor lag a turn. Hold the phone near a laptop or car to see the figure-8 prompt.
+- At a spot with Street View coverage, hold the phone up so the camera sees
+  buildings: within a few seconds the radar label should add
+  **"Precise direction"**, and on arriving the log should show
+  `[Geospatial] placement: active (±… m)` — the first time placement has ever
+  been able to activate. Where there's no coverage, the label stays as it is
+  and placement uses the floor, as before.
 - Mission photo: verification should come back in about a second on mobile
   data (plus server wake-up time on the free plan).
