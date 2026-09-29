@@ -1,17 +1,20 @@
 import React from "react";
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
 import Icon from "../components/Icon";
+import { captureError } from "./crashReporter";
 
-// Light-only for launch — pull the static light palette so this class component
-// (no hooks) still renders on-brand.
+// A class component can't use the useTheme() hook, so this mirrors the LIGHT
+// tokens from ThemeContext by hand. These drifted once already — they still
+// held the pre-migration white/cyan palette after the app moved to warm paper.
+// If you change lightColors there, change these too.
 const C = {
-  bg:       "#FFFFFF",
-  card:     "#D3EEF1",
-  brand:    "#0C7A84",
-  brandDark:"#1E2728",
-  text:     "#4C5A5B",
-  accent:   "#F2CE1B",
-  onAccent: "#2C2810",
+  bg:       "#FBF8F2",  // background
+  card:     "#FFFFFF",  // card
+  brand:    "#0A6F78",  // brand
+  brandDark:"#1C2426",  // brandDark
+  text:     "#455254",  // textSecondary
+  accent:   "#F2CE1B",  // accent
+  onAccent: "#2C2810",  // onAccent
 };
 
 export default class ErrorBoundary extends React.Component {
@@ -25,8 +28,10 @@ export default class ErrorBoundary extends React.Component {
   }
 
   componentDidCatch(error, errorInfo) {
-    // TODO(deploy): forward to a crash reporter (e.g. Sentry) here.
     console.error("[ErrorBoundary] Caught:", error, errorInfo);
+    // A render crash is the one failure the user always notices and never
+    // reports, so it is the most important thing to forward.
+    captureError(error, { componentStack: errorInfo?.componentStack });
   }
 
   handleReset = () => {
