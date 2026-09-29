@@ -9,25 +9,37 @@
       "distribution": "internal",
       "env": {
         "EXPO_LEGACY_PEER_DEPS": "true"
-      }
+      },
+      "ios": {
+        "simulator": false
+      },
+      "channel": "development"
     },
     "preview": {
       "distribution": "internal",
       "android": {
         "buildType": "apk"
       },
+      "ios": {
+        "simulator": false
+      },
       "env": {
         "EXPO_LEGACY_PEER_DEPS": "true"
-      }
+      },
+      "channel": "preview"
     },
     "production": {
       "android": {
-        "buildType": "apk"
+        "buildType": "app-bundle"
+      },
+      "ios": {
+        "distribution": "store"
       },
       "autoIncrement": true,
       "env": {
         "EXPO_LEGACY_PEER_DEPS": "true"
-      }
+      },
+      "channel": "production"
     }
   },
   "submit": {
