@@ -34,8 +34,64 @@
  */
 export const GEO_ACCURACY_LIMIT_M = 10;
 
-/** Earth tracking states that mean the pose can be trusted. */
-const EARTH_OK = new Set(["TRACKING", "tracking"]);
+/**
+ * Earth tracking states that mean the pose can be trusted.
+ *
+ * Viro reports Earth tracking as "Enabled" | "Paused" | "Stopped" — its enum
+ * is ARScene.EarthTrackingState { ENABLED, PAUSED, STOPPED }, and "Enabled" is
+ * its name for ARCore's TRACKING. This set used to contain only "TRACKING" /
+ * "tracking", which Viro never returns, so every evaluation ended as
+ * "earth-not-tracking" after 30 s of retries and geospatial placement never
+ * switched on. The accuracy limit below still guards against a coarse pose.
+ */
+const EARTH_OK = new Set(["Enabled", "ENABLED", "TRACKING", "tracking"]);
+
+export const isEarthTracking = (state) => EARTH_OK.has(String(state));
+
+// setGeospatialModeEnabled reconfigures the ARCore session, so call it once
+// per navigator. evaluateGeospatial used to call it on every retry — up to 15
+// reconfigurations while Earth tracking was still converging.
+const geoEnabled = new WeakSet();
+
+/**
+ * Turns geospatial mode on for this navigator if the device supports it.
+ * Returns true when it's on. Safe to call repeatedly.
+ */
+export async function ensureGeospatialEnabled(nav) {
+  if (!nav || typeof nav.isGeospatialModeSupported !== "function") return false;
+  if (geoEnabled.has(nav)) return true;
+  try {
+    const support = await nav.isGeospatialModeSupported();
+    if (!support?.supported) return false;
+    nav.setGeospatialModeEnabled(true);
+    geoEnabled.add(nav);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * The camera's heading from ARCore Geospatial, or null when Earth isn't
+ * tracking or there's no pose. Where Google's VPS covers the spot this is
+ * accurate to a few degrees and — unlike the magnetometer — unaffected by
+ * steel, concrete or a nearby car, and valid with the phone held upright.
+ *
+ * @returns {Promise<{heading: number, accuracy: number, at: number} | null>}
+ */
+export async function readGeoHeading(nav) {
+  if (!nav || typeof nav.getCameraGeospatialPose !== "function") return null;
+  try {
+    const earth = await nav.getEarthTrackingState();
+    if (!isEarthTracking(earth?.state)) return null;
+    const res = await nav.getCameraGeospatialPose();
+    const pose = res?.pose;
+    if (!res?.success || !Number.isFinite(pose?.heading) || !Number.isFinite(pose?.headingAccuracy)) return null;
+    return { heading: ((pose.heading % 360) + 360) % 360, accuracy: pose.headingAccuracy, at: Date.now() };
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Decides, in one call, whether geospatial placement should be used here.
@@ -54,13 +110,15 @@ export async function evaluateGeospatial(nav, lat, lng) {
   }
 
   try {
-    const support = await nav.isGeospatialModeSupported();
-    if (!support?.supported) {
-      // Device lacks ARCore Geospatial, or the API key is missing/invalid.
-      return { usable: false, reason: support?.error ? "auth-or-device" : "device" };
+    if (!geoEnabled.has(nav)) {
+      const support = await nav.isGeospatialModeSupported();
+      if (!support?.supported) {
+        // Device lacks ARCore Geospatial, or the API key is missing/invalid.
+        return { usable: false, reason: support?.error ? "auth-or-device" : "device" };
+      }
+      nav.setGeospatialModeEnabled(true);
+      geoEnabled.add(nav);
     }
-
-    nav.setGeospatialModeEnabled(true);
 
     // The pre-flight `checkVPSAvailability` gate is deliberately gone: VPS
     // coverage at these spots is confirmed, and that call is an extra network
@@ -78,7 +136,7 @@ export async function evaluateGeospatial(nav, lat, lng) {
     // Earth tracking needs a moment and some camera movement before it
     // converges; the caller is expected to retry rather than give up here.
     const earth = await nav.getEarthTrackingState();
-    if (!EARTH_OK.has(String(earth?.state))) {
+    if (!isEarthTracking(earth?.state)) {
       return { usable: false, reason: "earth-not-tracking" };
     }
 
