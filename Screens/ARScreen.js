@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback, useMemo } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import {
   View,
   Text,
@@ -35,137 +35,16 @@ import {
   ViroTrackingStateConstants,
 } from "@reactvision/react-viro";
 import { GpsSmoother, isBetterFix, MAX_USABLE_ACCURACY_M } from "../utils/gpsFilter";
-import { HeadingFilter, shouldEmit } from "../utils/headingFilter";
+import useCompassHeading from "../hooks/useCompassHeading";
+import { createValueStore, GEO_HEADING_POLL_MS } from "../utils/headingSource";
 // `explainReason` is exported by the module but deliberately not used here:
 // the absence of precise placement needs no explanation to the user, since
 // plane placement is the normal experience. It's there for debugging and for
 // any future screen that wants to surface the reason.
-import { evaluateGeospatial, anchorAtLocation, releaseAnchor } from "../utils/geospatial";
+import { evaluateGeospatial, anchorAtLocation, releaseAnchor, ensureGeospatialEnabled, readGeoHeading } from "../utils/geospatial";
 import { resolveTrail } from "../utils/arTrail";
 import { fonts } from "../context/ThemeContext";
 import Icon from "../components/Icon";
-
-// ─────────────────────────────────────────────
-// COMPASS HEADING HOOK  (tilt-aware, real-time)
-// Strategy 1 — expo-location watchHeadingAsync:
-//   Uses the OS's own sensor fusion (mag + accel + gyro).
-//   Correct for any phone orientation including upright AR use.
-// Strategy 2 — tilt-compensated Magnetometer + Accelerometer:
-//   Fallback when expo-location is unavailable. Uses pitch/roll
-//   from the accelerometer to project the mag vector into the
-//   horizontal plane before computing the bearing.
-// ─────────────────────────────────────────────
-// Smoothing is a One Euro filter (utils/headingFilter.js): steady when the
-// phone is still, responsive while turning. State only changes when the
-// smoothed heading moves ≥ 1° and at most ~30 times a second — the sensors
-// report far more often than the radar can show, and every setHeading is a
-// render.
-//
-// Returns { heading, needsCalibration }. needsCalibration is the OS saying the
-// magnetometer is unreliable (Android accuracy 0–1 of 3; iOS error > 25°) —
-// the usual reason an AR arrow points the wrong way, and fixed by moving the
-// phone in a figure 8.
-function useCompassHeading() {
-  const [heading, setHeading] = useState(0);
-  const [needsCalibration, setNeedsCalibration] = useState(false);
-  const filterRef = useRef(new HeadingFilter());
-  const emittedRef = useRef({ value: null, at: 0 });
-
-  const applyReading = useCallback((raw) => {
-    const now = Date.now();
-    const smoothed = filterRef.current.push(raw, now);
-    const last = emittedRef.current;
-    if (smoothed !== null && shouldEmit(last.value, smoothed, last.at, now)) {
-      emittedRef.current = { value: smoothed, at: now };
-      setHeading(smoothed);
-    }
-  }, []);
-
-  useEffect(() => {
-    let headingSub = null;
-    let magSub     = null;
-    let accSub     = null;
-
-    // ── Strategy 1: expo-location watchHeadingAsync ──────────────────
-    const tryLocationHeading = async () => {
-      try {
-        const Location = require("expo-location");
-        headingSub = await Location.watchHeadingAsync((data) => {
-          // trueHeading is -1 when GPS unavailable; fall back to magHeading
-          const raw = data.trueHeading >= 0 ? data.trueHeading : data.magHeading;
-          if (raw >= 0) applyReading(raw);
-          if (Number.isFinite(data.accuracy)) {
-            const poor = Platform.OS === "android" ? data.accuracy <= 1 : data.accuracy > 25;
-            setNeedsCalibration((prev) => (prev === poor ? prev : poor));
-          }
-        });
-        return true;
-      } catch (_) {
-        return false;
-      }
-    };
-
-    // ── Strategy 2: tilt-compensated Magnetometer + Accelerometer ────
-    const tryTiltCompensated = async () => {
-      try {
-        const { Magnetometer, Accelerometer } = require("expo-sensors");
-
-        const magOk = await Magnetometer.isAvailableAsync().catch(() => false);
-        if (!magOk) return;
-
-        Magnetometer.setUpdateInterval(50);   // 20 Hz
-        Accelerometer.setUpdateInterval(50);
-
-        // Default: phone held upright in portrait (camera facing forward)
-        let mag = { x: 0, y: 1, z: 0 };
-        let acc = { x: 0, y: 0, z: -1 };
-
-        const compute = () => {
-          const { x: ax, y: ay, z: az } = acc;
-          const { x: mx, y: my, z: mz } = mag;
-
-          // Normalize gravity vector
-          const na = Math.sqrt(ax * ax + ay * ay + az * az) || 1;
-          const nx = ax / na, ny = ay / na, nz = az / na;
-
-          // Pitch (rotation around X) and roll (rotation around Z)
-          const pitch = Math.asin(-Math.max(-1, Math.min(1, nx)));
-          const roll  = Math.atan2(ny, nz);
-
-          const cp = Math.cos(pitch), sp = Math.sin(pitch);
-          const cr = Math.cos(roll),  sr = Math.sin(roll);
-
-          // Project magnetometer into the horizontal plane
-          const xh =  mx * cp      + mz * sp;
-          const yh =  mx * sr * sp + my * cr - mz * sr * cp;
-
-          let angle = Math.atan2(-yh, xh) * (180 / Math.PI);
-          angle = (angle + 360) % 360;
-          applyReading(angle);
-        };
-
-        // Mag fires the heading update; acc keeps tilt current
-        magSub = Magnetometer.addListener((d)  => { mag = d; compute(); });
-        accSub = Accelerometer.addListener((d) => { acc = d; });
-      } catch (_) {
-        // Both strategies failed — heading stays 0 (arrow points north)
-      }
-    };
-
-    (async () => {
-      const ok = await tryLocationHeading();
-      if (!ok) await tryTiltCompensated();
-    })();
-
-    return () => {
-      headingSub?.remove();
-      magSub?.remove();
-      accSub?.remove();
-    };
-  }, [applyReading]);
-
-  return { heading, needsCalibration };
-}
 
 // ─────────────────────────────────────────────
 // DESIGN TOKENS
@@ -509,15 +388,17 @@ const RadarMap = ({ distance, bearing, heading, modelRadius, label }) => {
 // every reading re-rendered the whole screen — AR scene, HUD and all — to
 // rotate this one widget. Owning it here also means the sensors only run while
 // the radar is on screen (the "walk there" step), not for the whole session.
-const LiveRadar = ({ label, ...props }) => {
-  const { heading, needsCalibration } = useCompassHeading();
-  return (
-    <RadarMap
-      {...props}
-      heading={heading}
-      label={needsCalibration ? `${label} · Compass unsure: move your phone in a figure 8` : label}
-    />
-  );
+//
+// `geoStore` carries ARCore Geospatial's heading from the AR scene. When it's
+// available and accurate the radar uses it instead of the compass (see
+// hooks/useCompassHeading.js) and says so, so the user knows the arrow can be
+// trusted near buildings and cars.
+const LiveRadar = ({ label, geoStore, ...props }) => {
+  const { heading, needsCalibration, precise } = useCompassHeading(geoStore);
+  const note = precise
+    ? " · Precise direction"
+    : needsCalibration ? " · Compass unsure: move your phone in a figure 8" : "";
+  return <RadarMap {...props} heading={heading} label={`${label}${note}`} />;
 };
 
 const radar = StyleSheet.create({
@@ -951,7 +832,7 @@ const ModelOnPlane = ({ spot, anchorLabel, onModelClick, onModelError, onPlacedC
 };
 
 const ARScene = ({ sceneNavigator }) => {
-  const { spot, activeAnchors, focusAnchor, onModelClick, onTrackingChange, onModelError, onPlacedChange, onGeoStatus } =
+  const { spot, activeAnchors, focusAnchor, onModelClick, onTrackingChange, onModelError, onPlacedChange, onGeoStatus, onGeoHeading } =
     sceneNavigator.viroAppProps;
 
   // ── ARCore Geospatial ────────────────────────────────────────────────────
@@ -1068,6 +949,41 @@ const ARScene = ({ sceneNavigator }) => {
     geoIdsRef.current.forEach((id) => releaseAnchor(sceneNavigator, id));
     geoIdsRef.current = [];
   }, [sceneNavigator]);
+
+  // ── ARCore heading for the radar ─────────────────────────────────────────
+  // While the user is still walking to the next model (no anchor in range —
+  // the radar step), read ARCore Geospatial's camera heading a few times a
+  // second and hand it to the radar through onGeoHeading. Geospatial mode is
+  // switched on here, earlier than placement needs it, so Earth tracking has
+  // usually converged by the time the user arrives. Where there's no VPS
+  // coverage the readings are simply null and the radar keeps the compass.
+  // Only module calls happen here — nothing is added to the scene — so this
+  // is safe once ARCore reports tracking.
+  const hasActiveAnchors = (activeAnchors?.length ?? 0) > 0;
+  useEffect(() => {
+    if (!tracking || hasActiveAnchors || !onGeoHeading) return undefined;
+    let cancelled = false;
+    let timer = null;
+
+    (async () => {
+      const on = await ensureGeospatialEnabled(sceneNavigator);
+      if (!on || cancelled) return;
+      const tick = async () => {
+        if (cancelled) return;
+        const reading = await readGeoHeading(sceneNavigator);
+        if (cancelled) return;
+        onGeoHeading(reading);
+        timer = setTimeout(tick, GEO_HEADING_POLL_MS);
+      };
+      tick();
+    })();
+
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+      onGeoHeading(null);
+    };
+  }, [tracking, hasActiveAnchors, sceneNavigator, onGeoHeading]);
 
   if (!tracking) {
     return <ViroARScene onTrackingUpdated={handleTracking} />;
@@ -1505,6 +1421,11 @@ export default function ARScreen({ route, navigation }) {
     geoStatusRef.current = s;
     console.log("[Geospatial] placement:", s?.active ? `active (±${s.accuracy?.toFixed?.(1)} m)` : `off — ${s?.reason}`);
   };
+
+  // ARCore Geospatial heading, written by the AR scene and read only by the
+  // radar. A store rather than state, so these updates never re-render this
+  // (very large) component — see utils/headingSource.js.
+  const geoHeadingStore = useMemo(() => createValueStore(null), []);
 
   useEffect(() => {
     let cancelled = false;
@@ -1970,6 +1891,7 @@ export default function ARScreen({ route, navigation }) {
             {targetPending ? (
               <>
                 <LiveRadar
+                  geoStore={geoHeadingStore}
                   distance={targetPending.distance}
                   bearing={bearingDegrees(
                     userLocation.latitude, userLocation.longitude,
@@ -2127,6 +2049,7 @@ export default function ARScreen({ route, navigation }) {
           onModelError:     () => setModelFailed(true),
           onPlacedChange:   setModelPlaced,
           onGeoStatus:      setGeoStatus,
+          onGeoHeading:     geoHeadingStore.set,
         }}
         style={{ flex: 1 }}
       />
