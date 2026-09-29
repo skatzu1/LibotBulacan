@@ -13,6 +13,8 @@ import { showAlert } from "../components/AppAlert";
 import { useState, useEffect } from "react";
 import { useSignIn, useOAuth } from "@clerk/clerk-expo";
 import * as WebBrowser from "expo-web-browser";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+import { captureError } from "../utils/crashReporter";
 import { auth as A, fonts, MAX_FONT_SCALE } from "../context/ThemeContext";
 import AuthScaffold, { authStyles as a } from "../components/AuthScaffold";
 import Icon from "../components/Icon";
@@ -21,6 +23,35 @@ WebBrowser.maybeCompleteAuthSession();
 
 function isValidEmail(email) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+}
+
+/* ── Lockout tracking ─────────────────────────────────────────────────────
+   Mirrors the Clerk Dashboard lockout policy (5 attempts → 5 minute lock) so
+   the user is told they're locked out on every attempt inside the window,
+   even when Clerk answers with a plain password error (e.g. an email with no
+   password account, which Clerk never locks). Tracked per email, persisted so
+   an app restart doesn't reset it. Keep these in sync with the dashboard. */
+const MAX_ATTEMPTS = 5;
+const LOCKOUT_MS = 5 * 60 * 1000;
+const lockKey = (email) => `loginLock:${email.trim().toLowerCase()}`;
+
+async function readLock(email) {
+  try {
+    const raw = await AsyncStorage.getItem(lockKey(email));
+    return raw ? JSON.parse(raw) : { fails: 0, lockedUntil: 0 };
+  } catch {
+    return { fails: 0, lockedUntil: 0 };
+  }
+}
+async function writeLock(email, state) {
+  try { await AsyncStorage.setItem(lockKey(email), JSON.stringify(state)); } catch {}
+}
+async function clearLock(email) {
+  try { await AsyncStorage.removeItem(lockKey(email)); } catch {}
+}
+function lockoutMessage(lockedUntil) {
+  const mins = Math.max(1, Math.ceil((lockedUntil - Date.now()) / 60000));
+  return `Too many failed attempts. Your account is locked — try again in ${mins} minute${mins === 1 ? "" : "s"}.`;
 }
 
 /* ── Forgot Password ──────────────────────────────────────────────────────
@@ -77,6 +108,8 @@ function ForgotPasswordModal({ visible, onClose, signIn }) {
         password: newPassword,
       });
       if (result.status === "complete") {
+        // A fresh password starts a fresh attempt count
+        await clearLock(email);
         showAlert("Password updated", "You can now log in with your new password.", [
           { text: "OK", onPress: handleClose },
         ]);
@@ -261,6 +294,34 @@ export default function Login({ navigation }) {
     if (!isLoaded) return setAuthError("Authentication is loading. Please wait.");
 
     setIsLoading(true);
+
+    // Every failed attempt funnels through here: inside an active lockout it
+    // always reports the lock; otherwise it counts toward MAX_ATTEMPTS.
+    const registerFailure = async (lockedUntilFromClerk) => {
+      const lock = await readLock(email);
+      const now = Date.now();
+      // A lock that has run out starts a fresh count
+      if (lock.lockedUntil && lock.lockedUntil <= now) {
+        lock.lockedUntil = 0;
+        lock.fails = 0;
+      }
+      if (lockedUntilFromClerk) {
+        lock.lockedUntil = Math.max(lock.lockedUntil, lockedUntilFromClerk);
+      } else if (!lock.lockedUntil) {
+        lock.fails += 1;
+        if (lock.fails >= MAX_ATTEMPTS) lock.lockedUntil = now + LOCKOUT_MS;
+      }
+      if (lock.lockedUntil > now) {
+        lock.fails = 0;
+        await writeLock(email, lock);
+        setAuthError(lockoutMessage(lock.lockedUntil));
+      } else {
+        await writeLock(email, lock);
+        // Generic — don't specify which credential was wrong (avoids email enumeration)
+        setAuthError("Incorrect email or password. Please try again.");
+      }
+    };
+
     try {
       const signInResult = await signIn.create({ identifier: email.trim(), password });
 
@@ -279,31 +340,63 @@ export default function Login({ navigation }) {
         }
       }
 
-      if (signInResult.status !== "complete") {
-        // Generic — don't specify which credential was wrong
-        setAuthError("Incorrect email or password. Please try again.");
+      if (signInResult.status === "needs_second_factor") {
+        // The password was right — not a failed attempt. The app has no MFA
+        // screen, so say so rather than calling it a wrong password.
+        await clearLock(email);
+        setAuthError("This account uses two-step verification, which isn't supported in the app yet.");
         return;
       }
 
+      if (signInResult.status !== "complete") {
+        await registerFailure();
+        return;
+      }
+
+      await clearLock(email);
       await setActive({ session: signInResult.createdSessionId });
     } catch (err) {
-      console.error("Email Login Error:", err);
-
-      // Lockout is the one case worth naming. The generic message below would
-      // send someone into an endless retry loop against an account that cannot
-      // accept a password right now, however correct it is. Clerk's longMessage
-      // already carries the remaining wait, so prefer it when present.
-      const lockout = err?.errors?.find((e) => e.code === "user_locked");
-      if (lockout) {
-        setAuthError(
-          lockout.longMessage ||
-            "Too many failed attempts. This account is temporarily locked — please try again later."
+      // Log Clerk's error codes explicitly; the raw error object prints as "e:"
+      // in LogBox, which hides whether this was a bad password or a lockout.
+      if (__DEV__) {
+        console.error(
+          "Email Login Error:",
+          err?.errors?.map((e) => `${e.code}: ${e.longMessage || e.message}`).join(" | ") ||
+            err?.message ||
+            String(err)
         );
+      }
+
+      // No Clerk API response (offline, timeout, or a bug on our side) isn't a
+      // wrong password and shouldn't count toward the lockout.
+      if (!err?.errors) {
+        captureError(err, { where: "Login.handleLogin" });
+        setAuthError("Couldn't reach the server. Check your connection and try again.");
         return;
       }
 
-      // Always show a generic message — avoids email enumeration
-      setAuthError("Incorrect email or password. Please try again.");
+      const codes = err.errors.map((e) => e.code);
+
+      // Rate limited by Clerk — a throttle, not a credential failure.
+      if (codes.includes("too_many_requests")) {
+        setAuthError("Too many requests. Please wait a moment and try again.");
+        return;
+      }
+
+      // Correct password, but it appears in a known breach; Clerk refuses it
+      // until it's changed. Counting it as a failure would lock them out for
+      // knowing their own password.
+      if (codes.includes("form_password_pwned")) {
+        setAuthError("This password was found in a data breach. Use \"Forgot password\" to set a new one.");
+        return;
+      }
+
+      // Clerk's own lock wins when present; its meta carries the remaining wait.
+      const lockout = err.errors.find((e) => e.code === "user_locked");
+      const secs = Number(lockout?.meta?.lockoutExpiresInSeconds ?? lockout?.meta?.lockout_expires_in_seconds);
+      await registerFailure(
+        lockout ? Date.now() + (secs > 0 ? secs * 1000 : LOCKOUT_MS) : undefined
+      );
     } finally {
       setIsLoading(false);
     }

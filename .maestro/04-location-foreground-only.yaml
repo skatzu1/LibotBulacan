@@ -1,0 +1,17 @@
+appId: com.skatzu15.libot
+name: Never asks for background ("all the time") location
+---
+# Background location is off for launch. Neither Libot's old in-app nudge nor
+# Android's "Allow all the time" option should ever appear.
+- launchApp
+- extendedWaitUntil:
+    visible: "Explore"
+    timeout: 60000
+- assertNotVisible: ".*all the time.*"
+- assertNotVisible: ".*Allow all the time.*"
+- pressKey: Home
+- launchApp
+- extendedWaitUntil:
+    visible: "Explore"
+    timeout: 30000
+- assertNotVisible: ".*all the time.*"

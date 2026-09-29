@@ -1,0 +1,20 @@
+appId: com.skatzu15.libot
+name: Offline banner appears and clears
+---
+- launchApp
+- extendedWaitUntil:
+    visible: "Explore"
+    timeout: 60000
+- setAirplaneMode: enabled
+- extendedWaitUntil:
+    visible: "You're offline.*"
+    timeout: 15000
+- tapOn: "Check the connection again"
+- assertVisible: "You're offline.*"
+- setAirplaneMode: disabled
+- extendedWaitUntil:
+    visible: "Back online"
+    timeout: 30000
+- extendedWaitUntil:
+    notVisible: "Back online"
+    timeout: 10000

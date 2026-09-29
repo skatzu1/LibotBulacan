@@ -23,7 +23,9 @@ import { MissionProvider }      from "./context/MissionContext";
 import { PointsProvider }       from "./context/PointsContext";
 import { ThemeProvider, useTheme } from "./context/ThemeContext";
 import { AppAlertProvider }     from "./components/AppAlert";
+import OfflineBanner            from "./components/OfflineBanner";
 import ErrorBoundary            from "./utils/ErrorBoundary";
+import { initCrashReporting }   from "./utils/crashReporter";
 
 // Fonts. Every weight is a separate family because React Native does not
 // synthesize weights for custom fonts — see the note in ThemeContext.
@@ -269,6 +271,8 @@ function AppNavigator() {
                   suspensionInfo={suspensionInfo}
                   onDismiss={() => setShowSuspensionNotice(false)}
                 />
+
+                <OfflineBanner />
               </>
             </ErrorBoundary>
           </BookmarkProvider>
@@ -279,6 +283,10 @@ function AppNavigator() {
     </PointsProvider>
   );
 }
+
+// Initialised at module scope, before React mounts — a crash in the first
+// render is exactly the one you most need reported.
+initCrashReporting();
 
 export default function App() {
   const [fontsLoaded, fontError] = useFonts({

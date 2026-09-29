@@ -34,45 +34,13 @@ export const AuthProvider = ({ children }) => {
     }
   };
 
-  // LOGIN
-  const login = async (email, password) => {
-    try {
-      setError(null);
-      const response = await authAPI.login(email, password);
-      if (response.success && response.token) {
-        await AsyncStorage.setItem('userToken', response.token);
-        setUser(response.user);
-        return { success: true };
-      }
-      setError(response.message || 'Invalid credentials');
-      return { success: false, message: response.message || 'Invalid credentials' };
-    } catch (err) {
-      const errorMessage = err?.response?.data?.message || err.message || 'Login failed';
-      setError(errorMessage);
-      return { success: false, message: errorMessage };
-    }
-  };
-
-  // REGISTER
-  const register = async (email, password, name) => {
-    try {
-      setError(null);
-      const [firstName, ...lastNameParts] = (name || '').trim().split(' ');
-      const lastName = lastNameParts.join(' ');
-      const response = await authAPI.register({ email, password, firstName, lastName });
-      if (response.success && response.token) {
-        await AsyncStorage.setItem('userToken', response.token);
-        setUser(response.user);
-        return { success: true };
-      }
-      setError(response.message || 'Registration failed');
-      return { success: false, message: response.message || 'Registration failed' };
-    } catch (err) {
-      const errorMessage = err?.response?.data?.message || err.message || 'Registration failed';
-      setError(errorMessage);
-      return { success: false, message: errorMessage };
-    }
-  };
+  // login() and register() used to live here. Both were dead — no screen ever
+  // called them (sign-in and sign-up both go through Clerk in Login.js /
+  // Register.js), and their backend routes have been removed: POST
+  // /api/auth/login was an unauthenticated NoSQL-injection surface, and the
+  // email+password half of /api/auth/register created accounts that could
+  // never authenticate because the User model has no password field.
+  // Re-adding either here without a server route would fail at runtime.
 
   // UPDATE PROFILE
   // Expects: { displayName, username, email, phone, bio, photoURL, currentPassword?, newPassword? }
@@ -117,7 +85,7 @@ export const AuthProvider = ({ children }) => {
 
   return (
     <AuthContext.Provider
-      value={{ user, login, register, logout, updateProfile, loading, error }}
+      value={{ user, logout, updateProfile, loading, error }}
     >
       {children}
     </AuthContext.Provider>

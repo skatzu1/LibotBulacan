@@ -17,6 +17,7 @@ import * as Location from "expo-location";
 import { useArrival } from "../context/ArrivalContext";
 import { useTheme, radius, shadow, fonts } from "../context/ThemeContext";
 import { BULACAN_BOUNDARY, BULACAN_BBOX } from "../utils/bulacanBoundary";
+import { GpsSmoother, isBetterFix, MAX_USABLE_ACCURACY_M } from "../utils/gpsFilter";
 import { BASE_URL } from "../api";
 import Icon from "../components/Icon";
 
@@ -944,11 +945,33 @@ export default function Track({ route, navigation }) {
           updateMarkerRef.current?.(initialCoords);
         }
 
+        // Same filtering as the AR screen (utils/gpsFilter.js): drop fixes too
+        // vague to use, don't let a coarse network fix replace a better GPS
+        // one, and smooth the jitter so the marker glides instead of jumping.
+        let best = {
+          latitude: initial.coords.latitude,
+          longitude: initial.coords.longitude,
+          accuracy: initial.coords.accuracy,
+          timestamp: initial.timestamp || Date.now(),
+        };
+        const smoother = new GpsSmoother();
+        smoother.push(best);
+
         locationSubscription.current = await Location.watchPositionAsync(
           { accuracy: Location.Accuracy.High, timeInterval: 3000, distanceInterval: 3 },
           (loc) => {
             if (!isMounted.current) return;
-            const c = { latitude: loc.coords.latitude, longitude: loc.coords.longitude };
+            const next = {
+              latitude: loc.coords.latitude,
+              longitude: loc.coords.longitude,
+              accuracy: loc.coords.accuracy,
+              timestamp: loc.timestamp || Date.now(),
+            };
+            if (Number.isFinite(next.accuracy) && next.accuracy > MAX_USABLE_ACCURACY_M) return;
+            if (!isBetterFix(best, next)) return;
+            best = next;
+            const s = smoother.push(next);
+            const c = { latitude: s.latitude, longitude: s.longitude };
             setUserLocation(c);
             updateMarkerRef.current?.(c);
           }
@@ -1024,8 +1047,14 @@ export default function Track({ route, navigation }) {
     return `<!DOCTYPE html><html>
     <head>
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-      <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.css" />
+      <!-- integrity: the WebView refuses these files if the CDN ever serves
+           anything other than the exact published versions. Leaflet's hashes
+           are the ones on leafletjs.com/download; change them only together
+           with the version in the URL. -->
+      <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+      <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.css"
+        integrity="sha384-n6BdBD4Ahcb9IGZDgjgv0hV2a/y2WOCf1n0kEMZDpZySy/Hv1QMAtLIrC3y9oIZD" crossorigin="" />
       <style>
         * { margin:0; padding:0; box-sizing:border-box; }
         html,body { background:${mapBg}; }
@@ -1091,8 +1120,10 @@ export default function Track({ route, navigation }) {
         <span>Loading Bulacan map…</span>
       </div>
       <div id="map"></div>
-      <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-      <script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.js"></script>
+      <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+      <script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.js"
+        integrity="sha384-Le/Ab4WG5Ezkdf4RS5P5eZrpmvNgcZ4QcTozVDXGoOsTxGroBLM4e9OSqeh6V26n" crossorigin=""></script>
       <script>
         const DEST_LAT   = ${destLat};
         const DEST_LNG   = ${destLng};

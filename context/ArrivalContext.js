@@ -30,6 +30,7 @@ import { navigationRef } from "../navigation/navigationRef";
 import { useTheme } from "./ThemeContext";
 import { BASE_URL } from "../api";
 import { badgeImage } from "../utils/image";
+import { evaluateFix, watchTierFor } from "../utils/arrivalEngine";
 
 // Single source of truth for the backend host — see api.js.
 const ARRIVAL_RADIUS_METERS    = 50;
@@ -39,6 +40,17 @@ const ALL_SPOTS_KEY            = "allSpots";
 const SPOTS_CACHE_TTL_MS       = 5 * 60 * 1000;
 const BACKGROUND_LOCATION_TASK = "background-location-task";
 
+// Background arrivals (alerts while Libot is closed) are OFF for launch.
+// Background location triggers Google Play's strictest review — a permission
+// declaration, a demo video, and a real chance of rejection — so the first
+// release detects arrivals only while the app is open. The background task
+// below is kept intact. To turn it back on: set this to true, remove
+// ACCESS_BACKGROUND_LOCATION / FOREGROUND_SERVICE* from `blockedPermissions`
+// in app.json, set isAndroidBackgroundLocationEnabled and
+// isAndroidForegroundServiceEnabled back to true, and restore the background
+// wording in the backend's /privacy and /help pages.
+const BACKGROUND_ARRIVALS_ENABLED = false;
+
 // Persisted set of spotIds the user is CURRENTLY inside (per user).
 // Both the foreground watcher and the background task read/write this same
 // key, so an arrival only notifies once per "stay" — the user must leave
@@ -46,6 +58,28 @@ const BACKGROUND_LOCATION_TASK = "background-location-task";
 // will notify a second time. This survives app restarts, unlike an
 // in-memory Set, which is what previously caused re-notification on reopen.
 const INSIDE_SPOTS_KEY_PREFIX  = "insideSpots_";
+
+// First visits whose rewards haven't reached the server yet (per user).
+// Arriving with no signal — common at rural spots — used to lose the points,
+// visit log and badge for good: the spot is marked visited locally before the
+// requests go out, so it was never tried again. Now it stays here until the
+// server has answered, and is replayed later. Replaying is safe because the
+// server pays each reward once per user and spot however often it's asked.
+const PENDING_REWARDS_KEY_PREFIX = "pendingRewards_";
+const RETRY_PENDING_EVERY_MS     = 30_000;
+
+async function readPendingRewards(userId) {
+  try {
+    const raw = await AsyncStorage.getItem(`${PENDING_REWARDS_KEY_PREFIX}${userId}`);
+    return raw ? JSON.parse(raw) : [];
+  } catch { return []; }
+}
+async function updatePendingRewards(userId, change) {
+  const next = change(await readPendingRewards(userId));
+  try { await AsyncStorage.setItem(`${PENDING_REWARDS_KEY_PREFIX}${userId}`, JSON.stringify(next)); } catch {}
+}
+const addPendingReward    = (userId, spotId) => updatePendingRewards(userId, (l) => (l.includes(spotId) ? l : [...l, spotId]));
+const removePendingReward = (userId, spotId) => updatePendingRewards(userId, (l) => l.filter((id) => id !== spotId));
 
 // ─────────────────────────────────────────────
 // Helpers
@@ -220,7 +254,9 @@ async function requestAllLocationPermissions() {
   if (current.status !== "granted" && current.canAskAgain) {
     const proceed = await confirmAsync(
       "Libot uses your location",
-      "To show spots near you, log the places you visit, and send arrival alerts. You'll pick a permission level on the next screen.",
+      BACKGROUND_ARRIVALS_ENABLED
+        ? "To show spots near you, log the places you visit, and send arrival alerts. You'll pick a permission level on the next screen."
+        : "To show spots near you and recognise when you arrive at one while Libot is open. Libot doesn't use your location when the app is closed.",
       { confirmText: "Continue", icon: "map-pin", tone: "info" },
     );
     if (!proceed) {
@@ -233,6 +269,10 @@ async function requestAllLocationPermissions() {
   if (fg !== "granted") {
     console.warn("[Location] Foreground permission denied");
     return { foreground: false, background: false };
+  }
+
+  if (!BACKGROUND_ARRIVALS_ENABLED) {
+    return { foreground: true, background: false };
   }
 
   const { status: bg } = await Location.requestBackgroundPermissionsAsync();
@@ -333,6 +373,11 @@ export function ArrivalProvider({ children }) {
   // a notification; leaving (in set -> not in set) clears it silently so
   // the *next* arrival notifies again.
   const insideSpotsRef = useRef(new Set());
+  // Spots with an arrival awaiting a confirming fix (utils/arrivalEngine.js).
+  const arrivalPendingRef = useRef(new Map());
+  // Replays rewards that never reached the server (see PENDING_REWARDS).
+  const flushPendingRef   = useRef(null);
+  const lastFlushAtRef    = useRef(0);
 
   useEffect(() => { activeSpotRef.current = activeSpot; }, [activeSpot]);
 
@@ -401,8 +446,15 @@ export function ArrivalProvider({ children }) {
       hasLocationPerms.current = perms;
       // Only nudge for "all the time" when they've granted foreground but not
       // background — don't stack a second modal on top of a fresh "Not now".
-      if (perms.foreground && !perms.background) {
+      if (BACKGROUND_ARRIVALS_ENABLED && perms.foreground && !perms.background) {
         promptForAllTimeLocation();
+      }
+      if (!BACKGROUND_ARRIVALS_ENABLED) {
+        // A build that had background arrivals may have left the task
+        // registered; stop it so an update can't keep tracking in the background.
+        Location.hasStartedLocationUpdatesAsync(BACKGROUND_LOCATION_TASK)
+          .then((running) => running && Location.stopLocationUpdatesAsync(BACKGROUND_LOCATION_TASK))
+          .catch(() => {});
       }
 
       // Sync cache so local state matches DB
@@ -410,6 +462,7 @@ export function ArrivalProvider({ children }) {
       const userId = clerkUser?.id;
       if (token && userId) {
         await syncClaimedCache(userId, token);
+        flushPendingRef.current?.(); // rewards earned offline last session
         await loadInsideSpots(userId);
       }
     };
@@ -439,6 +492,7 @@ export function ArrivalProvider({ children }) {
         const prevState = appStateRef.current;
 
         if (
+          BACKGROUND_ARRIVALS_ENABLED &&
           (nextState === "inactive" || nextState === "background") &&
           prevState === "active"
         ) {
@@ -520,6 +574,7 @@ export function ArrivalProvider({ children }) {
     if (newUserId) AsyncStorage.setItem("currentUserId", newUserId);
 
     insideSpotsRef.current   = new Set();
+    arrivalPendingRef.current = new Map();
     setActiveSpotState(null);
     activeSpotRef.current    = null;
     allSpotsRef.current      = [];
@@ -653,8 +708,11 @@ export function ArrivalProvider({ children }) {
     console.log("[Arrival] isFirstVisit:", isFirstVisit, "| spotId:", spotId);
 
     // Write cache immediately on first visit — crash-safe guard
+    const userId = currentUserIdRef.current;
     if (isFirstVisit) {
       await AsyncStorage.setItem(cacheKey, JSON.stringify([...cachedIds, spotId]));
+      // Kept until the server has the points and the badge; see PENDING_REWARDS.
+      await addPendingReward(userId, spotId);
     }
 
     // ── Visit count (every visit) ──────────────────────────────────────────
@@ -670,6 +728,7 @@ export function ArrivalProvider({ children }) {
 
     // ── Points (first visit only) ──────────────────────────────────────────
     let pointsJustEarned = false;
+    let pointsReachedServer = false;
     if (isFirstVisit) {
       try {
         const token = await getToken();
@@ -678,6 +737,7 @@ export function ArrivalProvider({ children }) {
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
           body:    JSON.stringify({ spotId }),
         });
+        pointsReachedServer = res.status < 500;
         const data = await safeJson(res);
         if (res.ok && data?.success && !data.alreadyAwarded) {
           pointsJustEarned = true;
@@ -723,6 +783,8 @@ export function ArrivalProvider({ children }) {
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body:    JSON.stringify({ spotId }),
       });
+      // Points and badge both answered: nothing left to replay for this spot.
+      if (pointsReachedServer && res.status < 500) await removePendingReward(userId, spotId);
       const data = await safeJson(res);
 
       if (!data?.success) {
@@ -742,55 +804,145 @@ export function ArrivalProvider({ children }) {
   }, [getToken, triggerPointsPopup, triggerBadgeBanner]);
 
   // ─────────────────────────────────────────
-  // Foreground location watcher
-  // Detects outside->inside and inside->outside transitions per spot.
-  // Only the outside->inside transition triggers awardRewards/notification.
+  // Replay rewards that were earned offline
+  // Same four calls, same order as a live arrival. Each spot leaves the list
+  // only once every call got an answer from the server; a network failure
+  // keeps it for the next attempt. Runs quietly — the points show up the next
+  // time the profile or leaderboard refreshes.
   // ─────────────────────────────────────────
-  const checkArrival = useCallback((coords) => {
-    let changed = false;
-
-    for (const spot of allSpotsRef.current) {
-      const spotId = String(spot._id ?? "").trim();
-      if (!spotId) continue;
-
-      const dest = getSpotCoords(spot);
-      if (!dest) continue;
-
-      const dist     = getDistanceMeters(coords.latitude, coords.longitude, dest.lat, dest.lng);
-      const isInside  = dist <= ARRIVAL_RADIUS_METERS;
-      const wasInside = insideSpotsRef.current.has(spotId);
-
-      if (isInside && !wasInside) {
-        // Mark synchronously *before* awarding so a rapid second location
-        // tick (or an app reopen a moment later) can't double-trigger.
-        insideSpotsRef.current.add(spotId);
-        changed = true;
-        awardRewards(spot);
-      } else if (!isInside && wasInside) {
-        insideSpotsRef.current.delete(spotId);
-        changed = true;
-        console.log("[Arrival] Left:", spot.name);
+  const flushingRef = useRef(false);
+  const flushPendingRewards = useCallback(async () => {
+    const userId = currentUserIdRef.current;
+    if (!userId || flushingRef.current) return;
+    flushingRef.current = true;
+    lastFlushAtRef.current = Date.now();
+    try {
+      const pending = await readPendingRewards(userId);
+      for (const spotId of pending) {
+        try {
+          const token = await getToken();
+          if (!token) return;
+          const call = async (method, path, body) => {
+            const res = await fetch(`${BASE_URL}${path}`, {
+              method,
+              headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+              ...(body ? { body: JSON.stringify(body) } : {}),
+            });
+            return res.status < 500;
+          };
+          const answered = [
+            await call("PATCH", `/api/spots/${spotId}/visit`),
+            await call("PATCH", "/api/users/points", { spotId }),
+            await call("POST",  "/api/visitlogs", { spotId }),
+            await call("PATCH", "/api/users/badges", { spotId }),
+          ];
+          if (answered.every(Boolean)) {
+            await removePendingReward(userId, spotId);
+            console.log("[Rewards] Delivered offline visit:", spotId);
+          }
+        } catch {
+          return; // still offline — try again later
+        }
       }
+    } finally {
+      flushingRef.current = false;
+    }
+  }, [getToken]);
+  useEffect(() => { flushPendingRef.current = flushPendingRewards; }, [flushPendingRewards]);
+
+  // …and whenever the app comes back to the foreground.
+  useEffect(() => {
+    if (!isSignedIn) return;
+    const sub = AppState.addEventListener("change", (state) => {
+      if (state === "active") flushPendingRef.current?.();
+    });
+    return () => sub.remove();
+  }, [isSignedIn]);
+
+  // ─────────────────────────────────────────
+  // Foreground location watcher
+  // The rules — hysteresis at the radius, ignoring vague fixes, confirming an
+  // arrival — live in utils/arrivalEngine.js, where they are unit-tested.
+  // Only an arrival triggers awardRewards/notification.
+  // ─────────────────────────────────────────
+
+  // Returns the distance to the nearest spot, which sets the GPS rate.
+  const checkArrival = useCallback((fix) => {
+    const byId = new Map();
+    const targets = [];
+    for (const spot of allSpotsRef.current) {
+      const id = String(spot._id ?? "").trim();
+      const dest = id && getSpotCoords(spot);
+      if (!dest) continue;
+      byId.set(id, spot);
+      targets.push({ id, lat: dest.lat, lng: dest.lng });
     }
 
-    if (changed) persistInsideSpots();
+    // evaluateFix updates insideSpotsRef's Set in place — the entry is marked
+    // synchronously *before* awarding, so a rapid second fix (or reopening
+    // the app a moment later) can't double-trigger.
+    const state = { inside: insideSpotsRef.current, pending: arrivalPendingRef.current };
+    const { entered, left, nearestM } = evaluateFix(state, fix, targets);
+
+    for (const id of entered) awardRewards(byId.get(id));
+    for (const id of left) console.log("[Arrival] Left:", byId.get(id)?.name);
+    if (entered.length || left.length) persistInsideSpots();
+    return nearestM;
   }, [awardRewards, persistInsideSpots]);
+
+  // The watcher calls through a ref, so a new checkArrival (awardRewards
+  // changes whenever Clerk's getToken does) no longer tears down and restarts
+  // the GPS watch.
+  const checkArrivalRef = useRef(checkArrival);
+  useEffect(() => { checkArrivalRef.current = checkArrival; }, [checkArrival]);
 
   useEffect(() => {
     if (!isSignedIn) return;
     let cancelled = false;
+    let tier = null;
+    let switching = false;
+
+    // GPS effort follows the distance to the nearest spot (arrivalEngine's
+    // watchTierFor): full rate within 400 m, relaxed within 2.5 km, and a
+    // low-power network fix beyond that — where most time is spent.
+    const watchWith = async (next) => {
+      locationSub.current?.remove();
+      locationSub.current = null;
+      tier = next;
+      const sub = await Location.watchPositionAsync(
+        {
+          accuracy: next.accuracy === "high" ? Location.Accuracy.High : Location.Accuracy.Balanced,
+          timeInterval: next.timeInterval,
+          distanceInterval: next.distanceInterval,
+        },
+        onFix,
+      );
+      if (cancelled) { sub.remove(); return; }
+      locationSub.current = sub;
+      console.log(`[Location] Arrival watch: ${next.key} (${next.timeInterval / 1000}s / ${next.distanceInterval}m)`);
+    };
+
+    function onFix(loc) {
+      if (cancelled) return;
+      const nearestM = checkArrivalRef.current({
+        latitude: loc.coords.latitude,
+        longitude: loc.coords.longitude,
+        accuracy: loc.coords.accuracy,
+      });
+      // A fix proves location works; if rewards are waiting, try the network too.
+      if (Date.now() - lastFlushAtRef.current > RETRY_PENDING_EVERY_MS) flushPendingRef.current?.();
+      const next = watchTierFor(nearestM, tier?.key);
+      if (next.key !== tier?.key && !switching) {
+        switching = true;
+        watchWith(next).finally(() => { switching = false; });
+      }
+    }
 
     const start = async () => {
       const { status } = await Location.getForegroundPermissionsAsync();
       if (status !== "granted" || cancelled) return;
-
-      locationSub.current = await Location.watchPositionAsync(
-        { accuracy: Location.Accuracy.High, timeInterval: 3000, distanceInterval: 5 },
-        (loc) => {
-          if (cancelled) return;
-          checkArrival({ latitude: loc.coords.latitude, longitude: loc.coords.longitude });
-        }
-      );
+      // Distance unknown until the first fix, so start in the middle tier.
+      await watchWith(watchTierFor(null));
     };
 
     start();
@@ -799,7 +951,7 @@ export function ArrivalProvider({ children }) {
       locationSub.current?.remove();
       locationSub.current = null;
     };
-  }, [isSignedIn, checkArrival]);
+  }, [isSignedIn]);
 
   // ─────────────────────────────────────────
   // Banner tap
