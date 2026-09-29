@@ -41,16 +41,18 @@ access. Start this first; everything else can happen during the 14 days.
 
 ### 3. Data safety answers
 
-"Collected" means the data leaves the phone. Libot's servers never receive
-coordinates (arrival is worked out on the phone), so location counts only
-because directions send it to the routing service.
+"Collected" means the data leaves the phone. Arrival at a spot is worked out
+on the phone, but precise location does leave it in two cases: completing a
+**location mission** sends the current coordinates to Libot's server, which
+checks the distance and discards them (they are not stored or logged), and
+**directions** send position and destination to the routing service.
 
 | Data type | Collected | Shared | Required? | Purpose | Notes |
 |---|---|---|---|---|---|
 | Name | Yes | No | Required | Account management, App functionality | Shown on reviews and the leaderboard |
 | Email address | Yes | No | Required | Account management | Via Clerk |
 | User IDs | Yes | No | Required | Account management | Clerk account ID |
-| Precise location | Yes | No * | Optional | App functionality | Only when the user asks for directions; processed ephemerally |
+| Precise location | Yes | No * | Optional | App functionality | Sent when completing a location mission (distance check, not stored) and when asking for directions; processed ephemerally |
 | Photos | Yes | No | Optional | App functionality | Mission photos are checked and discarded (ephemeral); profile photos are stored |
 | App interactions | Yes | No | Required | App functionality | Visits, missions, points, badges, bookmarks |
 | Other user-generated content | Yes | No | Optional | App functionality | Reviews and ratings |
