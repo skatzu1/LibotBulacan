@@ -40,6 +40,13 @@ https://developers.google.com/ar/devices). Add an iPhone when iOS is in scope.
 **AR**
 - [ ] ARCore phone: model places on a surface; trail order is respected.
 - [ ] Non-ARCore phone: "AR isn't available on this phone" card, with a way back.
+- [ ] Radar arrow is steady when still and follows a turn without lag; near a laptop or car the label shows the figure-8 calibration prompt.
+
+**Location engine** (details and log lines: `docs/AR_GEOLOCATION.md`)
+- [ ] Log shows the watch tier changing `far` → `approach` → `near` while travelling to a spot.
+- [ ] Walking around the edge of a spot's 50 m radius gives one arrival, not several.
+- [ ] Arrive with airplane mode on, then turn it off: `[Rewards] Delivered offline visit` within ~30 s and the points appear.
+- [ ] Mission photo verification returns in about a second on mobile data.
 
 **Accessibility**
 - [ ] TalkBack on: every icon-only button is announced with a name (profile, search, back, bookmark, close). Swipe through Home, a spot page, Settings.
