@@ -1512,6 +1512,7 @@ window.updateSpotProximity = function(active) {
       <View style={[styles.topBar, { top: insets.top + 10 }]} pointerEvents="box-none">
         <TouchableOpacity
           accessibilityRole="button"
+          accessibilityLabel="Go back"
           onPress={() => navigation.goBack()}
           style={[styles.circleBtn, { backgroundColor: colors.background }, shadow.md]}
           activeOpacity={0.8}
@@ -1553,6 +1554,8 @@ window.updateSpotProximity = function(active) {
 
         <TouchableOpacity
           accessibilityRole="button"
+          accessibilityLabel={followMode ? "Stop following my location" : "Centre the map on my location"}
+          accessibilityState={{ selected: followMode }}
           style={[
             styles.circleBtn,
             styles.fab,
@@ -1596,7 +1599,7 @@ window.updateSpotProximity = function(active) {
                 <Text style={[styles.sheetType, { color: colors.textSecondary }]}>{selectedTerminal.type}</Text>
               </View>
               <TouchableOpacity
-                accessibilityRole="button" style={styles.sheetClose} onPress={hideSheet} hitSlop={8}>
+                accessibilityRole="button" accessibilityLabel="Close" style={styles.sheetClose} onPress={hideSheet} hitSlop={8}>
                 <Icon name="x" size={18} color={colors.textMuted} />
               </TouchableOpacity>
             </View>

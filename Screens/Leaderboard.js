@@ -149,7 +149,7 @@ export default function Leaderboard() {
       <View style={[styles.hero, { backgroundColor: colors.backgroundHero, paddingTop: insets.top + 8 }]}>
         <View style={styles.heroNav}>
           <TouchableOpacity
-            accessibilityRole="button" onPress={() => navigation.goBack()} style={[styles.backBtn, { backgroundColor: colors.background }]}>
+            accessibilityRole="button" accessibilityLabel="Go back" onPress={() => navigation.goBack()} style={[styles.backBtn, { backgroundColor: colors.background }]}>
             <Icon name="chevron-left" size={22} color={colors.brand} />
           </TouchableOpacity>
           <Text style={[styles.heroTitle, { color: colors.brandDark }]}>Leaderboard</Text>
@@ -240,7 +240,7 @@ export default function Leaderboard() {
 
         <View style={styles.heroNav}>
           <TouchableOpacity
-            accessibilityRole="button" onPress={() => navigation.goBack()} style={[styles.backBtn, { backgroundColor: colors.background }]} activeOpacity={0.8}>
+            accessibilityRole="button" accessibilityLabel="Go back" onPress={() => navigation.goBack()} style={[styles.backBtn, { backgroundColor: colors.background }]} activeOpacity={0.8}>
             <Icon name="chevron-left" size={22} color={colors.brand} />
           </TouchableOpacity>
           <Text style={[styles.heroTitle, { color: colors.brandDark }]}>Leaderboard</Text>
