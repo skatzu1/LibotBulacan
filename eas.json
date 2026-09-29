@@ -8,7 +8,8 @@
       "developmentClient": true,
       "distribution": "internal",
       "env": {
-        "EXPO_LEGACY_PEER_DEPS": "true"
+        "EXPO_LEGACY_PEER_DEPS": "true",
+        "SENTRY_DISABLE_AUTO_UPLOAD": "true"
       },
       "ios": {
         "simulator": false
@@ -24,7 +25,8 @@
         "simulator": false
       },
       "env": {
-        "EXPO_LEGACY_PEER_DEPS": "true"
+        "EXPO_LEGACY_PEER_DEPS": "true",
+        "SENTRY_DISABLE_AUTO_UPLOAD": "true"
       },
       "channel": "preview"
     },
@@ -37,7 +39,8 @@
       },
       "autoIncrement": true,
       "env": {
-        "EXPO_LEGACY_PEER_DEPS": "true"
+        "EXPO_LEGACY_PEER_DEPS": "true",
+        "SENTRY_DISABLE_AUTO_UPLOAD": "true"
       },
       "channel": "production"
     }
