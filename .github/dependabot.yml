@@ -28,6 +28,9 @@ updates:
         update-types: ["version-update:semver-major", "version-update:semver-minor"]
       - dependency-name: "jest-expo"
         update-types: ["version-update:semver-major"]
+      # The AR engine. Pinned exactly: 2.58 added a storage permission that
+      # broke the Android manifest merge. Upgrade by hand and test AR on a phone.
+      - dependency-name: "@reactvision/react-viro"
 
   - package-ecosystem: github-actions
     directory: /
