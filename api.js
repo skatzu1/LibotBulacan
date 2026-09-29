@@ -29,10 +29,12 @@ export const API_ENDPOINTS = {
   uploadProfile:`${BASE_URL}/api/upload/profile`,
   leaderboard:  `${BASE_URL}/api/leaderboard`,
   auth: {
-    login:       `${BASE_URL}/api/auth/login`,
+    // login and check-user were removed server-side (2026-09-28): /login was an
+    // unauthenticated NoSQL-injection surface with no caller, /check-user was an
+    // unauthenticated account-existence oracle. register now only accepts a
+    // verified Clerk session.
     register:    `${BASE_URL}/api/auth/register`,
     verify:      `${BASE_URL}/api/auth/verify`,
-    checkUser:   `${BASE_URL}/api/auth/check-user`,
   },
 };
 
@@ -72,15 +74,6 @@ export const setupClerkInterceptor = (getToken) => {
 
 // ─── Auth API ─────────────────────────────────────────────────────────────────
 export const authAPI = {
-  login: async (email, password) => {
-    try {
-      const response = await api.post(API_ENDPOINTS.auth.login, { email, password });
-      return response.data;
-    } catch (error) {
-      throw error.response?.data || { message: 'Network error' };
-    }
-  },
-
   register: async (payload) => {
     try {
       const response = await api.post(API_ENDPOINTS.auth.register, payload);
@@ -99,14 +92,8 @@ export const authAPI = {
     }
   },
 
-  checkUserExists: async (email) => {
-    try {
-      const response = await api.get(API_ENDPOINTS.auth.checkUser, { params: { email } });
-      return response.data;
-    } catch (error) {
-      throw error.response?.data || { message: 'Network error' };
-    }
-  },
+  // checkUserExists() removed with its route — it was an unauthenticated
+  // "is this email registered?" oracle and nothing in the app called it.
 };
 
 // ─── Users API ────────────────────────────────────────────────────────────────
