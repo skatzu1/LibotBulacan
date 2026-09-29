@@ -1,0 +1,27 @@
+appId: com.skatzu15.libot
+name: Sign in from a fresh install
+---
+- launchApp:
+    clearState: true
+- assertVisible: "Next"
+- tapOn: "Next"
+- assertVisible: "Where do you live?"
+- tapOn: "Select your municipality"
+- tapOn: "Malolos"
+- tapOn: "Next"
+- tapOn: "Email address"
+- inputText: ${LIBOT_EMAIL}
+- tapOn: "Password"
+- inputText: ${LIBOT_PASSWORD}
+- hideKeyboard
+- tapOn: "Log in"
+# Location rationale, then the OS permission sheet ("While using the app").
+- tapOn:
+    text: "Continue"
+    optional: true
+- tapOn:
+    text: "While using the app"
+    optional: true
+- extendedWaitUntil:
+    visible: "Explore"
+    timeout: 60000   # a sleeping free-tier server can take a minute to wake

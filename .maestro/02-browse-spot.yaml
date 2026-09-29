@@ -1,0 +1,17 @@
+appId: com.skatzu15.libot
+name: Search for a spot and open it
+---
+- launchApp
+- extendedWaitUntil:
+    visible: "Explore"
+    timeout: 60000
+- tapOn: "Search spots"
+- inputText: "Barasoain"
+- hideKeyboard
+- tapOn:
+    text: ".*Barasoain.*"
+    index: 0
+- extendedWaitUntil:
+    visible: ".*Barasoain.*"
+    timeout: 20000
+- assertVisible: ".*[Rr]eview.*"

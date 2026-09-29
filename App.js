@@ -23,6 +23,7 @@ import { MissionProvider }      from "./context/MissionContext";
 import { PointsProvider }       from "./context/PointsContext";
 import { ThemeProvider, useTheme } from "./context/ThemeContext";
 import { AppAlertProvider }     from "./components/AppAlert";
+import OfflineBanner            from "./components/OfflineBanner";
 import ErrorBoundary            from "./utils/ErrorBoundary";
 import { initCrashReporting }   from "./utils/crashReporter";
 
@@ -270,6 +271,8 @@ function AppNavigator() {
                   suspensionInfo={suspensionInfo}
                   onDismiss={() => setShowSuspensionNotice(false)}
                 />
+
+                <OfflineBanner />
               </>
             </ErrorBoundary>
           </BookmarkProvider>
