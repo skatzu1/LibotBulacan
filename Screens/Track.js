@@ -1024,8 +1024,14 @@ export default function Track({ route, navigation }) {
     return `<!DOCTYPE html><html>
     <head>
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
-      <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-      <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.css" />
+      <!-- integrity: the WebView refuses these files if the CDN ever serves
+           anything other than the exact published versions. Leaflet's hashes
+           are the ones on leafletjs.com/download; change them only together
+           with the version in the URL. -->
+      <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+      <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.css"
+        integrity="sha384-n6BdBD4Ahcb9IGZDgjgv0hV2a/y2WOCf1n0kEMZDpZySy/Hv1QMAtLIrC3y9oIZD" crossorigin="" />
       <style>
         * { margin:0; padding:0; box-sizing:border-box; }
         html,body { background:${mapBg}; }
@@ -1091,8 +1097,10 @@ export default function Track({ route, navigation }) {
         <span>Loading Bulacan map…</span>
       </div>
       <div id="map"></div>
-      <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-      <script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.js"></script>
+      <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+      <script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.js"
+        integrity="sha384-Le/Ab4WG5Ezkdf4RS5P5eZrpmvNgcZ4QcTozVDXGoOsTxGroBLM4e9OSqeh6V26n" crossorigin=""></script>
       <script>
         const DEST_LAT   = ${destLat};
         const DEST_LNG   = ${destLng};
