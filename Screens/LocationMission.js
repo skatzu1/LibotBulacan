@@ -14,6 +14,7 @@ import { useMissions } from "../context/MissionContext";
 import { useTheme, spacing, radius, typography, shadow, fonts } from "../context/ThemeContext";
 import Icon from "../components/Icon";
 import { spotImage } from "../utils/image";
+import { GpsSmoother, isBetterFix, MAX_USABLE_ACCURACY_M } from "../utils/gpsFilter";
 
 function distanceMeters(lat1, lng1, lat2, lng2) {
   const R = 6371000;
@@ -56,11 +57,34 @@ export default function LocationMission({ navigation, route }) {
         if (cancelled) return;
         setCoords({ latitude: initial.coords.latitude, longitude: initial.coords.longitude });
 
+        // These coordinates are what the server checks against the mission's
+        // radius, so filter them like the AR screen does (utils/gpsFilter.js):
+        // skip vague fixes, never swap a GPS fix for a worse network one, and
+        // smooth the jitter so "in range" doesn't flicker at the edge.
+        let best = {
+          latitude: initial.coords.latitude,
+          longitude: initial.coords.longitude,
+          accuracy: initial.coords.accuracy,
+          timestamp: initial.timestamp || Date.now(),
+        };
+        const smoother = new GpsSmoother();
+        smoother.push(best);
+
         watchRef.current = await Location.watchPositionAsync(
           { accuracy: Location.Accuracy.High, timeInterval: 3000, distanceInterval: 3 },
           (loc) => {
             if (cancelled) return;
-            setCoords({ latitude: loc.coords.latitude, longitude: loc.coords.longitude });
+            const next = {
+              latitude: loc.coords.latitude,
+              longitude: loc.coords.longitude,
+              accuracy: loc.coords.accuracy,
+              timestamp: loc.timestamp || Date.now(),
+            };
+            if (Number.isFinite(next.accuracy) && next.accuracy > MAX_USABLE_ACCURACY_M) return;
+            if (!isBetterFix(best, next)) return;
+            best = next;
+            const s = smoother.push(next);
+            setCoords({ latitude: s.latitude, longitude: s.longitude });
           }
         );
       } catch {
