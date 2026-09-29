@@ -1,7 +1,12 @@
 import axios from 'axios';
 
 // ─── Single source of truth for the backend URL ───────────────────────────────
-export const BASE_URL = 'https://libotbackend.onrender.com';
+// EXPO_PUBLIC_API_URL lets a build profile point at a different server (a
+// staging backend for preview builds, or your machine during development —
+// see eas.json and .env.example). Unset means production, so existing builds
+// and anyone running the app without extra setup behave exactly as before.
+const PRODUCTION_API_URL = 'https://libotbackend.onrender.com';
+export const BASE_URL = (process.env.EXPO_PUBLIC_API_URL || PRODUCTION_API_URL).replace(/\/+$/, '');
 
 export const API_ENDPOINTS = {
   spots:        `${BASE_URL}/api/spots`,
