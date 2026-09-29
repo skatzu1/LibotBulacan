@@ -35,6 +35,7 @@ import {
   ViroTrackingStateConstants,
 } from "@reactvision/react-viro";
 import { GpsSmoother, isBetterFix, MAX_USABLE_ACCURACY_M } from "../utils/gpsFilter";
+import { HeadingFilter, shouldEmit } from "../utils/headingFilter";
 // `explainReason` is exported by the module but deliberately not used here:
 // the absence of precise placement needs no explanation to the user, since
 // plane placement is the normal experience. It's there for debugging and for
@@ -54,21 +55,30 @@ import Icon from "../components/Icon";
 //   from the accelerometer to project the mag vector into the
 //   horizontal plane before computing the bearing.
 // ─────────────────────────────────────────────
+// Smoothing is a One Euro filter (utils/headingFilter.js): steady when the
+// phone is still, responsive while turning. State only changes when the
+// smoothed heading moves ≥ 1° and at most ~30 times a second — the sensors
+// report far more often than the radar can show, and every setHeading is a
+// render.
+//
+// Returns { heading, needsCalibration }. needsCalibration is the OS saying the
+// magnetometer is unreliable (Android accuracy 0–1 of 3; iOS error > 25°) —
+// the usual reason an AR arrow points the wrong way, and fixed by moving the
+// phone in a figure 8.
 function useCompassHeading() {
   const [heading, setHeading] = useState(0);
-  const smoothedRef = useRef(null);
+  const [needsCalibration, setNeedsCalibration] = useState(false);
+  const filterRef = useRef(new HeadingFilter());
+  const emittedRef = useRef({ value: null, at: 0 });
 
-  // Exponential moving average — handles 0/360 wraparound cleanly
-  const applyEMA = useCallback((raw) => {
-    if (smoothedRef.current === null) {
-      smoothedRef.current = raw;
-      return raw;
+  const applyReading = useCallback((raw) => {
+    const now = Date.now();
+    const smoothed = filterRef.current.push(raw, now);
+    const last = emittedRef.current;
+    if (smoothed !== null && shouldEmit(last.value, smoothed, last.at, now)) {
+      emittedRef.current = { value: smoothed, at: now };
+      setHeading(smoothed);
     }
-    let diff = raw - smoothedRef.current;
-    if (diff >  180) diff -= 360;
-    if (diff < -180) diff += 360;
-    smoothedRef.current = (smoothedRef.current + diff * 0.3 + 360) % 360;
-    return smoothedRef.current;
   }, []);
 
   useEffect(() => {
@@ -83,7 +93,11 @@ function useCompassHeading() {
         headingSub = await Location.watchHeadingAsync((data) => {
           // trueHeading is -1 when GPS unavailable; fall back to magHeading
           const raw = data.trueHeading >= 0 ? data.trueHeading : data.magHeading;
-          if (raw >= 0) setHeading(applyEMA(raw));
+          if (raw >= 0) applyReading(raw);
+          if (Number.isFinite(data.accuracy)) {
+            const poor = Platform.OS === "android" ? data.accuracy <= 1 : data.accuracy > 25;
+            setNeedsCalibration((prev) => (prev === poor ? prev : poor));
+          }
         });
         return true;
       } catch (_) {
@@ -127,7 +141,7 @@ function useCompassHeading() {
 
           let angle = Math.atan2(-yh, xh) * (180 / Math.PI);
           angle = (angle + 360) % 360;
-          setHeading(applyEMA(angle));
+          applyReading(angle);
         };
 
         // Mag fires the heading update; acc keeps tilt current
@@ -148,9 +162,9 @@ function useCompassHeading() {
       magSub?.remove();
       accSub?.remove();
     };
-  }, [applyEMA]);
+  }, [applyReading]);
 
-  return heading;
+  return { heading, needsCalibration };
 }
 
 // ─────────────────────────────────────────────
@@ -487,6 +501,22 @@ const RadarMap = ({ distance, bearing, heading, modelRadius, label }) => {
 
       <Text style={radar.label}>{label}</Text>
     </View>
+  );
+};
+
+// The radar is the only thing that uses the compass, so it owns the
+// subscription. The compass used to live in the main AR component, where
+// every reading re-rendered the whole screen — AR scene, HUD and all — to
+// rotate this one widget. Owning it here also means the sensors only run while
+// the radar is on screen (the "walk there" step), not for the whole session.
+const LiveRadar = ({ label, ...props }) => {
+  const { heading, needsCalibration } = useCompassHeading();
+  return (
+    <RadarMap
+      {...props}
+      heading={heading}
+      label={needsCalibration ? `${label} · Compass unsure: move your phone in a figure 8` : label}
+    />
   );
 };
 
@@ -1100,6 +1130,7 @@ const TriviaPopup = ({
   tappedCount,
   totalCount,
   missionJustCompleted,
+  alreadyDone,
 }) => {
   const slideAnim = useRef(new Animated.Value(100)).current;
   const fadeAnim  = useRef(new Animated.Value(0)).current;
@@ -1182,7 +1213,11 @@ const TriviaPopup = ({
             <Icon name="aperture" size={13} color={TOKEN.goldLight} style={{ marginRight: 7 }} />
             <Text style={popup.missionProgressText}>
               {tappedCount} / {totalCount} models explored
-              {remaining > 0 ? ` — ${remaining} more to finish this activity` : ""}
+              {remaining > 0
+                ? alreadyDone
+                  ? ` — already completed, ${remaining} more on this run`
+                  : ` — ${remaining} more to finish this activity`
+                : ""}
             </Text>
           </View>
         )}
@@ -1403,11 +1438,22 @@ const popup = StyleSheet.create({
 // MAIN COMPONENT
 // ─────────────────────────────────────────────
 export default function ARScreen({ route, navigation }) {
-  const { spot, arMissionId } = route.params;
-  const { completeMission, completedMissions } = useMissions();
+  const { spot } = route.params;
+  const { completeMission, completedMissions, fetchMissions, getMissionsForSpot } = useMissions();
 
-  // Tilt-aware, real-time compass heading
-  const compassHeading = useCompassHeading();
+  // The spot's AR mission is what completion is saved against. Launching from
+  // the spot page passes its id; launching from the AR picker on Home does
+  // not, which meant finishing the trail from there was never recorded. Fall
+  // back to looking it up from the spot's missions so every entry point saves.
+  useEffect(() => { fetchMissions(spot._id); }, [spot._id, fetchMissions]);
+  const arMissionId =
+    route.params.arMissionId ??
+    getMissionsForSpot(spot._id).find((m) => m.type === "ar")?._id ??
+    null;
+  // Already finished on an earlier visit. Doesn't lock anything — the trail
+  // can be walked again as often as the user likes; it just isn't re-awarded.
+  const alreadyDone = !!arMissionId && !!completedMissions?.includes(arMissionId);
+
 
   const [userLocation, setUserLocation] = useState(null);
 
@@ -1660,26 +1706,36 @@ export default function ARScreen({ route, navigation }) {
       tappedIndicesRef.current = next;
       setTappedIndices(next);
 
-      const alreadyCompleted = completedMissions?.includes(arMissionId);
-      if (
-        !missionJustCompletedRef.current &&
-        !alreadyCompleted &&
-        arMissionId &&
-        next.size >= totalAnchors
-      ) {
-        missionJustCompletedRef.current = true;
-        setMissionJustCompleted(true);
-        completeMission(arMissionId);
-        buzz.complete();
-      } else {
-        buzz.tap();
-      }
+      // Saving happens in the effect below; this is only the feel of it.
+      if (!alreadyDone && next.size >= totalAnchors) buzz.complete();
+      else buzz.tap();
     } else {
       buzz.tick();
     }
     setTappedAnchor(anchor);
     setTriviaVisible(true);
   };
+
+  // ── Saving completion ─────────────────────────────────────────────────
+  // An effect rather than part of the tap, because the mission id can arrive
+  // AFTER the last model is found: launched from the Home AR picker on a slow
+  // connection, the spot's missions may still be loading. Reacting to state
+  // means the save goes through whenever both halves are finally present.
+  const allFound = totalAnchors > 0 && tappedIndices.size >= totalAnchors;
+  useEffect(() => {
+    if (!allFound || !arMissionId || alreadyDone || missionJustCompletedRef.current) return;
+
+    missionJustCompletedRef.current = true;
+    setMissionJustCompleted(true);
+    completeMission(arMissionId).then((data) => {
+      // Not saved (offline, server error): don't claim it was, and let the
+      // next full run retry instead of the completion being lost for good.
+      if (!data?.success) {
+        missionJustCompletedRef.current = false;
+        setMissionJustCompleted(false);
+      }
+    });
+  }, [allFound, arMissionId, alreadyDone, completeMission]);
 
   const activeAnchors = anchorProximities.filter((a) => a.isInRange);
 
@@ -1743,6 +1799,17 @@ export default function ARScreen({ route, navigation }) {
     setEncounterTrigger((n) => n + 1);
     buzz.encounter();
   }, [nextInRange, focusAnchor?.index]);
+
+  // Walk the trail again without leaving AR. Progress is already saved, so
+  // this only resets what this session has collected.
+  const restartTrail = () => {
+    const empty = new Set();
+    tappedIndicesRef.current = empty;
+    setTappedIndices(empty);
+    setMissionJustCompleted(false);
+    announcedRef.current = null;
+    buzz.tap();
+  };
 
   // ── HUD ──────────────────────────────────────────────────────────────
   const renderHUD = () => {
@@ -1819,7 +1886,7 @@ export default function ARScreen({ route, navigation }) {
     // ── Which of the three steps is the user actually on? ──────────────
     // Exactly one, always. Everything the card shows is derived from this, so
     // it can't tell them to tap an object while also telling them to walk.
-    const allCollected = totalAnchors > 0 && tappedIndices.size >= totalAnchors;
+    const allCollected = allFound;
     // Three steps: placement is automatic again, so "find a surface" and
     // "object appears" are one event rather than two instructions.
     const TOTAL_STEPS = 3;
@@ -1848,6 +1915,12 @@ export default function ARScreen({ route, navigation }) {
             need no key. */}
         <View style={step.header}>
           <Text style={step.spotName} numberOfLines={1}>{spot.name}</Text>
+          {alreadyDone && (
+            <View style={step.doneChip} accessibilityLabel="You have completed this AR activity">
+              <Icon name="check" size={10} color={TOKEN.success} />
+              <Text style={step.doneChipText}>Completed</Text>
+            </View>
+          )}
           {totalAnchors > 1 && !allCollected && (
             <Text style={step.count}>Found {tappedIndices.size} of {totalAnchors}</Text>
           )}
@@ -1876,7 +1949,18 @@ export default function ARScreen({ route, navigation }) {
             <Text style={step.title}>All found!</Text>
             <Text style={step.sub}>
               You've explored everything at {spot.name}.
+              {alreadyDone ? " It's saved to your progress — you can walk the trail again any time." : ""}
             </Text>
+            <TouchableOpacity
+              style={step.replayBtn}
+              onPress={restartTrail}
+              activeOpacity={0.85}
+              accessibilityRole="button"
+              accessibilityLabel="Explore this spot again"
+            >
+              <Icon name="refresh-cw" size={13} color={TOKEN.ctaText} style={{ marginRight: 6 }} />
+              <Text style={step.replayBtnText}>Explore again</Text>
+            </TouchableOpacity>
           </View>
 
         // ── Step 1: walk there ──────────────────────────────────────────
@@ -1884,13 +1968,12 @@ export default function ARScreen({ route, navigation }) {
           <View style={step.body}>
             {targetPending ? (
               <>
-                <RadarMap
+                <LiveRadar
                   distance={targetPending.distance}
                   bearing={bearingDegrees(
                     userLocation.latitude, userLocation.longitude,
                     targetPending.lat, targetPending.lng
                   )}
-                  heading={compassHeading}
                   modelRadius={targetPending.radius}
                   // The tilde still carries the honesty about precision; it
                   // just sits under the radar now instead of being the whole
@@ -2116,6 +2199,7 @@ export default function ARScreen({ route, navigation }) {
         tappedCount={tappedIndices.size}
         totalCount={totalAnchors}
         missionJustCompleted={missionJustCompleted}
+        alreadyDone={alreadyDone}
       />
     </View>
   );
@@ -2131,6 +2215,18 @@ const step = StyleSheet.create({
   header:      { flexDirection: "row", alignItems: "center", gap: 8 },
   spotName:    { flex: 1, color: TOKEN.textPrimary, fontSize: 13.5, fontFamily: fonts.sansBold },
   count:       { color: TOKEN.textSecond, fontSize: 12.5, fontFamily: fonts.sansSemi },
+  doneChip: {
+    flexDirection: "row", alignItems: "center", gap: 4,
+    backgroundColor: TOKEN.successDim,
+    borderRadius: 10, paddingHorizontal: 8, paddingVertical: 3,
+  },
+  doneChipText: { color: TOKEN.success, fontSize: 11, fontFamily: fonts.sansBold },
+  replayBtn: {
+    flexDirection: "row", alignItems: "center",
+    backgroundColor: TOKEN.cta, borderRadius: TOKEN.radiusXl,
+    paddingHorizontal: 16, paddingVertical: 9, marginTop: 6,
+  },
+  replayBtnText: { color: TOKEN.ctaText, fontSize: 12.5, fontFamily: fonts.sansBold },
   // Plain words where three unlabeled bars used to be.
   stepLine:    { color: TOKEN.textMuted, fontSize: 11.5, fontFamily: fonts.sansBold, letterSpacing: 0.4, textAlign: "center" },
 

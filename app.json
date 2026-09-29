@@ -14,6 +14,13 @@
     },
     "newArchEnabled": true,
     "userInterfaceStyle": "automatic",
+    "runtimeVersion": {
+      "policy": "appVersion"
+    },
+    "updates": {
+      "url": "https://u.expo.dev/ce019b8b-d9d3-49c7-be10-9f3624a80041",
+      "fallbackToCacheTimeout": 0
+    },
     "assetBundlePatterns": [
       "**/*"
     ],
@@ -54,7 +61,8 @@
           "locationAlwaysAndWhenInUsePermission": "Libot needs your location to provide navigation to tourist spots in Bulacan.",
           "locationWhenInUsePermission": "Libot needs your location to show nearby tourist attractions.",
           "isIosBackgroundLocationEnabled": false,
-          "isAndroidBackgroundLocationEnabled": true
+          "isAndroidBackgroundLocationEnabled": false,
+          "isAndroidForegroundServiceEnabled": false
         }
       ],
       [
@@ -78,7 +86,8 @@
         }
       ],
       "react-native-vision-camera",
-      "./plugins/withArCoreApiKey"
+      "./plugins/withArCoreApiKey",
+      "@sentry/react-native"
     ],
     "ios": {
       "supportsTablet": true,
@@ -105,19 +114,21 @@
         "android.permission.CAMERA",
         "android.permission.ACCESS_FINE_LOCATION",
         "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.INTERNET"
+      ],
+      "blockedPermissions": [
         "android.permission.ACCESS_BACKGROUND_LOCATION",
         "android.permission.FOREGROUND_SERVICE",
         "android.permission.FOREGROUND_SERVICE_LOCATION",
-        "android.permission.INTERNET",
-        "android.permission.READ_EXTERNAL_STORAGE",
-        "android.permission.WRITE_EXTERNAL_STORAGE"
+        "android.permission.RECORD_AUDIO",
+        "android.permission.SYSTEM_ALERT_WINDOW"
       ],
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#F2CE1B"
       },
       "edgeToEdgeEnabled": true,
-      "package": "com.skatzu15.libot.beta",
+      "package": "com.skatzu15.libot",
       "intentFilters": [
         {
           "action": "VIEW",
