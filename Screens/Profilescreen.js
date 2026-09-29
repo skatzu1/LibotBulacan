@@ -11,6 +11,7 @@ import {
   TouchableWithoutFeedback,
   Animated,
   useWindowDimensions,
+  RefreshControl,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { showAlert } from "../components/AppAlert";
@@ -90,6 +91,16 @@ export default function ProfileScreen() {
     const unsubscribe = navigation.addListener("focus", loadStats);
     return unsubscribe;
   }, [navigation, loadStats]);
+
+  // Pull to refresh — the stats otherwise only reload when the screen is
+  // re-opened, so a load that failed (bad signal, server waking up) left the
+  // profile showing zeros with no way to try again.
+  const [refreshing, setRefreshing] = useState(false);
+  const onRefresh = useCallback(async () => {
+    setRefreshing(true);
+    await loadStats();
+    setRefreshing(false);
+  }, [loadStats]);
 
   const openPhotoModal = () => {
     if (!displayPhoto) return;
@@ -191,6 +202,15 @@ export default function ProfileScreen() {
       <ScrollView
         showsVerticalScrollIndicator={false}
         contentContainerStyle={styles.scrollContent}
+        refreshControl={
+          <RefreshControl
+            refreshing={refreshing}
+            onRefresh={onRefresh}
+            tintColor={colors.brand}
+            colors={[colors.brand]}
+            progressBackgroundColor={colors.card}
+          />
+        }
       >
         <View style={styles.profilePhotoContainer}>
           <TouchableOpacity
