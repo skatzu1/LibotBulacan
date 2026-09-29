@@ -7,9 +7,10 @@ import { ScreenHeader, SpotCard, EmptyState, H_PAD } from "./ui";
 
 /**
  * Shared "pick a spot" list screen used by the AR / Missions / Navigate flows.
- * Props: title, subtitle, onPick(spot) -> navigation action.
+ * Props: title, subtitle, onPick(spot) -> navigation action,
+ *        renderRight(spot) -> optional node for the card's top-right corner.
  */
-export default function SpotPicker({ title, subtitle, onPick }) {
+export default function SpotPicker({ title, subtitle, onPick, renderRight }) {
   const navigation = useNavigation();
   const { allSpots: spots } = useArrival();
   const { colors, isDark } = useTheme();
@@ -43,6 +44,7 @@ export default function SpotPicker({ title, subtitle, onPick }) {
               wide
               height={132}
               onPress={() => onPick(item, navigation)}
+              right={renderRight?.(item)}
               style={styles.card}
             />
           )}
