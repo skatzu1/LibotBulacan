@@ -1,13 +1,14 @@
 import './utils/silenceLogs';
 import 'react-native-reanimated';
-import 'react-native-gesture-handler';
+// Must stay among the first imports: it registers the gesture system before
+// any screen loads. Imported once, with the one name App.js needs from it.
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import React, { useEffect, useRef, useState } from 'react';
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { ClerkProvider, useAuth } from '@clerk/clerk-expo';
 import { ActivityIndicator, View, StyleSheet, AppState } from 'react-native';
-import { showAlert } from './components/AppAlert';
-import { GestureHandlerRootView } from 'react-native-gesture-handler';
+import { showAlert, AppAlertProvider } from './components/AppAlert';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import AsyncStorage from "@react-native-async-storage/async-storage";
 
@@ -22,7 +23,6 @@ import { navigationRef }        from './navigation/navigationRef';
 import { MissionProvider }      from "./context/MissionContext";
 import { PointsProvider }       from "./context/PointsContext";
 import { ThemeProvider, useTheme } from "./context/ThemeContext";
-import { AppAlertProvider }     from "./components/AppAlert";
 import OfflineBanner            from "./components/OfflineBanner";
 import ErrorBoundary            from "./utils/ErrorBoundary";
 import { initCrashReporting }   from "./utils/crashReporter";
