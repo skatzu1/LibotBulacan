@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          # Set here rather than in .node-version so EAS builds keep their own.
+          node-version: 24
+          cache: npm
+
+      # Same flag the EAS builds use (EXPO_LEGACY_PEER_DEPS in eas.json).
+      - run: npm ci --legacy-peer-deps
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Unit tests
+        run: npm test -- --ci
+
+      - name: Android bundle builds
+        # Catches broken imports and syntax the unit tests don't load. No
+        # native build and no secrets: this only compiles the JavaScript.
+        run: npx expo export --platform android --output-dir dist

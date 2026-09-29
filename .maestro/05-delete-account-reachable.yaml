@@ -1,0 +1,18 @@
+appId: com.skatzu15.libot
+name: Account deletion is reachable in the app (does not delete)
+---
+# Google Play requires in-app account deletion. This walks to the button and
+# opens the confirmation, then backs out — it never confirms.
+- launchApp
+- extendedWaitUntil:
+    visible: "Explore"
+    timeout: 60000
+- tapOn: "Go to your profile"
+- tapOn: "Settings"
+- tapOn: "Edit Profile"
+- scrollUntilVisible:
+    element: "Delete Account"
+- tapOn: "Delete Account"
+- assertVisible: ".*permanent.*"
+- tapOn: "Cancel"
+- assertVisible: "Delete Account"
