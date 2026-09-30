@@ -11,6 +11,7 @@ import { fetchModelBounds, fitBounds } from "./modelFit";
 import {
   Viro3DSceneNavigator,
   ViroScene,
+  ViroCamera,
   ViroAmbientLight,
   ViroDirectionalLight,
   Viro3DObject,
@@ -21,12 +22,16 @@ import {
 
 
 const VIEW_DISTANCE     = -20;
-// Every model is scaled so its bounding sphere has this radius. 4.6 is what the
-// typical (~24-unit) spot model measured at the old fixed 0.25 scale, so those
-// look as they did and the outliers are brought in line with them.
-const MODEL_RADIUS      = 4.6;
-// Only used when a model's bounds can't be read: the old fixed transform.
-const FALLBACK_FIT      = { scale: 0.25, offset: [0, -1.5, 0] };
+// Set explicitly: Viro's own default is an unexposed renderer value, and the
+// framing below is worked out against this. Degrees, across the card's width.
+const FIELD_OF_VIEW     = 60;
+// Every model is scaled so its bounding sphere has this radius: at 20 units
+// with a 60° view that spans ~60% of the card's width, leaving the zoom
+// buttons clear at any angle.
+const MODEL_RADIUS      = 6.7;
+// Only used when a model's bounds can't be read: the old fixed transform
+// (scale 0.25, lowered 1.5, tuned for a radius of 4.6), resized to match.
+const FALLBACK_FIT      = { scale: 0.25 * (MODEL_RADIUS / 4.6), offset: [0, -1.5 * (MODEL_RADIUS / 4.6), 0] };
 
 const SENSITIVITY       = 0.3;        // degrees per pixel dragged
 const INERTIA           = 0.92;       // share of fling velocity kept per 60 Hz frame
@@ -36,11 +41,13 @@ const AUTO_ROTATE_DEG_S = 30;         // what the old 0.5°-per-frame gave at 60
 const AUTO_RESUME_MS    = 2500;       // idle time after a gesture before spinning again
 const RESET_MS          = 650;
 const ZOOM_MIN          = 0.3;
-const ZOOM_MAX          = 4;
+const ZOOM_MAX          = 2.5;        // 6.7 × 2.5 stays short of the camera at 20
 const TILT_LIMIT        = 70;
 
-const DEFAULT_ROT_X = 0;
-const DEFAULT_ROT_Y = -55;
+// The spot models all have their facade on +Z (see modelFit.js), so one pose
+// fits them all: tipped 15° towards the viewer, facade turned 35° to the right.
+const DEFAULT_ROT_X = 15;
+const DEFAULT_ROT_Y = 35;
 
 // The backdrop is the theme's card colour, so the viewer sits in the hero card
 // the way the photo does instead of as a white box in dark mode.
@@ -60,7 +67,8 @@ const ModelScene = ({ sceneNavigator }) => {
   const {
     modelUrl,
     fit,
-    pivotRef,
+    tiltRef,
+    spinRef,
     isDark,
     baseRotX,
     baseRotY,
@@ -70,6 +78,8 @@ const ModelScene = ({ sceneNavigator }) => {
 
   return (
     <ViroScene>
+      <ViroCamera position={[0, 0, 0]} active fieldOfView={FIELD_OF_VIEW} />
+
       <ViroSphere
         position={[0, 0, 0]}
         radius={100}
@@ -82,19 +92,23 @@ const ModelScene = ({ sceneNavigator }) => {
       <ViroDirectionalLight color="#ffffff" direction={[0, 0.5, 1]}       intensity={350} />
       <ViroAmbientLight     color="#ffffff" intensity={300} />
 
-      {/* The node is the turntable — drag, spin and zoom all act on it, about
-          the model's centre. The object inside only carries its own fit, so
-          it mounts once that's known (the scene itself starts up meanwhile). */}
+      {/* A turntable, about the model's centre: the outer node tilts it
+          towards the viewer, the inner one spins it and zooms it. Two nodes
+          keep that order fixed, so the spin stays level at any tilt. The
+          object inside only carries its own fit, so it mounts once that's
+          known (the scene itself starts up meanwhile). */}
       {fit && (
-        <ViroNode ref={pivotRef} position={[0, 0, VIEW_DISTANCE]} rotation={[baseRotX, baseRotY, 0]}>
-          <Viro3DObject
-            source={{ uri: modelUrl }}
-            position={fit.offset}
-            scale={[fit.scale, fit.scale, fit.scale]}
-            type="GLB"
-            onLoadEnd={() => onModelReady?.()}
-            onError={() => onModelError?.()}
-          />
+        <ViroNode ref={tiltRef} position={[0, 0, VIEW_DISTANCE]} rotation={[baseRotX, 0, 0]}>
+          <ViroNode ref={spinRef} rotation={[0, baseRotY, 0]}>
+            <Viro3DObject
+              source={{ uri: modelUrl }}
+              position={fit.offset}
+              scale={[fit.scale, fit.scale, fit.scale]}
+              type="GLB"
+              onLoadEnd={() => onModelReady?.()}
+              onError={() => onModelError?.()}
+            />
+          </ViroNode>
         </ViroNode>
       )}
     </ViroScene>
@@ -107,8 +121,8 @@ const ModelScene = ({ sceneNavigator }) => {
 // Props:
 //   url       {string}  — GLB model URI (required)
 //   style     {object}  — extra container styles
-//   baseRotX  {number}  — resting X tilt in degrees (default: 0)
-//   baseRotY  {number}  — resting Y turn in degrees (default: -55)
+//   baseRotX  {number}  — resting tilt towards the viewer, degrees (default: 15)
+//   baseRotY  {number}  — resting turn, degrees (default: 35)
 // ─────────────────────────────────────────────
 export default function ModelViewer({
   url,
@@ -122,7 +136,8 @@ export default function ModelViewer({
   const [error, setError]     = useState(false);
   const [attempt, setAttempt] = useState(0);
 
-  const pivotRef = useRef(null);
+  const tiltRef  = useRef(null);
+  const spinRef  = useRef(null);
   const rotX     = useRef(baseRotX);
   const rotY     = useRef(baseRotY);
   const zoom     = useRef(1);
@@ -159,8 +174,9 @@ export default function ModelViewer({
 
   const applyTransform = () => {
     try {
-      pivotRef.current?.setNativeProps({
-        rotation: [rotX.current, rotY.current, 0],
+      tiltRef.current?.setNativeProps({ rotation: [rotX.current, 0, 0] });
+      spinRef.current?.setNativeProps({
+        rotation: [0, rotY.current, 0],
         scale: [zoom.current, zoom.current, zoom.current],
       });
     } catch (_) {}
@@ -299,7 +315,7 @@ export default function ModelViewer({
       <Viro3DSceneNavigator
         key={attempt}
         initialScene={{ scene: ModelScene }}
-        viroAppProps={{ modelUrl: url, fit, pivotRef, isDark, baseRotX, baseRotY, onModelReady, onModelError }}
+        viroAppProps={{ modelUrl: url, fit, tiltRef, spinRef, isDark, baseRotX, baseRotY, onModelReady, onModelError }}
         style={StyleSheet.absoluteFill}
         onError={onModelError}
       />
