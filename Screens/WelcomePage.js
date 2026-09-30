@@ -9,10 +9,9 @@ import { auth as A, typography, fonts, MAX_FONT_SCALE } from "../context/ThemeCo
 /*
  * Onboarding, screen 1 of 2 — built from the approved mockup.
  *
- * A Bulacan photograph under a cyan→yellow duotone wash, an oversized headline
- * with two words picked out in the CTA yellow, page dots, and the yellow Next
- * button. The version this replaces was a centred stock 3D suitcase
- * illustration on a plain background, which said nothing about Bulacan.
+ * bg.png (Bulacan landmarks with the cyan→yellow duotone baked in, shared with
+ * the sign-in and sign-up screens), an oversized headline with two words
+ * picked out in the CTA yellow, page dots, and the yellow Next button.
  */
 export default function WelcomePage({ navigation }) {
   const insets = useSafeAreaInsets();
@@ -22,22 +21,13 @@ export default function WelcomePage({ navigation }) {
       <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
 
       <ImageBackground
-        source={require("../assets/welcome.jpg")}
+        source={require("../assets/bg.png")}
         style={StyleSheet.absoluteFill}
         resizeMode="cover"
       >
-        {/* Duotone wash — the composition reads as cyan/yellow first and a
-            photograph second, which is what makes both onboarding screens feel
-            like one piece. */}
-        <LinearGradient
-          colors={[A.washTop, A.washMid, A.washBottom]}
-          locations={[0, 0.55, 1]}
-          style={StyleSheet.absoluteFill}
-          pointerEvents="none"
-        />
-        {/* White text over a light wash measures ~1.3:1 on its own. This band
-            sits behind the headline only and lifts it past 7:1 without
-            darkening the whole composition. */}
+        {/* White text over bg.png measures ~1.5:1 on its own. This band sits
+            behind the headline only and lifts it past 6:1 without darkening
+            the whole composition. */}
         <LinearGradient
           colors={["transparent", "rgba(12,34,36,0.68)", "rgba(12,34,36,0.68)", "transparent"]}
           locations={[0.18, 0.34, 0.74, 0.92]}
