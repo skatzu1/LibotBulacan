@@ -104,6 +104,7 @@ export default function BannedScreen({ banInfo }) {
               placeholderTextColor={colors.placeholder}
               value={text}
               onChangeText={setText}
+              maxLength={1000}
               textAlignVertical="top"
               accessibilityLabel="Your appeal"
             />

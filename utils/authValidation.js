@@ -2,8 +2,55 @@
 // the rules and the wording, so the four screens can't drift apart.
 //
 // Each check returns an error string, or null when the value is fine.
+// The clean* helpers go in onChangeText, so characters a field can never hold
+// (digits in a name, spaces in an email) are dropped as they're typed or
+// pasted instead of being reported after the fact.
 
-export const isValidEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email || "").trim());
+// ── Names ──
+// Letters, including ñ and accented letters, plus the punctuation real names
+// use: space, hyphen (Mary-Ann), apostrophe (D'Angelo), period (Ma., Jr.).
+const LETTERS = "A-Za-z\\u00C0-\\u00D6\\u00D8-\\u00F6\\u00F8-\\u024F";
+const NAME_DISALLOWED = new RegExp(`[^${LETTERS}\\s'.-]`, "g");
+const NAME_ONLY_ALLOWED = new RegExp(`^[${LETTERS}\\s'.-]*$`);
+const STARTS_WITH_LETTER = new RegExp(`^[${LETTERS}]`);
+const LETTER_G = new RegExp(`[${LETTERS}]`, "g");
+
+export const NAME_MAX = 50;
+
+export const cleanName = (text) =>
+  String(text || "")
+    .replace(/[‘’]/g, "'")   // curly apostrophes from iOS smart punctuation
+    .replace(NAME_DISALLOWED, "")
+    .replace(/\s+/g, " ")
+    .replace(/^ /, "")
+    .slice(0, NAME_MAX);
+
+// `what` finishes the "Enter …" sentence: "your full name", "your first name".
+export const nameError = (name, what = "your full name") => {
+  const v = String(name || "").trim();
+  if (!v) return `Enter ${what}.`;
+  if (!NAME_ONLY_ALLOWED.test(v)) return "Use letters only. Spaces, hyphens (-), apostrophes (') and periods (.) are fine.";
+  if (!STARTS_WITH_LETTER.test(v)) return "Start with a letter.";
+  if ((v.match(LETTER_G) || []).length < 2) return "Use at least 2 letters.";
+  return null;
+};
+
+// ── Email ──
+export const EMAIL_MAX = 254;
+
+// An email never contains whitespace; phones like to add a trailing space
+// after autocomplete.
+export const cleanEmail = (text) => String(text || "").replace(/\s+/g, "").slice(0, EMAIL_MAX);
+
+// name@domain.tld: no leading, trailing or doubled dots, and a real top-level
+// domain of 2+ letters (catches "name@gmail" and "name@gmail.c").
+const EMAIL_RE =
+  /^[A-Za-z0-9!#$%&'*+/=?^_`{|}~-]+(\.[A-Za-z0-9!#$%&'*+/=?^_`{|}~-]+)*@([A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?\.)+[A-Za-z]{2,}$/;
+
+export const isValidEmail = (email) => EMAIL_RE.test(String(email || "").trim());
+
+// ── Codes ──
+export const digitsOnly = (text) => String(text || "").replace(/\D/g, "");
 
 export const emailError = (email) => {
   if (!String(email || "").trim()) return "Enter your email address.";
@@ -30,10 +77,12 @@ export const confirmPasswordError = (password, confirm) => {
 export const codeError = (code) =>
   /^\d{6}$/.test(String(code || "").trim()) ? null : "Enter the 6-digit code from your email.";
 
-export const nameError = (name) => (String(name || "").trim() ? null : "Enter your full name.");
+// The Terms and Privacy Policy (LibotBackend legal/*.html) set 13 as the
+// minimum age.
+export const MIN_AGE = 13;
 
 // Date of birth typed as MM/DD/YYYY (Register masks the input as you type).
-export const dobError = (dob) => {
+export const dobError = (dob, today = new Date()) => {
   const digits = String(dob || "").replace(/\D/g, "");
   if (!digits) return "Enter your date of birth.";
   if (digits.length < 8) return "Finish the date as MM/DD/YYYY.";
@@ -41,10 +90,14 @@ export const dobError = (dob) => {
   const d = parseInt(digits.slice(2, 4), 10);
   const y = parseInt(digits.slice(4, 8), 10);
   const parsed = new Date(y, m - 1, d);
-  const real = m >= 1 && m <= 12 && d >= 1 && y >= 1900
+  const real = m >= 1 && m <= 12 && d >= 1
     && parsed.getFullYear() === y && parsed.getMonth() === m - 1 && parsed.getDate() === d;
   if (!real) return "That date doesn't exist. Check the month and day.";
-  if (parsed > new Date()) return "Date of birth can't be in the future.";
+  if (y < 1900) return "Check the year.";
+  if (parsed > today) return "Date of birth can't be in the future.";
+  let age = today.getFullYear() - y;
+  if (today.getMonth() < m - 1 || (today.getMonth() === m - 1 && today.getDate() < d)) age -= 1;
+  if (age < MIN_AGE) return `You must be at least ${MIN_AGE} to use Libot.`;
   return null;
 };
 

@@ -13,6 +13,7 @@ import {
   ScreenHeader, HeaderAction, FormField, GroupLabel, ListRow, LoadingState, Avatar, H_PAD,
 } from "../components/ui";
 import { BASE_URL } from "../api";
+import { cleanName, nameError } from "../utils/authValidation";
 import Icon from "../components/Icon";
 
 // Single source of truth for the backend host — see api.js.
@@ -141,9 +142,13 @@ export default function EditProfile({ navigation }) {
     }
   };
 
+  // Same name rules as sign-up. The last name may be left blank.
   const validate = () => {
-    if (!firstName.trim()) {
-      showAlert("Validation", "First name cannot be empty.");
+    const problem =
+      nameError(firstName, "your first name") ||
+      (lastName.trim() ? nameError(lastName, "your last name") : null);
+    if (problem) {
+      showAlert("Check your name", problem);
       return false;
     }
     return true;
@@ -272,8 +277,8 @@ export default function EditProfile({ navigation }) {
 
           <View style={styles.section}>
             <GroupLabel>Personal info</GroupLabel>
-            <FormField label="First name" icon="user" value={firstName} onChangeText={setFirstName} placeholder="First name" autoCapitalize="words" />
-            <FormField label="Last name"  icon="user" value={lastName}  onChangeText={setLastName}  placeholder="Last name"  autoCapitalize="words" />
+            <FormField label="First name" icon="user" value={firstName} onChangeText={(v) => setFirstName(cleanName(v))} placeholder="First name" autoCapitalize="words" />
+            <FormField label="Last name"  icon="user" value={lastName}  onChangeText={(v) => setLastName(cleanName(v))}  placeholder="Last name"  autoCapitalize="words" />
             <FormField
               label="Email"
               icon="mail"
