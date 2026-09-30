@@ -19,6 +19,10 @@ import { auth as A, fonts, MAX_FONT_SCALE } from "../context/ThemeContext";
 import AuthScaffold, { authStyles as a } from "../components/AuthScaffold";
 import Icon from "../components/Icon";
 
+// Full-screen background for sign-in and forgot-password. It already carries
+// the app's cyan→yellow wash, so nothing is layered over it but the form.
+const LOGIN_BG = require("../assets/bg.png");
+
 WebBrowser.maybeCompleteAuthSession();
 
 function isValidEmail(email) {
@@ -126,6 +130,7 @@ function ForgotPasswordModal({ visible, onClose, signIn }) {
   return (
     <Modal visible={visible} animationType="slide" onRequestClose={handleClose}>
       <AuthScaffold
+        background={LOGIN_BG}
         onBack={step === "otp" ? () => setStep("email") : handleClose}
         title="Forgot Password?"
         subtitle={
@@ -431,7 +436,7 @@ export default function Login({ navigation }) {
 
   return (
     <>
-      <AuthScaffold title="Welcome" subtitle="Sign in to continue.">
+      <AuthScaffold title="Welcome" subtitle="Sign in to continue." background={LOGIN_BG}>
         {/* Google */}
         <TouchableOpacity
           style={[a.googleBtn, disabled && styles.disabled]}
