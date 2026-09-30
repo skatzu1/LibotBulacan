@@ -52,3 +52,23 @@ export function resolveTrail(anchorProximities, tappedIndices, triviaVisible) {
     pending: next && !inRange ? next : null,
   };
 }
+
+/**
+ * The one trivia fact a model reveals when it is found.
+ *
+ * Model n on the trail shows fact n, so walking the whole trail reads the
+ * facts in the order the moderator wrote them. A spot with more models than
+ * facts wraps back to the first; a spot with no facts gets a generic line
+ * rather than an empty card.
+ *
+ * @param {string[]|undefined} trivia  The spot's trivia, in order.
+ * @param {number} index               The model's position on the trail (0-based).
+ * @param {string} [spotName]          Only used for the no-trivia fallback.
+ * @returns {string}
+ */
+export function triviaForModel(trivia, index, spotName) {
+  const facts = (trivia ?? []).filter((t) => typeof t === "string" && t.trim());
+  if (!facts.length) return `${spotName ?? "This spot"} is a remarkable place worth exploring!`;
+  const i = Number.isInteger(index) && index >= 0 ? index : 0;
+  return facts[i % facts.length];
+}
