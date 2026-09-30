@@ -6,7 +6,9 @@
 import * as Location from "expo-location";
 import { showAlert } from "../components/AppAlert";
 
-// A little slack for GPS drift and large sites.
+// A little slack for GPS drift and large sites. The server uses the same
+// radius (ON_SITE_RADIUS_M in the backend's utils/onSite.js) when it checks
+// AR and photo missions, so the two agree on what "at the spot" means.
 const AR_RANGE_METERS = 120;
 
 function distanceMeters(lat1, lng1, lat2, lng2) {
@@ -97,13 +99,67 @@ export async function ensureAtSpotForAR(spot) {
   );
 
   if (dist > AR_RANGE_METERS) {
-    const away =
-      dist >= 1000 ? `${(dist / 1000).toFixed(1)} km` : `${Math.round(dist)} m`;
     return confirm(
       `You're not at ${name}`,
-      `You're about ${away} away. The AR experience only works when you're physically at the spot — the models are anchored to real locations there. Head over and try again once you've arrived.`
+      `You're about ${formatAway(dist)} away. The AR experience only works when you're physically at the spot — the models are anchored to real locations there. Head over and try again once you've arrived.`
     );
   }
 
   return true;
+}
+
+const formatAway = (m) => (m >= 1000 ? `${(m / 1000).toFixed(1)} km` : `${Math.round(m)} m`);
+
+/**
+ * The phone's current position ({ latitude, longitude, accuracy }), or null
+ * if location is off or unavailable. `ask` requests permission if needed.
+ */
+export async function currentCoords({ ask = false } = {}) {
+  try {
+    let { status } = await Location.getForegroundPermissionsAsync();
+    if (status !== "granted" && ask) {
+      ({ status } = await Location.requestForegroundPermissionsAsync());
+    }
+    if (status !== "granted") return null;
+    const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+    return pos.coords;
+  } catch (_) {
+    return null;
+  }
+}
+
+/**
+ * Photo missions only count at the spot: the server checks the position sent
+ * with the photo and awards nothing from anywhere else. So unlike the AR gate
+ * there's no "start anyway" — better to say so before the photo than after.
+ * Resolves to the phone's coords when it's on site, otherwise explains why
+ * not and resolves to null.
+ */
+export async function ensureAtSpotForPhoto(spot) {
+  const name = spot?.name || "this spot";
+  const coords = await currentCoords({ ask: true });
+  if (!coords) {
+    showAlert(
+      "Location needed",
+      `Photo missions only count when the photo is taken at ${name}, so the app needs your location to check you're there. Turn on location access and try again.`,
+      undefined,
+      { tone: "warning", icon: "map-pin" }
+    );
+    return null;
+  }
+
+  const dest = getSpotCoords(spot);
+  if (!dest) return coords; // nothing to compare against here; the server decides
+
+  const dist = distanceMeters(coords.latitude, coords.longitude, dest.lat, dest.lng);
+  if (dist > AR_RANGE_METERS) {
+    showAlert(
+      `You're not at ${name}`,
+      `You're about ${formatAway(dist)} away. Photo missions only count when the photo is taken at the spot itself — head over and try again once you've arrived.`,
+      undefined,
+      { tone: "warning", icon: "map-pin" }
+    );
+    return null;
+  }
+  return coords;
 }

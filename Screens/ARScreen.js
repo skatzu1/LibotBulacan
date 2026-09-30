@@ -45,6 +45,7 @@ import { evaluateGeospatial, anchorAtLocation, releaseAnchor, ensureGeospatialEn
 import { resolveTrail } from "../utils/arTrail";
 import { fonts } from "../context/ThemeContext";
 import Icon from "../components/Icon";
+import { showAlert } from "../components/AppAlert";
 
 // ─────────────────────────────────────────────
 // DESIGN TOKENS
@@ -1373,6 +1374,10 @@ export default function ARScreen({ route, navigation }) {
 
 
   const [userLocation, setUserLocation] = useState(null);
+  // Latest fix for saving the mission, without re-running that effect on
+  // every GPS update.
+  const userLocationRef = useRef(null);
+  userLocationRef.current = userLocation;
 
   // Derived rather than stored: proximities are a pure function of where you
   // are, so keeping them in their own state just risked them drifting out of
@@ -1643,21 +1648,36 @@ export default function ARScreen({ route, navigation }) {
   // AFTER the last model is found: launched from the Home AR picker on a slow
   // connection, the spot's missions may still be loading. Reacting to state
   // means the save goes through whenever both halves are finally present.
+  //
+  // The server only counts an AR mission done at the spot, so the save sends
+  // where the phone is — and waits for a first GPS fix to have one to send.
   const allFound = totalAnchors > 0 && tappedIndices.size >= totalAnchors;
+  const hasFix = !!userLocation;
   useEffect(() => {
-    if (!allFound || !arMissionId || alreadyDone || missionJustCompletedRef.current) return;
+    if (!allFound || !arMissionId || alreadyDone || !hasFix || missionJustCompletedRef.current) return;
 
+    const here = userLocationRef.current;
     missionJustCompletedRef.current = true;
     setMissionJustCompleted(true);
-    completeMission(arMissionId).then((data) => {
-      // Not saved (offline, server error): don't claim it was, and let the
-      // next full run retry instead of the completion being lost for good.
-      if (!data?.success) {
-        missionJustCompletedRef.current = false;
-        setMissionJustCompleted(false);
+    completeMission(arMissionId, {
+      lat: here.latitude, lng: here.longitude, accuracy: here.rawAccuracy ?? here.accuracy,
+    }).then((data) => {
+      const saved = data?.success && !data.tooFar && !data.noLocation;
+      if (saved) return;
+      // Not saved (away from the spot, offline, server error): don't claim it
+      // was, and let the next full run retry instead of it being lost.
+      missionJustCompletedRef.current = false;
+      setMissionJustCompleted(false);
+      if (data?.tooFar) {
+        showAlert(
+          `You're not at ${spot?.name ?? "the spot"}`,
+          "You found them all, but the AR mission only counts when you're at the spot itself. Finish it there to earn its points.",
+          undefined,
+          { tone: "warning", icon: "map-pin" }
+        );
       }
     });
-  }, [allFound, arMissionId, alreadyDone, completeMission]);
+  }, [allFound, arMissionId, alreadyDone, hasFix, completeMission, spot?.name]);
 
   const activeAnchors = anchorProximities.filter((a) => a.isInRange);
 

@@ -42,7 +42,15 @@ export async function loadModel(missionId) {
   return true;
 }
 
-export async function runPrediction(imageUri, missionId, getToken) {
+// Sends the photo AND where the phone is. The server checks both — the photo
+// only counts if it was taken at the spot — and, when both pass, completes the
+// mission and awards its points itself. `coords` is { latitude, longitude,
+// accuracy } from expo-location.
+//
+// Returns { verified, confidence, noModel, tooFar, distance, noLocation,
+// completed }, { error: message } when the server refused the request, or null
+// when it couldn't be reached.
+export async function runPrediction(imageUri, missionId, getToken, coords) {
   try {
     const base64Image = await uploadableBase64(imageUri);
 
@@ -55,21 +63,28 @@ export async function runPrediction(imageUri, missionId, getToken) {
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${token}`,
       },
-      body: JSON.stringify({ image: base64Image }),
+      body: JSON.stringify({
+        image: base64Image,
+        lat: coords?.latitude,
+        lng: coords?.longitude,
+        accuracy: coords?.accuracy,
+      }),
     });
 
-    if (!response.ok) {
-      const errBody = await response.json().catch(() => ({}));
-      throw new Error(errBody.message || `Server error ${response.status}`);
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok || !data.success) {
+      return { error: data.message || `Server error ${response.status}` };
     }
 
-    const data = await response.json();
-    if (!data.success) throw new Error(data.message || 'Verification failed');
-
     return {
-      verified:   data.verified,
+      verified:   !!data.verified,
       confidence: data.confidence,
-      noModel:    data.noModel || false,  // pass through no-model flag
+      noModel:    data.noModel || false,
+      tooFar:     data.tooFar || false,
+      distance:   data.distance,
+      noLocation: data.noLocation || false,
+      // The server completed the mission (now or on an earlier attempt).
+      completed:  !!data.verified && (data.alreadyCompleted === true || data.alreadyCompleted === false),
     };
 
   } catch (err) {
