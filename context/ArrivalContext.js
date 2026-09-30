@@ -280,9 +280,15 @@ async function requestAllLocationPermissions() {
     return { foreground: true, background: false };
   }
 
-  const { status: bg } = await Location.requestBackgroundPermissionsAsync();
+  // Background access is only CHECKED here. Requesting it on Android 11+
+  // jumps straight to the system's location-permission screen, so it's asked
+  // for in promptForAllTimeLocation, after a modal explains why.
+  let bg = "denied";
+  try {
+    ({ status: bg } = await Location.getBackgroundPermissionsAsync());
+  } catch (_) {}
   if (bg !== "granted") {
-    console.warn("[Location] Background permission denied — only foreground granted");
+    console.log("[Location] Foreground granted; background not (yet)");
     return { foreground: true, background: false };
   }
 
@@ -290,38 +296,50 @@ async function requestAllLocationPermissions() {
   return { foreground: true, background: true };
 }
 
-// Life360-style nudge: shown when Libot has only "while using the app" (or no)
-// location access. Two steps — an intro, then a Settings shortcut — because on
-// Android 11+ "Allow all the time" can only be granted from system Settings.
+// Asks for "Allow all the time" when Libot only has "while using the app".
+// The modal comes FIRST, then the system screen: on Android 11+ the request
+// itself opens Libot's location-permission page in Settings, and Google Play
+// requires this disclosure before a background-location request. "Continue"
+// opens that page, where the user picks "Allow all the time"; "Not now"
+// leaves it. If Android won't show its page any more (asked and refused
+// twice), a second modal offers Libot's Settings page instead. At most once
+// per 12 h. Resolves true if background access was granted.
 const ALLTIME_PROMPT_KEY  = "alltimeLocationPromptAt";
 const ALLTIME_PROMPT_EVERY = 12 * 60 * 60 * 1000; // at most once per 12h
 
 async function promptForAllTimeLocation() {
-  if (Platform.OS !== "android") return; // iOS shows its own "Always Allow" prompt
+  if (Platform.OS !== "android") return false; // iOS shows its own "Always Allow" prompt
   try {
     const last = Number(await AsyncStorage.getItem(ALLTIME_PROMPT_KEY)) || 0;
-    if (Date.now() - last < ALLTIME_PROMPT_EVERY) return;
+    if (Date.now() - last < ALLTIME_PROMPT_EVERY) return false;
     await AsyncStorage.setItem(ALLTIME_PROMPT_KEY, String(Date.now()));
   } catch (_) {}
 
-  const openStep2 = () => {
-    showAlert(
-      `Libot's location features only work if it can access your location "all the time"`,
-      `In Settings > Permissions > Location, choose "Allow all the time".`,
-      [
-        { text: "Not now", style: "cancel" },
-        { text: "Go to Settings", onPress: () => Linking.openSettings() },
-      ],
-      { tone: "danger", cancelable: false },
-    );
-  };
-
-  showAlert(
-    `Libot only works correctly if it can access your location "all the time"`,
-    `Right now Libot can only see your location while the app is open, so arrival alerts and visit logging won't work in the background.`,
-    [{ text: "OK", onPress: openStep2 }],
-    { tone: "danger", cancelable: false },
+  const proceed = await confirmAsync(
+    "Get arrival alerts even when Libot is closed?",
+    `Libot uses your location in the background — even when the app is closed or not in use — to let you know when you arrive at a tourist spot and log your visit. On the next screen, choose "Allow all the time". You can change this anytime in Settings.`,
+    { confirmText: "Continue", cancelText: "Not now", icon: "map-pin", tone: "info" },
   );
+  if (!proceed) return false;
+
+  try {
+    const res = await Location.requestBackgroundPermissionsAsync();
+    if (res.status === "granted") {
+      console.log("[Location] Background permission granted");
+      return true;
+    }
+    if (res.canAskAgain === false) {
+      const openSettings = await confirmAsync(
+        `Turn on "Allow all the time" in Settings`,
+        `Android won't ask again from inside Libot. In Settings > Permissions > Location, choose "Allow all the time".`,
+        { confirmText: "Go to Settings", cancelText: "Not now", icon: "map-pin", tone: "info" },
+      );
+      if (openSettings) Linking.openSettings();
+    }
+  } catch (e) {
+    console.warn("[Location] Background permission request failed:", e?.message);
+  }
+  return false;
 }
 
 // ─────────────────────────────────────────────
@@ -449,10 +467,13 @@ export function ArrivalProvider({ children }) {
       await setupNotifications();
       const perms = await requestAllLocationPermissions();
       hasLocationPerms.current = perms;
-      // Only nudge for "all the time" when they've granted foreground but not
+      // Only ask for "all the time" when they've granted foreground but not
       // background — don't stack a second modal on top of a fresh "Not now".
+      // Not awaited: the rest of sign-in shouldn't wait on the user reading it.
       if (BACKGROUND_ARRIVALS_ENABLED && perms.foreground && !perms.background) {
-        promptForAllTimeLocation();
+        promptForAllTimeLocation().then((granted) => {
+          if (granted) hasLocationPerms.current = { foreground: true, background: true };
+        });
       }
       if (!BACKGROUND_ARRIVALS_ENABLED) {
         // A build that had background arrivals may have left the task
@@ -540,6 +561,17 @@ export function ArrivalProvider({ children }) {
           // "inside" set while this provider wasn't running.
           if (currentUserIdRef.current) {
             await loadInsideSpots(currentUserIdRef.current);
+          }
+
+          // "Allow all the time" may have been switched on in Settings
+          // meanwhile (e.g. just now, from the prompt) — pick it up so
+          // background tracking starts the next time the app is closed.
+          if (BACKGROUND_ARRIVALS_ENABLED && hasLocationPerms.current.foreground) {
+            Location.getBackgroundPermissionsAsync()
+              .then(({ status }) => {
+                hasLocationPerms.current = { ...hasLocationPerms.current, background: status === "granted" };
+              })
+              .catch(() => {});
           }
 
           try {

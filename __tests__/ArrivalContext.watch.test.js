@@ -33,7 +33,8 @@ jest.mock("expo-location", () => ({
   Accuracy: { Balanced: 3, High: 4 },
   getForegroundPermissionsAsync: jest.fn(async () => ({ status: "granted", canAskAgain: true })),
   requestForegroundPermissionsAsync: jest.fn(async () => ({ status: "granted" })),
-  requestBackgroundPermissionsAsync: jest.fn(async () => ({ status: "denied" })),
+  getBackgroundPermissionsAsync: jest.fn(async () => ({ status: "denied" })),
+  requestBackgroundPermissionsAsync: jest.fn(async () => ({ status: "denied", canAskAgain: true })),
   hasStartedLocationUpdatesAsync: jest.fn(async () => false),
   stopLocationUpdatesAsync: jest.fn(async () => {}),
   startLocationUpdatesAsync: jest.fn(async () => {}),
@@ -161,4 +162,44 @@ it("a visit that reaches the server is not queued", async () => {
   await feed(10, 6);
   await settle();
   expect(JSON.parse(await AsyncStorage.getItem("pendingRewards_user_test"))).toEqual([]);
+});
+
+describe('"Allow all the time" (background location)', () => {
+  const Location = require("expo-location");
+  const { showAlert } = require("../components/AppAlert");
+  const { Platform } = require("react-native");
+  let realOS;
+
+  beforeEach(() => {
+    realOS = Platform.OS;
+    Platform.OS = "android";
+    showAlert.mockClear();
+    Location.requestBackgroundPermissionsAsync.mockClear();
+  });
+  afterEach(() => { Platform.OS = realOS; });
+
+  const disclosure = () =>
+    showAlert.mock.calls.find(([title]) => /even when Libot is closed/.test(title));
+  const press = async (label) => {
+    await act(async () => { disclosure()[2].find((b) => b.text === label).onPress(); });
+    await settle();
+  };
+
+  it("explains it in a modal before Android's permission screen opens", async () => {
+    await mount();
+    expect(disclosure()).toBeTruthy();
+    expect(disclosure()[1]).toMatch(/even when the app is closed/);
+    expect(disclosure()[1]).toMatch(/Allow all the time/);
+    // The modal is up and the system screen has NOT been opened.
+    expect(Location.requestBackgroundPermissionsAsync).not.toHaveBeenCalled();
+
+    await press("Continue");
+    expect(Location.requestBackgroundPermissionsAsync).toHaveBeenCalledTimes(1);
+  });
+
+  it('"Not now" never opens the permission screen', async () => {
+    await mount();
+    await press("Not now");
+    expect(Location.requestBackgroundPermissionsAsync).not.toHaveBeenCalled();
+  });
 });
