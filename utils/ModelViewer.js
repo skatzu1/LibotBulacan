@@ -36,6 +36,7 @@ const SENSITIVITY       = 0.3;        // degrees per pixel dragged
 const INERTIA           = 0.92;       // share of fling velocity kept per 60 Hz frame
 const INERTIA_MIN       = 0.05;
 const FRAME_MS          = 1000 / 60;
+const APPLY_INTERVAL_MS = FRAME_MS - 2;   // ~60 native updates a second, at most
 const AUTO_ROTATE_DEG_S = 30;         // what the old 0.5°-per-frame gave at 60 Hz
 const AUTO_RESUME_MS    = 2500;       // idle time after a gesture before spinning again
 const RESET_MS          = 650;
@@ -177,6 +178,11 @@ export default function ModelViewer({
   const frame       = useRef(null);
   const resumeTimer = useRef(null);
 
+  // What's waiting to be pushed to Viro, and when it last was (see flush).
+  const pending    = useRef({ rotation: false, zoom: false });
+  const applyFrame = useRef(null);
+  const lastApply  = useRef(-Infinity);
+
   useEffect(() => {
     if (!url) return undefined;
     let live = true;
@@ -208,17 +214,35 @@ export default function ModelViewer({
 
   useEffect(() => () => {
     cancelAnimationFrame(frame.current);
+    cancelAnimationFrame(applyFrame.current);
     clearTimeout(resumeTimer.current);
   }, []);
 
-  const applyTransform = () => {
-    if (!fitRef.current) return;
-    try {
-      objectRef.current?.setNativeProps({
-        ...placement(fitRef.current, zoom.current),
-        rotation: [rotX.current, rotY.current, 0],
-      });
-    } catch (_) {}
+  // Pushing a transform to Viro is the expensive part: each prop makes it walk
+  // every node in the scene with a native call per node, on the UI thread —
+  // three props a frame at 120/144 Hz made the whole screen stutter. So only
+  // what changed is sent, and at most ~60 times a second, however often the
+  // animation ticks or touch events arrive.
+  const flush = (now) => {
+    applyFrame.current = null;
+    if (now - lastApply.current < APPLY_INTERVAL_MS) {
+      applyFrame.current = requestAnimationFrame(flush);
+      return;
+    }
+    const obj = objectRef.current;
+    if (!obj || !fitRef.current) return;
+    const props = {};
+    if (pending.current.rotation) props.rotation = [rotX.current, rotY.current, 0];
+    if (pending.current.zoom) Object.assign(props, placement(fitRef.current, zoom.current));
+    pending.current = { rotation: false, zoom: false };
+    lastApply.current = now;
+    try { obj.setNativeProps(props); } catch (_) {}
+  };
+
+  const requestApply = ({ rotation = false, zoom: zoomed = false }) => {
+    if (rotation) pending.current.rotation = true;
+    if (zoomed) pending.current.zoom = true;
+    if (applyFrame.current == null) applyFrame.current = requestAnimationFrame(flush);
   };
 
   const stopMotion = () => {
@@ -228,15 +252,16 @@ export default function ModelViewer({
 
   // Calls step(frames) every animation frame, where `frames` is the time since
   // the last one counted in 60 Hz frames, so speeds match on 60/90/120 Hz
-  // screens. When step returns false the loop ends and onDone runs.
-  const animate = (step, onDone) => {
+  // screens. `changes` says what step moves. When step returns false the loop
+  // ends and onDone runs.
+  const animate = (step, onDone, changes = { rotation: true }) => {
     stopMotion();
     let prev = null;
     const tick = (now) => {
       const frames = prev == null ? 1 : clamp((now - prev) / FRAME_MS, 0, 4);
       prev = now;
       const more = step(frames);
-      applyTransform();
+      requestApply(changes);
       if (more) frame.current = requestAnimationFrame(tick);
       else onDone?.();
     };
@@ -275,12 +300,12 @@ export default function ModelViewer({
       rotY.current = from[1] + (baseRotY - from[1]) * ease;
       zoom.current = from[2] + (1 - from[2]) * ease;
       return t < 1;
-    }, startSpin);
+    }, startSpin, { rotation: true, zoom: from[2] !== 1 });
   };
 
   const zoomBy = (factor) => {
     zoom.current = clamp(zoom.current * factor, ZOOM_MIN, ZOOM_MAX);
-    applyTransform();
+    requestApply({ zoom: true });
   };
 
   const onModelReady = () => {
@@ -306,7 +331,7 @@ export default function ModelViewer({
       rotY.current = panStart.current[1] + e.translationX * SENSITIVITY;
       velX.current = e.velocityY * 0.01;
       velY.current = e.velocityX * 0.01;
-      applyTransform();
+      requestApply({ rotation: true });
     })
     .onEnd(() => startInertia());
 
@@ -320,7 +345,7 @@ export default function ModelViewer({
     })
     .onUpdate((e) => {
       zoom.current = clamp(pinchStart.current * e.scale, ZOOM_MIN, ZOOM_MAX);
-      applyTransform();
+      requestApply({ zoom: true });
     })
     .onEnd(() => resumeSpinLater());
 
