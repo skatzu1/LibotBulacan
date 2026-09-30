@@ -20,6 +20,7 @@ import AuthScaffold, { useAuthStyles, FieldError, FormError } from "../component
 import {
   emailError as checkEmail, requiredPasswordError, newPasswordError, confirmPasswordError,
   codeError as checkCode, clerkErrorToField, NETWORK_ERROR,
+  cleanEmail, digitsOnly, EMAIL_MAX,
 } from "../utils/authValidation";
 import Icon from "../components/Icon";
 
@@ -174,8 +175,10 @@ function ForgotPasswordModal({ visible, onClose, signIn }) {
                 autoCapitalize="none"
                 keyboardType="email-address"
                 autoComplete="email"
+                autoCorrect={false}
+                maxLength={EMAIL_MAX}
                 value={email}
-                onChangeText={edit("email", setEmail)}
+                onChangeText={edit("email", (v) => setEmail(cleanEmail(v)))}
                 onSubmitEditing={handleSendCode}
                 returnKeyType="send"
                 editable={!loading}
@@ -207,7 +210,7 @@ function ForgotPasswordModal({ visible, onClose, signIn }) {
                 keyboardType="number-pad"
                 maxLength={6}
                 value={code}
-                onChangeText={edit("code", setCode)}
+                onChangeText={edit("code", (v) => setCode(digitsOnly(v)))}
                 autoComplete="one-time-code"
                 textContentType="oneTimeCode"
                 editable={!loading}
@@ -517,8 +520,10 @@ export default function Login({ navigation }) {
             textContentType="emailAddress"
             returnKeyType="next"
             onSubmitEditing={() => passwordRef.current?.focus()}
+            autoCorrect={false}
+            maxLength={EMAIL_MAX}
             value={email}
-            onChangeText={(v) => { setEmail(v); if (authError) setAuthError(""); }}
+            onChangeText={(v) => { setEmail(cleanEmail(v)); if (authError) setAuthError(""); }}
             onBlur={() => touch("email")}
             editable={!disabled}
             accessibilityLabel="Email address"

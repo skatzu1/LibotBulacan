@@ -27,6 +27,9 @@ jest.mock("expo-notifications", () => ({
   AndroidImportance: { HIGH: 4, MAX: 5, DEFAULT: 3 },
 }));
 jest.mock("../components/AppAlert", () => ({ showAlert: jest.fn() }));
+// The app mounts PointsProvider above ArrivalProvider; arrival only calls
+// refresh() after a visit, so a stub is enough here.
+jest.mock("../context/PointsContext", () => ({ usePoints: () => ({ refresh: jest.fn() }) }));
 
 const mockWatches = [];
 jest.mock("expo-location", () => ({
