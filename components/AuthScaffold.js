@@ -27,6 +27,11 @@ export function AuthHero({ children, variant = "photo", height }) {
   const { height: winH } = useWindowDimensions();
   const h = height ?? Math.round(Math.min(winH * 0.38, 340));
 
+  // Transparent: the screen's own full-screen background shows through.
+  if (variant === "clear") {
+    return <View style={[s.hero, { height: h }]}>{children}</View>;
+  }
+
   if (variant === "bubbles") {
     // Register's header: cyan circles scattered on white. Positions are fixed
     // rather than random so the composition is the same on every launch.
@@ -81,11 +86,26 @@ export function AuthHero({ children, variant = "photo", height }) {
   );
 }
 
+// With a full-screen background the panel is slightly see-through, so the
+// picture carries on behind the form. 0.88 is the lowest opacity that keeps
+// every text colour on the panel at WCAG AA (≥ 4.5:1) even over the darkest
+// part of bg.png — measured: body 6.99:1, muted 4.57:1 (0.85 drops muted
+// to 4.45:1). Re-measure if the background image changes.
+const PANEL_OVER_IMAGE_OPACITY = 0.88;
+
+const withAlpha = (hex, alpha) => {
+  const n = parseInt(hex.slice(1), 16);
+  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${alpha})`;
+};
+
 /**
- * @param variant   'cyan' | 'yellow'
- * @param onBack    renders the back chevron when provided
- * @param title     large heading
- * @param subtitle  one or two lines under it
+ * @param variant     'cyan' | 'yellow'
+ * @param onBack      renders the back chevron when provided
+ * @param title       large heading
+ * @param subtitle    one or two lines under it
+ * @param background  optional image source for the whole screen. The hero
+ *                    becomes transparent and the panel translucent over it;
+ *                    the image should already carry its own colour wash.
  */
 export default function AuthScaffold({
   variant = "cyan",
@@ -96,12 +116,19 @@ export default function AuthScaffold({
   subtitle,
   children,
   footer,
+  background,
 }) {
   const insets = useSafeAreaInsets();
   const panel  = variant === "yellow" ? A.yellowPanel : A.cyanPanel;
+  const heroVariant = background && hero === "photo" ? "clear" : hero;
+  const panelBg = background ? withAlpha(panel, PANEL_OVER_IMAGE_OPACITY) : panel;
+
+  // The background stays put while the form scrolls over it.
+  const Root = background ? ImageBackground : View;
+  const rootProps = background ? { source: background, resizeMode: "cover" } : {};
 
   return (
-    <View style={[s.screen, { backgroundColor: panel }]}>
+    <Root {...rootProps} style={[s.screen, { backgroundColor: panel }]}>
       <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
 
       <KeyboardAvoidingView
@@ -114,7 +141,7 @@ export default function AuthScaffold({
           showsVerticalScrollIndicator={false}
           bounces={false}
         >
-          <AuthHero variant={hero}>
+          <AuthHero variant={heroVariant}>
             {showLogo && (
               <View style={[s.logoWrap, { marginTop: insets.top }]}>
                 <Logo size={120} />
@@ -135,7 +162,7 @@ export default function AuthScaffold({
 
           {/* The panel pulls up over the hero so the oversized corner cuts into
               the photograph, exactly as the mockup draws it. */}
-          <View style={[s.panel, { backgroundColor: panel }]}>
+          <View style={[s.panel, { backgroundColor: panelBg }]}>
             {hero !== "bubbles" && onBack && (
               <TouchableOpacity
                 onPress={onBack}
@@ -167,7 +194,7 @@ export default function AuthScaffold({
       </KeyboardAvoidingView>
 
       {footer}
-    </View>
+    </Root>
   );
 }
 
