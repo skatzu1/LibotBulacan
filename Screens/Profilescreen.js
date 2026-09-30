@@ -6,7 +6,6 @@ import {
   TouchableOpacity,
   Image,
   ScrollView,
-  ActivityIndicator,
   Modal,
   TouchableWithoutFeedback,
   Animated,
@@ -14,14 +13,12 @@ import {
   RefreshControl,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
-import { showAlert } from "../components/AppAlert";
 import { useUser, useAuth } from "@clerk/clerk-expo";
 import { useAuth as useAppAuth } from "../context/AuthContext";
 import { useProfileImage } from "../context/ProfileImageContext";
 import { useTheme, fonts, typography } from "../context/ThemeContext";
-import { ScreenHeader, H_PAD, TAP } from "../components/ui";
+import { ScreenHeader, ListRow, LoadingState, Avatar, H_PAD, TAP } from "../components/ui";
 import { BASE_URL } from "../api";
-import { avatarImage } from "../utils/image";
 import Icon from "../components/Icon";
 
 // Was a hardcoded "https://libotbackend.onrender.com" — the only place in the
@@ -142,62 +139,44 @@ export default function ProfileScreen() {
 
   const fullName = userInfo.fullName;
 
+  // "Deactivate" used to head this list. It did nothing but open a "Not
+  // available yet" popup — a destructive-sounding dead end as the first thing
+  // on the page. Deleting the account is real and lives in Edit Profile.
   const menuItems = [
-    {
-      id: 1,
-      icon: "user-x",
-      title: "Deactivate",
-      onPress: () =>
-        showAlert(
-          "Not Available Yet",
-          "Account deactivation isn't set up yet. If you'd like to deactivate or delete your account, please contact support.",
-          [{ text: "OK" }]
-        ),
-    },
-    {
-      id: 2,
-      icon: "map-pin",
-      title: "Previous Trips",
-      onPress: () => navigation.navigate("PreviousTrips"),
-    },
-    {
-      id: 3,
-      icon: "award",
-      title: "Badges",
-      onPress: () => navigation.navigate("Badges"),
-    },
-    {
-      id: 4,
-      icon: "settings",
-      title: "Settings",
-      onPress: () => navigation.navigate("Settings"),
-    },
+    { id: "trips",    icon: "map-pin",  title: "Previous Trips", subtitle: "Places you've arrived at", onPress: () => navigation.navigate("PreviousTrips") },
+    { id: "badges",   icon: "award",    title: "Badges",         subtitle: "Earned by visiting spots", onPress: () => navigation.navigate("Badges") },
+    { id: "settings", icon: "settings", title: "Settings",       subtitle: "Account, appearance, support", onPress: () => navigation.navigate("Settings") },
   ];
+
+  const header = (
+    <ScreenHeader
+      title="Profile"
+      onBack={navigation.canGoBack() ? () => navigation.goBack() : undefined}
+      right={
+        <TouchableOpacity
+          accessibilityRole="button"
+          onPress={() => navigation.navigate("EditProfile")}
+          hitSlop={8}
+          accessibilityLabel="Edit profile"
+        >
+          <Icon name="edit-2" size={18} color={colors.brand} />
+        </TouchableOpacity>
+      }
+    />
+  );
 
   if (!isLoaded) {
     return (
-      <View style={[styles.container, styles.centered, { backgroundColor: colors.background }]}>
-        <ActivityIndicator size="large" color={colors.brand} />
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
+        {header}
+        <LoadingState />
       </View>
     );
   }
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <ScreenHeader
-        title="Profile"
-        onBack={navigation.canGoBack() ? () => navigation.goBack() : undefined}
-        right={
-          <TouchableOpacity
-            accessibilityRole="button"
-            onPress={() => navigation.navigate("EditProfile")}
-            hitSlop={8}
-            accessibilityLabel="Edit profile"
-          >
-            <Icon name="edit-2" size={18} color={colors.brand} />
-          </TouchableOpacity>
-        }
-      />
+      {header}
 
       <ScrollView
         showsVerticalScrollIndicator={false}
@@ -222,13 +201,7 @@ export default function ProfileScreen() {
             accessibilityHint={displayPhoto ? "Opens a larger view" : undefined}
           >
             <View style={[styles.profilePhotoWrapper, { backgroundColor: colors.brand, borderColor: colors.card }]}>
-              {displayPhoto ? (
-                <Image source={{ uri: avatarImage(displayPhoto, 104) }} style={styles.profilePhoto} />
-              ) : (
-                <View style={[styles.profilePhotoPlaceholder, { backgroundColor: colors.brand }]}>
-                  <Icon name="user" size={40} color={colors.onBrand} />
-                </View>
-              )}
+              <Avatar uri={displayPhoto} name={fullName} size={96} strong />
             </View>
             {displayPhoto && (
               <View style={[styles.zoomBadge, { backgroundColor: colors.overlay }]}>
@@ -266,35 +239,9 @@ export default function ProfileScreen() {
           </View>
         </View>
 
-        <View style={styles.menuContainer}>
-          {menuItems.map((item) => (
-            <TouchableOpacity
-              key={item.id}
-              style={[styles.menuItem, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}
-              onPress={item.onPress}
-              activeOpacity={0.7}
-              accessibilityRole="button"
-              accessibilityLabel={item.title}
-            >
-              <View style={styles.menuLeft}>
-                <View style={[styles.iconContainer, { backgroundColor: colors.brandLight }]}>
-                  <Icon name={item.icon} size={18} color={colors.brand} />
-                </View>
-                <Text style={[styles.menuText, { color: colors.textPrimary }]}>{item.title}</Text>
-              </View>
-              <View style={styles.menuRight}>
-                {item.badge ? (
-                  <View style={[styles.badgePill, { backgroundColor: colors.brand }]}>
-                    <Text style={[styles.badgePillText, { color: colors.textInverse }]}>{item.badge}</Text>
-                  </View>
-                ) : null}
-                <Icon name="chevron-right" size={18} color={colors.textMuted} />
-              </View>
-            </TouchableOpacity>
-          ))}
-        </View>
-
-        <View style={{ height: 50 }} />
+        {menuItems.map((item) => (
+          <ListRow key={item.id} icon={item.icon} title={item.title} subtitle={item.subtitle} onPress={item.onPress} />
+        ))}
       </ScrollView>
 
       {/* ── Photo Modal ── */}
@@ -350,7 +297,6 @@ export default function ProfileScreen() {
 
 const styles = StyleSheet.create({
   container:     { flex: 1 },
-  centered:      { justifyContent: "center", alignItems: "center" },
   scrollContent: { paddingHorizontal: H_PAD, paddingTop: 16, paddingBottom: 60 },
 
   profilePhotoContainer: { alignItems: "center", marginBottom: 14 },
@@ -359,8 +305,6 @@ const styles = StyleSheet.create({
     justifyContent: "center", alignItems: "center",
     borderWidth: 4,
   },
-  profilePhoto:            { width: "100%", height: "100%", resizeMode: "cover" },
-  profilePhotoPlaceholder: { width: "100%", height: "100%", justifyContent: "center", alignItems: "center" },
   zoomBadge: {
     position: "absolute", bottom: 0, right: 0, width: 26, height: 26,
     borderRadius: 13, justifyContent: "center", alignItems: "center",
@@ -377,20 +321,8 @@ const styles = StyleSheet.create({
   statIcon:    { marginBottom: 5 },
   statDivider: { width: 1, height: 50, marginHorizontal: 4 },
   statLabel:   { fontSize: 11, fontFamily: fonts.sansMedium, marginBottom: 4 },
-  statCount:   { fontSize: 26, fontFamily: fonts.sansBold, letterSpacing: -0.5 },
-
-  menuContainer: { backgroundColor: "transparent" },
-  menuItem: {
-    flexDirection: "row", justifyContent: "space-between", alignItems: "center",
-    borderRadius: 16, paddingVertical: 15, paddingHorizontal: 15,
-    marginBottom: 10, borderWidth: 1,
-  },
-  menuLeft:      { flexDirection: "row", alignItems: "center" },
-  iconContainer: { width: 38, height: 38, borderRadius: 12, justifyContent: "center", alignItems: "center", marginRight: 12 },
-  menuText:      { fontSize: 15, fontFamily: fonts.sansSemi },
-  menuRight:     { flexDirection: "row", alignItems: "center", gap: 8 },
-  badgePill:     { borderRadius: 999, paddingHorizontal: 9, paddingVertical: 3 },
-  badgePillText: { fontSize: 11, fontFamily: fonts.sansBold },
+  // Figures carry the serif, like the rank numerals and the rating summary.
+  statCount:   { ...typography.display, fontSize: 28, lineHeight: 32 },
 
   // ── Modal ──
   modalBackdrop: {
