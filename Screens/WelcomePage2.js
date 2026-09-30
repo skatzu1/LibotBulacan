@@ -22,7 +22,7 @@ const BULACAN_MUNICIPALITIES = [
 /*
  * Onboarding, screen 2 of 2 — built from the approved mockup.
  *
- * Same duotone hero as screen 1 so the pair reads as one piece, with the
+ * Same bg.png backdrop as screen 1 so the pair reads as one piece, with the
  * municipality picker as a white pill. All of the original gating logic is
  * unchanged: a selection is required, "I don't live in Bulacan" is refused, and
  * the choice plus the hasSeenWelcome flag are persisted before Login.
@@ -62,16 +62,10 @@ export default function WelcomePage2({ navigation }) {
       <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
 
       <ImageBackground
-        source={require("../assets/welcome.jpg")}
+        source={require("../assets/bg.png")}
         style={StyleSheet.absoluteFill}
         resizeMode="cover"
       >
-        <LinearGradient
-          colors={[A.washTop, A.washMid, A.washBottom]}
-          locations={[0, 0.55, 1]}
-          style={StyleSheet.absoluteFill}
-          pointerEvents="none"
-        />
         <LinearGradient
           colors={["transparent", "rgba(12,34,36,0.68)", "rgba(12,34,36,0.68)", "transparent"]}
           locations={[0.18, 0.34, 0.74, 0.92]}

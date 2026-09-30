@@ -20,6 +20,9 @@ import { TERMS_URL as TERMS_OF_SERVICE_URL, PRIVACY_URL as PRIVACY_POLICY_URL } 
 import AuthScaffold, { authStyles as a } from "../components/AuthScaffold";
 import Icon from "../components/Icon";
 
+// Same full-screen background as sign-in; it carries its own cyan→yellow wash.
+const REGISTER_BG = require("../assets/bg.png");
+
 WebBrowser.maybeCompleteAuthSession();
 
 // ── Password strength helpers ──────────────────────────────────────
@@ -32,6 +35,8 @@ const PASSWORD_RULES = [
 
 // Strength colours are picked to sit on the YELLOW panel, not on the app's
 // cards — the in-app `danger`/`warning` tokens wash out against #F8E27E.
+// All four stay ≥ 4.5:1 with the panel translucent over bg.png ("Fair" is the
+// tightest at 4.60:1).
 const STRENGTH = [
   { label: "Weak",   color: "#8E1F16" },
   { label: "Fair",   color: "#8A4B0A" },
@@ -258,7 +263,7 @@ export default function Register({ navigation }) {
   return (
     <AuthScaffold
       variant="yellow"
-      hero="bubbles"
+      background={REGISTER_BG}
       showLogo={false}
       onBack={() => navigation.navigate("Login")}
       title="Create an Account"
