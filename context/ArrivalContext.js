@@ -40,16 +40,21 @@ const ALL_SPOTS_KEY            = "allSpots";
 const SPOTS_CACHE_TTL_MS       = 5 * 60 * 1000;
 const BACKGROUND_LOCATION_TASK = "background-location-task";
 
-// Background arrivals (alerts while Libot is closed) are OFF for launch.
-// Background location triggers Google Play's strictest review — a permission
-// declaration, a demo video, and a real chance of rejection — so the first
-// release detects arrivals only while the app is open. The background task
-// below is kept intact. To turn it back on: set this to true, remove
-// ACCESS_BACKGROUND_LOCATION / FOREGROUND_SERVICE* from `blockedPermissions`
-// in app.json, set isAndroidBackgroundLocationEnabled and
-// isAndroidForegroundServiceEnabled back to true, and restore the background
-// wording in the backend's /privacy and /help pages.
-const BACKGROUND_ARRIVALS_ENABLED = false;
+// Background arrivals: arrival alerts while Libot is closed, via the
+// background task below, plus the "Allow all the time" prompt that asks for
+// the permission it needs. ON.
+//
+// It depends on native config in app.json: ACCESS_BACKGROUND_LOCATION and
+// FOREGROUND_SERVICE(_LOCATION) in `permissions`, and
+// isAndroidBackgroundLocationEnabled / isAndroidForegroundServiceEnabled set
+// to true. Changing those needs a new build, not just a JS reload. Google
+// Play reviews background location strictly: the Play Console asks for a
+// permission declaration and a short demo video before release.
+//
+// Set this to false for a foreground-only build (arrivals only while the app
+// is open). Block those permissions in app.json too, and update the backend's
+// /help page, which describes the current behaviour.
+const BACKGROUND_ARRIVALS_ENABLED = true;
 
 // Persisted set of spotIds the user is CURRENTLY inside (per user).
 // Both the foreground watcher and the background task read/write this same
