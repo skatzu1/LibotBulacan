@@ -1,9 +1,8 @@
-import React, { useState, useRef, useMemo } from "react";
+import React, { useState, useMemo } from "react";
 import {
   View,
   Text,
   StyleSheet,
-  TouchableOpacity,
   ScrollView,
   StatusBar,
 } from "react-native";
@@ -18,7 +17,6 @@ import {
 
 // ── Skeleton import ───────────────────────────────────────────────────────────
 import ListsSkeleton from "../components/ListsSkeleton";
-import Icon from "../components/Icon";
 
 // Spot.category is stored as an array (e.g. ["Festivals"]) per the Mongoose
 // schema. Some legacy docs might still have it as a plain string.
@@ -38,9 +36,7 @@ export default function Lists() {
   const displayName = route.params?.displayName || category;
 
   // ── Search state ──────────────────────────────────────────────────────────
-  const [searchActive, setSearchActive] = useState(false);
-  const [searchQuery,  setSearchQuery]  = useState("");
-  const searchInputRef = useRef(null);
+  const [searchQuery, setSearchQuery] = useState("");
 
   // There used to be a hardcoded "offline" list here, shown whenever a
   // category came back empty. It held Paoay Church, Vigan and Pahiyas — none of
@@ -50,18 +46,6 @@ export default function Lists() {
     () => allSpots.filter((s) => inCategory(s, category)),
     [allSpots, category]
   );
-
-  // ── Search handlers ───────────────────────────────────────────────────────
-  const openSearch = () => {
-    setSearchActive(true);
-    // wait for the input to mount before focusing
-    setTimeout(() => searchInputRef.current?.focus(), 50);
-  };
-
-  const closeSearch = () => {
-    setSearchActive(false);
-    setSearchQuery("");
-  };
 
   // Spots visible after applying the in-category search filter
   const q = searchQuery.trim().toLowerCase();
@@ -76,38 +60,18 @@ export default function Lists() {
     <View style={styles.container}>
       <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={colors.background} />
 
-      {/* The header stays put whether searching or loading — it used to be
-          swapped for a bespoke search bar (with its own hardcoded paddingTop:52
-          that disagreed with every other screen), and replaced entirely by the
-          skeleton while loading. */}
-      <ScreenHeader
-        title={displayName}
-        onBack={searchActive ? closeSearch : () => navigation.goBack()}
-        right={
-          searchActive ? null : (
-            <TouchableOpacity
-              onPress={openSearch}
-              hitSlop={12}
-              accessibilityRole="button"
-              accessibilityLabel={`Search in ${displayName}`}
-            >
-              <Icon name="search" size={21} color={colors.textPrimary} />
-            </TouchableOpacity>
-          )
-        }
-      />
+      {/* The header and search bar stay put while loading — the header used to
+          be replaced entirely by the skeleton. */}
+      <ScreenHeader title={displayName} onBack={() => navigation.goBack()} />
 
-      {searchActive && (
-        <View style={styles.searchWrap}>
-          <SearchField
-            ref={searchInputRef}
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            onClear={() => setSearchQuery("")}
-            placeholder={`Search in ${displayName}`}
-          />
-        </View>
-      )}
+      <View style={styles.searchWrap}>
+        <SearchField
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          onClear={() => setSearchQuery("")}
+          placeholder={`Search in ${displayName}`}
+        />
+      </View>
 
       {loading ? <ListsSkeleton cardCount={4} /> : (
       <ScrollView
