@@ -43,9 +43,8 @@ const ZOOM_MIN          = 0.3;
 const ZOOM_MAX          = 2.5;        // 6.7 × 2.5 stays short of the camera at 20
 const TILT_LIMIT        = 70;
 
-// The camera looks down on the model from 15° above. Tipping the model instead
-// would need a second node to keep its spin level, and nested nodes crash Viro
-// (see ModelScene).
+// The camera looks down on the model from 15° above, so the model itself only
+// ever spins about its own vertical axis — one Viro3DObject, one rotation.
 const CAMERA_PITCH  = 15;
 const CAMERA_HEIGHT = -VIEW_DISTANCE * Math.tan((CAMERA_PITCH * Math.PI) / 180);
 
@@ -76,33 +75,41 @@ const placement = (fit, zoom) => {
 // ─────────────────────────────────────────────
 // 3D Scene
 //
-// Keep the model a single Viro3DObject directly in the scene. Nesting it in
-// ViroNodes crashes the app (SIGSEGV, "sVM != nullptr" in Viro's
-// VROPlatformUtil): a node with Java-side children runs a native bounds
-// update on every transform, and in a 3D (non-AR) scene that can happen
-// before Viro has its JavaVM handle. A lone object has no such children.
+// The camera and the model are only added once the scene reports the platform
+// is up (onPlatformUpdate). Anything that has child nodes — a ViroCamera makes
+// one internally — runs a native bounds update when it's created, and that
+// needs the JavaVM handle Viro only gets when its renderer is created. React
+// builds the scene's first render *before* the navigator (children first), so
+// a camera there crashes the app (SIGSEGV, "sVM != nullptr" in Viro's
+// VROPlatformUtil). The navigator calls onPlatformUpdate from its own
+// addView, i.e. once it — and the handle — exists; after that it's safe.
 // ─────────────────────────────────────────────
 const ModelScene = ({ sceneNavigator }) => {
   const {
     modelUrl,
     fit,
+    sceneReady,
     objectRef,
     isDark,
     baseRotX,
     baseRotY,
+    onSceneReady,
     onModelReady,
     onModelError,
   } = sceneNavigator.viroAppProps;
-  const { scale, position } = placement(fit, 1);
+  const showModel = sceneReady && !!fit;
+  const { scale, position } = showModel ? placement(fit, 1) : {};
 
   return (
-    <ViroScene>
-      <ViroCamera
-        position={[0, CAMERA_HEIGHT, 0]}
-        rotation={[-CAMERA_PITCH, 0, 0]}
-        active
-        fieldOfView={FIELD_OF_VIEW}
-      />
+    <ViroScene onPlatformUpdate={() => onSceneReady?.()}>
+      {sceneReady && (
+        <ViroCamera
+          position={[0, CAMERA_HEIGHT, 0]}
+          rotation={[-CAMERA_PITCH, 0, 0]}
+          active
+          fieldOfView={FIELD_OF_VIEW}
+        />
+      )}
 
       <ViroSphere
         position={[0, 0, 0]}
@@ -116,16 +123,18 @@ const ModelScene = ({ sceneNavigator }) => {
       <ViroDirectionalLight color="#ffffff" direction={[0, 0.5, 1]}       intensity={350} />
       <ViroAmbientLight     color="#ffffff" intensity={300} />
 
-      <Viro3DObject
-        ref={objectRef}
-        source={{ uri: modelUrl }}
-        position={position}
-        scale={scale}
-        rotation={[baseRotX, baseRotY, 0]}
-        type="GLB"
-        onLoadEnd={() => onModelReady?.()}
-        onError={() => onModelError?.()}
-      />
+      {showModel && (
+        <Viro3DObject
+          ref={objectRef}
+          source={{ uri: modelUrl }}
+          position={position}
+          scale={scale}
+          rotation={[baseRotX, baseRotY, 0]}
+          type="GLB"
+          onLoadEnd={() => onModelReady?.()}
+          onError={() => onModelError?.()}
+        />
+      )}
     </ViroScene>
   );
 };
@@ -151,6 +160,8 @@ export default function ModelViewer({
   const [loaded, setLoaded]   = useState(false);
   const [error, setError]     = useState(false);
   const [attempt, setAttempt] = useState(0);
+  // True once the Viro scene is running; see ModelScene for why it matters.
+  const [sceneReady, setSceneReady] = useState(false);
 
   const objectRef  = useRef(null);
   const fitRef     = useRef(null);
@@ -173,6 +184,7 @@ export default function ModelViewer({
     clearTimeout(resumeTimer.current);
     setFit(null);
     fitRef.current = null;
+    setSceneReady(false);
     setLoaded(false);
     setError(false);
     rotX.current = baseRotX;
@@ -185,6 +197,14 @@ export default function ModelViewer({
     });
     return () => { live = false; };
   }, [url, attempt, baseRotX, baseRotY]);
+
+  // Backstop for onPlatformUpdate: well after the navigator has mounted, the
+  // renderer exists whether or not the event arrived.
+  useEffect(() => {
+    if (!url || sceneReady) return undefined;
+    const t = setTimeout(() => setSceneReady(true), 1500);
+    return () => clearTimeout(t);
+  }, [url, attempt, sceneReady]);
 
   useEffect(() => () => {
     cancelAnimationFrame(frame.current);
@@ -331,17 +351,16 @@ export default function ModelViewer({
 
   return (
     <View style={[styles.wrapper, surface, style]}>
-      {/* Mounted once the fit is known, so the scene's first render already
-          holds the model — the same order the viewer always used. */}
-      {fit && (
-        <Viro3DSceneNavigator
-          key={attempt}
-          initialScene={{ scene: ModelScene }}
-          viroAppProps={{ modelUrl: url, fit, objectRef, isDark, baseRotX, baseRotY, onModelReady, onModelError }}
-          style={StyleSheet.absoluteFill}
-          onError={onModelError}
-        />
-      )}
+      <Viro3DSceneNavigator
+        key={attempt}
+        initialScene={{ scene: ModelScene }}
+        viroAppProps={{
+          modelUrl: url, fit, sceneReady, objectRef, isDark, baseRotX, baseRotY,
+          onSceneReady: () => setSceneReady(true), onModelReady, onModelError,
+        }}
+        style={StyleSheet.absoluteFill}
+        onError={onModelError}
+      />
 
       {!loaded && (
         <View style={[StyleSheet.absoluteFill, styles.center, surface]}>
