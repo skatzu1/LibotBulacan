@@ -5,13 +5,14 @@
 // completion.
 import React, { useEffect, useRef, useState } from "react";
 import {
-  View, Text, Image, StyleSheet, TouchableOpacity, ActivityIndicator, StatusBar,
+  View, Text, Image, StyleSheet, ActivityIndicator, StatusBar, ScrollView,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import * as Location from "expo-location";
 import { showAlert } from "../components/AppAlert";
 import { useMissions } from "../context/MissionContext";
 import { useTheme, spacing, radius, typography, shadow, fonts } from "../context/ThemeContext";
+import { ScreenHeader, PrimaryButton, H_PAD } from "../components/ui";
 import Icon from "../components/Icon";
 import { spotImage } from "../utils/image";
 import { GpsSmoother, isBetterFix, MAX_USABLE_ACCURACY_M } from "../utils/gpsFilter";
@@ -144,20 +145,15 @@ export default function LocationMission({ navigation, route }) {
   };
 
   return (
-    <SafeAreaView style={[styles.screen, { backgroundColor: colors.background }]} edges={["top", "bottom"]}>
+    // ScreenHeader pads for the top inset itself, so only the bottom edge here.
+    <SafeAreaView style={[styles.screen, { backgroundColor: colors.background }]} edges={["bottom"]}>
       <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={colors.background} />
 
-      <View style={styles.header}>
-        <TouchableOpacity
-          accessibilityRole="button" accessibilityLabel="Go back" onPress={() => navigation.goBack()} style={styles.backBtn} hitSlop={8}>
-          <Icon name="chevron-left" size={24} color={colors.textPrimary} />
-        </TouchableOpacity>
-        <Text style={[typography.h3, { color: colors.textPrimary, flex: 1 }]} numberOfLines={1}>
-          {mission.title}
-        </Text>
-      </View>
+      <ScreenHeader title={mission.title} onBack={() => navigation.goBack()} />
 
-      <View style={styles.body}>
+      {/* Scrolls so a long description or large font setting can't push the
+          Complete button off a small screen. */}
+      <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
         {mission.image ? (
           <Image source={{ uri: spotImage(mission.image, 400, 200) }} style={[styles.restaurantImage, shadow.md]} resizeMode="cover" />
         ) : (
@@ -234,37 +230,25 @@ export default function LocationMission({ navigation, route }) {
           </View>
         )}
 
+        <View style={styles.spacer} />
+
         {configured && !locError && (
-          <TouchableOpacity
-            accessibilityRole="button"
-            style={[
-              styles.completeBtn,
-              { backgroundColor: colors.accent },
-              (submitting || !coords) && { opacity: 0.6 },
-              shadow.md,
-            ]}
+          <PrimaryButton
+            title="Complete Activity"
             onPress={handleComplete}
-            disabled={submitting || !coords}
-            activeOpacity={0.85}
-          >
-            {submitting
-              ? <ActivityIndicator color={colors.onAccent} />
-              : <Text style={[typography.title, { color: colors.onAccent }]}>Complete Activity</Text>}
-          </TouchableOpacity>
+            loading={submitting}
+            disabled={!coords}
+            style={styles.completeBtn}
+          />
         )}
-      </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
   screen: { flex: 1 },
-  header: {
-    flexDirection: "row", alignItems: "center", gap: spacing.sm,
-    paddingHorizontal: spacing.md, paddingVertical: spacing.sm,
-  },
-  backBtn: { width: 40, height: 40, justifyContent: "center", alignItems: "flex-start" },
-  body: { flex: 1, paddingHorizontal: spacing.xl, alignItems: "center" },
+  body: { flexGrow: 1, paddingHorizontal: H_PAD, alignItems: "center" },
   center: { textAlign: "center" },
 
   iconWrap: {
@@ -291,8 +275,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md, paddingVertical: spacing.sm, marginTop: spacing.lg,
   },
 
-  completeBtn: {
-    width: "100%", borderRadius: radius.button, paddingVertical: spacing.lg,
-    alignItems: "center", justifyContent: "center", marginTop: "auto", marginBottom: spacing.xl,
-  },
+  // Pushes the button to the bottom when there's room, keeps a gap when not.
+  spacer:      { flexGrow: 1, minHeight: spacing.xl },
+  completeBtn: { alignSelf: "stretch", marginBottom: spacing.xl },
 });

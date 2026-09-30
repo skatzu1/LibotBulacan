@@ -9,7 +9,6 @@ import {
   Image,
   Animated,
   useWindowDimensions,
-  ActivityIndicator,
   RefreshControl,
   Modal,
   StatusBar,
@@ -22,7 +21,10 @@ import { captureRef } from "react-native-view-shot";
 import RNShare from "react-native-share";
 import * as Haptics from "expo-haptics";
 import { useTheme, fonts, typography } from "../context/ThemeContext";
-import { ScreenHeader } from "../components/ui";
+import {
+  ScreenHeader, Segmented, EmptyState, ErrorState, LoadingState, PrimaryButton,
+} from "../components/ui";
+import { useArrival } from "../context/ArrivalContext";
 import { BASE_URL } from "../api";
 import { badgeImage } from "../utils/image";
 import Icon from "../components/Icon";
@@ -58,6 +60,8 @@ export default function BadgeScreen() {
   const navigation   = useNavigation();
   const { getToken } = useAuth();
   const { colors, isDark } = useTheme();
+  const { allSpots } = useArrival();
+  const hasLoaded    = useRef(false);
   const { width: winWidth } = useWindowDimensions();
   const columns  = columnsFor(winWidth);
   const cardSize = cardSizeFor(winWidth);
@@ -116,14 +120,18 @@ export default function BadgeScreen() {
 
       combined.sort((a, b) => (b.claimed === a.claimed ? 0 : b.claimed ? 1 : -1));
       setBadges(combined);
+      hasLoaded.current = true;
     } catch (e) {
       console.warn("BadgeScreen load error:", e);
-      setError("Could not load badges. Pull down to retry.");
+      setError("Couldn't load your badges. Check your connection.");
     }
   };
 
+  // Only the first load shows the loading state. The focus listener re-runs
+  // this every time the screen comes back into view (e.g. closing a spot you
+  // opened from a badge), and each of those used to blank the grid.
   const initialLoad = async () => {
-    setLoading(true);
+    if (!hasLoaded.current) setLoading(true);
     await loadBadges();
     setLoading(false);
   };
@@ -300,18 +308,45 @@ export default function BadgeScreen() {
     </AnimatedCell>
   ), [colors, cardSize]);
 
+  // The spot a badge belongs to, in full, so the detail modal can open it.
+  const spotForBadge = (badge) => {
+    const id = badge?.spotId?._id ?? badge?.spotId;
+    return id ? allSpots.find((s) => String(s._id) === String(id)) : null;
+  };
+  const selectedSpot = spotForBadge(selectedBadge);
+
+  const openSelectedSpot = () => {
+    const spot = selectedSpot;
+    closeBadge();
+    if (spot) navigation.navigate("InformationScreen", { spot });
+  };
+
+  const header = (
+    <ScreenHeader
+      title="Badges"
+      onBack={() => navigation.goBack()}
+      right={
+        badges.length > 0 ? (
+          <View style={[styles.countBadge, { backgroundColor: colors.brandLight }]}>
+            <Text style={[styles.countText, { color: colors.brandDark }]}>{claimedCount}/{badges.length}</Text>
+          </View>
+        ) : null
+      }
+    />
+  );
+
   if (loading) {
     return (
-      <View style={[styles.centered, { backgroundColor: colors.background }]}>
-        <ActivityIndicator size="large" color={colors.brand} />
-        <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Loading badges...</Text>
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
+        {header}
+        <LoadingState label="Loading badges…" />
       </View>
     );
   }
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <StatusBar barStyle={isDark ? "light-content" : "dark-content"} />
+      <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={colors.background} />
 
       {/* ── Hidden shareable badge card, captured as PNG ──
           Kept inside normal document bounds (top:0/left:0) rather than
@@ -333,15 +368,7 @@ export default function BadgeScreen() {
         </View>
       </View>
 
-      <ScreenHeader
-        title="Badges"
-        onBack={() => navigation.goBack()}
-        right={
-          <View style={[styles.countBadge, { backgroundColor: colors.brandLight }]}>
-            <Text style={[styles.countText, { color: colors.brandDark }]}>{claimedCount}/{badges.length}</Text>
-          </View>
-        }
-      />
+      {header}
 
       <FlatList
         data={visibleBadges}
@@ -370,53 +397,33 @@ export default function BadgeScreen() {
         }
         ListHeaderComponent={
           <>
-            {error && (
-              <TouchableOpacity
-                accessibilityRole="button" onPress={onRefresh} style={[styles.errorBanner, { backgroundColor: colors.dangerBg, borderColor: colors.danger }]}>
-                <Text style={[styles.errorText, { color: colors.danger }]}>{error}</Text>
-                <Text style={[styles.retryText, { color: colors.danger }]}>Tap to retry</Text>
-              </TouchableOpacity>
-            )}
+            {error && <ErrorState text={error} onRetry={onRefresh} style={styles.errorBox} />}
 
             {badges.length > 0 && (
-              <View style={[styles.filterBar, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
-                {FILTERS.map((f) => {
+              <Segmented
+                style={styles.filterBar}
+                value={filter}
+                onChange={setFilter}
+                options={FILTERS.map((f) => {
                   const count = f.key === "all" ? badges.length : f.key === "claimed" ? claimedCount : lockedCount;
-                  const active = filter === f.key;
-                  return (
-                    <TouchableOpacity
-                      accessibilityRole="button"
-                      key={f.key}
-                      onPress={() => setFilter(f.key)}
-                      style={[styles.filterTab, active && { backgroundColor: colors.brand }]}
-                      activeOpacity={0.8}
-                    >
-                      <Text style={[styles.filterTabText, { color: active ? colors.textInverse : colors.textSecondary }]}>
-                        {f.label} ({count})
-                      </Text>
-                    </TouchableOpacity>
-                  );
+                  return { key: f.key, label: `${f.label} (${count})`, a11y: `${f.label}, ${count} badges` };
                 })}
-              </View>
+              />
             )}
           </>
         }
         ListEmptyComponent={
           !error && badges.length === 0 ? (
-            <View style={styles.emptyState}>
-              <Icon name="award" size={52} color={colors.brand} style={styles.emptyIcon} />
-              <Text style={[styles.emptyTitle, { color: colors.brandDark }]}>No badges yet</Text>
-              <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
-                Navigate to a historical spot and arrive to earn your first badge!
-              </Text>
-            </View>
+            <EmptyState
+              icon="award"
+              title="No badges yet"
+              text="Arrive at a spot in person to earn its badge."
+            />
           ) : !error && visibleBadges.length === 0 ? (
-            <View style={styles.emptyState}>
-              <Icon name={filter === "claimed" ? "target" : "check-circle"} size={52} color={colors.brand} style={styles.emptyIcon} />
-              <Text style={[styles.emptyTitle, { color: colors.brandDark }]}>
-                {filter === "claimed" ? "Nothing claimed yet" : "All badges unlocked!"}
-              </Text>
-            </View>
+            <EmptyState
+              icon={filter === "claimed" ? "target" : "check-circle"}
+              title={filter === "claimed" ? "Nothing claimed yet" : "All badges unlocked!"}
+            />
           ) : null
         }
         ListFooterComponent={<View style={{ height: 40 }} />}
@@ -543,32 +550,25 @@ export default function BadgeScreen() {
             <View style={[styles.divider, { backgroundColor: colors.divider }]} />
 
             {selectedBadge?.claimed ? (
-              <TouchableOpacity
-                accessibilityRole="button"
-                style={[styles.shareButton, { backgroundColor: colors.accent }, sharing && { opacity: 0.7 }]}
+              <PrimaryButton
+                title="Share this badge"
+                icon="share-2"
                 onPress={handleShare}
-                activeOpacity={0.82}
-                disabled={sharing}
-              >
-                {sharing ? (
-                  <ActivityIndicator size="small" color={colors.onAccent} style={{ marginRight: 8 }} />
-                ) : (
-                  <Icon name="share-2" size={17} color={colors.onAccent} style={{ marginRight: 8 }} />
-                )}
-                <Text style={[styles.shareButtonText, { color: colors.onAccent }]}>
-                  {sharing ? "Preparing..." : "Share This Badge"}
-                </Text>
-              </TouchableOpacity>
+                loading={sharing}
+                style={styles.modalButton}
+              />
+            ) : selectedSpot ? (
+              // "Go Explore" used to just close the modal. It now opens the
+              // spot the badge is earned at.
+              <PrimaryButton
+                title="View this spot"
+                icon="map-pin"
+                variant="secondary"
+                onPress={openSelectedSpot}
+                style={styles.modalButton}
+              />
             ) : (
-              <TouchableOpacity
-                accessibilityRole="button"
-                style={[styles.shareButton, { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.cardBorder }]}
-                onPress={closeBadge}
-                activeOpacity={0.82}
-              >
-                <Icon name="map-pin" size={17} color={colors.brand} style={{ marginRight: 8 }} />
-                <Text style={[styles.shareButtonText, { color: colors.brand }]}>Go Explore</Text>
-              </TouchableOpacity>
+              <PrimaryButton title="Close" variant="secondary" onPress={closeBadge} style={styles.modalButton} />
             )}
           </Animated.View>
         </Animated.View>
@@ -579,8 +579,6 @@ export default function BadgeScreen() {
 
 const styles = StyleSheet.create({
   container:   { flex: 1 },
-  centered:    { flex: 1, justifyContent: "center", alignItems: "center" },
-  loadingText: { marginTop: 12, fontSize: 14, fontFamily: fonts.sansMedium },
 
   offscreen: {
     position: "absolute",
@@ -617,62 +615,22 @@ const styles = StyleSheet.create({
     letterSpacing: 0.3,
   },
 
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 20,
-    marginBottom: 10,
-  },
-  backButton:  { width: 40, height: 40, justifyContent: "center", alignItems: "flex-start" },
-  headerTitle: { fontSize: 20, fontFamily: fonts.sansBold },
   countBadge:  { borderRadius: 999, paddingHorizontal: 12, paddingVertical: 5 },
   countText:   { fontFamily: fonts.sansBold, fontSize: 13 },
 
-  scrollContent: { paddingHorizontal: 20, paddingTop: 15 },
+  scrollContent: { paddingHorizontal: H_GUTTER / 2, paddingTop: 8, flexGrow: 1 },
   row: { justifyContent: "flex-start", gap: GRID_GAP, marginBottom: GRID_GAP },
 
-  filterBar: {
-    flexDirection: "row",
-    borderRadius: 12,
-    borderWidth: 1,
-    padding: 4,
-    marginBottom: 16,
-  },
-  filterTab: {
-    flex: 1,
-    paddingVertical: 8,
-    borderRadius: 9,
-    alignItems: "center",
-  },
-  filterTabText: { fontSize: 12, fontFamily: fonts.sansBold },
-
-  errorBanner: {
-    borderRadius: 12,
-    padding: 14,
-    marginBottom: 16,
-    alignItems: "center",
-    borderWidth: 1,
-  },
-  errorText: { fontSize: 13, fontFamily: fonts.sansSemi, textAlign: "center" },
-  retryText: { fontSize: 12, marginTop: 4 },
-
-  emptyState:    { alignItems: "center", marginTop: 60, paddingHorizontal: 30 },
-  emptyIcon:     { marginBottom: 14 },
-  emptyTitle:    { fontSize: 18, fontFamily: fonts.sansBold, marginBottom: 6, textAlign: "center" },
-  emptySubtitle: { fontSize: 13, textAlign: "center", lineHeight: 19 },
+  filterBar: { marginBottom: 16 },
+  errorBox:  { marginBottom: 16 },
 
   badgeWrapper: {},
+  // Border, not a drop shadow — the same depth cue as every other card.
   badgeCard: {
     borderRadius: 16,
-    padding: 12,
+    padding: 10,
     alignItems: "center",
-    shadowColor: "#0B2E31",
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 6,
-    elevation: 3,
-    minHeight: 128,
+    minHeight: 136,
   },
   iconCircle: {
     width: 60,
@@ -697,19 +655,22 @@ const styles = StyleSheet.create({
     right: -4,
     borderRadius: 10,
   },
+  // These were 9–10pt, below comfortable reading size on a phone.
   badgeName: {
-    fontSize: 10,
+    fontSize: 11.5,
     fontFamily: fonts.sansSemi,
     textAlign: "center",
-    lineHeight: 13,
+    lineHeight: 15,
   },
   claimedDate: {
-    fontSize: 9,
+    fontSize: 10.5,
+    fontFamily: fonts.sansMedium,
     marginTop: 4,
     textAlign: "center",
   },
   lockedSpot: {
-    fontSize: 9,
+    fontSize: 10.5,
+    fontFamily: fonts.sansMedium,
     marginTop: 3,
     textAlign: "center",
   },
@@ -722,7 +683,7 @@ const styles = StyleSheet.create({
     paddingVertical: 2,
     marginTop: 4,
   },
-  ptsChipText: { fontSize: 9, fontFamily: fonts.sansBold },
+  ptsChipText: { fontSize: 10, fontFamily: fonts.sansBold },
 
   modalOverlay: {
     flex: 1,
@@ -736,7 +697,8 @@ const styles = StyleSheet.create({
     paddingBottom: 28,
     paddingHorizontal: 28,
     alignItems: "center",
-    shadowColor: "#2c1210",
+    // Was a brown #2c1210 left over from the old terracotta palette.
+    shadowColor: "#0B2E31",
     shadowOffset: { width: 0, height: 12 },
     shadowOpacity: 0.22,
     shadowRadius: 28,
@@ -824,19 +786,5 @@ const styles = StyleSheet.create({
     height: 1,
     marginVertical: 20,
   },
-  shareButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "center",
-    borderRadius: 16,
-    paddingVertical: 14,
-    paddingHorizontal: 32,
-    width: "100%",
-    shadowColor: "#0B2E31",
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.28,
-    shadowRadius: 10,
-    elevation: 6,
-  },
-  shareButtonText: { fontSize: 15, fontFamily: fonts.sansBold, letterSpacing: 0.2 },
+  modalButton: { alignSelf: "stretch" },
 });

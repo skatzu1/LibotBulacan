@@ -5,8 +5,6 @@ import {
   StyleSheet,
   TouchableOpacity,
   FlatList,
-  Image,
-  ActivityIndicator,
   RefreshControl,
   useWindowDimensions,
 } from "react-native";
@@ -15,9 +13,9 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useUser, useAuth } from "@clerk/clerk-expo";
 import { useProfileImage } from "../context/ProfileImageContext";
-import { useTheme, radius, shadow, fonts, typography, TAB_BAR_CLEARANCE } from "../context/ThemeContext";
+import { useTheme, radius, shadow, fonts, typography, MAX_FONT_SCALE } from "../context/ThemeContext";
+import { Avatar, EmptyState, ErrorState, LoadingState, H_PAD, TAP } from "../components/ui";
 import { BASE_URL } from "../api";
-import { avatarImage } from "../utils/image";
 import Icon from "../components/Icon";
 
 // Was a hardcoded "https://libotbackend.onrender.com".
@@ -63,12 +61,16 @@ export default function Leaderboard() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError]           = useState(null);
   const isFetching                  = useRef(false);
+  const hasLoaded                   = useRef(false);
 
+  // Only the FIRST load shows the loading state. This is a tab, so the focus
+  // listener below fires on every switch back to it — each of those used to
+  // blank the whole board behind a spinner. Later loads refresh in place.
   const buildLeaderboard = async (isRefresh = false) => {
     if (isFetching.current) return;
     isFetching.current = true;
     if (isRefresh) setRefreshing(true);
-    else setLoading(true);
+    else if (!hasLoaded.current) setLoading(true);
     setError(null);
 
     try {
@@ -110,6 +112,7 @@ export default function Leaderboard() {
 
       users.sort((a, b) => b.points - a.points || a.name.localeCompare(b.name));
       setAllUsers(users);
+      hasLoaded.current = true;
     } catch (e) {
       console.warn("Leaderboard error:", e);
       setError("Failed to load leaderboard.");
@@ -130,64 +133,66 @@ export default function Leaderboard() {
     return unsub;
   }, [navigation, isLoaded]);
 
-  const Avatar = ({ user, size }) => {
-    if (user.avatar)
-      return <Image source={{ uri: avatarImage(user.avatar, size) }} style={{ width: size, height: size, borderRadius: size / 2 }} />;
-    return (
-      <View style={{
-        width: size, height: size, borderRadius: size / 2,
-        backgroundColor: user.isMe ? colors.brand : colors.brandLight,
-        justifyContent: "center", alignItems: "center",
-      }}>
-        <Icon name="user" size={size * 0.42} color={user.isMe ? colors.onBrand : colors.brand} />
-      </View>
-    );
-  };
+  // Plain render helpers, not components: a component declared inside render is
+  // a new type every render, so React remounted every avatar (and re-fetched
+  // its image) on each update.
+  const personAvatar = (user, size) => (
+    <Avatar uri={user.avatar} name={user.name} size={size} strong={user.isMe} />
+  );
 
-  const StateScreen = ({ icon, tone, title, sub, retry }) => (
+  // The hero's top bar. Loading, error and empty states render it too — the
+  // loading state used to replace the whole screen, back button included.
+  const heroNav = (
+    <View style={styles.heroNav}>
+      {navigation.canGoBack() ? (
+        <TouchableOpacity
+          accessibilityRole="button"
+          accessibilityLabel="Go back"
+          onPress={() => navigation.goBack()}
+          style={[styles.backBtn, { backgroundColor: colors.background }]}
+          activeOpacity={0.8}
+        >
+          <Icon name="chevron-left" size={22} color={colors.textPrimary} />
+        </TouchableOpacity>
+      ) : (
+        <View style={styles.backBtn} />
+      )}
+      <Text
+        style={[styles.heroTitle, { color: colors.textPrimary }]}
+        accessibilityRole="header"
+        maxFontSizeMultiplier={MAX_FONT_SCALE}
+      >
+        Leaderboard
+      </Text>
+      <View style={styles.backBtn} />
+    </View>
+  );
+
+  const stateScreen = (children) => (
     <View style={[styles.fullScreen, { backgroundColor: colors.background }]}>
-      <View style={[styles.hero, { backgroundColor: colors.backgroundHero, paddingTop: insets.top + 8 }]}>
-        <View style={styles.heroNav}>
-          <TouchableOpacity
-            accessibilityRole="button" accessibilityLabel="Go back" onPress={() => navigation.goBack()} style={[styles.backBtn, { backgroundColor: colors.background }]}>
-            <Icon name="chevron-left" size={22} color={colors.brand} />
-          </TouchableOpacity>
-          <Text style={[styles.heroTitle, { color: colors.brandDark }]}>Leaderboard</Text>
-          <View style={{ width: 40 }} />
-        </View>
+      <View style={[styles.hero, styles.heroStateOnly, { backgroundColor: colors.backgroundHero, paddingTop: insets.top + 8 }]}>
+        {heroNav}
       </View>
-      <View style={styles.centered}>
-        <View style={[styles.stateBadge, { backgroundColor: tone === "error" ? colors.dangerBg : colors.brandSoft }]}>
-          <Icon name={icon} size={26} color={tone === "error" ? colors.danger : colors.brand} />
-        </View>
-        <Text style={[styles.emptyTitle, { color: colors.brandDark }]}>{title}</Text>
-        <Text style={[styles.emptySub, { color: colors.textSecondary }]}>{sub}</Text>
-        {retry && (
-          <TouchableOpacity
-            accessibilityRole="button" style={[styles.retryBtn, { backgroundColor: colors.accent }, shadow.sm]} onPress={retry} activeOpacity={0.85}>
-            <Text style={[styles.retryText, { color: colors.onAccent }]}>Try again</Text>
-          </TouchableOpacity>
-        )}
-      </View>
+      <View style={styles.stateBody}>{children}</View>
     </View>
   );
 
   if (!isLoaded || loading) {
-    return (
-      <View style={[styles.fullScreen, styles.centered, { backgroundColor: colors.background }]}>
-        <View style={[styles.stateBadge, { backgroundColor: colors.brandSoft }]}>
-          <Icon name="award" size={26} color={colors.brand} />
-        </View>
-        <ActivityIndicator size="small" color={colors.brand} style={{ marginTop: 16 }} />
-        <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Loading leaderboard…</Text>
-      </View>
-    );
+    return stateScreen(<LoadingState label="Loading leaderboard…" />);
   }
 
-  if (error)
-    return <StateScreen icon="alert-triangle" tone="error" title="Something went wrong" sub={error} retry={() => buildLeaderboard()} />;
-  if (allUsers.length === 0)
-    return <StateScreen icon="award" title="No rankings yet" sub="Visit locations around Bulacan to earn points and climb the board." />;
+  if (error) {
+    return stateScreen(<ErrorState text={error} onRetry={() => buildLeaderboard()} />);
+  }
+  if (allUsers.length === 0) {
+    return stateScreen(
+      <EmptyState
+        icon="award"
+        title="No rankings yet"
+        text="Visit places around Bulacan to earn points and climb the board."
+      />
+    );
+  }
 
   const renderRow = ({ item: user, index }) => {
     const rank = index + 4;
@@ -204,7 +209,7 @@ export default function Leaderboard() {
         </View>
 
         <View style={[styles.rowAvatarWrap, { borderColor: colors.cardBorder }]}>
-          <Avatar user={user} size={40} />
+          {personAvatar(user, 40)}
         </View>
 
         <Text
@@ -238,14 +243,7 @@ export default function Leaderboard() {
       <View style={[styles.hero, { backgroundColor: colors.backgroundHero, paddingTop: insets.top + 8 }]}>
         <View style={[styles.heroBlob, blob, { backgroundColor: "rgba(255,255,255,0.22)" }]} pointerEvents="none" />
 
-        <View style={styles.heroNav}>
-          <TouchableOpacity
-            accessibilityRole="button" accessibilityLabel="Go back" onPress={() => navigation.goBack()} style={[styles.backBtn, { backgroundColor: colors.background }]} activeOpacity={0.8}>
-            <Icon name="chevron-left" size={22} color={colors.brand} />
-          </TouchableOpacity>
-          <Text style={[styles.heroTitle, { color: colors.brandDark }]}>Leaderboard</Text>
-          <View style={{ width: 40 }} />
-        </View>
+        {heroNav}
 
         <Text style={[styles.heroSub, { color: colors.textSecondary }]}>Top explorers of Bulacan</Text>
 
@@ -260,7 +258,7 @@ export default function Leaderboard() {
                 {rank === 1 && <Icon name="star" size={16} color={colors.accent} style={{ marginBottom: 4 }} />}
 
                 <View style={[styles.avatarRing, { borderColor: medal.ring }, user.isMe && { borderColor: colors.brand }]}>
-                  <Avatar user={user} size={cfg.avatarSz} />
+                  {personAvatar(user, cfg.avatarSz)}
                   <View style={[styles.medalCoin, { backgroundColor: medal.coin }]}>
                     <Text style={[styles.medalCoinText, { color: medal.coinText }]}>{rank}</Text>
                   </View>
@@ -342,7 +340,7 @@ export default function Leaderboard() {
               <Text style={[styles.myRankCoinText, { color: colors.onBrand }]}>{myRank}</Text>
             </View>
             <View style={styles.rowAvatarWrap}>
-              <Avatar user={allUsers[myIndex]} size={36} />
+              {personAvatar(allUsers[myIndex], 36)}
             </View>
             <Text style={[styles.myRankName, { color: colors.onBrand }]} numberOfLines={1}>
               You
@@ -360,13 +358,13 @@ export default function Leaderboard() {
 
 const styles = StyleSheet.create({
   fullScreen: { flex: 1 },
-  centered:   { flex: 1, justifyContent: "center", alignItems: "center", paddingHorizontal: 32 },
-  loadingText: { marginTop: 12, fontSize: 13.5, fontFamily: fonts.sansMedium },
 
   hero: {
     overflow: "hidden",
     paddingBottom: 0,
   },
+  heroStateOnly: { paddingBottom: 14 },
+  stateBody:     { flex: 1, paddingHorizontal: H_PAD, paddingTop: 24 },
   // Sized inline from useWindowDimensions — see `blob` in the component.
   heroBlob: { position: "absolute" },
 
@@ -374,16 +372,16 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    paddingHorizontal: 16,
+    paddingHorizontal: H_PAD,
     paddingTop: 6,
     paddingBottom: 4,
   },
   backBtn: {
-    width: 40, height: 40, borderRadius: 20,
+    width: TAP, height: TAP, borderRadius: TAP / 2,
     justifyContent: "center", alignItems: "center",
-    ...shadow.sm,
   },
-  heroTitle: { fontSize: 20, fontFamily: fonts.sansBold, letterSpacing: -0.3 },
+  // Same face and size as every other screen title (ScreenHeader → h3).
+  heroTitle: { ...typography.h3 },
   heroSub:   { fontSize: 12.5, fontFamily: fonts.sansSemi, textAlign: "center", marginTop: 2, marginBottom: 4 },
 
   podiumRow: {
@@ -532,8 +530,4 @@ const styles = StyleSheet.create({
     justifyContent: "center", alignItems: "center",
     marginBottom: 14,
   },
-  emptyTitle: { fontSize: 19, fontFamily: fonts.sansBold, letterSpacing: -0.3, marginBottom: 8, textAlign: "center" },
-  emptySub:   { fontSize: 13, textAlign: "center", lineHeight: 20 },
-  retryBtn:   { marginTop: 20, paddingHorizontal: 28, paddingVertical: 12, borderRadius: 999 },
-  retryText:  { fontFamily: fonts.sansBold, fontSize: 13.5 },
 });

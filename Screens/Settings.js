@@ -1,38 +1,40 @@
 import React from "react";
 import {
   View,
-  Text,
   StyleSheet,
-  TouchableOpacity,
-  ScrollView,  ActivityIndicator,
+  ScrollView,
+  ActivityIndicator,
   Linking,
   Switch,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { showAlert } from "../components/AppAlert";
 import { useAuth } from "../context/AuthContext";
-import { useTheme, fonts } from "../context/ThemeContext";
-import { ScreenHeader } from "../components/ui";
+import { useTheme } from "../context/ThemeContext";
+import { ScreenHeader, ListRow, GroupLabel, Segmented, H_PAD } from "../components/ui";
 import * as Notifications from "expo-notifications";
 import { HELP_URL, ABOUT_URL, TERMS_URL, PRIVACY_URL } from "../utils/legalLinks";
-import Icon from "../components/Icon";
+
+const SUPPORT_EMAIL = "support@libot.app";
 
 const openURL = async (url) => {
-  const supported = await Linking.canOpenURL(url);
-  if (supported) await Linking.openURL(url);
-  else showAlert("Unavailable", "This page isn't available right now.");
+  try {
+    if (await Linking.canOpenURL(url)) return await Linking.openURL(url);
+  } catch {}
+  showAlert("Unavailable", "This page isn't available right now.");
 };
 
 const THEME_OPTIONS = [
-  { key: "light",  label: "Light",  icon: "sun" },
-  { key: "dark",   label: "Dark",   icon: "moon" },
-  { key: "system", label: "System", icon: "smartphone" },
+  { key: "light",  label: "Light",  icon: "sun",        a11y: "Light appearance" },
+  { key: "dark",   label: "Dark",   icon: "moon",       a11y: "Dark appearance" },
+  { key: "system", label: "System", icon: "smartphone", a11y: "Match the phone's appearance" },
 ];
 
 const Settings = ({ navigation }) => {
   const { logout } = useAuth();
   const { pref, setThemePref, colors } = useTheme();
+  const insets = useSafeAreaInsets();
 
-  const [isLoggingOut, setIsLoggingOut] = React.useState(false);
   const [notifEnabled, setNotifEnabled] = React.useState(null);
 
   const checkNotifPermission = React.useCallback(() => {
@@ -86,63 +88,26 @@ const Settings = ({ navigation }) => {
         style: "destructive",
         onPress: async () => {
           try {
-            setIsLoggingOut(true);
             await logout();
           } catch {
             showAlert("Error", "Failed to log out. Please try again.");
-          } finally {
-            setIsLoggingOut(false);
           }
         },
       },
     ]);
   };
 
-  const handleReportProblem = () => {
-    showAlert("Report a Problem", "How would you like to report?", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Send Email",
-        onPress: () =>
-          Linking.openURL(
-            "mailto:support@libot.app?subject=Problem%20Report&body=Describe%20the%20issue%20here..."
-          ),
-      },
-    ]);
+  // This used to open a popup whose only real choice was "Send Email". It now
+  // goes straight to the mail app, and says where to write if there isn't one.
+  const handleReportProblem = async () => {
+    const url = `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent("Problem report")}` +
+      `&body=${encodeURIComponent("Describe the issue here...")}`;
+    try {
+      await Linking.openURL(url);
+    } catch {
+      showAlert("No email app found", `Email us at ${SUPPORT_EMAIL} and we'll take a look.`);
+    }
   };
-
-  const handlePrivacy = () => {
-    showAlert("Privacy", "View our full privacy policy?", [
-      { text: "Cancel", style: "cancel" },
-      { text: "View Policy", onPress: () => openURL(PRIVACY_URL) },
-    ]);
-  };
-
-  // ── Reusable row ──────────────────────────────────────────────
-  const MenuItem = ({ icon, title, onPress, accessLabel, rightElement, danger }) => (
-    <TouchableOpacity
-      accessibilityRole="button"
-      style={[styles.menuItem, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}
-      onPress={onPress}
-      activeOpacity={rightElement ? 1 : 0.7}
-      accessibilityLabel={accessLabel || title}
-    >
-      <View style={styles.menuLeft}>
-        <View style={[
-          styles.iconContainer,
-          { backgroundColor: danger ? colors.dangerBg : colors.brandLight },
-        ]}>
-          <Icon name={icon} size={18} color={danger ? colors.danger : colors.brand} />
-        </View>
-        <Text style={[styles.menuText, { color: danger ? colors.danger : colors.textPrimary }]}>
-          {title}
-        </Text>
-      </View>
-      {rightElement || (
-        <Icon name="chevron-right" size={18} color={danger ? colors.danger : colors.textMuted} />
-      )}
-    </TouchableOpacity>
-  );
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -151,28 +116,28 @@ const Settings = ({ navigation }) => {
         onBack={navigation.canGoBack() ? () => navigation.goBack() : undefined}
       />
 
-      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.scrollContent}>
-
-        {/* Account */}
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 40 }]}
+      >
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.textMuted }]}>Account</Text>
-          <MenuItem
+          <GroupLabel>Account</GroupLabel>
+          <ListRow
             icon="user"
             title="Edit Profile"
             onPress={() => navigation.navigate("EditProfile")}
-            accessLabel="Edit your profile"
+            accessibilityLabel="Edit your profile"
           />
-          <MenuItem
+          <ListRow
             icon="shield"
             title="Login & Security"
             onPress={() => navigation.navigate("LoginSecurity")}
-            accessLabel="Login and security settings"
+            accessibilityLabel="Login and security settings"
           />
-          <MenuItem
+          <ListRow
             icon="bell"
             title="Notifications"
-            accessLabel={notifEnabled ? "Notifications on" : "Notifications off"}
-            rightElement={
+            right={
               notifEnabled === null
                 ? <ActivityIndicator size="small" color={colors.brand} />
                 : (
@@ -181,68 +146,34 @@ const Settings = ({ navigation }) => {
                     onValueChange={handleNotifToggle}
                     trackColor={{ false: colors.cardBorder, true: colors.brand }}
                     thumbColor="#fff"
-                    accessibilityLabel="Toggle notifications"
+                    accessibilityLabel="Notifications"
                   />
                 )
             }
           />
-          <MenuItem
-            icon="lock"
-            title="Privacy"
-            onPress={handlePrivacy}
-            accessLabel="Privacy settings"
-          />
         </View>
 
-        {/* Appearance */}
+        {/* A two-state switch could not express "follow my phone", so a user
+            with the OS in dark mode got a light app with dark native keyboards
+            and share sheets. app.json declares userInterfaceStyle:"automatic",
+            and this is what actually honours it. */}
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.textMuted }]}>Appearance</Text>
-          {/* A two-state switch could not express "follow my phone", so a user
-              with the OS in dark mode got a light app with dark native keyboards
-              and share sheets. app.json declares userInterfaceStyle:"automatic",
-              and this is what actually honours it. */}
-          <View
-            style={[styles.segment, { backgroundColor: colors.backgroundSoft, borderColor: colors.cardBorder }]}
-            accessibilityRole="radiogroup"
-          >
-            {THEME_OPTIONS.map((opt) => {
-              const on = pref === opt.key;
-              return (
-                <TouchableOpacity
-                  key={opt.key}
-                  style={[styles.segmentItem, on && { backgroundColor: colors.card }]}
-                  onPress={() => setThemePref(opt.key)}
-                  activeOpacity={0.85}
-                  accessibilityRole="radio"
-                  accessibilityState={{ selected: on }}
-                  accessibilityLabel={`${opt.label} appearance`}
-                >
-                  <Icon name={opt.icon} size={15} color={on ? colors.brand : colors.textMuted} />
-                  <Text style={[styles.segmentText, { color: on ? colors.brand : colors.textMuted }]}>
-                    {opt.label}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
+          <GroupLabel>Appearance</GroupLabel>
+          <Segmented options={THEME_OPTIONS} value={pref} onChange={setThemePref} role="radio" />
         </View>
 
-        {/* Support & About */}
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.textMuted }]}>Support & About</Text>
-          <MenuItem icon="help-circle" title="Help & Support"     onPress={() => openURL(HELP_URL)}  accessLabel="Help and support" />
-          <MenuItem icon="info"        title="About Us"           onPress={() => openURL(ABOUT_URL)} accessLabel="About Libot" />
-          <MenuItem icon="file-text"   title="Terms and Policies" onPress={() => openURL(TERMS_URL)} accessLabel="Terms and policies" />
+          <GroupLabel>Support & About</GroupLabel>
+          <ListRow icon="help-circle" title="Help & Support"   onPress={() => openURL(HELP_URL)}    accessibilityLabel="Help and support" />
+          <ListRow icon="info"        title="About Libot"      onPress={() => openURL(ABOUT_URL)}   />
+          <ListRow icon="file-text"   title="Terms of Service" onPress={() => openURL(TERMS_URL)}   />
+          <ListRow icon="lock"        title="Privacy Policy"   onPress={() => openURL(PRIVACY_URL)} />
+          <ListRow icon="flag"        title="Report a Problem" subtitle={SUPPORT_EMAIL} onPress={handleReportProblem} />
         </View>
 
-        {/* Actions */}
         <View style={styles.section}>
-          <Text style={[styles.sectionTitle, { color: colors.textMuted }]}>Actions</Text>
-          <MenuItem icon="flag"    title="Report a Problem" onPress={handleReportProblem} accessLabel="Report a problem" />
-          <MenuItem icon="log-out" title="Log Out"          onPress={handleLogout}         accessLabel="Log out" danger />
+          <ListRow icon="log-out" title="Log Out" onPress={handleLogout} danger right={null} />
         </View>
-
-        <View style={{ height: 50 }} />
       </ScrollView>
     </View>
   );
@@ -250,20 +181,8 @@ const Settings = ({ navigation }) => {
 
 const styles = StyleSheet.create({
   container:     { flex: 1 },
-  scrollContent: { paddingHorizontal: 20, paddingTop: 12, paddingBottom: 60 },
-  section:       { marginBottom: 28 },
-  sectionTitle:  { fontSize: 13, fontFamily: fonts.sansBold, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 10, marginLeft: 4 },
-  menuItem:      { flexDirection: "row", justifyContent: "space-between", alignItems: "center", paddingVertical: 15, paddingHorizontal: 15, marginBottom: 8, borderRadius: 16, borderWidth: 1 },
-  menuLeft:      { flexDirection: "row", alignItems: "center" },
-  iconContainer: { width: 36, height: 36, borderRadius: 12, justifyContent: "center", alignItems: "center", marginRight: 12 },
-  menuText:      { fontSize: 15, fontFamily: fonts.sansSemi },
-
-  segment:     { flexDirection: "row", borderRadius: 16, padding: 4, gap: 4, borderWidth: 1 },
-  segmentItem: {
-    flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center",
-    gap: 6, paddingVertical: 11, borderRadius: 12,
-  },
-  segmentText: { fontSize: 13, fontFamily: fonts.sansSemi },
+  scrollContent: { paddingHorizontal: H_PAD, paddingTop: 12 },
+  section:       { marginBottom: 24 },
 });
 
 export default Settings;

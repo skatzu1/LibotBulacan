@@ -1,6 +1,7 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Modal } from 'react-native';
+import { View, Text, StyleSheet, Modal } from 'react-native';
 import { useTheme, spacing, radius, typography, fonts } from '../context/ThemeContext';
+import { PrimaryButton } from "../components/ui";
 import Icon from "../components/Icon";
 
 function daysLeft(dateStr) {
@@ -32,7 +33,7 @@ export default function SuspendedNotice({ visible, suspensionInfo, onDismiss }) 
               Lifts in
             </Text>
             <Text style={[s.deadlineDays, { color: colors.warning }]}>
-              {daysLeft(suspensionInfo?.suspendedUntil)} days
+              {daysLeft(suspensionInfo?.suspendedUntil)} {daysLeft(suspensionInfo?.suspendedUntil) === 1 ? 'day' : 'days'}
             </Text>
             {suspensionInfo?.suspendedUntil && (
               <Text style={[typography.caption, { color: colors.warning, marginTop: 4 }]}>
@@ -41,14 +42,7 @@ export default function SuspendedNotice({ visible, suspensionInfo, onDismiss }) 
             )}
           </View>
 
-          <TouchableOpacity
-            accessibilityRole="button"
-            style={[s.btn, { backgroundColor: colors.accent }]}
-            onPress={onDismiss}
-            activeOpacity={0.85}
-          >
-            <Text style={[typography.title, { color: colors.onAccent }]}>Got it</Text>
-          </TouchableOpacity>
+          <PrimaryButton title="Got it" onPress={onDismiss} style={s.btn} />
         </View>
       </View>
     </Modal>
@@ -69,5 +63,5 @@ const s = StyleSheet.create({
     alignItems: 'center', marginBottom: spacing.lg,
   },
   deadlineDays: { fontSize: 26, fontFamily: fonts.sansBold },
-  btn:         { borderRadius: radius.md, paddingVertical: spacing.md, alignItems: 'center', width: '100%' },
+  btn:         { alignSelf: 'stretch' },
 });

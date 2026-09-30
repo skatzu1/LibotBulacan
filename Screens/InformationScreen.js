@@ -5,19 +5,21 @@ import {
   ActivityIndicator, Modal, StatusBar,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { showAlert } from "../components/AppAlert";
+import { showAlert, showToast } from "../components/AppAlert";
 import { useUser } from "@clerk/clerk-expo";
 import { useIsFocused } from "@react-navigation/native";
 import { useBookmark } from "../context/BookmarkContext";
 import { useReviews } from "../context/ReviewContext";
 import { useMissions } from "../context/MissionContext";
 import { useProfileImage } from "../context/ProfileImageContext";
-import { useTheme, radius, shadow, fonts } from "../context/ThemeContext";
+import { useTheme, radius, shadow, fonts, typography, MAX_FONT_SCALE } from "../context/ThemeContext";
 import ModelViewer from "../utils/ModelViewer";
 import { ensureAtSpotForAR } from "../utils/arLocationGate";
 import InformationSkeleton from "../components/InformationSkeleton";
-import { PhotoScrim } from "../components/ui";
-import { spotImage, avatarImage } from "../utils/image";
+import {
+  PhotoScrim, Segmented, EmptyState, PrimaryButton, Avatar, H_PAD, TAP,
+} from "../components/ui";
+import { spotImage } from "../utils/image";
 import Icon from "../components/Icon";
 
 // Icon + label per mission type. Colour is theme-driven (see MissionRow).
@@ -117,6 +119,200 @@ const showSuspendedAlert = (result) => {
   );
 };
 
+const TABS = [
+  { key: "Overview",   label: "Overview",   icon: "book-open" },
+  { key: "BucketList", label: "Bakit List", icon: "flag"      },
+  { key: "Reviews",    label: "Reviews",    icon: "star"      },
+];
+
+/* ── Pieces of the screen ─────────────────────────────────────────────────
+   These used to be declared INSIDE InformationScreen, which makes each one a
+   brand-new component type on every render. Typing a single character in the
+   review box re-rendered the screen, so React unmounted and remounted every
+   review card — avatars reloaded, and a like that was mid-request lost its
+   `reacting` state. At module level they keep their identity. */
+
+function StarRating({ rating, size = 14, colors }) {
+  return (
+    <View style={styles.starsRow}>
+      {/* Earned stars are filled, the rest are outlines. */}
+      {[1, 2, 3, 4, 5].map((s) => (
+        <Icon
+          key={s}
+          name="star"
+          size={size}
+          weight={s <= rating ? "fill" : "regular"}
+          color={s <= rating ? colors.star : colors.starEmpty}
+        />
+      ))}
+    </View>
+  );
+}
+
+function CircleBtn({ icon, onPress, active, iconNode, colors, ...rest }) {
+  return (
+    <TouchableOpacity
+      accessibilityRole="button"
+      onPress={onPress}
+      activeOpacity={0.8}
+      style={[styles.circleBtn, { backgroundColor: active ? colors.accent : colors.card, borderColor: colors.cardBorder }]}
+      hitSlop={4}
+      {...rest}
+    >
+      {iconNode ?? <Icon name={icon} size={19} color={active ? colors.onAccent : colors.textPrimary} />}
+    </TouchableOpacity>
+  );
+}
+
+function ReviewCard({ review, spotId, clerkUser, profileImage, reactToReview, onReport, colors }) {
+  const isMe = clerkUser?.id === review.clerkUserId;
+  // No more pravatar.cc fallback — a reviewer without a photo gets their
+  // initials, not a random stranger's face.
+  const avatarUri = isMe ? (profileImage || review.userImage || clerkUser?.imageUrl) : review.userImage;
+  const [reacting, setReacting] = useState(false);
+
+  // Prefer a locally-patched userReaction (set right after a react call,
+  // and correctly captures "null" meaning removed). Fall back to
+  // deriving it from the raw reactions array on freshly-fetched reviews.
+  const userReaction = ("userReaction" in review)
+    ? review.userReaction
+    : (review.reactions || []).find((r) => r.clerkUserId === clerkUser?.id)?.type || null;
+
+  const handleReact = async (type) => {
+    if (isMe || reacting) return;
+    setReacting(true);
+    try {
+      const result = await reactToReview(review._id, spotId, type);
+      if (isMutedResult(result)) showMutedAlert(result);
+    } catch (err) {
+      if (isMutedResult(err)) showMutedAlert(err);
+    } finally {
+      setReacting(false);
+    }
+  };
+
+  const author = review.userName || "Anonymous";
+
+  return (
+    <View style={styles.reviewCard}>
+      <Avatar uri={avatarUri} name={author} size={36} style={[styles.avatar, { borderColor: colors.cardBorder }]} />
+      <View style={[styles.reviewBubble, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
+        <View style={styles.reviewBubbleHeader}>
+          <Text style={[styles.reviewAuthor, { color: colors.textPrimary }]} numberOfLines={1}>{author}</Text>
+          <View style={styles.reviewBubbleHeaderRight}>
+            <StarRating rating={review.rating} size={11} colors={colors} />
+            <TouchableOpacity
+              onPress={() => onReport(review)}
+              activeOpacity={0.7}
+              hitSlop={{ top: 16, bottom: 16, left: 16, right: 16 }}
+              style={styles.reportButton}
+              accessibilityRole="button"
+              accessibilityLabel={`Report the review by ${review.userName || "this user"}`}
+            >
+              <Icon name="flag" size={13} color={colors.textMuted} />
+            </TouchableOpacity>
+          </View>
+        </View>
+        <Text style={[styles.reviewComment, { color: colors.textPrimary }]}>{review.comment}</Text>
+        <View style={styles.reviewFooterRow}>
+          <Text style={[styles.reviewDate, { color: colors.textMuted }]}>
+            {review.createdAt ? new Date(review.createdAt).toLocaleDateString() : "Just now"}
+          </Text>
+          {/* Your own review can't be reacted to. Rather than rendering two
+              greyed-out buttons with no explanation, show the tallies as plain
+              text — nothing looks broken and nothing invites a dead tap. */}
+          {isMe ? (
+            <View
+              style={styles.reactionsRow}
+              accessibilityLabel={`${review.likes || 0} likes, ${review.dislikes || 0} dislikes on your review`}
+            >
+              <View style={styles.reactionBtn}>
+                <Icon name="thumbs-up" size={13} color={colors.textMuted} />
+                <Text style={[styles.reactionCount, { color: colors.textMuted }]}>{review.likes || 0}</Text>
+              </View>
+              <View style={styles.reactionBtn}>
+                <Icon name="thumbs-down" size={13} color={colors.textMuted} />
+                <Text style={[styles.reactionCount, { color: colors.textMuted }]}>{review.dislikes || 0}</Text>
+              </View>
+            </View>
+          ) : (
+            <View style={styles.reactionsRow}>
+              <TouchableOpacity
+                onPress={() => handleReact("like")}
+                disabled={reacting}
+                hitSlop={{ top: 14, bottom: 14, left: 12, right: 12 }}
+                style={styles.reactionBtn}
+                activeOpacity={0.7}
+                accessibilityRole="button"
+                accessibilityState={{ selected: userReaction === "like" }}
+                accessibilityLabel={`Like this review, ${review.likes || 0} likes`}
+              >
+                <Icon name="thumbs-up" size={13} weight={userReaction === "like" ? "fill" : "regular"} color={userReaction === "like" ? colors.brand : colors.textMuted} />
+                <Text style={[styles.reactionCount, { color: userReaction === "like" ? colors.brand : colors.textMuted }]}>
+                  {review.likes || 0}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => handleReact("dislike")}
+                disabled={reacting}
+                hitSlop={{ top: 14, bottom: 14, left: 12, right: 12 }}
+                style={styles.reactionBtn}
+                activeOpacity={0.7}
+                accessibilityRole="button"
+                accessibilityState={{ selected: userReaction === "dislike" }}
+                accessibilityLabel={`Dislike this review, ${review.dislikes || 0} dislikes`}
+              >
+                <Icon name="thumbs-down" size={13} weight={userReaction === "dislike" ? "fill" : "regular"} color={userReaction === "dislike" ? colors.danger : colors.textMuted} />
+                <Text style={[styles.reactionCount, { color: userReaction === "dislike" ? colors.danger : colors.textMuted }]}>
+                  {review.dislikes || 0}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
+      </View>
+    </View>
+  );
+}
+
+function MissionRow({ mission, isDone, cityText, onPress, colors }) {
+  const config = MISSION_CONFIG[mission.type] || MISSION_CONFIG.checkin;
+  return (
+    <TouchableOpacity
+      accessibilityRole="button"
+      accessibilityLabel={`${mission.title}, ${config.label}${isDone ? ", completed" : ""}`}
+      style={styles.missionRow}
+      onPress={onPress}
+      activeOpacity={0.82}
+    >
+      <View style={styles.missionThumbWrap}>
+        <View style={[styles.missionThumb, { backgroundColor: isDone ? colors.successBg : colors.brandLight }]}>
+          <Icon name={config.icon} size={19} color={isDone ? colors.success : colors.brand} />
+        </View>
+        {isDone && (
+          <View style={[styles.checkBadge, { backgroundColor: colors.success, borderColor: colors.card }]}>
+            <Icon name="check" size={10} color="#fff" />
+          </View>
+        )}
+      </View>
+      <View style={styles.missionRowBody}>
+        <Text style={[styles.missionRowTitle, { color: colors.textPrimary }, isDone && styles.missionRowTitleDone]} numberOfLines={2}>
+          {mission.title}
+        </Text>
+        <Text style={[styles.missionRowSub, { color: colors.textMuted }]} numberOfLines={1}>{config.label} · {cityText}</Text>
+      </View>
+      {mission.type === "ar" && !isDone ? (
+        <View style={[styles.arLaunchBadge, { backgroundColor: colors.accentSoft }]}>
+          <Icon name="aperture" size={11} color={colors.accentDark} style={{ marginRight: 4 }} />
+          <Text style={[styles.arLaunchBadgeText, { color: colors.accentDark }]}>Open AR</Text>
+        </View>
+      ) : (
+        <Icon name="chevron-right" size={18} color={colors.textMuted} style={{ marginLeft: 4 }} />
+      )}
+    </TouchableOpacity>
+  );
+}
+
 export default function InformationScreen({ route, navigation }) {
   const spot = route?.params?.spot;
   const { colors, isDark } = useTheme();
@@ -124,15 +320,12 @@ export default function InformationScreen({ route, navigation }) {
 
   // Callers can deep-link to a specific tab (e.g. the Missions flow lands here
   // on the missions list rather than Overview).
-  const initialTab = ["Overview", "BucketList", "Reviews"].includes(route?.params?.tab)
-    ? route.params.tab
-    : "Overview";
+  const initialTab = TABS.some((t) => t.key === route?.params?.tab) ? route.params.tab : "Overview";
   const [activeTab,        setActiveTab]        = useState(initialTab);
   const [show3D,           setShow3D]           = useState(false);
   const [newRating,        setNewRating]        = useState(0);
   const [newReview,        setNewReview]        = useState("");
   const [showStarPicker,   setShowStarPicker]   = useState(false);
-  const [refreshKey,       setRefreshKey]       = useState(0);
   const [screenReady,      setScreenReady]      = useState(false);
   const [reportTarget,     setReportTarget]     = useState(null);
   const [showReportModal,  setShowReportModal]  = useState(false);
@@ -143,9 +336,9 @@ export default function InformationScreen({ route, navigation }) {
 
   const inputRef = useRef(null);
   const { user: clerkUser } = useUser();
-  const { isBookmarked, toggleBookmark }                                                           = useBookmark();
+  const { isBookmarked, toggleBookmark } = useBookmark();
   const { getReviewsForSpot, addReview, reportReview, reactToReview, getAverageRating, getReviewCount, fetchReviews } = useReviews();
-  const { fetchMissions, getMissionsForSpot, completedMissions }                                   = useMissions();
+  const { fetchMissions, getMissionsForSpot, completedMissions } = useMissions();
   const { profileImage } = useProfileImage();
   const isFocused = useIsFocused();
 
@@ -157,16 +350,32 @@ export default function InformationScreen({ route, navigation }) {
     }
   }, [spot?._id]);
 
+  const header = (right) => (
+    <View style={[styles.header, { backgroundColor: colors.background, paddingTop: Math.max(insets.top, 12) + 6, borderBottomColor: colors.divider }]}>
+      <CircleBtn icon="chevron-left" onPress={() => navigation.goBack()} accessibilityLabel="Go back" colors={colors} />
+      <Text
+        style={[styles.headerTitle, { color: colors.textPrimary }]}
+        numberOfLines={1}
+        accessibilityRole="header"
+        maxFontSizeMultiplier={MAX_FONT_SCALE}
+      >
+        {spot?.name}
+      </Text>
+      <View style={styles.headerRight}>{right}</View>
+    </View>
+  );
+
   if (!spot) return (
-    <View style={[styles.errorContainer, { backgroundColor: colors.background }]}>
-      <View style={[styles.stateBadge, { backgroundColor: colors.brandSoft }]}>
-        <Icon name="compass" size={26} color={colors.brand} />
+    <View style={[styles.container, { backgroundColor: colors.background }]}>
+      {header(null)}
+      <View style={styles.missingWrap}>
+        <EmptyState
+          icon="compass"
+          title="Spot not found"
+          text="We couldn't open this place. Go back and try again."
+          action={<PrimaryButton title="Go back" onPress={() => navigation.goBack()} style={styles.missingBtn} />}
+        />
       </View>
-      <Text style={[styles.errorText, { color: colors.textSecondary }]}>No spot data found.</Text>
-      <TouchableOpacity
-        accessibilityRole="button" onPress={() => navigation.goBack()} style={[styles.backButton, { backgroundColor: colors.accent }, shadow.sm]}>
-        <Text style={[styles.backButtonText, { color: colors.onAccent }]}>Go Back</Text>
-      </TouchableOpacity>
     </View>
   );
 
@@ -177,20 +386,7 @@ export default function InformationScreen({ route, navigation }) {
   if (!screenReady) return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={colors.background} />
-      <View style={[styles.header, { backgroundColor: colors.background, paddingTop: insets.top + 6, borderBottomColor: colors.divider }]}>
-        <TouchableOpacity
-          onPress={() => navigation.goBack()}
-          activeOpacity={0.8}
-          style={[styles.circleBtn, { backgroundColor: colors.card }]}
-          hitSlop={10}
-          accessibilityRole="button"
-          accessibilityLabel="Go back"
-        >
-          <Icon name="chevron-left" size={19} color={colors.brandDark} />
-        </TouchableOpacity>
-        <Text style={[styles.headerTitle, { color: colors.brandDark }]} numberOfLines={1}>{spot.name}</Text>
-        <View style={styles.headerRight} />
-      </View>
+      {header(null)}
       <InformationSkeleton />
     </View>
   );
@@ -208,28 +404,15 @@ export default function InformationScreen({ route, navigation }) {
 
   const cityText = spot.city || spot.address || "Bulacan, Philippines";
 
-  const tabs = [
-    { key:"Overview",   label:"Overview", icon:"book-open" },
-    { key:"BucketList", label:"Bakit List", icon:"flag"    },
-    { key:"Reviews",    label:"Reviews",  icon:"star"      },
-  ];
-
-  const StarRating = ({ rating, size = 14 }) => (
-    <View style={styles.starsRow}>
-      {/* Earned stars are filled, the rest are outlines. Feather couldn't do
-          this (outline-only) — which is exactly why MaterialIcons used to be
-          pulled in here just for a filled star. */}
-      {[1,2,3,4,5].map((s) => (
-        <Icon
-          key={s}
-          name="star"
-          size={size}
-          weight={s <= rating ? "fill" : "regular"}
-          color={s <= rating ? colors.star : colors.starEmpty}
-        />
-      ))}
-    </View>
-  );
+  // Only facts the spot actually has. Missing hours used to read
+  // "6:00 AM – 10:00 PM", a missing fee "Free" and missing contact "N/A" —
+  // invented details a visitor could plan a trip around.
+  const facts = [
+    { icon: "clock",   label: "Visiting hours", value: spot.visitingHours },
+    { icon: "tag",     label: "Entrance fee",   value: spot.entranceFee },
+    { icon: "map-pin", label: "Location",       value: cityText },
+    { icon: "phone",   label: "Contact",        value: spot.contact },
+  ].filter((row) => !!row.value);
 
   const handleSubmit = async () => {
     if (newRating === 0) { setShowStarPicker(true); return; }
@@ -265,13 +448,23 @@ export default function InformationScreen({ route, navigation }) {
     }
   };
 
-  const handleBookmarkToggle = async () => { await toggleBookmark(spot); setRefreshKey(prev => prev + 1); };
+  // BookmarkContext re-renders this screen on its own. This used to bump a
+  // `key` on the whole screen to force a refresh, which remounted everything
+  // and threw the user back to the top of a long review list.
+  const handleBookmarkToggle = () => toggleBookmark(spot);
+
   const handleLaunchAR = async () => {
     // AR models are anchored to real places at the spot — warn if the user
     // isn't physically there before launching.
     if (await ensureAtSpotForAR(spot)) {
       navigation.navigate("ar", { spot, arMissionId: arMission?._id ?? null });
     }
+  };
+
+  const openMission = (mission) => {
+    if (mission.type === "ar") handleLaunchAR();
+    else if (mission.type === "location") navigation.navigate("LocationMission", { spot, mission });
+    else navigation.navigate("Mission", { spot, mission });
   };
 
   const openReportModal = (review) => {
@@ -291,7 +484,7 @@ export default function InformationScreen({ route, navigation }) {
         return;
       }
       setShowReportModal(false);
-      if (result) showAlert("Report submitted", "Thank you. Our moderators will review this report.");
+      if (result) showToast("Report sent — our moderators will review it.", { type: "success" });
       else showAlert("Error", "Failed to submit report. Please try again.");
     } catch (err) {
       setSubmittingReport(false);
@@ -304,199 +497,36 @@ export default function InformationScreen({ route, navigation }) {
     }
   };
 
-  const ReviewCard = ({ review }) => {
-    const isMe = clerkUser?.id === review.clerkUserId;
-    const avatarUri = isMe ? (profileImage || review.userImage || clerkUser?.imageUrl) : (review.userImage || "https://i.pravatar.cc/150?img=10");
-    const [reacting, setReacting] = useState(false);
-
-    // Prefer a locally-patched userReaction (set right after a react call,
-    // and correctly captures "null" meaning removed). Fall back to
-    // deriving it from the raw reactions array on freshly-fetched reviews.
-    const userReaction = ("userReaction" in review)
-      ? review.userReaction
-      : (review.reactions || []).find((r) => r.clerkUserId === clerkUser?.id)?.type || null;
-
-    const handleReact = async (type) => {
-      if (isMe || reacting) return;
-      setReacting(true);
-      try {
-        const result = await reactToReview(review._id, spot._id, type);
-        if (isMutedResult(result)) {
-          showMutedAlert(result);
-        }
-      } catch (err) {
-        if (isMutedResult(err)) {
-          showMutedAlert(err);
-        }
-      } finally {
-        setReacting(false);
-      }
-    };
-
-    return (
-      <View style={styles.reviewCard}>
-        <Image source={{ uri: avatarImage(avatarUri, 34) }} style={[styles.avatar, { borderColor: colors.cardBorder }]} />
-        <View style={[styles.reviewBubble, { backgroundColor: colors.card }]}>
-          <View style={styles.reviewBubbleHeader}>
-            <Text style={[styles.reviewAuthor, { color: colors.brandDark }]}>{review.userName || "Anonymous"}</Text>
-            <View style={styles.reviewBubbleHeaderRight}>
-              <StarRating rating={review.rating} size={11} />
-              <TouchableOpacity
-                onPress={() => openReportModal(review)}
-                activeOpacity={0.7}
-                hitSlop={{ top:16, bottom:16, left:16, right:16 }}
-                style={styles.reportButton}
-                accessibilityRole="button"
-                accessibilityLabel={`Report the review by ${review.userName || "this user"}`}
-              >
-                <Icon name="flag" size={13} color={colors.textMuted} />
-              </TouchableOpacity>
-            </View>
-          </View>
-          <Text style={[styles.reviewComment, { color: colors.textPrimary }]}>{review.comment}</Text>
-          <View style={styles.reviewFooterRow}>
-            <Text style={[styles.reviewDate, { color: colors.textMuted }]}>{review.createdAt ? new Date(review.createdAt).toLocaleDateString() : "Just now"}</Text>
-            {/* Your own review can't be reacted to. Rather than rendering two
-                greyed-out buttons with no explanation, show the tallies as plain
-                text — nothing looks broken and nothing invites a dead tap. */}
-            {isMe ? (
-              <View
-                style={styles.reactionsRow}
-                accessibilityLabel={`${review.likes || 0} likes, ${review.dislikes || 0} dislikes on your review`}
-              >
-                <View style={styles.reactionBtn}>
-                  <Icon name="thumbs-up" size={13} color={colors.textMuted} />
-                  <Text style={[styles.reactionCount, { color: colors.textMuted }]}>{review.likes || 0}</Text>
-                </View>
-                <View style={styles.reactionBtn}>
-                  <Icon name="thumbs-down" size={13} color={colors.textMuted} />
-                  <Text style={[styles.reactionCount, { color: colors.textMuted }]}>{review.dislikes || 0}</Text>
-                </View>
-              </View>
-            ) : (
-              <View style={styles.reactionsRow}>
-                <TouchableOpacity
-                  onPress={() => handleReact("like")}
-                  disabled={reacting}
-                  hitSlop={{ top:14, bottom:14, left:12, right:12 }}
-                  style={styles.reactionBtn}
-                  activeOpacity={0.7}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: userReaction === "like" }}
-                  accessibilityLabel={`Like this review, ${review.likes || 0} likes`}
-                >
-                  <Icon name="thumbs-up" size={13} color={userReaction === "like" ? colors.brand : colors.textMuted} />
-                  <Text style={[styles.reactionCount, { color: userReaction === "like" ? colors.brand : colors.textMuted }]}>
-                    {review.likes || 0}
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={() => handleReact("dislike")}
-                  disabled={reacting}
-                  hitSlop={{ top:14, bottom:14, left:12, right:12 }}
-                  style={styles.reactionBtn}
-                  activeOpacity={0.7}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: userReaction === "dislike" }}
-                  accessibilityLabel={`Dislike this review, ${review.dislikes || 0} dislikes`}
-                >
-                  <Icon name="thumbs-down" size={13} color={userReaction === "dislike" ? colors.danger : colors.textMuted} />
-                  <Text style={[styles.reactionCount, { color: userReaction === "dislike" ? colors.danger : colors.textMuted }]}>
-                    {review.dislikes || 0}
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            )}
-          </View>
-        </View>
-      </View>
-    );
-  };
-
-  const MissionRow = ({ mission }) => {
-    const config = MISSION_CONFIG[mission.type] || MISSION_CONFIG.checkin;
-    const isDone = completedMissions?.includes(mission._id);
-    return (
-      <TouchableOpacity
-        accessibilityRole="button"
-        style={styles.missionRow}
-        onPress={() => {
-          if (mission.type === "ar") handleLaunchAR();
-          else if (mission.type === "location") navigation.navigate("LocationMission", { spot, mission });
-          else navigation.navigate("Mission", { spot, mission });
-        }}
-        activeOpacity={0.82}
-      >
-        <View style={styles.missionThumbWrap}>
-          <View style={[styles.missionThumb, { backgroundColor: isDone ? colors.successBg : colors.brandSoft }]}>
-            <Icon name={config.icon} size={19} color={isDone ? colors.success : colors.brand} />
-          </View>
-          {isDone && (
-            <View style={[styles.checkBadge, { backgroundColor: colors.success, borderColor: colors.background }]}>
-              <Icon name="check" size={10} color="#fff" />
-            </View>
-          )}
-        </View>
-        <View style={styles.missionRowBody}>
-          <Text style={[styles.missionRowTitle, { color: colors.brandDark }, isDone && styles.missionRowTitleDone]} numberOfLines={2}>{mission.title}</Text>
-          <Text style={[styles.missionRowSub, { color: colors.textMuted }]} numberOfLines={1}>{config.label} · {cityText}</Text>
-        </View>
-        {mission.type === "ar" && !isDone ? (
-          <View style={[styles.arLaunchBadge, { backgroundColor: colors.accentSoft }]}>
-            <Icon name="aperture" size={11} color={colors.accentDark} style={{ marginRight:4 }}/>
-            <Text style={[styles.arLaunchBadgeText, { color: colors.accentDark }]}>Open AR</Text>
-          </View>
-        ) : (
-          <Icon name="chevron-right" size={18} color={colors.textMuted} style={{ marginLeft:4 }} />
-        )}
-      </TouchableOpacity>
-    );
-  };
-
-  const CircleBtn = ({ icon, onPress, active, iconNode, ...rest }) => (
-    <TouchableOpacity
-      accessibilityRole="button"
-      onPress={onPress}
-      activeOpacity={0.8}
-      style={[styles.circleBtn, { backgroundColor: active ? colors.accent : colors.card }]}
-      hitSlop={6}
-      {...rest}
-    >
-      {iconNode ?? <Icon name={icon} size={19} color={active ? colors.onAccent : colors.brandDark} />}
-    </TouchableOpacity>
-  );
-
   const showing3D = show3D && !!spot.modelUrl && isFocused;
+  const canPost   = !!newReview.trim() && newRating > 0 && !submittingReview;
 
   return (
-    <KeyboardAvoidingView key={refreshKey} style={[styles.container, { backgroundColor: colors.background }]} behavior={Platform.OS === "ios" ? "padding" : "height"} keyboardVerticalOffset={0}>
+    <KeyboardAvoidingView style={[styles.container, { backgroundColor: colors.background }]} behavior={Platform.OS === "ios" ? "padding" : "height"} keyboardVerticalOffset={0}>
       <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={colors.background} />
 
-      {/* Header */}
-      <View style={[styles.header, { backgroundColor: colors.background, paddingTop: insets.top + 6, borderBottomColor: colors.divider }]}>
-        <CircleBtn icon="chevron-left" onPress={() => navigation.goBack()} accessibilityLabel="Go back" />
-        <Text style={[styles.headerTitle, { color: colors.brandDark }]} numberOfLines={1}>{spot.name}</Text>
-        <View style={styles.headerRight}>
+      {header(
+        <>
           {spot.modelUrl && (
             <CircleBtn
+              colors={colors}
               accessibilityLabel={show3D ? "Show photo" : "Show 3D model"}
               onPress={() => setShow3D(!show3D)}
-              iconNode={<Icon name={show3D ? "image-outline" : "cube-scan"} size={20} color={colors.brandDark} />}
+              iconNode={<Icon name={show3D ? "image-outline" : "cube-scan"} size={20} color={colors.textPrimary} />}
             />
           )}
           <CircleBtn
+            colors={colors}
             accessibilityLabel={spotIsBookmarked ? "Remove bookmark" : "Bookmark this spot"}
             accessibilityState={{ selected: spotIsBookmarked }}
             onPress={handleBookmarkToggle}
             active={spotIsBookmarked}
-            iconNode={<Icon name="bookmark" size={16} weight={spotIsBookmarked ? "fill" : "regular"} color={spotIsBookmarked ? colors.onAccent : colors.brandDark} />}
+            iconNode={<Icon name="bookmark" size={17} weight={spotIsBookmarked ? "fill" : "regular"} color={spotIsBookmarked ? colors.onAccent : colors.textPrimary} />}
           />
-        </View>
-      </View>
+        </>
+      )}
 
       <ScrollView
         style={styles.scrollView}
-        contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         stickyHeaderIndices={[1]}
@@ -526,52 +556,37 @@ export default function InformationScreen({ route, navigation }) {
           </View>
         </View>
 
-        {/* [1] Sticky segmented tabs */}
+        {/* [1] Sticky tabs */}
         <View style={[styles.segmentWrap, { backgroundColor: colors.background }]}>
-          <View style={[styles.segment, { backgroundColor: colors.card }]}>
-            {tabs.map((tab) => {
-              const on = activeTab === tab.key;
-              return (
-                <TouchableOpacity
-                  accessibilityRole="button"
-                  key={tab.key}
-                  style={[styles.segmentItem, on && [styles.segmentItemActive, { backgroundColor: colors.background }, shadow.sm]]}
-                  onPress={() => { setActiveTab(tab.key); setShowStarPicker(false); }}
-                  activeOpacity={0.85}
-                >
-                  <Icon name={tab.icon} size={13} color={on ? colors.brand : colors.textMuted} />
-                  <Text style={[styles.segmentText, { color: on ? colors.brand : colors.textMuted }]}>{tab.label}</Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
+          <Segmented
+            options={TABS}
+            value={activeTab}
+            onChange={(key) => { setActiveTab(key); setShowStarPicker(false); }}
+          />
         </View>
 
         {/* [2] Body */}
         <View style={styles.bodyPad}>
-          <Text style={[styles.title, { color: colors.brandDark }]}>{spot.name}</Text>
+          <Text style={[styles.title, { color: colors.textPrimary }]} accessibilityRole="header">{spot.name}</Text>
 
           {activeTab === "Overview" && (
             <>
-              <Text style={[styles.sectionHeading, { color: colors.brandDark }]}>About</Text>
-              <Text style={[styles.descriptionText, { color: colors.textSecondary }]}>{spot.description || "Description coming soon..."}</Text>
+              <Text style={[styles.sectionHeading, { color: colors.textPrimary }]}>About</Text>
+              <Text style={[styles.descriptionText, { color: colors.textSecondary }]}>
+                {spot.description || "No description for this place yet."}
+              </Text>
 
               <View style={[styles.infoCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
-                {[
-                  { icon:"clock",   label:"Visiting Hours", value: spot.visitingHours || "6:00 AM – 10:00 PM" },
-                  { icon:"tag",     label:"Entrance Fee",   value: spot.entranceFee   || "Free" },
-                  { icon:"map-pin", label:"Location",       value: cityText },
-                  { icon:"phone",   label:"Contact",        value: spot.contact       || "N/A" },
-                ].map((row, i, arr) => (
+                {facts.map((row, i) => (
                   <React.Fragment key={row.label}>
-                    <View style={styles.infoRow}>
-                      <View style={[styles.infoIcon, { backgroundColor: colors.brandSoft }]}>
+                    <View style={styles.infoRow} accessible accessibilityLabel={`${row.label}: ${row.value}`}>
+                      <View style={[styles.infoIcon, { backgroundColor: colors.brandLight }]}>
                         <Icon name={row.icon} size={14} color={colors.brand} />
                       </View>
                       <Text style={[styles.infoLabel, { color: colors.textMuted }]}>{row.label}</Text>
-                      <Text style={[styles.infoValue, { color: colors.brandDark }]} numberOfLines={2}>{row.value}</Text>
+                      <Text style={[styles.infoValue, { color: colors.textPrimary }]} numberOfLines={2}>{row.value}</Text>
                     </View>
-                    {i < arr.length - 1 && <View style={[styles.infoDivider, { backgroundColor: colors.cardBorder }]} />}
+                    {i < facts.length - 1 && <View style={[styles.infoDivider, { backgroundColor: colors.cardBorder }]} />}
                   </React.Fragment>
                 ))}
               </View>
@@ -579,57 +594,66 @@ export default function InformationScreen({ route, navigation }) {
           )}
 
           {activeTab === "BucketList" && (
-            <>
-              {missions.length === 0 ? (
-                <View style={styles.emptyState}>
-                  <View style={[styles.stateBadge, { backgroundColor: colors.brandSoft }]}>
-                    <Icon name="flag" size={24} color={colors.brand} />
+            missions.length === 0 ? (
+              <EmptyState icon="flag" text="No Bakit List activities for this spot yet." />
+            ) : (
+              <>
+                <View style={[styles.progressCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
+                  <View style={styles.progressTop}>
+                    <Text style={[styles.progressLabel, { color: colors.textPrimary }]}>Your progress</Text>
+                    <Text style={[styles.progressPct, { color: colors.brand }]}>{Math.round(progressRatio * 100)}%</Text>
                   </View>
-                  <Text style={[styles.emptyText, { color: colors.textSecondary }]}>No missions for this spot yet.</Text>
+                  <View
+                    style={[styles.progressTrack, { backgroundColor: colors.brandLight }]}
+                    accessibilityRole="progressbar"
+                    accessibilityValue={{ min: 0, max: totalCount, now: completedCount }}
+                  >
+                    <View style={[styles.progressFill, { width: `${progressRatio * 100}%`, backgroundColor: colors.brand }]} />
+                  </View>
+                  <Text style={[styles.progressSub, { color: colors.textMuted }]}>{completedCount} of {totalCount} activities complete</Text>
                 </View>
-              ) : (
-                <>
-                  <View style={[styles.progressCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
-                    <View style={styles.progressTop}>
-                      <Text style={[styles.progressLabel, { color: colors.brandDark }]}>Your progress</Text>
-                      <Text style={[styles.progressPct, { color: colors.brand }]}>{Math.round(progressRatio * 100)}%</Text>
-                    </View>
-                    <View style={[styles.progressTrack, { backgroundColor: colors.brandSoft }]}>
-                      <View style={[styles.progressFill, { width:`${progressRatio*100}%`, backgroundColor: colors.brand }]} />
-                    </View>
-                    <Text style={[styles.progressSub, { color: colors.textMuted }]}>{completedCount} of {totalCount} missions complete</Text>
-                  </View>
 
-                  <Text style={[styles.bucketSectionTitle, { color: colors.brandDark }]}>Bakit List for this spot</Text>
-                  <View style={[styles.missionList, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
-                    {missions.map((mission, i) => (
-                      <React.Fragment key={mission._id}>
-                        <MissionRow mission={mission} index={i} />
-                        {i < missions.length - 1 && <View style={[styles.missionDivider, { backgroundColor: colors.cardBorder }]} />}
-                      </React.Fragment>
-                    ))}
-                  </View>
-                </>
-              )}
-            </>
+                <Text style={[styles.sectionHeading, { color: colors.textPrimary }]}>Bakit List for this spot</Text>
+                <View style={[styles.missionList, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
+                  {missions.map((mission, i) => (
+                    <React.Fragment key={mission._id}>
+                      <MissionRow
+                        mission={mission}
+                        isDone={!!completedMissions?.includes(mission._id)}
+                        cityText={cityText}
+                        onPress={() => openMission(mission)}
+                        colors={colors}
+                      />
+                      {i < missions.length - 1 && <View style={[styles.missionDivider, { backgroundColor: colors.cardBorder }]} />}
+                    </React.Fragment>
+                  ))}
+                </View>
+              </>
+            )
           )}
 
           {activeTab === "Reviews" && (
             <>
               <View style={[styles.ratingSummary, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
-                <Text style={[styles.ratingBig, { color: colors.brandDark }]}>{averageRating}</Text>
-                <StarRating rating={Math.round(parseFloat(averageRating))} size={18} />
+                <Text style={[styles.ratingBig, { color: colors.textPrimary }]}>{averageRating}</Text>
+                <StarRating rating={Math.round(parseFloat(averageRating))} size={18} colors={colors} />
                 <Text style={[styles.reviewCountText, { color: colors.textMuted }]}>{reviewCount} {reviewCount === 1 ? "review" : "reviews"}</Text>
               </View>
-              <Text style={[styles.sectionHeading, { color: colors.brandDark }]}>All reviews ({reviewCount})</Text>
+              <Text style={[styles.sectionHeading, { color: colors.textPrimary }]}>All reviews ({reviewCount})</Text>
               {reviews.length === 0 ? (
-                <View style={styles.emptyState}>
-                  <View style={[styles.stateBadge, { backgroundColor: colors.brandSoft }]}>
-                    <Icon name="message-square" size={24} color={colors.brand} />
-                  </View>
-                  <Text style={[styles.emptyText, { color: colors.textSecondary }]}>No reviews yet — be the first!</Text>
-                </View>
-              ) : reviews.map((review) => <ReviewCard key={review._id} review={review} />)}
+                <EmptyState icon="message-square" text="No reviews yet — be the first to write one below." />
+              ) : reviews.map((review) => (
+                <ReviewCard
+                  key={review._id}
+                  review={review}
+                  spotId={spot._id}
+                  clerkUser={clerkUser}
+                  profileImage={profileImage}
+                  reactToReview={reactToReview}
+                  onReport={openReportModal}
+                  colors={colors}
+                />
+              ))}
             </>
           )}
 
@@ -643,7 +667,7 @@ export default function InformationScreen({ route, navigation }) {
           {showStarPicker && (
             <View style={styles.starPickerRow}>
               <Text style={[styles.starPickerLabel, { color: colors.textMuted }]}>Your rating</Text>
-              {[1,2,3,4,5].map((s) => (
+              {[1, 2, 3, 4, 5].map((s) => (
                 <TouchableOpacity
                   key={s}
                   onPress={() => setNewRating(s)}
@@ -663,19 +687,39 @@ export default function InformationScreen({ route, navigation }) {
             </View>
           )}
           <View style={styles.commentBar}>
-            <View style={[styles.commentAvatar, { backgroundColor: colors.card }]}>
-              {(profileImage || clerkUser?.imageUrl) ? (
-                <Image source={{ uri: avatarImage(profileImage || clerkUser?.imageUrl, 34) }} style={styles.commentAvatarImg} />
-              ) : (
-                <Icon name="user" size={16} color={colors.textMuted} />
-              )}
-            </View>
+            <Avatar
+              uri={profileImage || clerkUser?.imageUrl}
+              name={clerkUser?.fullName || clerkUser?.firstName}
+              size={36}
+              style={styles.commentAvatar}
+            />
             <TouchableOpacity
-              accessibilityRole="button" style={[styles.commentInputWrap, { backgroundColor: colors.card }]} activeOpacity={1} onPress={() => { setShowStarPicker(true); inputRef.current?.focus(); }}>
-              <TextInput ref={inputRef} style={[styles.commentInput, { color: colors.brandDark }]} placeholder="Write a review..." placeholderTextColor={colors.textMuted} value={newReview} onChangeText={setNewReview} onFocus={() => setShowStarPicker(true)} multiline maxLength={500} />
+              accessibilityRole="button"
+              style={[styles.commentInputWrap, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}
+              activeOpacity={1}
+              onPress={() => { setShowStarPicker(true); inputRef.current?.focus(); }}
+            >
+              <TextInput
+                ref={inputRef}
+                style={[styles.commentInput, { color: colors.textPrimary }]}
+                placeholder="Write a review..."
+                placeholderTextColor={colors.placeholder}
+                value={newReview}
+                onChangeText={setNewReview}
+                onFocus={() => setShowStarPicker(true)}
+                multiline
+                maxLength={500}
+                accessibilityLabel="Write a review"
+              />
             </TouchableOpacity>
             <TouchableOpacity
-              accessibilityRole="button" accessibilityLabel={submittingReview ? "Posting review" : "Post review"} style={[styles.sendBtn, { backgroundColor: colors.accent }, (!newReview.trim() || newRating === 0 || submittingReview) && styles.sendBtnDisabled]} onPress={handleSubmit} disabled={!newReview.trim() || newRating === 0 || submittingReview}>
+              accessibilityRole="button"
+              accessibilityLabel={submittingReview ? "Posting review" : "Post review"}
+              accessibilityState={{ disabled: !canPost }}
+              style={[styles.sendBtn, { backgroundColor: colors.accent }, !canPost && styles.sendBtnDisabled]}
+              onPress={handleSubmit}
+              disabled={!canPost}
+            >
               {submittingReview ? <ActivityIndicator size="small" color={colors.onAccent} /> : <Icon name="send" size={17} color={colors.onAccent} />}
             </TouchableOpacity>
           </View>
@@ -684,48 +728,86 @@ export default function InformationScreen({ route, navigation }) {
 
       {/* Floating action card — Navigate + AR */}
       {!isReviewsTab && (
-        <View style={[styles.actionCard, { backgroundColor: colors.background, bottom: Math.max(insets.bottom, 14) + 10 }, shadow.lg]}>
+        <View style={[styles.actionCard, { backgroundColor: colors.card, borderColor: colors.cardBorder, bottom: Math.max(insets.bottom, 14) + 10 }, shadow.lg]}>
           <TouchableOpacity
-            accessibilityRole="button" style={styles.actionItem} onPress={() => navigation.navigate("Track", { spot })} activeOpacity={0.75}>
+            accessibilityRole="button"
+            accessibilityLabel={`Navigate to ${spot.name}`}
+            style={styles.actionItem}
+            onPress={() => navigation.navigate("Track", { spot })}
+            activeOpacity={0.75}
+          >
             <Icon name="navigation" size={17} color={colors.brand} />
-            <Text style={[styles.actionText, { color: colors.brandDark }]}>Navigate</Text>
+            <Text style={[styles.actionText, { color: colors.textPrimary }]}>Navigate</Text>
           </TouchableOpacity>
           <View style={[styles.actionDivider, { backgroundColor: colors.divider }]} />
           <TouchableOpacity
-            accessibilityRole="button" style={styles.actionItem} onPress={handleLaunchAR} activeOpacity={0.75}>
+            accessibilityRole="button"
+            accessibilityLabel={`Open ${spot.name} in AR`}
+            style={styles.actionItem}
+            onPress={handleLaunchAR}
+            activeOpacity={0.75}
+          >
             <Icon name="aperture" size={17} color={colors.brand} />
-            <Text style={[styles.actionText, { color: colors.brandDark }]}>AR View</Text>
+            <Text style={[styles.actionText, { color: colors.textPrimary }]}>AR View</Text>
           </TouchableOpacity>
         </View>
       )}
 
       {/* Report modal */}
       <Modal visible={showReportModal} animationType="slide" transparent onRequestClose={() => setShowReportModal(false)}>
-        <View style={styles.modalOverlay}>
+        <View style={[styles.modalOverlay, { backgroundColor: colors.overlay }]}>
           <View style={[styles.modalContent, { backgroundColor: colors.background, paddingBottom: Math.max(insets.bottom, 24) }]}>
             <View style={[styles.modalGrabber, { backgroundColor: colors.divider }]} />
             <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, { color: colors.brandDark }]}>Report review</Text>
+              <Text style={[styles.modalTitle, { color: colors.textPrimary }]} accessibilityRole="header">Report review</Text>
               <TouchableOpacity
-                accessibilityRole="button" accessibilityLabel="Close report" onPress={() => setShowReportModal(false)} hitSlop={8}><Icon name="x" size={22} color={colors.textMuted} /></TouchableOpacity>
+                accessibilityRole="button"
+                accessibilityLabel="Close report"
+                onPress={() => setShowReportModal(false)}
+                style={styles.modalClose}
+              >
+                <Icon name="x" size={22} color={colors.textMuted} />
+              </TouchableOpacity>
             </View>
-            {reportTarget && <Text style={[styles.reportSubtitle, { color: colors.textMuted }]}>Reporting comment by <Text style={{ fontFamily: fonts.sansBold, color: colors.brandDark }}>{reportTarget.userName}</Text></Text>}
-            <Text style={[styles.modalLabel, { color: colors.brandDark }]}>Reason</Text>
-            <View style={styles.reasonList}>
-              {REPORT_REASONS.map((r) => (
-                <TouchableOpacity
-                  accessibilityRole="button" key={r.key} style={[styles.reasonOption, { backgroundColor: colors.card, borderColor: colors.cardBorder }, reportReason === r.key && { borderColor: colors.brand, backgroundColor: colors.brandLight }]} onPress={() => setReportReason(r.key)} activeOpacity={0.8}>
-                  <View style={[styles.reasonRadio, { borderColor: colors.textMuted }, reportReason === r.key && { borderColor: colors.brand, backgroundColor: colors.brand }]} />
-                  <Text style={[styles.reasonLabel, { color: colors.textMuted }, reportReason === r.key && { color: colors.brandDark, fontFamily: fonts.sansSemi }]}>{r.label}</Text>
-                </TouchableOpacity>
-              ))}
+            {reportTarget && (
+              <Text style={[styles.reportSubtitle, { color: colors.textMuted }]}>
+                Reporting comment by <Text style={{ fontFamily: fonts.sansBold, color: colors.textPrimary }}>{reportTarget.userName}</Text>
+              </Text>
+            )}
+            <Text style={[styles.modalLabel, { color: colors.textPrimary }]}>Reason</Text>
+            <View style={styles.reasonList} accessibilityRole="radiogroup">
+              {REPORT_REASONS.map((r) => {
+                const on = reportReason === r.key;
+                return (
+                  <TouchableOpacity
+                    key={r.key}
+                    accessibilityRole="radio"
+                    accessibilityState={{ selected: on }}
+                    accessibilityLabel={r.label}
+                    style={[styles.reasonOption, { backgroundColor: colors.card, borderColor: colors.cardBorder }, on && { borderColor: colors.brand, backgroundColor: colors.brandLight }]}
+                    onPress={() => setReportReason(r.key)}
+                    activeOpacity={0.8}
+                  >
+                    <View style={[styles.reasonRadio, { borderColor: on ? colors.brand : colors.textMuted }]}>
+                      {on && <View style={[styles.reasonRadioDot, { backgroundColor: colors.brand }]} />}
+                    </View>
+                    <Text style={[styles.reasonLabel, { color: on ? colors.textPrimary : colors.textSecondary }, on && { fontFamily: fonts.sansSemi }]}>{r.label}</Text>
+                  </TouchableOpacity>
+                );
+              })}
             </View>
-            <Text style={[styles.modalLabel, { color: colors.brandDark }]}>Additional details (optional)</Text>
-            <TextInput style={[styles.reportDetailsInput, { backgroundColor: colors.card, borderColor: colors.cardBorder, color: colors.brandDark }]} multiline placeholder="Add any extra context..." placeholderTextColor={colors.textMuted} value={reportDetails} onChangeText={setReportDetails} textAlignVertical="top" />
-            <TouchableOpacity
-              accessibilityRole="button" style={[styles.submitButton, { backgroundColor: colors.accent }, submittingReport && { opacity:0.6 }]} onPress={handleSubmitReport} disabled={submittingReport} activeOpacity={0.85}>
-              <Text style={[styles.submitButtonText, { color: colors.onAccent }]}>{submittingReport ? "Submitting..." : "Submit report"}</Text>
-            </TouchableOpacity>
+            <Text style={[styles.modalLabel, { color: colors.textPrimary }]}>Additional details (optional)</Text>
+            <TextInput
+              style={[styles.reportDetailsInput, { backgroundColor: colors.inputBg, borderColor: colors.inputBorder, color: colors.textPrimary }]}
+              multiline
+              placeholder="Add any extra context..."
+              placeholderTextColor={colors.placeholder}
+              value={reportDetails}
+              onChangeText={setReportDetails}
+              textAlignVertical="top"
+              accessibilityLabel="Additional details"
+            />
+            <PrimaryButton title="Submit report" onPress={handleSubmitReport} loading={submittingReport} />
           </View>
         </View>
       </Modal>
@@ -734,127 +816,116 @@ export default function InformationScreen({ route, navigation }) {
 }
 
 const styles = StyleSheet.create({
-  container:       { flex:1 },
-  errorContainer:  { flex:1, justifyContent:"center", alignItems:"center", gap:14, paddingHorizontal:32 },
-  errorText:       { fontSize:15, fontFamily: fonts.sansMedium },
-  backButton:      { paddingHorizontal:28, paddingVertical:12, borderRadius:999 },
-  backButtonText:  { fontFamily: fonts.sansBold, fontSize:13.5 },
+  container:       { flex: 1 },
+  missingWrap:     { paddingHorizontal: H_PAD, paddingTop: 24 },
+  missingBtn:      { alignSelf: "stretch", marginTop: 8 },
 
-  header:          { flexDirection:"row", alignItems:"center", justifyContent:"space-between", paddingHorizontal:14, paddingBottom:10, borderBottomWidth:1 },
-  headerTitle:     { flex:1, textAlign:"center", fontSize:16.5, fontFamily: fonts.sansBold, letterSpacing:-0.2, marginHorizontal:8 },
-  headerRight:     { flexDirection:"row", alignItems:"center", gap:8 },
-  circleBtn:       { width:38, height:38, borderRadius:19, justifyContent:"center", alignItems:"center" },
+  header:          { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: H_PAD, paddingBottom: 10, borderBottomWidth: 1 },
+  headerTitle:     { flex: 1, textAlign: "center", fontSize: 16.5, fontFamily: fonts.sansSemi, letterSpacing: -0.2, marginHorizontal: 8 },
+  headerRight:     { flexDirection: "row", alignItems: "center", gap: 8, minWidth: 40, justifyContent: "flex-end" },
+  circleBtn:       { width: 40, height: 40, borderRadius: 20, justifyContent: "center", alignItems: "center", borderWidth: 1 },
 
-  scrollView:      { flex:1 },
-  scrollContent:   { paddingBottom:0 },
+  scrollView:      { flex: 1 },
 
-  heroWrap:        { paddingHorizontal:16, paddingTop:14, paddingBottom:4 },
-  heroCard:        { borderRadius:radius.xl, overflow:"hidden", height:288 },
-  heroImage:       { width:"100%", height:"100%" },
-  heroRating:      { position:"absolute", top:12, left:12, flexDirection:"row", alignItems:"center", gap:3, backgroundColor:"rgba(11,30,32,0.62)", paddingHorizontal:10, paddingVertical:5, borderRadius:999 },
-  heroRatingText:  { color:"#fff", fontSize:12.5, fontFamily: fonts.sansBold },
-  heroRatingCount: { color:"rgba(255,255,255,0.75)", fontSize:11, fontFamily: fonts.sansSemi },
-  heroCaption:     { position:"absolute", left:14, right:14, bottom:12, flexDirection:"row", alignItems:"center", gap:5 },
-  heroCaptionText: { color:"#fff", fontSize:12.5, fontFamily: fonts.sansBold, flex:1, textShadowColor:"rgba(0,0,0,0.5)", textShadowRadius:6 },
+  // One gutter for the whole screen — hero, tabs and body used to sit at 16,
+  // 16 and 22, so their edges didn't line up.
+  heroWrap:        { paddingHorizontal: H_PAD, paddingTop: 14, paddingBottom: 4 },
+  heroCard:        { borderRadius: radius.xl, overflow: "hidden", height: 288 },
+  heroImage:       { width: "100%", height: "100%" },
+  heroRating:      { position: "absolute", top: 12, left: 12, flexDirection: "row", alignItems: "center", gap: 3, backgroundColor: "rgba(11,30,32,0.62)", paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999 },
+  heroRatingText:  { color: "#fff", fontSize: 12.5, fontFamily: fonts.sansBold },
+  heroRatingCount: { color: "rgba(255,255,255,0.75)", fontSize: 11, fontFamily: fonts.sansSemi },
+  heroCaption:     { position: "absolute", left: 14, right: 14, bottom: 12, flexDirection: "row", alignItems: "center", gap: 5 },
+  heroCaptionText: { color: "#fff", fontSize: 12.5, fontFamily: fonts.sansBold, flex: 1, textShadowColor: "rgba(0,0,0,0.5)", textShadowRadius: 6 },
 
-  segmentWrap:     { paddingHorizontal:16, paddingTop:8, paddingBottom:10 },
-  segment:         { flexDirection:"row", borderRadius:999, padding:4, gap:4 },
-  segmentItem:     { flex:1, flexDirection:"row", alignItems:"center", justifyContent:"center", gap:6, paddingVertical:9, borderRadius:999 },
-  segmentItemActive:{ },
-  segmentText:     { fontSize:13, fontFamily: fonts.sansBold, letterSpacing:-0.1 },
+  segmentWrap:     { paddingHorizontal: H_PAD, paddingTop: 10, paddingBottom: 10 },
 
-  bodyPad:         { paddingHorizontal:22, paddingTop:10 },
-  title:           { fontSize:24, fontFamily: fonts.sansBold, letterSpacing:-0.5, marginBottom:14 },
+  bodyPad:         { paddingHorizontal: H_PAD, paddingTop: 10 },
+  // The place name is the screen's display moment — it gets the serif, like
+  // the Profile name and the badge names.
+  title:           { ...typography.display, marginBottom: 14 },
 
-  sectionHeading:  { fontSize:16, fontFamily: fonts.sansBold, letterSpacing:-0.2, marginBottom:10, marginTop:6 },
-  descriptionText: { fontSize:13.5, lineHeight:21, marginBottom:18 },
+  sectionHeading:  { ...typography.h3, fontSize: 17, lineHeight: 22, marginBottom: 10, marginTop: 6 },
+  descriptionText: { ...typography.body, marginBottom: 18 },
 
-  infoCard:        { borderRadius:radius.card, borderWidth:1, paddingHorizontal:16, paddingVertical:6 },
-  infoRow:         { flexDirection:"row", alignItems:"center", gap:11, paddingVertical:12 },
-  infoIcon:        { width:30, height:30, borderRadius:15, justifyContent:"center", alignItems:"center" },
-  infoLabel:       { fontSize:12.5, fontFamily: fonts.sansSemi, width:96 },
-  infoValue:       { fontSize:13, fontFamily: fonts.sansBold, flex:1, textAlign:"right" },
-  infoDivider:     { height:1 },
+  infoCard:        { borderRadius: radius.card, borderWidth: 1, paddingHorizontal: 16, paddingVertical: 6 },
+  infoRow:         { flexDirection: "row", alignItems: "center", gap: 11, paddingVertical: 12 },
+  infoIcon:        { width: 30, height: 30, borderRadius: 15, justifyContent: "center", alignItems: "center" },
+  infoLabel:       { fontSize: 12.5, fontFamily: fonts.sansSemi, width: 100 },
+  infoValue:       { fontSize: 13.5, fontFamily: fonts.sansSemi, flex: 1, textAlign: "right" },
+  infoDivider:     { height: 1 },
 
-  progressCard:    { borderRadius:radius.card, borderWidth:1, padding:16, marginBottom:20, marginTop:2 },
-  progressTop:     { flexDirection:"row", justifyContent:"space-between", alignItems:"center", marginBottom:10 },
-  progressLabel:   { fontSize:14, fontFamily: fonts.sansBold, letterSpacing:-0.2 },
-  progressPct:     { fontSize:15, fontFamily: fonts.sansBold },
-  progressTrack:   { height:8, borderRadius:4, overflow:"hidden" },
-  progressFill:    { height:"100%", borderRadius:4 },
-  progressSub:     { fontSize:12, fontFamily: fonts.sansSemi, marginTop:8 },
+  progressCard:    { borderRadius: radius.card, borderWidth: 1, padding: 16, marginBottom: 20, marginTop: 2 },
+  progressTop:     { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 10 },
+  progressLabel:   { fontSize: 14, fontFamily: fonts.sansBold, letterSpacing: -0.2 },
+  progressPct:     { fontSize: 15, fontFamily: fonts.sansBold },
+  progressTrack:   { height: 8, borderRadius: 4, overflow: "hidden" },
+  progressFill:    { height: "100%", borderRadius: 4 },
+  progressSub:     { fontSize: 12, fontFamily: fonts.sansSemi, marginTop: 8 },
 
-  bucketSectionTitle: { fontSize:17, fontFamily: fonts.sansBold, letterSpacing:-0.3, marginBottom:12 },
-  missionList:     { borderRadius:radius.card, borderWidth:1, overflow:"hidden" },
-  missionRow:      { flexDirection:"row", alignItems:"center", paddingHorizontal:14, paddingVertical:13, gap:12 },
-  missionDivider:  { height:1, marginLeft:70 },
-  missionThumbWrap:{ position:"relative" },
-  missionThumb:    { width:46, height:46, borderRadius:14, justifyContent:"center", alignItems:"center" },
-  checkBadge:      { position:"absolute", bottom:-3, right:-3, width:18, height:18, borderRadius:9, justifyContent:"center", alignItems:"center", borderWidth:2 },
-  missionRowBody:  { flex:1, gap:3 },
-  missionRowTitle: { fontSize:14, fontFamily: fonts.sansBold, lineHeight:19 },
+  missionList:     { borderRadius: radius.card, borderWidth: 1, overflow: "hidden" },
+  missionRow:      { flexDirection: "row", alignItems: "center", paddingHorizontal: 14, paddingVertical: 13, gap: 12, minHeight: 72 },
+  missionDivider:  { height: 1, marginLeft: 72 },
+  missionThumbWrap:{ position: "relative" },
+  missionThumb:    { width: 46, height: 46, borderRadius: 14, justifyContent: "center", alignItems: "center" },
+  checkBadge:      { position: "absolute", bottom: -3, right: -3, width: 18, height: 18, borderRadius: 9, justifyContent: "center", alignItems: "center", borderWidth: 2 },
+  missionRowBody:  { flex: 1, gap: 3 },
+  missionRowTitle: { fontSize: 14, fontFamily: fonts.sansBold, lineHeight: 19 },
   // No strikethrough. The green tick on the thumbnail already says "done", and
   // a line through the title says something different — crossed-out text reads
   // as cancelled or no longer available, which is the opposite of an
   // achievement the user just earned. The tick is the only completion marker.
-  missionRowTitleDone: { opacity:0.72 },
-  missionRowSub:   { fontSize:11.5, fontFamily: fonts.sansMedium },
-  arLaunchBadge:   { flexDirection:"row", alignItems:"center", borderRadius:999, paddingHorizontal:10, paddingVertical:5, marginLeft:4 },
-  arLaunchBadgeText: { fontSize:11, fontFamily: fonts.sansBold },
+  missionRowTitleDone: { opacity: 0.72 },
+  missionRowSub:   { fontSize: 11.5, fontFamily: fonts.sansMedium },
+  arLaunchBadge:   { flexDirection: "row", alignItems: "center", borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5, marginLeft: 4 },
+  arLaunchBadgeText: { fontSize: 11, fontFamily: fonts.sansBold },
 
-  emptyState:      { alignItems:"center", paddingVertical:36, gap:12 },
-  emptyText:       { fontSize:13, fontFamily: fonts.sansMedium, textAlign:"center" },
+  ratingSummary:   { borderRadius: radius.card, padding: 22, marginBottom: 16, alignItems: "center", borderWidth: 1 },
+  ratingBig:       { ...typography.display, fontSize: 48, lineHeight: 54, marginBottom: 6 },
+  starsRow:        { flexDirection: "row", gap: 3, marginBottom: 4 },
+  reviewCountText: { fontSize: 12.5, fontFamily: fonts.sansSemi, marginTop: 4 },
 
-  ratingSummary:   { borderRadius:radius.card, padding:22, marginBottom:16, alignItems:"center", borderWidth:1 },
-  ratingBig:       { fontSize:48, fontFamily: fonts.sansBold, letterSpacing:-1, marginBottom:6 },
-  starsRow:        { flexDirection:"row", gap:3, marginBottom:4 },
-  reviewCountText: { fontSize:12.5, fontFamily: fonts.sansSemi, marginTop:4 },
+  reviewCard:      { flexDirection: "row", alignItems: "flex-start", gap: 10, marginBottom: 12 },
+  avatar:          { marginTop: 2, borderWidth: 1.5 },
+  reviewBubble:    { flex: 1, borderRadius: radius.lg, borderWidth: 1, paddingHorizontal: 15, paddingVertical: 12 },
+  reviewBubbleHeader:      { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 4, gap: 8 },
+  reviewBubbleHeaderRight: { flexDirection: "row", alignItems: "center", gap: 8 },
+  reviewAuthor:    { fontSize: 13, fontFamily: fonts.sansBold, flexShrink: 1 },
+  reviewComment:   { fontSize: 13.5, lineHeight: 20 },
+  reviewFooterRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 6 },
+  reviewDate:      { fontSize: 11, fontFamily: fonts.sansMedium },
+  reactionsRow:    { flexDirection: "row", alignItems: "center", gap: 14 },
+  reactionBtn:     { flexDirection: "row", alignItems: "center", gap: 4 },
+  reactionCount:   { fontSize: 12, fontFamily: fonts.sansBold },
+  reportButton:    { padding: 2 },
 
-  reviewCard:      { flexDirection:"row", alignItems:"flex-start", gap:10, marginBottom:12 },
-  avatar:          { width:36, height:36, borderRadius:18, marginTop:2, borderWidth:1.5 },
-  reviewBubble:    { flex:1, borderRadius:radius.lg, paddingHorizontal:15, paddingVertical:12 },
-  reviewBubbleHeader:      { flexDirection:"row", alignItems:"center", justifyContent:"space-between", marginBottom:4 },
-  reviewBubbleHeaderRight: { flexDirection:"row", alignItems:"center", gap:8 },
-  reviewAuthor:    { fontSize:13, fontFamily: fonts.sansBold },
-  reviewComment:   { fontSize:13, lineHeight:19 },
-  reviewFooterRow: { flexDirection:"row", alignItems:"center", justifyContent:"space-between", marginTop:6 },
-  reviewDate:      { fontSize:11, fontFamily: fonts.sansMedium },
-  reactionsRow:    { flexDirection:"row", alignItems:"center", gap:14 },
-  reactionBtn:     { flexDirection:"row", alignItems:"center", gap:4 },
-  reactionBtnDisabled: { opacity:0.35 },
-  reactionCount:   { fontSize:12, fontFamily: fonts.sansBold },
-  reportButton:    { padding:2 },
+  commentBarWrapper: { borderTopWidth: 1, paddingTop: 10, paddingHorizontal: H_PAD },
+  starPickerRow:   { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 4, paddingBottom: 10 },
+  starPickerLabel: { fontSize: 12.5, fontFamily: fonts.sansBold, marginRight: 4 },
+  commentBar:      { flexDirection: "row", alignItems: "flex-end", gap: 8 },
+  commentAvatar:   { marginBottom: 3 },
+  commentInputWrap:{ flex: 1, borderRadius: 22, borderWidth: 1, paddingHorizontal: 16, paddingVertical: 10, minHeight: 42, maxHeight: 100, justifyContent: "center" },
+  commentInput:    { fontSize: 14, fontFamily: fonts.sans, padding: 0 },
+  sendBtn:         { width: TAP, height: TAP, borderRadius: TAP / 2, justifyContent: "center", alignItems: "center" },
+  sendBtnDisabled: { opacity: 0.5 },
 
-  commentBarWrapper: { borderTopWidth:1, paddingTop:10, paddingHorizontal:14 },
-  starPickerRow:   { flexDirection:"row", alignItems:"center", gap:8, paddingHorizontal:4, paddingBottom:10 },
-  starPickerLabel: { fontSize:12.5, fontFamily: fonts.sansBold, marginRight:4 },
-  commentBar:      { flexDirection:"row", alignItems:"flex-end", gap:8 },
-  commentAvatar:   { width:36, height:36, borderRadius:18, justifyContent:"center", alignItems:"center", marginBottom:2, overflow:"hidden" },
-  commentAvatarImg:{ width:36, height:36, borderRadius:18 },
-  commentInputWrap:{ flex:1, borderRadius:999, paddingHorizontal:16, paddingVertical:10, minHeight:42, maxHeight:100, justifyContent:"center" },
-  commentInput:    { fontSize:14, padding:0 },
-  sendBtn:         { width:40, height:40, borderRadius:20, justifyContent:"center", alignItems:"center", marginBottom:1 },
-  sendBtnDisabled: { opacity:0.5 },
+  actionCard:      { position: "absolute", alignSelf: "center", flexDirection: "row", alignItems: "center", borderRadius: 999, borderWidth: 1, paddingHorizontal: 6, paddingVertical: 4 },
+  actionItem:      { flexDirection: "row", alignItems: "center", gap: 8, minHeight: TAP, paddingHorizontal: 22 },
+  actionText:      { fontFamily: fonts.sansBold, fontSize: 13.5, letterSpacing: -0.2 },
+  actionDivider:   { width: 1, alignSelf: "stretch", marginVertical: 8 },
 
-  actionCard:      { position:"absolute", alignSelf:"center", flexDirection:"row", alignItems:"center", borderRadius:999, paddingHorizontal:6, paddingVertical:5 },
-  actionItem:      { flexDirection:"row", alignItems:"center", gap:8, paddingVertical:11, paddingHorizontal:22 },
-  actionText:      { fontFamily: fonts.sansBold, fontSize:13.5, letterSpacing:-0.2 },
-  actionDivider:   { width:1, alignSelf:"stretch", marginVertical:8 },
-
-  modalOverlay:    { flex:1, backgroundColor:"rgba(11,30,32,0.55)", justifyContent:"flex-end" },
-  modalContent:    { borderTopLeftRadius:radius.xl, borderTopRightRadius:radius.xl, paddingHorizontal:24, paddingTop:10, maxHeight:"88%" },
-  modalGrabber:    { alignSelf:"center", width:40, height:4, borderRadius:2, marginBottom:14 },
-  modalHeader:     { flexDirection:"row", justifyContent:"space-between", alignItems:"center", marginBottom:12 },
-  modalTitle:      { fontSize:20, fontFamily: fonts.sansBold, letterSpacing:-0.3 },
-  modalLabel:      { fontSize:14, fontFamily: fonts.sansBold, marginBottom:10, marginTop:14 },
-  reportSubtitle:  { fontSize:13.5, marginBottom:4 },
-  reasonList:      { gap:8, marginBottom:4 },
-  reasonOption:    { flexDirection:"row", alignItems:"center", borderRadius:radius.md, paddingVertical:13, paddingHorizontal:14, borderWidth:1.5, gap:12 },
-  reasonRadio:     { width:18, height:18, borderRadius:9, borderWidth:2 },
-  reasonLabel:     { fontSize:14 },
-  reportDetailsInput: { borderRadius:radius.md, padding:14, fontSize:14, minHeight:88, marginBottom:18, borderWidth:1.5, textAlignVertical:"top" },
-  submitButton:    { paddingVertical:15, borderRadius:radius.button, alignItems:"center" },
-  submitButtonText:{ fontSize:15, fontFamily: fonts.sansBold },
-
-  stateBadge:      { width:56, height:56, borderRadius:28, justifyContent:"center", alignItems:"center" },
+  modalOverlay:    { flex: 1, justifyContent: "flex-end" },
+  modalContent:    { borderTopLeftRadius: radius.xl, borderTopRightRadius: radius.xl, paddingHorizontal: H_PAD, paddingTop: 10, maxHeight: "88%" },
+  modalGrabber:    { alignSelf: "center", width: 40, height: 4, borderRadius: 2, marginBottom: 14 },
+  modalHeader:     { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 8 },
+  modalTitle:      { ...typography.h2, fontSize: 22, lineHeight: 28 },
+  modalClose:      { width: TAP, height: TAP, alignItems: "flex-end", justifyContent: "center" },
+  modalLabel:      { fontSize: 14, fontFamily: fonts.sansBold, marginBottom: 10, marginTop: 14 },
+  reportSubtitle:  { fontSize: 13.5, marginBottom: 4 },
+  reasonList:      { gap: 8, marginBottom: 4 },
+  reasonOption:    { flexDirection: "row", alignItems: "center", borderRadius: radius.md, paddingVertical: 13, paddingHorizontal: 14, borderWidth: 1.5, gap: 12 },
+  reasonRadio:     { width: 20, height: 20, borderRadius: 10, borderWidth: 2, alignItems: "center", justifyContent: "center" },
+  reasonRadioDot:  { width: 10, height: 10, borderRadius: 5 },
+  reasonLabel:     { fontSize: 14, fontFamily: fonts.sans },
+  reportDetailsInput: { borderRadius: radius.md, padding: 14, fontSize: 14, fontFamily: fonts.sans, minHeight: 88, marginBottom: 18, borderWidth: 1, textAlignVertical: "top" },
 });

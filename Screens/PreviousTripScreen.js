@@ -8,21 +8,24 @@ import {
   FlatList,
   Image,
   RefreshControl,
-  ActivityIndicator,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@clerk/clerk-expo";
-import { useTheme, fonts } from "../context/ThemeContext";
-import { ScreenHeader } from "../components/ui";
+import { useTheme, fonts, typography, radius } from "../context/ThemeContext";
+import { ScreenHeader, EmptyState, ErrorState, LoadingState, PrimaryButton, H_PAD } from "../components/ui";
 // Was a hardcoded "https://libotbackend.onrender.com".
 import { BASE_URL } from "../api";
 import { spotImage } from "../utils/image";
+import { useArrival } from "../context/ArrivalContext";
 import Icon from "../components/Icon";
 
 export default function PreviousTripsScreen() {
   const navigation   = useNavigation();
+  const insets       = useSafeAreaInsets();
   const { getToken } = useAuth();
   const { colors }   = useTheme();
+  const { allSpots } = useArrival();
 
   const [visited, setVisited]       = useState([]);
   const [loading, setLoading]       = useState(true);
@@ -55,7 +58,7 @@ export default function PreviousTripsScreen() {
       hasLoaded.current = true;
     } catch (e) {
       console.warn("PreviousTrips load error:", e);
-      setError("Could not load trips. Pull down to retry.");
+      setError("Couldn't load your trips. Check your connection.");
       if (!hasLoaded.current) setVisited([]);
     } finally {
       setLoading(false);
@@ -90,9 +93,22 @@ export default function PreviousTripsScreen() {
   const renderItem = useCallback(({ item, index }) => {
     const spot = item.spot;
     if (!spot) return null;
+    // Spot.category is an array in the schema; rendering it raw ran the names
+    // together ("ReligiousHistorical").
+    const category = Array.isArray(spot.category) ? spot.category.join(" · ") : spot.category;
+    // The visit log only populates a handful of fields. Open the detail page
+    // with the full spot (description, 3D model…) when we have it.
+    const fullSpot = allSpots.find((s) => s._id === spot._id) || spot;
 
     return (
-      <View style={[styles.card, { backgroundColor: colors.background }]}>
+      <TouchableOpacity
+        style={[styles.card, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}
+        activeOpacity={0.88}
+        onPress={() => navigation.navigate("InformationScreen", { spot: fullSpot })}
+        accessibilityRole="button"
+        accessibilityLabel={`Trip ${visited.length - index}: ${spot.name}, ${formatDate(item.visitedAt)}`}
+        accessibilityHint="Opens the spot details"
+      >
         <View style={styles.imageWrapper}>
           {spot.image ? (
             <Image source={{ uri: spotImage(spot.image, 400, 170) }} style={styles.spotImage} />
@@ -101,12 +117,14 @@ export default function PreviousTripsScreen() {
               <Icon name="map-pin" size={28} color={colors.textMuted} />
             </View>
           )}
-          <View style={[styles.tripNumberBadge, { backgroundColor: "rgba(107,75,69,0.9)" }]}>
-            <Text style={styles.tripNumberText}>#{visited.length - index}</Text>
+          {/* Was a hardcoded brown rgba(107,75,69) — the last of the old
+              terracotta palette. Now the same dark photo chip as the category. */}
+          <View style={styles.photoChip}>
+            <Text style={styles.photoChipText}>#{visited.length - index}</Text>
           </View>
-          {spot.category ? (
-            <View style={styles.categoryPill}>
-              <Text style={styles.categoryText}>{spot.category}</Text>
+          {category ? (
+            <View style={[styles.photoChip, styles.photoChipRight]}>
+              <Text style={styles.photoChipText} numberOfLines={1}>{category}</Text>
             </View>
           ) : null}
         </View>
@@ -134,22 +152,22 @@ export default function PreviousTripsScreen() {
 
           <View style={styles.detailsRow}>
             {spot.visitingHours ? (
-              <View style={[styles.detailChip, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
-                <Icon name="sun" size={11} color={colors.brand} />
+              <View style={[styles.detailChip, { backgroundColor: colors.brandLight }]}>
+                <Icon name="clock" size={11} color={colors.brand} />
                 <Text style={[styles.detailChipText, { color: colors.brand }]}>{spot.visitingHours}</Text>
               </View>
             ) : null}
             {spot.entranceFee ? (
-              <View style={[styles.detailChip, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
+              <View style={[styles.detailChip, { backgroundColor: colors.brandLight }]}>
                 <Icon name="tag" size={11} color={colors.brand} />
                 <Text style={[styles.detailChipText, { color: colors.brand }]}>{spot.entranceFee}</Text>
               </View>
             ) : null}
           </View>
         </View>
-      </View>
+      </TouchableOpacity>
     );
-  }, [visited.length, colors]);
+  }, [visited.length, colors, allSpots, navigation]);
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -169,26 +187,18 @@ export default function PreviousTripsScreen() {
       />
 
       {loading ? (
-        <View style={styles.centered}>
-          <ActivityIndicator size="large" color={colors.brand} />
-          <Text style={[styles.loadingText, { color: colors.textSecondary }]}>Loading your trips...</Text>
-        </View>
+        <LoadingState label="Loading your trips…" />
       ) : (
-      <>
-
-      {error ? (
-        <TouchableOpacity
-          accessibilityRole="button" onPress={() => loadVisited(true)} style={[styles.errorBanner, { backgroundColor: colors.dangerBg, borderColor: colors.danger }]}>
-          <Icon name="alert-circle" size={14} color={colors.danger} />
-          <Text style={[styles.errorText, { color: colors.danger }]}>{error}</Text>
-        </TouchableOpacity>
-      ) : null}
-
       <FlatList
         data={visited}
         keyExtractor={(item, index) => item._id?.toString() ?? String(index)}
         renderItem={renderItem}
-        contentContainerStyle={styles.listContent}
+        contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 40 }]}
+        ListHeaderComponent={
+          error ? (
+            <ErrorState text={error} onRetry={() => loadVisited(true)} style={styles.errorBox} />
+          ) : null
+        }
         showsVerticalScrollIndicator={false}
         windowSize={5}
         maxToRenderPerBatch={5}
@@ -204,18 +214,23 @@ export default function PreviousTripsScreen() {
         }
         ListEmptyComponent={
           !error ? (
-            <View style={styles.emptyState}>
-              <Icon name="map" size={52} color={colors.brand} style={styles.emptyIcon} />
-              <Text style={[styles.emptyTitle, { color: colors.brandDark }]}>No trips yet</Text>
-              <Text style={[styles.emptySubtitle, { color: colors.textSecondary }]}>
-                Start navigating to a spot — arriving there will log it as a trip!
-              </Text>
-            </View>
+            <EmptyState
+              icon="map"
+              title="No trips yet"
+              text="Navigate to a spot — arriving there logs it here as a trip."
+              action={
+                <PrimaryButton
+                  title="Find a spot"
+                  icon="navigation"
+                  variant="secondary"
+                  onPress={() => navigation.navigate("TrackSpotSelect")}
+                  style={styles.emptyAction}
+                />
+              }
+            />
           ) : null
         }
-        ListFooterComponent={<View style={{ height: 40 }} />}
       />
-      </>
       )}
     </View>
   );
@@ -223,18 +238,6 @@ export default function PreviousTripsScreen() {
 
 const styles = StyleSheet.create({
   container:   { flex: 1 },
-  centered:    { flex: 1, justifyContent: "center", alignItems: "center" },
-  loadingText: { marginTop: 12, fontSize: 14, fontFamily: fonts.sansMedium },
-
-  header: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: 20,
-    marginBottom: 16,
-  },
-  backButton:  { width: 40, height: 40, justifyContent: "center", alignItems: "flex-start" },
-  headerTitle: { fontSize: 22, fontFamily: fonts.sansBold, letterSpacing: -0.3 },
   countPill: {
     borderRadius: 20,
     minWidth: 32,
@@ -244,29 +247,16 @@ const styles = StyleSheet.create({
   },
   countText: { fontFamily: fonts.sansBold, fontSize: 13 },
 
-  errorBanner: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    marginHorizontal: 20,
-    marginBottom: 12,
-    borderRadius: 10,
-    padding: 12,
-    borderWidth: 1,
-  },
-  errorText: { fontSize: 13, fontFamily: fonts.sansMedium, flex: 1 },
+  errorBox:    { marginBottom: 16 },
+  emptyAction: { marginTop: 8, alignSelf: "stretch" },
 
-  listContent: { paddingHorizontal: 20 },
+  listContent: { paddingHorizontal: H_PAD, paddingTop: 8, flexGrow: 1 },
 
   card: {
-    borderRadius: 22,
+    borderRadius: radius.card,
+    borderWidth: 1,
     marginBottom: 16,
     overflow: "hidden",
-    shadowColor: "#0B2E31",
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.06,
-    shadowRadius: 22,
-    elevation: 4,
   },
   imageWrapper:     { width: "100%", height: 170, position: "relative" },
   spotImage:        { width: "100%", height: "100%", resizeMode: "cover" },
@@ -276,48 +266,35 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
-  tripNumberBadge: {
+  photoChip: {
     position: "absolute",
     top: 10,
     left: 10,
-    borderRadius: 10,
+    maxWidth: "60%",
+    backgroundColor: "rgba(6,20,22,0.62)",
+    borderRadius: radius.pill,
     paddingHorizontal: 10,
     paddingVertical: 4,
   },
-  tripNumberText: { color: "#fff", fontSize: 12, fontFamily: fonts.sansBold },
-  categoryPill: {
-    position: "absolute",
-    top: 10,
-    right: 10,
-    backgroundColor: "rgba(0,0,0,0.45)",
-    borderRadius: 10,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-  },
-  categoryText: { color: "#fff", fontSize: 11, fontFamily: fonts.sansSemi },
+  photoChipRight: { left: undefined, right: 10 },
+  photoChipText:  { color: "#fff", fontSize: 11.5, fontFamily: fonts.sansBold },
 
-  cardBody:  { padding: 14 },
-  spotName:  { fontSize: 18, fontFamily: fonts.sansBold, letterSpacing: -0.2, marginBottom: 6 },
+  cardBody:  { padding: 16 },
+  spotName:  { ...typography.h3, fontSize: 18, lineHeight: 23, marginBottom: 6 },
   infoRow:   { flexDirection: "row", alignItems: "center", gap: 5, marginBottom: 10 },
-  infoText:  { fontSize: 13, flex: 1 },
+  infoText:  { ...typography.body, fontSize: 13.5, lineHeight: 19, flex: 1 },
   divider:   { height: 1, marginBottom: 10 },
   metaRow:   { flexDirection: "row", gap: 16, marginBottom: 10 },
   metaItem:  { flexDirection: "row", alignItems: "center", gap: 5 },
-  metaText:  { fontSize: 12 },
+  metaText:  { fontSize: 12.5, fontFamily: fonts.sansMedium },
   detailsRow: { flexDirection: "row", gap: 8, flexWrap: "wrap" },
   detailChip: {
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
-    borderRadius: 8,
-    paddingHorizontal: 8,
+    borderRadius: radius.pill,
+    paddingHorizontal: 10,
     paddingVertical: 4,
-    borderWidth: 1,
   },
-  detailChipText: { fontSize: 11, fontFamily: fonts.sansMedium },
-
-  emptyState:    { alignItems: "center", marginTop: 80, paddingHorizontal: 40 },
-  emptyIcon:     { marginBottom: 14 },
-  emptyTitle:    { fontSize: 20, fontFamily: fonts.sansBold, letterSpacing: -0.3, marginBottom: 6 },
-  emptySubtitle: { fontSize: 13, textAlign: "center", lineHeight: 19 },
+  detailChipText: { fontSize: 11.5, fontFamily: fonts.sansSemi },
 });

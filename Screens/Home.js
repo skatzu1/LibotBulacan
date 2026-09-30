@@ -26,10 +26,16 @@ import { usePoints } from "../context/PointsContext";
 import {
   useTheme, fonts, typography, radius, TAB_BAR_HEIGHT, TAB_BAR_CLEARANCE, MAX_FONT_SCALE,
 } from "../context/ThemeContext";
-import { PhotoScrim, SearchField, ErrorState, useGrid, H_PAD, TAP } from "../components/ui";
+// Home used to hand-roll its own copies of the spot card, empty card, section
+// heading and quick-action tile. They had already drifted from the shared ones
+// (rank numerals, text sizes), so it now uses the kit like every other screen.
+import {
+  PhotoScrim, SearchField, ErrorState, EmptyState, SpotCard, SectionTitle, IconTile, Avatar,
+  useGrid, H_PAD, TAP,
+} from "../components/ui";
 import Logo from "../components/Logo";
 import { BASE_URL } from "../api";
-import { spotImage, avatarImage } from "../utils/image";
+import { spotImage } from "../utils/image";
 
 import Bookmark      from "./Bookmark";
 import Leaderboard   from "./Leaderboard";
@@ -299,13 +305,7 @@ function HomeContent({ profilePhoto, navigation }) {
             accessibilityRole="button"
             accessibilityLabel="Go to your profile"
           >
-            {profilePhoto ? (
-              <Image source={{ uri: avatarImage(profilePhoto, 36) }} style={h.avatar} />
-            ) : (
-              <View style={[h.avatar, h.avatarFallback, { backgroundColor: colors.brand }]}>
-                <Icon name="user" size={16} color={colors.onBrand} />
-              </View>
-            )}
+            <Avatar uri={profilePhoto} name={clerkUser?.fullName || firstName} size={36} strong />
           </TouchableOpacity>
         </View>
       </View>
@@ -369,32 +369,16 @@ function HomeContent({ profilePhoto, navigation }) {
               {results.length} {results.length === 1 ? "result" : "results"} for “{query.trim()}”
             </Text>
             {results.length === 0 ? (
-              <View style={[h.emptyCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
-                <Icon name="search" size={26} color={colors.textMuted} />
-                <Text style={[h.emptyText, { color: colors.textSecondary }]}>
-                  Nothing matched that. Try a town or a landmark name.
-                </Text>
-              </View>
+              <EmptyState icon="search" text="Nothing matched that. Try a town or a landmark name." />
             ) : (
               <View style={[h.grid, { gap }]}>
                 {results.map((spot) => (
-                  <TouchableOpacity
+                  <SpotCard
                     key={spot._id}
-                    style={[h.gridCard, { width: cardW, backgroundColor: colors.brandLight }]}
+                    spot={spot}
+                    style={[h.gridCell, { width: cardW }]}
                     onPress={() => handleSpotPress(spot)}
-                    activeOpacity={0.88}
-                    accessibilityRole="button"
-                    accessibilityLabel={`${spot.name}${spot.city ? `, ${spot.city}` : ""}`}
-                  >
-                    <Image source={{ uri: spotImage(spot.image, cardW, 200) }} style={h.gridImg} resizeMode="cover" />
-                    <PhotoScrim />
-                    <View style={h.gridInfoWrap}>
-                      <Text style={h.gridName} numberOfLines={1}>{spot.name}</Text>
-                      {(spot.city || spot.location) && (
-                        <Text style={h.gridLocationText} numberOfLines={1}>{spot.city || spot.location}</Text>
-                      )}
-                    </View>
-                  </TouchableOpacity>
+                  />
                 ))}
               </View>
             )}
@@ -404,35 +388,19 @@ function HomeContent({ profilePhoto, navigation }) {
             {/* ─── Quick actions ─── */}
             <Wrap {...anim(2)} style={h.quickRow}>
               {QUICK_ACTIONS.map((a) => (
-                <TouchableOpacity
+                <IconTile
                   key={a.key}
-                  style={[h.quickItem, { width: (width - H_PAD * 2 - 30) / 4 }]}
-                  activeOpacity={0.85}
+                  icon={a.icon}
+                  label={a.label}
+                  style={{ width: (width - H_PAD * 2 - 30) / 4 }}
                   onPress={() => navigation.navigate(a.route)}
-                  accessibilityRole="button"
-                  accessibilityLabel={a.label}
-                >
-                  <View style={[h.quickIcon, { backgroundColor: colors.brandLight }]}>
-                    <Icon name={a.icon} size={21} color={colors.brand} />
-                  </View>
-                  <Text
-                    style={[h.quickLabel, { color: colors.textSecondary }]}
-                    numberOfLines={1}
-                    maxFontSizeMultiplier={MAX_FONT_SCALE}
-                  >
-                    {a.label}
-                  </Text>
-                </TouchableOpacity>
+                />
               ))}
             </Wrap>
 
             {/* ─── Featured carousel ─── */}
             <Wrap {...anim(3)}>
-              <View style={h.sectionHead}>
-                <Text style={[h.sectionTitle, { color: colors.textPrimary }]} accessibilityRole="header">
-                  Featured
-                </Text>
-              </View>
+              <SectionTitle>Featured</SectionTitle>
 
               <View style={[h.heroWrap, { height: HERO_H }]}>
                 {sliderData.length === 0 ? (
@@ -510,11 +478,7 @@ function HomeContent({ profilePhoto, navigation }) {
 
             {/* ─── Most visited ─── */}
             <Wrap {...anim(4)}>
-              <View style={h.sectionHead}>
-                <Text style={[h.sectionTitle, { color: colors.textPrimary }]} accessibilityRole="header">
-                  Most visited
-                </Text>
-              </View>
+              <SectionTitle>Most visited</SectionTitle>
 
               <View style={h.sectionBody}>
                 {topLoading ? (
@@ -534,54 +498,22 @@ function HomeContent({ profilePhoto, navigation }) {
                     }}
                   />
                 ) : topSpots.length === 0 ? (
-                  <View style={[h.emptyCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
-                    <Icon name="map" size={26} color={colors.textMuted} />
-                    <Text style={[h.emptyText, { color: colors.textSecondary }]}>
-                      No visits yet — be the first to explore!
-                    </Text>
-                  </View>
+                  <EmptyState icon="map" text="No visits yet — be the first to explore!" />
                 ) : (
                   <View style={[h.grid, { gap }]}>
+                    {/* This section is a ranking — so each card shows its rank. */}
                     {topSpots.map((spot, i) => (
-                      <TouchableOpacity
+                      <SpotCard
                         key={spot._id}
-                        style={[
-                          h.gridCard,
-                          { width: cardW, backgroundColor: colors.brandLight },
-                          i === 0 && h.gridCardWide,
-                        ]}
+                        spot={spot}
+                        rank={i + 1}
+                        wide={i === 0}
+                        height={i === 0 ? 200 : 150}
+                        rating={getAverageRating(spot._id) || 0}
+                        visits={spot.visitCount ?? 0}
+                        style={[h.gridCell, i !== 0 && { width: cardW }]}
                         onPress={() => handleSpotPress(spot)}
-                        activeOpacity={0.88}
-                        accessibilityRole="button"
-                        accessibilityLabel={`Number ${i + 1}, ${spot.name}, ${spot.visitCount ?? 0} visits`}
-                      >
-                        <Image source={{ uri: spotImage(spot.image, cardW, 200) }} style={h.gridImg} resizeMode="cover" />
-                        <PhotoScrim />
-                        {/* This section is a ranking — so show the rank, big. */}
-                        <Text style={[h.rankNum, i === 0 && h.rankNumWide]} allowFontScaling={false}>
-                          {String(i + 1).padStart(2, "0")}
-                        </Text>
-                        <View style={h.gridInfoWrap}>
-                          <Text style={h.gridName} numberOfLines={1} maxFontSizeMultiplier={MAX_FONT_SCALE}>
-                            {spot.name}
-                          </Text>
-                          {(spot.city || spot.location) && (
-                            <Text style={h.gridLocationText} numberOfLines={1} maxFontSizeMultiplier={MAX_FONT_SCALE}>
-                              {spot.city || spot.location}
-                            </Text>
-                          )}
-                          <View style={h.gridMeta}>
-                            <View style={h.gridRatingRow}>
-                              <Icon name="star" size={12} color={colors.star} weight="fill" />
-                              <Text style={h.gridRatingText}>{getAverageRating(spot._id) || 0}</Text>
-                            </View>
-                            <View style={h.gridRatingRow}>
-                              <Icon name="eye" size={11} color="rgba(255,255,255,0.9)" />
-                              <Text style={h.gridVisitText}>{spot.visitCount ?? 0}</Text>
-                            </View>
-                          </View>
-                        </View>
-                      </TouchableOpacity>
+                      />
                     ))}
                   </View>
                 )}
@@ -647,8 +579,6 @@ const h = StyleSheet.create({
   },
   headerActions:  { flexDirection: "row", alignItems: "center", gap: 4 },
   headerBtn:      { width: TAP, height: TAP, alignItems: "center", justifyContent: "center" },
-  avatar:         { width: 36, height: 36, borderRadius: 18 },
-  avatarFallback: { alignItems: "center", justifyContent: "center" },
 
   // ── Greeting ──
   greeting: { paddingHorizontal: H_PAD, paddingTop: 6, paddingBottom: 4 },
@@ -673,16 +603,8 @@ const h = StyleSheet.create({
     paddingHorizontal: H_PAD,
     marginTop: 24,
   },
-  quickItem: { alignItems: "center" },
-  quickIcon: {
-    width: 58, height: 58, borderRadius: 20,
-    alignItems: "center", justifyContent: "center", marginBottom: 8,
-  },
-  quickLabel: { ...typography.caption, fontFamily: fonts.sansSemi },
 
   // ── Sections ──
-  sectionHead:  { paddingHorizontal: H_PAD, marginTop: 30, marginBottom: 14 },
-  sectionTitle: { ...typography.h2, fontSize: 22, lineHeight: 28 },
   sectionBody:  { paddingHorizontal: H_PAD },
 
   // ── Featured carousel ──
@@ -710,28 +632,8 @@ const h = StyleSheet.create({
   dotActive: { width: 18 },
 
   // ── Grid ──
-  grid:         { flexDirection: "row", flexWrap: "wrap" },
-  gridCard:     { height: 150, borderRadius: radius.card, overflow: "hidden" },
-  gridCardWide: { width: "100%", height: 200 },
-  gridImg:      { width: "100%", height: "100%", position: "absolute" },
-  // Editorial rank numeral — bleeds off the top-left corner.
-  rankNum: {
-    position: "absolute", top: -14, left: 8,
-    fontFamily: fonts.displayBlack, fontSize: 64,
-    color: "rgba(255,255,255,0.20)", letterSpacing: -3,
-  },
-  rankNumWide:  { fontSize: 88, top: -20, left: 12 },
-  gridInfoWrap: { position: "absolute", bottom: 0, left: 0, right: 0, padding: 13 },
-  gridName:     { fontFamily: fonts.sansBold, fontSize: 14, letterSpacing: -0.2, color: "#fff", marginBottom: 2 },
-  gridLocationText: { fontFamily: fonts.sansMedium, fontSize: 11, color: "rgba(255,255,255,0.92)", marginBottom: 5 },
-  gridMeta:      { flexDirection: "row", alignItems: "center", gap: 12 },
-  gridRatingRow: { flexDirection: "row", alignItems: "center", gap: 3 },
-  gridRatingText:{ fontFamily: fonts.sansBold, fontSize: 11, color: "#fff" },
-  gridVisitText: { fontFamily: fonts.sansBold, fontSize: 11, color: "#fff" },
-
-  emptyCard: {
-    borderRadius: radius.card, paddingVertical: 36, paddingHorizontal: 20,
-    alignItems: "center", gap: 10, borderWidth: 1,
-  },
-  emptyText: { ...typography.body, textAlign: "center" },
+  grid:     { flexDirection: "row", flexWrap: "wrap" },
+  // SpotCard grows to fill its row by default; in a two-column grid that
+  // would stretch an odd last card across the full width.
+  gridCell: { flexGrow: 0 },
 });
