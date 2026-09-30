@@ -12,6 +12,14 @@
 
 export const MAJOR_TYPES = new Set(["ar"]);
 
+// What users see. Travel-guide words rather than "major/minor":
+//   Must-Dos   — what you came for (major).
+//   Side Trips — small detours while you're nearby, like the eatery (minor).
+export const TIER_LABELS = {
+  major: { title: "Must-Dos",   sub: "What you came here for. Worth the most points." },
+  minor: { title: "Side Trips", sub: "Little extras while you're nearby." },
+};
+
 // Mirrors POINTS_PER_VISIT in LibotBackend/controllers/userController.js —
 // the server awards it; this copy is only for display.
 export const ARRIVAL_POINTS = 10;
