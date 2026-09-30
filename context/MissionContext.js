@@ -106,14 +106,12 @@ export const MissionProvider = ({ children }) => {
     return () => { cancelled = true; };
   }, [isLoaded, isSignedIn]);
 
-  // `extra` is optional request-body data — "location" missions need the
-  // user's current { lat, lng } so the backend can verify they're actually
-  // within range before accepting the completion (that can genuinely fail —
-  // unlike an AI/AR mission, which only calls this after already passing its
-  // own check, a location mission's server-side distance check is the *only*
-  // gate). Returns the raw response so a caller like LocationMission.js can
-  // branch on `tooFar` / `noLocation`; other callers (Mission.js, ARScreen)
-  // already ignore the return value and keep working unchanged.
+  // `extra` is request-body data. "location" and "ar" missions need the
+  // user's current { lat, lng } — the server checks it against the mission's
+  // pin / the spot and refuses from too far away (`tooFar` / `noLocation`).
+  // Returns the raw response so callers can branch on those. Photo ("ai")
+  // missions aren't completed here at all: the server completes them when it
+  // verifies the photo (see markCompleted); this only confirms one that's done.
   const completeMission = useCallback(async (missionId, extra) => {
     if (!missionId) return null;
 
@@ -135,6 +133,14 @@ export const MissionProvider = ({ children }) => {
     }
   }, [refreshPoints]);
 
+  // For a mission the server has already completed and paid out — a photo
+  // mission, the moment its photo is verified at the spot.
+  const markCompleted = useCallback((missionId) => {
+    if (!missionId) return;
+    setCompletedMissions((prev) => (prev.includes(missionId) ? prev : [...prev, missionId]));
+    refreshPoints();
+  }, [refreshPoints]);
+
   return (
     <MissionContext.Provider
       value={{
@@ -143,6 +149,7 @@ export const MissionProvider = ({ children }) => {
         refetchMissions,
         completedMissions,
         completeMission,
+        markCompleted,
       }}
     >
       {children}
