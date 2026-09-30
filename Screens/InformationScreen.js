@@ -11,7 +11,9 @@ import { useIsFocused } from "@react-navigation/native";
 import { useBookmark } from "../context/BookmarkContext";
 import { useReviews } from "../context/ReviewContext";
 import { useMissions } from "../context/MissionContext";
+import { usePoints } from "../context/PointsContext";
 import { useProfileImage } from "../context/ProfileImageContext";
+import { splitByTier, ARRIVAL_POINTS } from "../utils/missionTiers";
 import { useTheme, radius, shadow, fonts, typography, MAX_FONT_SCALE } from "../context/ThemeContext";
 import ModelViewer from "../utils/ModelViewer";
 import { ensureAtSpotForAR } from "../utils/arLocationGate";
@@ -275,12 +277,53 @@ function ReviewCard({ review, spotId, clerkUser, profileImage, reactToReview, on
   );
 }
 
+// Major missions (arriving, AR) — full-width gold cards with a clear next step.
+// Minor ones use the compact MissionRow list below, in teal.
+function MajorMissionCard({ icon, title, description, points, isDone, actionLabel, onPress, colors }) {
+  return (
+    <TouchableOpacity
+      accessibilityRole="button"
+      accessibilityLabel={`Major mission: ${title}, ${points} points${isDone ? ", completed" : `. ${actionLabel}`}`}
+      style={[styles.majorCard, { backgroundColor: colors.card, borderColor: isDone ? colors.success : colors.cardBorder }]}
+      onPress={onPress}
+      activeOpacity={0.85}
+    >
+      <View style={styles.majorTop}>
+        <View style={[styles.majorIcon, { backgroundColor: isDone ? colors.successBg : colors.accentSoft }]}>
+          <Icon name={isDone ? "check" : icon} size={22} color={isDone ? colors.success : colors.accentDark} />
+        </View>
+        <View style={styles.majorBody}>
+          <Text style={[styles.majorTitle, { color: colors.textPrimary }]} numberOfLines={2}>{title}</Text>
+          <Text style={[styles.majorDesc, { color: colors.textSecondary }]} numberOfLines={3}>{description}</Text>
+        </View>
+      </View>
+      <View style={styles.majorFooter}>
+        <View style={[styles.ptsPill, { backgroundColor: colors.accentSoft }]}>
+          <Icon name="star" size={11} color={colors.accentDark} weight="fill" />
+          <Text style={[styles.ptsText, { color: colors.accentDark }]}>{points} pts</Text>
+        </View>
+        {isDone ? (
+          <View style={styles.majorDone}>
+            <Icon name="check-circle" size={15} color={colors.success} weight="fill" />
+            <Text style={[styles.majorDoneText, { color: colors.success }]}>Done</Text>
+          </View>
+        ) : (
+          <View style={[styles.majorCta, { backgroundColor: colors.accent }]}>
+            <Text style={[styles.majorCtaText, { color: colors.onAccent }]}>{actionLabel}</Text>
+            <Icon name="chevron-right" size={15} color={colors.onAccent} />
+          </View>
+        )}
+      </View>
+    </TouchableOpacity>
+  );
+}
+
 function MissionRow({ mission, isDone, cityText, onPress, colors }) {
   const config = MISSION_CONFIG[mission.type] || MISSION_CONFIG.checkin;
   return (
     <TouchableOpacity
       accessibilityRole="button"
-      accessibilityLabel={`${mission.title}, ${config.label}${isDone ? ", completed" : ""}`}
+      accessibilityLabel={`${mission.title}, ${config.label}, ${mission.points ?? 0} points${isDone ? ", completed" : ""}`}
       style={styles.missionRow}
       onPress={onPress}
       activeOpacity={0.82}
@@ -301,14 +344,10 @@ function MissionRow({ mission, isDone, cityText, onPress, colors }) {
         </Text>
         <Text style={[styles.missionRowSub, { color: colors.textMuted }]} numberOfLines={1}>{config.label} · {cityText}</Text>
       </View>
-      {mission.type === "ar" && !isDone ? (
-        <View style={[styles.arLaunchBadge, { backgroundColor: colors.accentSoft }]}>
-          <Icon name="aperture" size={11} color={colors.accentDark} style={{ marginRight: 4 }} />
-          <Text style={[styles.arLaunchBadgeText, { color: colors.accentDark }]}>Open AR</Text>
-        </View>
-      ) : (
-        <Icon name="chevron-right" size={18} color={colors.textMuted} style={{ marginLeft: 4 }} />
-      )}
+      <View style={[styles.ptsPill, { backgroundColor: colors.brandLight }]}>
+        <Text style={[styles.ptsText, { color: colors.brand }]}>+{mission.points ?? 0}</Text>
+      </View>
+      <Icon name="chevron-right" size={18} color={colors.textMuted} />
     </TouchableOpacity>
   );
 }
@@ -339,10 +378,14 @@ export default function InformationScreen({ route, navigation }) {
   const { isBookmarked, toggleBookmark } = useBookmark();
   const { getReviewsForSpot, addReview, reportReview, reactToReview, getAverageRating, getReviewCount, fetchReviews } = useReviews();
   const { fetchMissions, getMissionsForSpot, completedMissions } = useMissions();
+  const { hasVisited, refresh: refreshPoints } = usePoints();
   const { profileImage } = useProfileImage();
   const isFocused = useIsFocused();
 
   useEffect(() => { if (!isFocused) setShow3D(false); }, [isFocused]);
+  // "Arrive at the spot" is ticked from the visit logs, so re-read them when
+  // the user comes back here — e.g. from navigating to the spot.
+  useEffect(() => { if (isFocused) refreshPoints(); }, [isFocused, refreshPoints]);
   useEffect(() => {
     if (spot?._id) {
       setScreenReady(false);
@@ -397,8 +440,17 @@ export default function InformationScreen({ route, navigation }) {
   const reviewCount      = getReviewCount(spot._id);
   const missions         = getMissionsForSpot(spot._id);
   const isReviewsTab     = activeTab === "Reviews";
-  const completedCount   = missions.filter((m) => completedMissions?.includes(m._id)).length;
-  const totalCount       = missions.length;
+  // Hierarchy: arriving + AR are major, AI + food are minor (utils/missionTiers).
+  // Arriving isn't a Mission document, so it's counted in by hand.
+  const isDoneMission    = (m) => !!completedMissions?.includes(m._id);
+  const arrived          = hasVisited(spot._id);
+  const tiers            = splitByTier(missions);
+  const majorDone        = (arrived ? 1 : 0) + tiers.major.filter(isDoneMission).length;
+  const majorTotal       = 1 + tiers.major.length;
+  const minorDone        = tiers.minor.filter(isDoneMission).length;
+  const minorTotal       = tiers.minor.length;
+  const completedCount   = majorDone + minorDone;
+  const totalCount       = majorTotal + minorTotal;
   const progressRatio    = totalCount > 0 ? completedCount / totalCount : 0;
   const arMission        = missions.find((m) => m.type === "ar");
 
@@ -593,10 +645,9 @@ export default function InformationScreen({ route, navigation }) {
             </>
           )}
 
+          {/* Never empty any more: arriving at the spot is a major mission
+              every spot has, even one with no Mission documents yet. */}
           {activeTab === "BucketList" && (
-            missions.length === 0 ? (
-              <EmptyState icon="flag" text="No Bakit List activities for this spot yet." />
-            ) : (
               <>
                 <View style={[styles.progressCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
                   <View style={styles.progressTop}>
@@ -610,26 +661,66 @@ export default function InformationScreen({ route, navigation }) {
                   >
                     <View style={[styles.progressFill, { width: `${progressRatio * 100}%`, backgroundColor: colors.brand }]} />
                   </View>
-                  <Text style={[styles.progressSub, { color: colors.textMuted }]}>{completedCount} of {totalCount} activities complete</Text>
+                  <Text style={[styles.progressSub, { color: colors.textMuted }]}>
+                    {majorDone} of {majorTotal} major{minorTotal > 0 ? ` · ${minorDone} of ${minorTotal} minor` : ""}
+                  </Text>
                 </View>
 
-                <Text style={[styles.sectionHeading, { color: colors.textPrimary }]}>Bakit List for this spot</Text>
-                <View style={[styles.missionList, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
-                  {missions.map((mission, i) => (
-                    <React.Fragment key={mission._id}>
-                      <MissionRow
-                        mission={mission}
-                        isDone={!!completedMissions?.includes(mission._id)}
-                        cityText={cityText}
-                        onPress={() => openMission(mission)}
-                        colors={colors}
-                      />
-                      {i < missions.length - 1 && <View style={[styles.missionDivider, { backgroundColor: colors.cardBorder }]} />}
-                    </React.Fragment>
+                <Text style={[styles.sectionHeading, styles.tierHeading, { color: colors.textPrimary }]} accessibilityRole="header">
+                  Major missions
+                </Text>
+                <Text style={[styles.tierSub, { color: colors.textMuted }]}>The reason to go — worth the most points</Text>
+                <View style={styles.majorList}>
+                  <MajorMissionCard
+                    icon="map-pin"
+                    title={`Arrive at ${spot.name}`}
+                    description={arrived
+                      ? "You've been here — your visit is logged."
+                      : "Get there in person. Your phone's location confirms you've arrived."}
+                    points={ARRIVAL_POINTS}
+                    isDone={arrived}
+                    actionLabel="Navigate"
+                    onPress={() => navigation.navigate("Track", { spot })}
+                    colors={colors}
+                  />
+                  {tiers.major.map((mission) => (
+                    <MajorMissionCard
+                      key={mission._id}
+                      icon={(MISSION_CONFIG[mission.type] || MISSION_CONFIG.checkin).icon}
+                      title={mission.title}
+                      description={mission.description}
+                      points={mission.points ?? 0}
+                      isDone={isDoneMission(mission)}
+                      actionLabel="Open AR"
+                      onPress={() => openMission(mission)}
+                      colors={colors}
+                    />
                   ))}
                 </View>
+
+                {tiers.minor.length > 0 && (
+                  <>
+                    <Text style={[styles.sectionHeading, styles.tierHeading, { color: colors.textPrimary }]} accessibilityRole="header">
+                      Minor missions
+                    </Text>
+                    <Text style={[styles.tierSub, { color: colors.textMuted }]}>Extras while you're there</Text>
+                    <View style={[styles.missionList, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
+                      {tiers.minor.map((mission, i) => (
+                        <React.Fragment key={mission._id}>
+                          <MissionRow
+                            mission={mission}
+                            isDone={isDoneMission(mission)}
+                            cityText={cityText}
+                            onPress={() => openMission(mission)}
+                            colors={colors}
+                          />
+                          {i < tiers.minor.length - 1 && <View style={[styles.missionDivider, { backgroundColor: colors.cardBorder }]} />}
+                        </React.Fragment>
+                      ))}
+                    </View>
+                  </>
+                )}
               </>
-            )
           )}
 
           {activeTab === "Reviews" && (
@@ -877,8 +968,24 @@ const styles = StyleSheet.create({
   // achievement the user just earned. The tick is the only completion marker.
   missionRowTitleDone: { opacity: 0.72 },
   missionRowSub:   { fontSize: 11.5, fontFamily: fonts.sansMedium },
-  arLaunchBadge:   { flexDirection: "row", alignItems: "center", borderRadius: 999, paddingHorizontal: 10, paddingVertical: 5, marginLeft: 4 },
-  arLaunchBadgeText: { fontSize: 11, fontFamily: fonts.sansBold },
+
+  // ── Mission hierarchy ──
+  tierHeading:     { marginBottom: 2, marginTop: 4 },
+  tierSub:         { ...typography.caption, marginBottom: 12 },
+  majorList:       { gap: 12, marginBottom: 24 },
+  majorCard:       { borderRadius: radius.card, borderWidth: 1.5, padding: 16, gap: 14 },
+  majorTop:        { flexDirection: "row", alignItems: "flex-start", gap: 14 },
+  majorIcon:       { width: 50, height: 50, borderRadius: 16, alignItems: "center", justifyContent: "center" },
+  majorBody:       { flex: 1, gap: 4 },
+  majorTitle:      { ...typography.h3, fontSize: 17, lineHeight: 22 },
+  majorDesc:       { ...typography.body, fontSize: 13.5, lineHeight: 19 },
+  majorFooter:     { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  majorCta:        { flexDirection: "row", alignItems: "center", gap: 4, minHeight: 40, paddingLeft: 16, paddingRight: 12, borderRadius: radius.pill },
+  majorCtaText:    { fontFamily: fonts.sansBold, fontSize: 13.5 },
+  majorDone:       { flexDirection: "row", alignItems: "center", gap: 5, minHeight: 40 },
+  majorDoneText:   { fontFamily: fonts.sansBold, fontSize: 13.5 },
+  ptsPill:         { flexDirection: "row", alignItems: "center", gap: 4, borderRadius: radius.pill, paddingHorizontal: 9, paddingVertical: 4 },
+  ptsText:         { fontFamily: fonts.sansBold, fontSize: 12 },
 
   ratingSummary:   { borderRadius: radius.card, padding: 22, marginBottom: 16, alignItems: "center", borderWidth: 1 },
   ratingBig:       { ...typography.display, fontSize: 48, lineHeight: 54, marginBottom: 6 },

@@ -13,13 +13,21 @@ export function PointsProvider({ children }) {
 
   // Pull the authoritative points/visits from the backend (same source the
   // Profile screen reads). Runs on sign-in and can be re-run via refresh().
+  // The visited spot ids feed the "Arrive at the spot" major mission.
   const refresh = useCallback(async () => {
     if (!isSignedIn) return;
     try {
       const res = await api.get('/api/users/me');
       const user = res.data?.user;
       if (typeof user?.points === 'number') setUserPoints(user.points);
-      if (Array.isArray(user?.visitedSpots)) setUserVisits(user.visitedSpots.length);
+      if (Array.isArray(user?.visitedSpots)) {
+        setUserVisits(user.visitedSpots.length);
+        // Each entry is a visit log with its spot populated.
+        const ids = user.visitedSpots
+          .map((v) => String(v?.spotId?._id ?? v?.spotId ?? ''))
+          .filter(Boolean);
+        setCheckedInSpots(new Set(ids));
+      }
     } catch (err) {
       console.warn('PointsContext refresh failed:', err?.message);
     }
@@ -40,12 +48,12 @@ export function PointsProvider({ children }) {
     const pts = spot.points ?? 10;
     setUserPoints((p) => p + pts);
     setUserVisits((v) => v + 1);
-    setCheckedInSpots((prev) => new Set([...prev, spot._id ?? spot.id]));
+    setCheckedInSpots((prev) => new Set([...prev, String(spot._id ?? spot.id)]));
     return pts;
   }, []);
 
   const hasVisited = useCallback(
-    (spotId) => checkedInSpots.has(spotId),
+    (spotId) => spotId != null && checkedInSpots.has(String(spotId)),
     [checkedInSpots]
   );
 
