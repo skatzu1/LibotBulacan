@@ -27,7 +27,7 @@ const STORAGE_KEY = "libot_theme_pref";   // "light" | "dark" | "system"
 // Every foreground/background pair used in the app is verified at >= 4.5:1
 // (WCAG AA body text). Do not lighten a text token without re-checking it
 // against `background`, `card` AND `brandLight`.
-const lightColors = {
+export const lightColors = {
   // Backgrounds — warm paper page, white cards
   background:       "#FBF8F2",   // capiz cream
   backgroundSoft:   "#F4EFE4",
@@ -87,7 +87,7 @@ const lightColors = {
   overlay:          "rgba(0,0,0,0.45)",
 };
 
-const darkColors = {
+export const darkColors = {
   // Backgrounds — dark teal-black, keeps the cyan family
   background:       "#0E1C1E",
   backgroundSoft:   "#16292C",
