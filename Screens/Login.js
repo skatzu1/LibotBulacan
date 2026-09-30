@@ -15,8 +15,8 @@ import { useSignIn, useOAuth } from "@clerk/clerk-expo";
 import * as WebBrowser from "expo-web-browser";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { captureError } from "../utils/crashReporter";
-import { auth as A, fonts, MAX_FONT_SCALE } from "../context/ThemeContext";
-import AuthScaffold, { authStyles as a, FieldError, FormError } from "../components/AuthScaffold";
+import { useTheme, fonts, MAX_FONT_SCALE } from "../context/ThemeContext";
+import AuthScaffold, { useAuthStyles, FieldError, FormError } from "../components/AuthScaffold";
 import {
   emailError as checkEmail, requiredPasswordError, newPasswordError, confirmPasswordError,
   codeError as checkCode, clerkErrorToField, NETWORK_ERROR,
@@ -64,6 +64,8 @@ function lockoutMessage(lockedUntil) {
    chevron returning to sign-in. The two-step Clerk flow (send code → verify
    code + set password) is unchanged. */
 function ForgotPasswordModal({ visible, onClose, signIn }) {
+  const a = useAuthStyles();
+  const { colors } = useTheme();
   const [step, setStep]               = useState("email");
   const [email, setEmail]             = useState("");
   const [code, setCode]               = useState("");
@@ -166,9 +168,9 @@ function ForgotPasswordModal({ visible, onClose, signIn }) {
           <>
             <View>
               <TextInput
-                style={[a.field, { backgroundColor: A.cyanField }, !!errors.email && a.fieldInvalid]}
+                style={[a.field, !!errors.email && a.fieldInvalid]}
                 placeholder="EMAIL"
-                placeholderTextColor={A.muted}
+                placeholderTextColor={colors.placeholder}
                 autoCapitalize="none"
                 keyboardType="email-address"
                 autoComplete="email"
@@ -191,7 +193,7 @@ function ForgotPasswordModal({ visible, onClose, signIn }) {
               accessibilityRole="button"
               accessibilityLabel="Send reset code"
             >
-              {loading ? <ActivityIndicator color={A.onCta} /> : <Text style={a.ctaText}>Send Reset Code</Text>}
+              {loading ? <ActivityIndicator color={colors.onAccent} /> : <Text style={a.ctaText}>Send Reset Code</Text>}
             </TouchableOpacity>
           </>
         ) : (
@@ -199,9 +201,9 @@ function ForgotPasswordModal({ visible, onClose, signIn }) {
             <View>
               <TextInput
                 ref={codeRef}
-                style={[a.field, { backgroundColor: A.cyanField, letterSpacing: 6, textAlign: "center" }, !!errors.code && a.fieldInvalid]}
+                style={[a.field, { letterSpacing: 6, textAlign: "center" }, !!errors.code && a.fieldInvalid]}
                 placeholder="000000"
-                placeholderTextColor={A.muted}
+                placeholderTextColor={colors.placeholder}
                 keyboardType="number-pad"
                 maxLength={6}
                 value={code}
@@ -219,9 +221,9 @@ function ForgotPasswordModal({ visible, onClose, signIn }) {
               <View style={a.fieldRow}>
                 <TextInput
                   ref={newPwRef}
-                  style={[a.field, { backgroundColor: A.cyanField, paddingRight: 60 }, !!errors.password && a.fieldInvalid]}
+                  style={[a.field, { paddingRight: 60 }, !!errors.password && a.fieldInvalid]}
                   placeholder="NEW PASSWORD"
-                  placeholderTextColor={A.muted}
+                  placeholderTextColor={colors.placeholder}
                   secureTextEntry={!showNew}
                   value={newPassword}
                   onChangeText={edit("password", setNewPassword)}
@@ -240,7 +242,7 @@ function ForgotPasswordModal({ visible, onClose, signIn }) {
                   accessibilityRole="button"
                   accessibilityLabel={showNew ? "Hide password" : "Show password"}
                 >
-                  <Icon name={showNew ? "eye-off" : "eye"} size={20} color={A.muted} />
+                  <Icon name={showNew ? "eye-off" : "eye"} size={20} color={colors.textMuted} />
                 </TouchableOpacity>
               </View>
               <FieldError>{errors.password}</FieldError>
@@ -250,9 +252,9 @@ function ForgotPasswordModal({ visible, onClose, signIn }) {
               <View style={a.fieldRow}>
                 <TextInput
                   ref={confirmRef}
-                  style={[a.field, { backgroundColor: A.cyanField, paddingRight: 60 }, !!errors.confirm && a.fieldInvalid]}
+                  style={[a.field, { paddingRight: 60 }, !!errors.confirm && a.fieldInvalid]}
                   placeholder="CONFIRM PASSWORD"
-                  placeholderTextColor={A.muted}
+                  placeholderTextColor={colors.placeholder}
                   secureTextEntry={!showConfirm}
                   value={confirmPassword}
                   onChangeText={edit("confirm", setConfirmPassword)}
@@ -269,7 +271,7 @@ function ForgotPasswordModal({ visible, onClose, signIn }) {
                   accessibilityRole="button"
                   accessibilityLabel={showConfirm ? "Hide password" : "Show password"}
                 >
-                  <Icon name={showConfirm ? "eye-off" : "eye"} size={20} color={A.muted} />
+                  <Icon name={showConfirm ? "eye-off" : "eye"} size={20} color={colors.textMuted} />
                 </TouchableOpacity>
               </View>
               <FieldError>{errors.confirm}</FieldError>
@@ -285,7 +287,7 @@ function ForgotPasswordModal({ visible, onClose, signIn }) {
               accessibilityRole="button"
               accessibilityLabel="Reset password"
             >
-              {loading ? <ActivityIndicator color={A.onCta} /> : <Text style={a.ctaText}>Reset Password</Text>}
+              {loading ? <ActivityIndicator color={colors.onAccent} /> : <Text style={a.ctaText}>Reset Password</Text>}
             </TouchableOpacity>
           </>
         )}
@@ -296,6 +298,8 @@ function ForgotPasswordModal({ visible, onClose, signIn }) {
 
 /* ── Sign in ──────────────────────────────────────────────────────────── */
 export default function Login({ navigation }) {
+  const a = useAuthStyles();
+  const { colors } = useTheme();
   const { isLoaded, signIn, setActive } = useSignIn();
   const { startOAuthFlow } = useOAuth({ strategy: "oauth_google" });
 
@@ -484,7 +488,7 @@ export default function Login({ navigation }) {
           accessibilityLabel="Continue with Google"
         >
           {isGoogleLoading ? (
-            <ActivityIndicator color={A.muted} />
+            <ActivityIndicator color={colors.textMuted} />
           ) : (
             <>
               <Image source={require("../assets/googlelogo.png")} style={a.googleLogo} />
@@ -504,9 +508,9 @@ export default function Login({ navigation }) {
         <View>
           <TextInput
             ref={emailRef}
-            style={[a.field, { backgroundColor: A.cyanField }, !!errorFor("email") && a.fieldInvalid]}
+            style={[a.field, !!errorFor("email") && a.fieldInvalid]}
             placeholder="EMAIL"
-            placeholderTextColor={A.muted}
+            placeholderTextColor={colors.placeholder}
             autoCapitalize="none"
             keyboardType="email-address"
             autoComplete="email"
@@ -528,9 +532,9 @@ export default function Login({ navigation }) {
           <View style={a.fieldRow}>
             <TextInput
               ref={passwordRef}
-              style={[a.field, { backgroundColor: A.cyanField, paddingRight: 60 }, !!errorFor("password") && a.fieldInvalid]}
+              style={[a.field, { paddingRight: 60 }, !!errorFor("password") && a.fieldInvalid]}
               placeholder="PASSWORD"
-              placeholderTextColor={A.muted}
+              placeholderTextColor={colors.placeholder}
               secureTextEntry={!passwordVisible}
               autoComplete="current-password"
               textContentType="password"
@@ -550,7 +554,7 @@ export default function Login({ navigation }) {
               accessibilityRole="button"
               accessibilityLabel={passwordVisible ? "Hide password" : "Show password"}
             >
-              <Icon name={passwordVisible ? "eye-off" : "eye"} size={20} color={A.muted} />
+              <Icon name={passwordVisible ? "eye-off" : "eye"} size={20} color={colors.textMuted} />
             </TouchableOpacity>
           </View>
           <FieldError>{errorFor("password")}</FieldError>
@@ -568,7 +572,7 @@ export default function Login({ navigation }) {
           accessibilityRole="button"
           accessibilityLabel="Log in"
         >
-          {isLoading ? <ActivityIndicator color={A.onCta} /> : <Text style={a.ctaText}>Log in</Text>}
+          {isLoading ? <ActivityIndicator color={colors.onAccent} /> : <Text style={a.ctaText}>Log in</Text>}
         </TouchableOpacity>
 
         <TouchableOpacity

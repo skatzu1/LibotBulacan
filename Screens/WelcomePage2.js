@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useMemo, useState } from "react";
 import {
   View, Text, StyleSheet, TouchableOpacity, Modal, ScrollView,
   StatusBar, ImageBackground, Pressable,
@@ -7,7 +7,7 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { showAlert } from "../components/AppAlert";
-import { auth as A, typography, fonts, radius, MAX_FONT_SCALE } from "../context/ThemeContext";
+import { useTheme, typography, fonts, radius, shadow, MAX_FONT_SCALE } from "../context/ThemeContext";
 import Icon from "../components/Icon";
 
 const BULACAN_MUNICIPALITIES = [
@@ -20,15 +20,18 @@ const BULACAN_MUNICIPALITIES = [
 ];
 
 /*
- * Onboarding, screen 2 of 2 — built from the approved mockup.
+ * Onboarding, screen 2 of 2.
  *
  * Same bg.png backdrop as screen 1 so the pair reads as one piece, with the
- * municipality picker as a white pill. All of the original gating logic is
+ * municipality picker as a card-coloured pill. Theme colours throughout, so it
+ * follows light/dark like the rest of the app. All of the original gating logic is
  * unchanged: a selection is required, "I don't live in Bulacan" is refused, and
  * the choice plus the hasSeenWelcome flag are persisted before Login.
  */
 export default function WelcomePage2({ navigation }) {
   const insets = useSafeAreaInsets();
+  const { colors, isDark } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
   const [selected, setSelected]         = useState(null);
   const [dropdownOpen, setDropdownOpen] = useState(false);
 
@@ -59,15 +62,16 @@ export default function WelcomePage2({ navigation }) {
 
   return (
     <View style={styles.screen}>
-      <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
+      <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor="transparent" translucent />
 
       <ImageBackground
         source={require("../assets/bg.png")}
         style={StyleSheet.absoluteFill}
         resizeMode="cover"
       >
+        {isDark && <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.photoVeil }]} />}
         <LinearGradient
-          colors={["transparent", "rgba(12,34,36,0.68)", "rgba(12,34,36,0.68)", "transparent"]}
+          colors={["transparent", colors.photoScrim, colors.photoScrim, "transparent"]}
           locations={[0.18, 0.34, 0.74, 0.92]}
           style={StyleSheet.absoluteFill}
           pointerEvents="none"
@@ -94,7 +98,7 @@ export default function WelcomePage2({ navigation }) {
             >
               {selected ?? "Select your municipality"}
             </Text>
-            <Icon name="chevron-down" size={22} color={A.muted} />
+            <Icon name="chevron-down" size={22} color={colors.textMuted} />
           </TouchableOpacity>
 
           {isNotBulacan && (
@@ -166,7 +170,7 @@ export default function WelcomePage2({ navigation }) {
                     >
                       {item}
                     </Text>
-                    {isChosen && <Icon name="check" size={18} color={A.ink} weight="bold" />}
+                    {isChosen && <Icon name="check" size={18} color={colors.brand} weight="bold" />}
                   </TouchableOpacity>
                 );
               })}
@@ -178,19 +182,20 @@ export default function WelcomePage2({ navigation }) {
   );
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: A.washTop },
+const makeStyles = (c) => StyleSheet.create({
+  screen: { flex: 1, backgroundColor: c.background },
 
   content: { flex: 1, paddingHorizontal: 30, justifyContent: "space-between" },
 
   middle: { flex: 1, justifyContent: "center", gap: 30 },
+  // White on the dark scrim band in both themes — it sits on the photo.
   headline: {
     ...typography.h1,
     fontSize: 50,
     lineHeight: 58,
-    color: A.onPhoto,
+    color: "#FFFFFF",
     textAlign: "center",
-    textShadowColor: "rgba(12,34,36,0.45)",
+    textShadowColor: c.photoScrim,
     textShadowOffset: { width: 0, height: 2 },
     textShadowRadius: 12,
   },
@@ -198,60 +203,58 @@ const styles = StyleSheet.create({
   picker: {
     height: 64,
     borderRadius: 32,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: c.card,
+    borderWidth: 1,
+    borderColor: c.cardBorder,
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "space-between",
     paddingHorizontal: 26,
-    shadowColor: "#0C2224",
-    shadowOpacity: 0.18,
-    shadowRadius: 14,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 3,
+    ...shadow.md,
   },
-  pickerText:        { flex: 1, fontFamily: fonts.sansMedium, fontSize: 16, color: A.ink, marginRight: 10 },
-  pickerPlaceholder: { color: A.muted },
+  pickerText:        { flex: 1, fontFamily: fonts.sansMedium, fontSize: 16, color: c.textPrimary, marginRight: 10 },
+  pickerPlaceholder: { color: c.placeholder },
 
   warning: {
     fontFamily: fonts.sansMedium, fontSize: 13.5, color: "#FFFFFF",
     textAlign: "center", marginTop: -14,
-    textShadowColor: "rgba(12,34,36,0.55)", textShadowRadius: 8,
+    textShadowColor: c.photoScrim, textShadowRadius: 8,
   },
 
   bottom: { gap: 22 },
   dots:      { flexDirection: "row", gap: 9, alignSelf: "center" },
   dot:       { width: 9, height: 9, borderRadius: 5, backgroundColor: "#FFFFFF" },
-  dotActive: { backgroundColor: A.cta },
+  dotActive: { backgroundColor: c.accent },
 
+  // The app's primary button.
   cta: {
-    height: 62, borderRadius: 18, alignItems: "center", justifyContent: "center",
-    backgroundColor: A.cta,
-    shadowColor: "#4A4200", shadowOpacity: 0.28, shadowRadius: 16,
-    shadowOffset: { width: 0, height: 6 }, elevation: 4,
+    height: 62, borderRadius: 31, alignItems: "center", justifyContent: "center",
+    backgroundColor: c.accent,
+    ...shadow.md,
   },
-  ctaText: { fontFamily: fonts.sansBold, fontSize: 18, color: A.onCta, letterSpacing: 0.2 },
+  ctaText: { fontFamily: fonts.sansBold, fontSize: 18, color: c.onAccent, letterSpacing: 0.2 },
 
   // ── Sheet ──
-  sheetBackdrop: { flex: 1, backgroundColor: "rgba(12,34,36,0.45)", justifyContent: "flex-end" },
+  sheetBackdrop: { flex: 1, backgroundColor: c.overlay, justifyContent: "flex-end" },
   sheet: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: c.card,
     borderTopLeftRadius: 32, borderTopRightRadius: 32,
     paddingHorizontal: 20, paddingTop: 12, maxHeight: "78%",
   },
   sheetGrabber: {
     width: 44, height: 5, borderRadius: 3, alignSelf: "center",
-    backgroundColor: "rgba(56,65,66,0.25)", marginBottom: 14,
+    backgroundColor: c.cardBorder, marginBottom: 14,
   },
-  sheetTitle:  { ...typography.h2, fontSize: 24, color: A.ink, marginBottom: 10, marginLeft: 6 },
+  sheetTitle:  { ...typography.h2, fontSize: 24, color: c.brandDark, marginBottom: 10, marginLeft: 6 },
   sheetScroll: { marginHorizontal: -4 },
 
   option: {
     flexDirection: "row", alignItems: "center", justifyContent: "space-between",
     paddingVertical: 15, paddingHorizontal: 18, borderRadius: radius.md, marginBottom: 2,
   },
-  optionChosen:  { backgroundColor: A.cyanField },
-  optionOutside: { borderTopWidth: 1, borderTopColor: "rgba(56,65,66,0.14)", marginTop: 10, paddingTop: 18 },
-  optionText:        { fontFamily: fonts.sansMedium, fontSize: 15.5, color: A.ink },
+  optionChosen:  { backgroundColor: c.brandLight },
+  optionOutside: { borderTopWidth: 1, borderTopColor: c.divider, marginTop: 10, paddingTop: 18 },
+  optionText:        { fontFamily: fonts.sansMedium, fontSize: 15.5, color: c.textPrimary },
   optionTextChosen:  { fontFamily: fonts.sansBold },
-  optionTextOutside: { color: "#8E1F16", fontFamily: fonts.sansSemi },
+  optionTextOutside: { color: c.danger, fontFamily: fonts.sansSemi },
 });

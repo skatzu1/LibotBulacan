@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
 import { useColorScheme } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as SystemUI from "expo-system-ui";
 
 const STORAGE_KEY = "libot_theme_pref";   // "light" | "dark" | "system"
 
@@ -85,6 +86,15 @@ export const lightColors = {
   success:          "#16764F",   //  5.62 on card
   successBg:        "#E3F4EC",
   overlay:          "rgba(0,0,0,0.45)",
+
+  // Screens drawn over a photograph (welcome, sign-in, sign-up). The veil tints
+  // the whole photo toward the page; the panel is the page colour, slightly
+  // see-through. Measured against the DARKEST pixel of assets/bg.png: every
+  // text token on the panel stays >= 4.5:1 (lowest: success 4.86).
+  photoVeil:        "rgba(251,248,242,0.25)",
+  panelOverPhoto:   "rgba(251,248,242,0.90)",
+  // Band behind white headline text sitting directly on the photo.
+  photoScrim:       "rgba(12,34,36,0.68)",
 };
 
 export const darkColors = {
@@ -145,45 +155,21 @@ export const darkColors = {
   success:          "#57C795",
   successBg:        "#123024",
   overlay:          "rgba(0,0,0,0.6)",
+
+  // A heavy dark veil: the bright cyan/yellow photo becomes a dim teal
+  // backdrop instead of a glare. Measured against the BRIGHTEST pixel of
+  // assets/bg.png: every text token on the panel stays >= 6:1.
+  photoVeil:        "rgba(14,28,30,0.80)",
+  panelOverPhoto:   "rgba(14,28,30,0.92)",
+  photoScrim:       "rgba(12,34,36,0.68)",
 };
 
-// ── Auth & onboarding surface ─────────────────────────────────────────────────
-// The pre-login screens (Welcome, Login, Register, Forgot Password) are a fixed
-// BRAND SURFACE built from the approved mockups: a duotone Bulacan photo under a
-// cyan→yellow wash, then a panel with one oversized corner. They deliberately do
-// NOT follow light/dark — this is the product's front door and it should look the
-// same to everyone, the way a splash screen does. The interior of the app keeps
-// the calmer warm-paper palette so a long browsing session isn't shouting.
-//
-// Contrast note: the mockup's own greys don't survive scrutiny — its placeholder
-// grey measures 3.5:1 on the tinted fields. `ink` and `muted` below are the
-// corrected values (5.5–8.1:1) at visually the same weight.
-export const auth = {
-  // Panels
-  cyanPanel:   "#A8E9F2",
-  cyanField:   "#BDEFF5",
-  yellowPanel: "#F8E27E",
-  yellowField: "#FBEC9F",
-
-  // Duotone wash over the hero photograph
-  washTop:     "#6FE0EC",
-  washMid:     "#E8E84A",
-  washBottom:  "#7FE3EC",
-
-  // Text
-  ink:         "#384142",   //  7.79 on cyanPanel · 8.07 on yellowPanel
-  muted:       "#4F5D5F",   //  5.49 on cyanField · 5.75 on yellowField
-  onPhoto:     "#FFFFFF",
-
-  // The onboarding CTA yellow is a touch more lemon than the in-app `accent`,
-  // which is what the mockups use.
-  cta:         "#F5E81C",
-  onCta:       "#2C2810",   // 11.59 on cta
-
-  // One oversized corner is the signature of this surface. 64 is large enough to
-  // read as a deliberate shape rather than a rounding mistake.
-  panelCorner: 64,
-};
+// ── Welcome / sign-in / sign-up ───────────────────────────────────────────────
+// These used to be a fixed cyan/yellow surface (the `auth` palette) that ignored
+// dark mode, so the app's front door looked like a different product from its
+// interior. The user asked for one palette everywhere: they now use the same
+// tokens as every other screen, plus photoVeil / panelOverPhoto / photoScrim
+// above for sitting on the Bulacan photograph. See components/AuthScaffold.js.
 
 // ── Static design tokens ──────────────────────────────────────────────────────
 // These do not change with the theme, so they're plain exports usable directly
@@ -330,6 +316,13 @@ export function ThemeProvider({ children }) {
   const toggleTheme = () => setThemePref(isDark ? "light" : "dark");
 
   const colors = isDark ? darkColors : lightColors;
+
+  // The native root view shows through during screen transitions, behind the
+  // keyboard and on overscroll. It defaults to white, so dark mode flashed
+  // white there; keep it the page colour of whichever theme is on.
+  useEffect(() => {
+    SystemUI.setBackgroundColorAsync(colors.background).catch(() => {});
+  }, [colors.background]);
 
   if (!loaded) return null; // Don't flash wrong theme on first render
 

@@ -3,11 +3,11 @@ import 'react-native-reanimated';
 // Must stay among the first imports: it registers the gesture system before
 // any screen loads. Imported once, with the one name App.js needs from it.
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
-import React, { useEffect, useRef, useState } from 'react';
-import { NavigationContainer } from "@react-navigation/native";
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { NavigationContainer, DefaultTheme, DarkTheme } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { ClerkProvider, useAuth } from '@clerk/clerk-expo';
-import { ActivityIndicator, View, StyleSheet, AppState } from 'react-native';
+import { ActivityIndicator, View, StyleSheet, AppState, useColorScheme } from 'react-native';
 import { showAlert, AppAlertProvider } from './components/AppAlert';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -22,7 +22,7 @@ import { ProfileImageProvider } from "./context/ProfileImageContext";
 import { navigationRef }        from './navigation/navigationRef';
 import { MissionProvider }      from "./context/MissionContext";
 import { PointsProvider }       from "./context/PointsContext";
-import { ThemeProvider, useTheme } from "./context/ThemeContext";
+import { ThemeProvider, useTheme, lightColors, darkColors } from "./context/ThemeContext";
 import OfflineBanner            from "./components/OfflineBanner";
 import ErrorBoundary            from "./utils/ErrorBoundary";
 import { initCrashReporting }   from "./utils/crashReporter";
@@ -86,7 +86,26 @@ const Stack = createNativeStackNavigator();
 
 function AppNavigator() {
   const { isLoaded, isSignedIn, getToken, userId, signOut } = useAuth();
-  const { colors } = useTheme();
+  const { colors, isDark } = useTheme();
+
+  // React Navigation paints its own background behind every screen and during
+  // transitions. Left on its default (light) theme, dark mode flashed white
+  // between screens; build its theme from the app palette instead.
+  const navTheme = useMemo(() => {
+    const base = isDark ? DarkTheme : DefaultTheme;
+    return {
+      ...base,
+      colors: {
+        ...base.colors,
+        primary: colors.brand,
+        background: colors.background,
+        card: colors.card,
+        text: colors.textPrimary,
+        border: colors.divider,
+        notification: colors.danger,
+      },
+    };
+  }, [isDark, colors]);
   const [hasSeenWelcome, setHasSeenWelcome] = useState(null);
   const [banInfo,        setBanInfo]        = useState(null);
   const [suspensionInfo, setSuspensionInfo] = useState(null);
@@ -216,7 +235,7 @@ function AppNavigator() {
           <BookmarkProvider>
             <ErrorBoundary>
               <>
-                <NavigationContainer ref={navigationRef}>
+                <NavigationContainer ref={navigationRef} theme={navTheme}>
                   {isSignedIn && banInfo?.archived ? (
                     <BannedScreen banInfo={banInfo} />
                   ) : (
@@ -289,6 +308,9 @@ function AppNavigator() {
 initCrashReporting();
 
 export default function App() {
+  // Before ThemeProvider exists, follow the system setting — the same default
+  // the theme itself starts from — so dark-mode phones don't get a cream flash.
+  const scheme = useColorScheme();
   const [fontsLoaded, fontError] = useFonts({
     Newsreader_600SemiBold, Newsreader_700Bold, Newsreader_800ExtraBold,
     SchibstedGrotesk_400Regular, SchibstedGrotesk_500Medium,
@@ -300,7 +322,7 @@ export default function App() {
   // app through — a missing font should degrade to the system face, never be a
   // blank screen.
   if (!fontsLoaded && !fontError) {
-    return <View style={[styles.loadingContainer, { backgroundColor: "#FBF8F2" }]} />;
+    return <View style={[styles.loadingContainer, { backgroundColor: (scheme === "dark" ? darkColors : lightColors).background }]} />;
   }
 
   return (
