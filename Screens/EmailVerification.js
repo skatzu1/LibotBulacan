@@ -9,14 +9,16 @@ import {
 import { showToast } from "../components/AppAlert";
 import { useState, useRef } from "react";
 import { useSignUp, useSignIn } from "@clerk/clerk-expo";
-import { auth as A, fonts, MAX_FONT_SCALE } from "../context/ThemeContext";
-import AuthScaffold, { authStyles as a, FieldError, FormError, AUTH_ERROR } from "../components/AuthScaffold";
+import { useTheme, fonts, MAX_FONT_SCALE } from "../context/ThemeContext";
+import AuthScaffold, { useAuthStyles, FieldError, FormError } from "../components/AuthScaffold";
 import { codeError as checkCode, clerkErrorToField, NETWORK_ERROR } from "../utils/authValidation";
 import Icon from "../components/Icon";
 
 const EMPTY_CODE = ["", "", "", "", "", ""];
 
 export default function EmailVerification({ navigation, route }) {
+  const a = useAuthStyles();
+  const { colors } = useTheme();
 
   const { email, fromLogin } = route.params || {};
   const { isLoaded: signUpLoaded, signUp, setActive: setActiveSignUp } = useSignUp();
@@ -177,15 +179,13 @@ export default function EmailVerification({ navigation, route }) {
   const busy = isLoading || isResending;
 
   return (
-    // Same cyan surface as Login / Forgot Password. This screen isn't in the
-    // mockups, but it sits in the middle of both the sign-up and sign-in flows
-    // — leaving it on the in-app palette would break the front door in half.
+    // Same photo-and-panel surface as Login and Register, in the app colours.
     <AuthScaffold
       onBack={busy ? undefined : () => navigation.goBack()}
       title="Verify Your Email"
       subtitle={`We've sent a 6-digit code to ${email}`}
     >
-      <Text style={styles.hint} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+      <Text style={[styles.hint, { color: colors.textMuted }]} maxFontSizeMultiplier={MAX_FONT_SCALE}>
         Please check your inbox and spam folder
       </Text>
 
@@ -196,9 +196,9 @@ export default function EmailVerification({ navigation, route }) {
             ref={(ref) => (inputRefs.current[index] = ref)}
             style={[
               styles.codeInput,
-              { backgroundColor: A.cyanField, color: A.ink },
-              !!digit && styles.codeInputFilled,
-              !!codeErr && { borderColor: AUTH_ERROR },
+              { backgroundColor: colors.inputBg, color: colors.textPrimary, borderColor: colors.inputBorder },
+              !!digit && { borderColor: colors.brand },
+              !!codeErr && { borderColor: colors.danger },
             ]}
             value={digit}
             onChangeText={(text) => handleCodeChange(text, index)}
@@ -223,7 +223,7 @@ export default function EmailVerification({ navigation, route }) {
         accessibilityRole="button"
         accessibilityLabel="Verify email"
       >
-        {isLoading ? <ActivityIndicator color={A.onCta} /> : <Text style={a.ctaText}>Verify Email</Text>}
+        {isLoading ? <ActivityIndicator color={colors.onAccent} /> : <Text style={a.ctaText}>Verify Email</Text>}
       </TouchableOpacity>
 
       <View style={a.linkRow}>
@@ -236,7 +236,7 @@ export default function EmailVerification({ navigation, route }) {
           accessibilityLabel="Resend verification code"
         >
           {isResending
-            ? <ActivityIndicator size="small" color={A.ink} />
+            ? <ActivityIndicator size="small" color={colors.brand} />
             : <Text style={a.linkBold}>Resend</Text>}
         </TouchableOpacity>
       </View>
@@ -249,8 +249,8 @@ export default function EmailVerification({ navigation, route }) {
         accessibilityRole="button"
         accessibilityLabel={`Back to ${fromLogin ? "login" : "register"}`}
       >
-        <Icon name="arrow-left" size={15} color={A.muted} />
-        <Text style={styles.backText}>Back to {fromLogin ? "Login" : "Register"}</Text>
+        <Icon name="arrow-left" size={15} color={colors.textSecondary} />
+        <Text style={[styles.backText, { color: colors.textSecondary }]}>Back to {fromLogin ? "Login" : "Register"}</Text>
       </TouchableOpacity>
     </AuthScaffold>
   );
@@ -260,7 +260,7 @@ const styles = StyleSheet.create({
   disabled: { opacity: 0.55 },
 
   hint: {
-    fontFamily: fonts.sansMedium, fontSize: 13, color: A.muted,
+    fontFamily: fonts.sansMedium, fontSize: 13,
     textAlign: 'center', marginTop: -10,
   },
 
@@ -282,12 +282,11 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: 'transparent',
   },
-  codeInputFilled: { borderColor: A.ink },
   codeErrorRow:    { marginTop: -6, marginLeft: 4 },
 
   backRow: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',
     gap: 7, marginTop: 4, paddingVertical: 4,
   },
-  backText: { fontFamily: fonts.sansSemi, fontSize: 14.5, color: A.muted },
+  backText: { fontFamily: fonts.sansSemi, fontSize: 14.5 },
 });

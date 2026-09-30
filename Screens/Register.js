@@ -15,9 +15,9 @@ import CheckBox from "expo-checkbox";
 import { useSignUp, useOAuth } from "@clerk/clerk-expo";
 import * as WebBrowser from "expo-web-browser";
 import { authAPI } from "../api";
-import { auth as A, fonts, MAX_FONT_SCALE } from "../context/ThemeContext";
+import { useTheme, fonts, MAX_FONT_SCALE } from "../context/ThemeContext";
 import { TERMS_URL as TERMS_OF_SERVICE_URL, PRIVACY_URL as PRIVACY_POLICY_URL } from "../utils/legalLinks";
-import AuthScaffold, { authStyles as a, FieldError, FormError, AUTH_ERROR } from "../components/AuthScaffold";
+import AuthScaffold, { useAuthStyles, FieldError, FormError } from "../components/AuthScaffold";
 import {
   nameError, emailError, dobError, clerkErrorToField, TERMS_ERROR,
 } from "../utils/authValidation";
@@ -36,15 +36,14 @@ const PASSWORD_RULES = [
   { id: "special", label: "One special character (!@#$…)",   test: (p) => /[^A-Za-z0-9]/.test(p) },
 ];
 
-// Strength colours are picked to sit on the YELLOW panel, not on the app's
-// cards — the in-app `danger`/`warning` tokens wash out against #F8E27E.
-// All four stay ≥ 4.5:1 with the panel translucent over bg.png ("Fair" is the
-// tightest at 4.60:1).
+// Theme tokens, so the meter follows light/dark like the rest of the app.
+// Measured on the sign-up panel over bg.png: every one stays >= 4.5:1 in both
+// themes (lowest: success, 4.86:1 in light mode).
 const STRENGTH = [
-  { label: "Weak",   color: "#8E1F16" },
-  { label: "Fair",   color: "#8A4B0A" },
-  { label: "Good",   color: "#5C5A10" },
-  { label: "Strong", color: "#1C5E3F" },
+  { label: "Weak",   token: "danger" },
+  { label: "Fair",   token: "warning" },
+  { label: "Good",   token: "accentDark" },
+  { label: "Strong", token: "success" },
 ];
 
 function getStrength(password) {
@@ -71,8 +70,10 @@ async function openLink(url) {
 
 // ── Password Strength Widget ───────────────────────────────────────
 function PasswordStrengthPanel({ password }) {
+  const { colors } = useTheme();
   if (!password) return null;
   const strength = getStrength(password);
+  const strengthColor = colors[strength.token];
   return (
     <View style={styles.strengthPanel} accessibilityLiveRegion="polite">
       <View style={styles.strengthTrack}>
@@ -81,12 +82,12 @@ function PasswordStrengthPanel({ password }) {
             key={i}
             style={[
               styles.strengthSeg,
-              { backgroundColor: i <= strength.level ? strength.color : "rgba(56,65,66,0.18)" },
+              { backgroundColor: i <= strength.level ? strengthColor : colors.divider },
             ]}
           />
         ))}
       </View>
-      <Text style={[styles.strengthLabel, { color: strength.color }]}>{strength.label}</Text>
+      <Text style={[styles.strengthLabel, { color: strengthColor }]}>{strength.label}</Text>
       <View style={styles.criteriaList}>
         {PASSWORD_RULES.map((rule) => {
           const ok = rule.test(password);
@@ -96,9 +97,9 @@ function PasswordStrengthPanel({ password }) {
                 name={ok ? "check-circle" : "circle"}
                 size={13}
                 weight={ok ? "fill" : "regular"}
-                color={ok ? "#1C5E3F" : A.muted}
+                color={ok ? colors.success : colors.textMuted}
               />
-              <Text style={[styles.criteriaText, { color: ok ? "#1C5E3F" : A.muted }]}>
+              <Text style={[styles.criteriaText, { color: ok ? colors.success : colors.textMuted }]}>
                 {rule.label}
               </Text>
             </View>
@@ -127,6 +128,8 @@ const FIELD_ORDER = ["name", "email", "password", "dob"];
 
 // ── Main Component ────────────────────────────────────────────────
 export default function Register({ navigation }) {
+  const a = useAuthStyles();
+  const { colors } = useTheme();
   const { isLoaded, signUp, setActive } = useSignUp();
   const { startOAuthFlow }              = useOAuth({ strategy: "oauth_google" });
 
@@ -266,13 +269,11 @@ export default function Register({ navigation }) {
 
   const field = (key) => [
     a.field,
-    { backgroundColor: A.yellowField },
     !!errorFor(key) && a.fieldInvalid,
   ];
 
   return (
     <AuthScaffold
-      variant="yellow"
       background={REGISTER_BG}
       showLogo={false}
       onBack={() => navigation.navigate("Login")}
@@ -289,7 +290,7 @@ export default function Register({ navigation }) {
         accessibilityLabel="Continue with Google"
       >
         {isGoogleLoading ? (
-          <ActivityIndicator color={A.muted} />
+          <ActivityIndicator color={colors.textMuted} />
         ) : (
           <>
             <Image source={require("../assets/googlelogo.png")} style={a.googleLogo} />
@@ -311,7 +312,7 @@ export default function Register({ navigation }) {
           ref={inputRefs.name}
           style={field("name")}
           placeholder="FULL NAME"
-          placeholderTextColor={A.muted}
+          placeholderTextColor={colors.placeholder}
           value={name}
           onChangeText={edit("name", setName)}
           onBlur={() => touch("name")}
@@ -333,7 +334,7 @@ export default function Register({ navigation }) {
           ref={inputRefs.email}
           style={field("email")}
           placeholder="EMAIL"
-          placeholderTextColor={A.muted}
+          placeholderTextColor={colors.placeholder}
           value={email}
           onChangeText={edit("email", setEmail)}
           onBlur={() => touch("email")}
@@ -357,7 +358,7 @@ export default function Register({ navigation }) {
             ref={inputRefs.password}
             style={[...field("password"), { paddingRight: 60 }]}
             placeholder="PASSWORD"
-            placeholderTextColor={A.muted}
+            placeholderTextColor={colors.placeholder}
             secureTextEntry={!passwordVisible}
             value={password}
             onChangeText={edit("password", setPassword)}
@@ -377,7 +378,7 @@ export default function Register({ navigation }) {
             accessibilityRole="button"
             accessibilityLabel={passwordVisible ? "Hide password" : "Show password"}
           >
-            <Icon name={passwordVisible ? "eye-off" : "eye"} size={20} color={A.muted} />
+            <Icon name={passwordVisible ? "eye-off" : "eye"} size={20} color={colors.textMuted} />
           </TouchableOpacity>
         </View>
         <FieldError>{errorFor("password")}</FieldError>
@@ -391,7 +392,7 @@ export default function Register({ navigation }) {
           ref={inputRefs.dob}
           style={field("dob")}
           placeholder="MM/DD/YYYY"
-          placeholderTextColor={A.muted}
+          placeholderTextColor={colors.placeholder}
           value={dob}
           onChangeText={handleDobChange}
           onBlur={() => touch("dob")}
@@ -410,17 +411,17 @@ export default function Register({ navigation }) {
           <CheckBox
             value={agreeToTerms}
             onValueChange={(v) => { setAgreeToTerms(v); if (v) setTermsError(""); }}
-            color={termsError ? AUTH_ERROR : agreeToTerms ? A.ink : undefined}
+            color={termsError ? colors.danger : agreeToTerms ? colors.brand : colors.textMuted}
             style={styles.checkbox}
             accessibilityLabel="Agree to the Terms and Conditions"
           />
-          <Text style={styles.termsText} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+          <Text style={[styles.termsText, { color: colors.textPrimary }]} maxFontSizeMultiplier={MAX_FONT_SCALE}>
             Agree to the{" "}
-            <Text style={styles.termsLink} onPress={() => openLink(TERMS_OF_SERVICE_URL)}>
+            <Text style={[styles.termsLink, { color: colors.brand }]} onPress={() => openLink(TERMS_OF_SERVICE_URL)}>
               Terms and Conditions
             </Text>
             {" "}and{" "}
-            <Text style={styles.termsLink} onPress={() => openLink(PRIVACY_POLICY_URL)}>
+            <Text style={[styles.termsLink, { color: colors.brand }]} onPress={() => openLink(PRIVACY_POLICY_URL)}>
               Privacy Policy
             </Text>
           </Text>
@@ -430,17 +431,16 @@ export default function Register({ navigation }) {
 
       <FormError>{formError}</FormError>
 
-      {/* Sign up — WHITE, not the CTA yellow: a yellow button on a yellow
-          panel has nothing to sit against. The mockup makes the same call. */}
+      {/* The same yellow primary button as every other screen. */}
       <TouchableOpacity
-        style={[styles.signupBtn, disabled && styles.disabled]}
+        style={[a.cta, styles.signupSpace, disabled && styles.disabled]}
         onPress={handleRegister}
         disabled={disabled}
         activeOpacity={0.88}
         accessibilityRole="button"
         accessibilityLabel="Sign up"
       >
-        {isLoading ? <ActivityIndicator color={A.ink} /> : <Text style={styles.signupText}>Sign up</Text>}
+        {isLoading ? <ActivityIndicator color={colors.onAccent} /> : <Text style={a.ctaText}>Sign up</Text>}
       </TouchableOpacity>
 
       <View style={a.linkRow}>
@@ -471,22 +471,9 @@ const styles = StyleSheet.create({
 
   termsRow:  { flexDirection: "row", alignItems: "flex-start", gap: 11, paddingHorizontal: 6, marginTop: 4 },
   checkbox:  { width: 20, height: 20, borderRadius: 5, marginTop: 1 },
-  termsText: { flex: 1, fontFamily: fonts.sansSemi, fontSize: 14, lineHeight: 20, color: A.ink },
+  termsText: { flex: 1, fontFamily: fonts.sansSemi, fontSize: 14, lineHeight: 20 },
   termsLink: { fontFamily: fonts.sansBold, textDecorationLine: "underline" },
   termsErrorRow: { marginLeft: 6 },
 
-  signupBtn: {
-    height: 62,
-    borderRadius: 31,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "#FFFFFF",
-    marginTop: 4,
-    shadowColor: "#6A5A00",
-    shadowOpacity: 0.18,
-    shadowRadius: 14,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 3,
-  },
-  signupText: { fontFamily: fonts.sansBold, fontSize: 17, color: A.ink, letterSpacing: 0.2 },
+  signupSpace: { marginTop: 4 },
 });
