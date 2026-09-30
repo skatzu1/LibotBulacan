@@ -6,11 +6,12 @@ import {
   Text,
   ActivityIndicator,
 } from "react-native";
-import { showAlert, showToast } from "../components/AppAlert";
+import { showToast } from "../components/AppAlert";
 import { useState, useRef } from "react";
 import { useSignUp, useSignIn } from "@clerk/clerk-expo";
 import { auth as A, fonts, MAX_FONT_SCALE } from "../context/ThemeContext";
-import AuthScaffold, { authStyles as a } from "../components/AuthScaffold";
+import AuthScaffold, { authStyles as a, FieldError, FormError, AUTH_ERROR } from "../components/AuthScaffold";
+import { codeError as checkCode, clerkErrorToField, NETWORK_ERROR } from "../utils/authValidation";
 import Icon from "../components/Icon";
 
 const EMPTY_CODE = ["", "", "", "", "", ""];
@@ -24,6 +25,9 @@ export default function EmailVerification({ navigation, route }) {
   const [code, setCode] = useState(EMPTY_CODE);
   const [isLoading, setIsLoading] = useState(false);
   const [isResending, setIsResending] = useState(false);
+  // Code problems sit under the boxes; anything else in the form-level box.
+  const [codeErr, setCodeErr]   = useState("");
+  const [formErr, setFormErr]   = useState("");
 
   const inputRefs = useRef([]);
 
@@ -32,8 +36,18 @@ export default function EmailVerification({ navigation, route }) {
     inputRefs.current[0]?.focus();
   };
 
+  // A rejected code clears the boxes and says why, under them.
+  const rejectCode = (err) => {
+    const { field, message } = clerkErrorToField(err);
+    if (field === "code" || field === null) setCodeErr(message);
+    else setFormErr(message);
+    resetCode();
+  };
+
   const handleCodeChange = (text, index) => {
     if (text && !/^\d+$/.test(text)) return;
+    if (codeErr) setCodeErr("");
+    if (formErr) setFormErr("");
 
     const newCode = [...code];
     newCode[index] = text;
@@ -53,16 +67,20 @@ export default function EmailVerification({ navigation, route }) {
   const handleVerify = async () => {
     const verificationCode = code.join("");
 
-    if (verificationCode.length !== 6) {
-      showAlert("Error", "Please enter the complete 6-digit code");
+    const incomplete = checkCode(verificationCode);
+    if (incomplete) {
+      setCodeErr(incomplete);
+      inputRefs.current[code.findIndex((d) => !d)]?.focus();
       return;
     }
 
     if (!signUpLoaded && !signInLoaded) {
-      showAlert("Error", "Please wait, loading...");
+      setFormErr("Still getting ready. Try again in a moment.");
       return;
     }
 
+    setCodeErr("");
+    setFormErr("");
     setIsLoading(true);
 
     try {
@@ -73,23 +91,13 @@ export default function EmailVerification({ navigation, route }) {
 
           if (result.status === "complete") {
             await setActiveSignUp({ session: result.createdSessionId });
-            showToast("Email verified — welcome to Libot!", { type: "success" });
+            showToast("Email verified. Welcome to Libot!", { type: "success" });
             setIsLoading(false);
             return;
           }
         } catch (signUpError) {
           console.error("SignUp verification error:", signUpError);
-          const errorCode = signUpError.errors?.[0]?.code;
-          const errorMessage = signUpError.errors?.[0]?.message;
-
-          if (errorCode === "form_code_incorrect") {
-            showAlert("Invalid Code", "The verification code is incorrect. Please try again.");
-          } else if (errorCode === "verification_expired") {
-            showAlert("Code Expired", "This verification code has expired. Please request a new one.");
-          } else {
-            showAlert("Verification Failed", errorMessage || "Unable to verify code. Please try again.");
-          }
-          resetCode();
+          rejectCode(signUpError);
           setIsLoading(false);
           return;
         }
@@ -105,32 +113,24 @@ export default function EmailVerification({ navigation, route }) {
 
           if (result.status === "complete") {
             await setActiveSignIn({ session: result.createdSessionId });
-            showToast("Email verified — welcome back!", { type: "success" });
+            showToast("Email verified. Welcome back!", { type: "success" });
             setIsLoading(false);
             return;
           }
         } catch (signInError) {
           console.error("SignIn verification error:", signInError);
-          const errorCode = signInError.errors?.[0]?.code;
-          const errorMessage = signInError.errors?.[0]?.message;
-
-          if (errorCode === "form_code_incorrect") {
-            showAlert("Invalid Code", "The verification code is incorrect. Please try again.");
-          } else {
-            showAlert("Verification Failed", errorMessage || "Unable to verify code.");
-          }
-          resetCode();
+          rejectCode(signInError);
           setIsLoading(false);
           return;
         }
       }
 
       // If we get here, verification failed
-      showAlert("Verification Failed", "Unable to verify the code. Please try again.");
+      setCodeErr("Couldn't verify that code. Try again, or tap Resend.");
       resetCode();
     } catch (error) {
       console.error("Unexpected verification error:", error);
-      showAlert("Error", "An unexpected error occurred. Please try again.");
+      setFormErr("Something went wrong. Please try again.");
     } finally {
       setIsLoading(false);
     }
@@ -138,16 +138,18 @@ export default function EmailVerification({ navigation, route }) {
 
   const handleResendCode = async () => {
     if (!signUpLoaded && !signInLoaded) {
-      showAlert("Error", "Please wait, loading...");
+      setFormErr("Still getting ready. Try again in a moment.");
       return;
     }
 
+    setCodeErr("");
+    setFormErr("");
     setIsResending(true);
 
     try {
       if (signUp && signUpLoaded && !fromLogin) {
         await signUp.prepareEmailAddressVerification({ strategy: "email_code" });
-        showToast("New code sent — check your email.", { type: "success" });
+        showToast("New code sent. Check your email.", { type: "success" });
         resetCode();
       }
 
@@ -166,7 +168,7 @@ export default function EmailVerification({ navigation, route }) {
       }
     } catch (error) {
       console.error("Resend error:", error);
-      showAlert("Error", "Failed to resend code. Please try again.");
+      setFormErr(error?.errors ? "Couldn't send a new code. Please try again." : NETWORK_ERROR);
     } finally {
       setIsResending(false);
     }
@@ -196,6 +198,7 @@ export default function EmailVerification({ navigation, route }) {
               styles.codeInput,
               { backgroundColor: A.cyanField, color: A.ink },
               !!digit && styles.codeInputFilled,
+              !!codeErr && { borderColor: AUTH_ERROR },
             ]}
             value={digit}
             onChangeText={(text) => handleCodeChange(text, index)}
@@ -209,6 +212,8 @@ export default function EmailVerification({ navigation, route }) {
           />
         ))}
       </View>
+      <FieldError style={styles.codeErrorRow}>{codeErr}</FieldError>
+      <FormError>{formErr}</FormError>
 
       <TouchableOpacity
         style={[a.cta, busy && styles.disabled]}
@@ -278,6 +283,7 @@ const styles = StyleSheet.create({
     borderColor: 'transparent',
   },
   codeInputFilled: { borderColor: A.ink },
+  codeErrorRow:    { marginTop: -6, marginLeft: 4 },
 
   backRow: {
     flexDirection: 'row', alignItems: 'center', justifyContent: 'center',

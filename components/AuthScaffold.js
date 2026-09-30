@@ -152,6 +152,38 @@ export default function AuthScaffold({
   );
 }
 
+/* ── Validation messages ──────────────────────────────────────────────────
+   Every auth screen reports problems the same two ways:
+     FieldError — under the field it's about, next to a red field border.
+     FormError  — one box above the main button, for problems that aren't
+                  any single field's (wrong password, offline, rate limit).
+   Both are live regions, so a screen reader announces them as they appear. */
+export const AUTH_ERROR = "#8E1F16";
+
+export function FieldError({ children, style }) {
+  if (!children) return null;
+  return (
+    <View
+      style={[authStyles.fieldErrorRow, style]}
+      accessibilityLiveRegion="polite"
+      accessibilityRole="alert"
+    >
+      <Icon name="alert-circle" size={13} color={AUTH_ERROR} style={authStyles.fieldErrorIcon} />
+      <Text style={authStyles.errorText} maxFontSizeMultiplier={MAX_FONT_SCALE}>{children}</Text>
+    </View>
+  );
+}
+
+export function FormError({ children }) {
+  if (!children) return null;
+  return (
+    <View style={authStyles.errorBox} accessibilityLiveRegion="polite" accessibilityRole="alert">
+      <Icon name="alert-circle" size={15} color={AUTH_ERROR} />
+      <Text style={authStyles.errorBoxText} maxFontSizeMultiplier={MAX_FONT_SCALE}>{children}</Text>
+    </View>
+  );
+}
+
 /* ── Shared controls ──────────────────────────────────────────────────────
    The mockup's fields are pill-shaped with a tinted fill and an UPPERCASE,
    letter-spaced placeholder. That treatment is specific enough that every
@@ -206,14 +238,19 @@ export const authStyles = StyleSheet.create({
   linkMuted:{ fontFamily: fonts.sans, fontSize: 14.5, color: A.ink },
   linkBold: { fontFamily: fonts.sansBold, fontSize: 14.5, color: A.ink },
 
-  errorText: { fontFamily: fonts.sansMedium, fontSize: 12.5, color: "#8E1F16", marginTop: 6, marginLeft: 20 },
+  // Red border on a field that has an error — colour AND a message, never
+  // colour alone.
+  fieldInvalid:   { borderWidth: 1.5, borderColor: AUTH_ERROR },
+  fieldErrorRow:  { flexDirection: "row", alignItems: "flex-start", gap: 6, marginTop: 7, marginLeft: 18, marginRight: 8 },
+  fieldErrorIcon: { marginTop: 2 },
+  errorText: { flex: 1, fontFamily: fonts.sansMedium, fontSize: 12.5, lineHeight: 17, color: AUTH_ERROR },
   errorBox: {
     flexDirection: "row", alignItems: "center", gap: 8,
     backgroundColor: "rgba(142,31,22,0.10)",
     borderRadius: 14, paddingVertical: 11, paddingHorizontal: 14,
     borderWidth: 1, borderColor: "rgba(142,31,22,0.35)",
   },
-  errorBoxText: { flex: 1, fontFamily: fonts.sansMedium, fontSize: 13, color: "#8E1F16" },
+  errorBoxText: { flex: 1, fontFamily: fonts.sansMedium, fontSize: 13, lineHeight: 18, color: AUTH_ERROR },
 });
 
 const s = StyleSheet.create({
