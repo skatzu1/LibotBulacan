@@ -19,6 +19,7 @@ import * as ImageManipulator from 'expo-image-manipulator';
 import { useIsFocused } from '@react-navigation/native';
 import { useAuth } from '@clerk/clerk-expo';
 import { loadModel, runPrediction } from '../utils/missionAI';
+import { ensureAtSpotForPhoto, currentCoords } from '../utils/arLocationGate';
 import * as Haptics from "expo-haptics";
 import { useTheme, fonts } from '../context/ThemeContext';
 import { useMissions } from '../context/MissionContext';
@@ -247,7 +248,7 @@ export default function Mission({ navigation, route }) {
   };
 
   const { getToken } = useAuth();
-  const { completeMission: persistMissionComplete, completedMissions } = useMissions();
+  const { completeMission: persistMissionComplete, completedMissions, markCompleted } = useMissions();
   const alreadyCompleted = completedMissions?.includes(mission._id);
   const { colors, isDark } = useTheme();
   // Resolved here rather than in TYPE_CONFIG so it follows the active theme.
@@ -256,6 +257,9 @@ export default function Mission({ navigation, route }) {
   const styles = useMemo(() => makeStyles(C), [C]);
 
   const cameraRef = useRef(null);
+  // Where the phone was when the camera opened — the fallback if a fresh fix
+  // can't be had at the moment the photo is taken.
+  const photoCoordsRef = useRef(null);
   const { hasPermission, requestPermission } = useCameraPermission();
   const isFocused = useIsFocused();
   const [cameraOpen, setCameraOpen]     = useState(false);
@@ -314,6 +318,12 @@ export default function Mission({ navigation, route }) {
         return;
       }
     }
+    // The photo only counts if it's taken at the spot (the server checks the
+    // position sent with it), so say so now rather than after the photo.
+    const coords = await ensureAtSpotForPhoto(spot);
+    if (!coords) return;
+    photoCoordsRef.current = coords;
+
     setCapturedImage(null);
     setStatus('pending');
     setConfidence(null);
@@ -419,6 +429,8 @@ export default function Mission({ navigation, route }) {
     ]).start();
 
     const photo = await cameraRef.current.takePhoto({ enableShutterSound: false });
+    // Where the photo was taken — read alongside the crop, not after it.
+    const coordsNow = currentCoords();
     // vision-camera returns a bare filesystem path; <Image>, fetch() and
     // ImageManipulator all need the file:// scheme.
     const photoUri = photo.path.startsWith('file://') ? photo.path : `file://${photo.path}`;
@@ -426,6 +438,7 @@ export default function Mission({ navigation, route }) {
     // Crop down to exactly what the user saw inside the scan frame,
     // so the AI analyzes the same region the guide shows.
     const croppedUri = await cropToScanFrame(photoUri);
+    const coords = (await coordsNow) || photoCoordsRef.current;
 
     setCameraOpen(false);
     setCapturedImage(croppedUri);
@@ -433,11 +446,17 @@ export default function Mission({ navigation, route }) {
     setConfidence(null);
     setAttempts(prev => prev + 1);
 
-    const result = await runPrediction(croppedUri, mission._id, getToken);
+    const result = await runPrediction(croppedUri, mission._id, getToken, coords);
 
     if (!result) {
       showAlert('Error', 'Could not analyze image. Please try again.');
       setStatus('failed');
+      return;
+    }
+
+    if (result.error) {
+      showAlert('Not accepted', result.error);
+      setStatus('pending');
       return;
     }
 
@@ -451,8 +470,32 @@ export default function Mission({ navigation, route }) {
       return;
     }
 
+    if (result.tooFar) {
+      const away = result.distance >= 1000
+        ? `${(result.distance / 1000).toFixed(1)} km`
+        : `${result.distance} m`;
+      showAlert(
+        `You're not at ${spot?.name || 'the spot'}`,
+        `This photo was taken about ${away} away. Photo missions only count when the photo is taken at the spot itself.`
+      );
+      setStatus('pending');
+      return;
+    }
+
+    if (result.noLocation) {
+      showAlert(
+        'Not Ready Yet',
+        `This spot's location isn't set up yet, so its photo mission can't be checked. Check back soon!`
+      );
+      setStatus('pending');
+      return;
+    }
+
     setConfidence(typeof result.confidence === 'number' ? result.confidence : null);
     setStatus(result.verified ? 'approved' : 'failed');
+    // The server completed the mission and awarded its points along with the
+    // verification — reflect that straight away.
+    if (result.completed) markCompleted(mission._id);
   } catch (error) {
     console.error('Camera error:', error);
     setStatus('failed');
@@ -467,10 +510,9 @@ export default function Mission({ navigation, route }) {
     // and it awards points — it should register physically, not just visually.
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
 
-    // Persists to the backend (awards points + survives app restarts) and
-    // updates local state so InformationScreen's mission list reflects it
-    // immediately. Fire-and-forget — the confirmation shows regardless, and
-    // completeMission() is idempotent server-side if it's retried.
+    // The server already completed the mission and awarded its points when it
+    // verified the photo; this just confirms it (it answers alreadyCompleted)
+    // and keeps local state in step. Fire-and-forget and idempotent.
     persistMissionComplete(mission._id);
     showAlert(
       'Nice spotting!',
