@@ -466,6 +466,8 @@ export default function InformationScreen({ route, navigation }) {
     </TouchableOpacity>
   );
 
+  const showing3D = show3D && !!spot.modelUrl && isFocused;
+
   return (
     <KeyboardAvoidingView key={refreshKey} style={[styles.container, { backgroundColor: colors.background }]} behavior={Platform.OS === "ios" ? "padding" : "height"} keyboardVerticalOffset={0}>
       <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={colors.background} />
@@ -502,12 +504,14 @@ export default function InformationScreen({ route, navigation }) {
         {/* [0] Hero */}
         <View style={styles.heroWrap}>
           <View style={[styles.heroCard, { backgroundColor: colors.card }, shadow.md]}>
-            {show3D && spot.modelUrl && isFocused ? (
+            {showing3D ? (
               <ModelViewer url={spot.modelUrl} style={styles.heroImage} />
             ) : (
               <Image source={{ uri: spotImage(spot.image, 400, 260) }} style={styles.heroImage} resizeMode="cover" />
             )}
-            <PhotoScrim from={0.5} />
+            {/* Over the 3D view the scrim only needs to back the caption; from
+                halfway down it would dim the lower half of the model. */}
+            <PhotoScrim from={showing3D ? 0.72 : 0.5} />
             {reviewCount > 0 && (
               <View style={styles.heroRating}>
                 <Icon name="star" size={13} color={colors.accent} weight="fill" />
