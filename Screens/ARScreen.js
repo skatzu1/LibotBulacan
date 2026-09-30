@@ -135,6 +135,75 @@ const MODEL_BASE_OFFSET_Y = 4.525 * MODEL_SCALE;   // 0.362 m
 const MODEL_HEIGHT_M = (8.593 + 4.525) * MODEL_SCALE; // 1.05 m
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get("window");
 
+// ── Taps on the camera view ──────────────────────────────────────────────
+// Viro's click events (ViroClickStateTypes).
+const CLICK_UP = 2;
+const CLICKED  = 3;
+// A touch counts as a tap only if it is short and barely moves; anything
+// longer is the user moving the phone around with a finger on the glass.
+const TAP_MAX_MS      = 400;
+const TAP_MAX_MOVE_DP = 12;
+// One tap on the model can be reported twice (Viro's event + our own test).
+const MODEL_TAP_DEDUPE_MS = 700;
+// Forgiveness around the model's on-screen outline, in dp.
+const MODEL_TAP_SLOP_DP = 24;
+// Refocus: how long ARCore stays in FIXED focus before AUTO is restored (long
+// enough for the lens to actually move, so AUTO starts a fresh focus pass),
+// and the minimum gap between refocuses so tap-happy users don't thrash the
+// session config.
+const REFOCUS_FIXED_MS  = 300;
+const REFOCUS_GAP_MS    = 1200;
+
+const dot3 = (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2];
+
+/**
+ * Does a tap at (x, y) — view coordinates in dp — land on the model?
+ *
+ * Projects the corners of the model's invisible hit box (world space) onto the
+ * screen and checks the tap against their outline. `project` answers in the
+ * renderer's units, which are pixels on Android; rather than assume a density,
+ * it's calibrated on the spot: a point straight ahead of the camera projects
+ * to the centre of the view, so its projection divided by half the view size
+ * is the units-per-dp factor.
+ */
+async function modelHitTest({ x, y, view, hitNode, scene, sceneNavigator }) {
+  if (!hitNode || !scene || !view?.width || !view?.height) return false;
+
+  const [bbRes, cam] = await Promise.all([hitNode.getBoundingBoxAsync(), scene.getCameraOrientationAsync()]);
+  const b = bbRes?.boundingBox;
+  if (!b || !cam?.position || !cam?.forward) return false;
+
+  const corners = [];
+  for (const cx of [b.minX, b.maxX]) for (const cy of [b.minY, b.maxY]) for (const cz of [b.minZ, b.maxZ]) {
+    corners.push([cx, cy, cz]);
+  }
+  // Only corners in front of the camera. A point behind it still projects —
+  // mirrored — onto the screen, which would register taps on empty sky.
+  const ahead = corners.filter((p) => dot3(p.map((v, i) => v - cam.position[i]), cam.forward) > 0.05);
+  if (!ahead.length) return false;
+
+  const straightAhead = cam.position.map((p, i) => p + cam.forward[i]);
+  const [mid, ...proj] = await Promise.all(
+    [straightAhead, ...ahead].map((p) => sceneNavigator.project(p))
+  );
+  const kx = mid?.screenPosition?.[0] / (view.width / 2);
+  const ky = mid?.screenPosition?.[1] / (view.height / 2);
+  // A calibration that makes no sense (session not ready, odd return) means
+  // "don't know" — fall back to Viro's own click rather than guess.
+  if (!(kx > 0.25 && kx < 6 && ky > 0.25 && ky < 6)) return false;
+
+  const xs = proj.map((r) => r?.screenPosition?.[0] / kx).filter(Number.isFinite);
+  const ys = proj.map((r) => r?.screenPosition?.[1] / ky).filter(Number.isFinite);
+  if (!xs.length || !ys.length) return false;
+
+  const hit = x >= Math.min(...xs) - MODEL_TAP_SLOP_DP && x <= Math.max(...xs) + MODEL_TAP_SLOP_DP
+           && y >= Math.min(...ys) - MODEL_TAP_SLOP_DP && y <= Math.max(...ys) + MODEL_TAP_SLOP_DP;
+  if (__DEV__) {
+    console.log(`[AR tap] ${hit ? "model" : "miss"} at ${x.toFixed(0)},${y.toFixed(0)}; model x ${Math.min(...xs).toFixed(0)}–${Math.max(...xs).toFixed(0)} y ${Math.min(...ys).toFixed(0)}–${Math.max(...ys).toFixed(0)}; units/dp ${kx.toFixed(2)}`);
+  }
+  return hit;
+}
+
 // ─────────────────────────────────────────────
 // HAPTICS
 // ─────────────────────────────────────────────
@@ -479,6 +548,64 @@ const GroundReticle = () => {
   );
 };
 
+// Feedback for tap-to-refocus: camera-style corner brackets that settle and
+// fade. They appear in the MIDDLE of the frame rather than under the finger,
+// because that's what ARCore's autofocus actually meters — a ring under the
+// finger would promise a "focus here" that ARCore can't do.
+const FocusRing = ({ pulse }) => {
+  const anim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (!pulse) return undefined;
+    anim.setValue(0);
+    const run = Animated.timing(anim, { toValue: 1, duration: 950, easing: Easing.out(Easing.cubic), useNativeDriver: true });
+    run.start();
+    return () => run.stop();
+  }, [pulse]);
+
+  if (!pulse) return null;
+  return (
+    <View style={focusSt.wrap} pointerEvents="none" accessibilityLiveRegion="polite" accessibilityLabel="Focusing">
+      <Animated.View
+        style={[
+          focusSt.box,
+          {
+            opacity:   anim.interpolate({ inputRange: [0, 0.15, 0.7, 1], outputRange: [0, 1, 1, 0] }),
+            transform: [{ scale: anim.interpolate({ inputRange: [0, 0.35, 1], outputRange: [1.35, 1, 1] }) }],
+          },
+        ]}
+      >
+        <View style={[focusSt.corner, focusSt.tl]} />
+        <View style={[focusSt.corner, focusSt.tr]} />
+        <View style={[focusSt.corner, focusSt.bl]} />
+        <View style={[focusSt.corner, focusSt.br]} />
+      </Animated.View>
+      <Animated.Text
+        style={[focusSt.label, { opacity: anim.interpolate({ inputRange: [0, 0.2, 0.7, 1], outputRange: [0, 1, 1, 0] }) }]}
+      >
+        Focusing
+      </Animated.Text>
+    </View>
+  );
+};
+
+const FOCUS_BOX = 88;
+const focusSt = StyleSheet.create({
+  wrap:   { ...StyleSheet.absoluteFillObject, alignItems: "center", justifyContent: "center" },
+  box:    { width: FOCUS_BOX, height: FOCUS_BOX },
+  corner: { position: "absolute", width: 22, height: 22, borderColor: TOKEN.gold },
+  tl:     { top: 0,    left: 0,  borderTopWidth: 2.5,    borderLeftWidth: 2.5,  borderTopLeftRadius: 6 },
+  tr:     { top: 0,    right: 0, borderTopWidth: 2.5,    borderRightWidth: 2.5, borderTopRightRadius: 6 },
+  bl:     { bottom: 0, left: 0,  borderBottomWidth: 2.5, borderLeftWidth: 2.5,  borderBottomLeftRadius: 6 },
+  br:     { bottom: 0, right: 0, borderBottomWidth: 2.5, borderRightWidth: 2.5, borderBottomRightRadius: 6 },
+  label: {
+    marginTop: 10,
+    color: TOKEN.textPrimary, fontFamily: fonts.sansBold, fontSize: 12, letterSpacing: 0.4,
+    backgroundColor: "rgba(6,18,20,0.55)", paddingHorizontal: 10, paddingVertical: 4,
+    borderRadius: 10, overflow: "hidden",
+  },
+});
+
 // ─────────────────────────────────────────────
 // HOW-IT-WORKS GUIDE
 // ─────────────────────────────────────────────
@@ -679,22 +806,59 @@ function computeAnchorProximities(spot, userLat, userLon, accuracyMeters) {
 // removed from the scene outright and cannot come back until the user leaves
 // AR and re-enters, so "this one is already done" is not a state this
 // component can ever be in.
-const ModelOnPlane = ({ spot, anchorLabel, onModelClick, onModelError, onPlacedChange, geoPosition = null }) => {
+const ModelOnPlane = ({ spot, anchorLabel, onModelClick, onModelError, onPlacedChange, tapBridge, geoPosition = null }) => {
   // The model only renders once ARCore finds a HORIZONTAL surface — i.e. once
   // the camera has actually seen the ground. That's the step users get stuck
   // on, and nothing was reporting it outward: the HUD said "TAP THE OBJECT" as
   // soon as ARCore tracking went normal, which happens well before any plane is
   // found. People were being told to tap something that wasn't on screen yet.
-  const [, setPlaced]                     = useState(false);
+  const [placed, setPlaced]               = useState(false);
   const [animationName, setAnimationName] = useState("slowSpin");
   const [animationLoop, setAnimationLoop] = useState(true);
   const [animationRun, setAnimationRun]   = useState(true);
 
   const handleClick = () => {
+    // One tap can now arrive by two routes — Viro's own click event and the
+    // screen-level tap test in ARScreen (see `tapBridge`) — so the second
+    // one inside this window is the same tap, not a new one.
+    const now = Date.now();
+    if (now - tapBridge.lastModelTapAt < MODEL_TAP_DEDUPE_MS) return;
+    tapBridge.lastModelTapAt = now;
+
     setAnimationName("wiggle");
     setAnimationLoop(false);
     setAnimationRun(true);
     onModelClick();
+  };
+
+  // Hand ARScreen a way to "tap" this model from outside the Viro scene. A ref
+  // keeps it pointing at the current render's handler without re-registering.
+  const clickRef = useRef(handleClick);
+  clickRef.current = handleClick;
+  useEffect(() => {
+    const tap = () => clickRef.current();
+    tapBridge.tapModel = tap;
+    return () => { if (tapBridge.tapModel === tap) tapBridge.tapModel = null; };
+  }, [tapBridge]);
+
+  // The nodes exist before a plane is found, just not on screen — so the
+  // screen-level tap test only runs once the model is really standing somewhere.
+  const onScreen = !!geoPosition || placed;
+  useEffect(() => {
+    tapBridge.placed = onScreen;
+    return () => { tapBridge.placed = false; };
+  }, [tapBridge, onScreen]);
+
+  // Viro only reports CLICKED when it sees BOTH the press and the release land
+  // on this node. On Android a quick first tap usually didn't qualify — the
+  // model needed a second tap at the same spot, or a swipe. That pattern fits
+  // the press being hit-tested before the new touch position reaches the
+  // renderer (inferred from the behaviour, not read from Viro's native code).
+  // CLICK_UP alone is therefore taken as the tap, and ARScreen also tests taps
+  // itself (see `tapBridge`). Nothing in this scene is dragged, so a touch that
+  // ends on the model can only mean "open it".
+  const handleClickState = (state) => {
+    if (state === CLICK_UP || state === CLICKED) handleClick();
   };
 
   const handleAnimationFinish = () => {
@@ -751,12 +915,9 @@ const ModelOnPlane = ({ spot, anchorLabel, onModelClick, onModelError, onPlacedC
           loop:     animationLoop,
           onFinish: handleAnimationFinish,
         }}
-        // `onClick`, not `onClickState` with state 1.
-        //
-        // State 1 is CLICK_DOWN — it fires the moment a press *begins* on
-        // the object. Viro calls `onClick` exactly when clickState == CLICKED
-        // (see ViroBase.tsx), i.e. a completed down+up on this object.
-        onClick={handleClick}
+        // CLICK_UP or CLICKED — see handleClickState. Never CLICK_DOWN: that
+        // fires the moment a press begins, before it's known to be a tap.
+        onClickState={handleClickState}
         // Report upward as well as logging. A console.warn alone meant a
         // failed model (404, dead link, corrupt .glb) looked identical to
         // "the object just hasn't appeared yet" — the user stood there
@@ -781,11 +942,13 @@ const ModelOnPlane = ({ spot, anchorLabel, onModelClick, onModelError, onPlacedC
           guaranteed to stay in the hit-test pass, and 1% is invisible in
           practice. */}
       <ViroBox
+        // Also the shape ARScreen's own tap test projects onto the screen.
+        ref={(node) => { tapBridge.hitNode = node; }}
         position={[0, MODEL_HEIGHT_M / 2, offsetZ]}
         scale={[1.0, MODEL_HEIGHT_M + 0.3, 0.9]}
         opacity={0.01}
         materials={["hitTarget"]}
-        onClick={handleClick}
+        onClickState={handleClickState}
       />
       {/* Sits just above the model's head rather than through its middle. */}
       <ViroText
@@ -833,8 +996,21 @@ const ModelOnPlane = ({ spot, anchorLabel, onModelClick, onModelError, onPlacedC
 };
 
 const ARScene = ({ sceneNavigator }) => {
-  const { spot, activeAnchors, focusAnchor, onModelClick, onTrackingChange, onModelError, onPlacedChange, onGeoStatus, onGeoHeading } =
+  const { spot, activeAnchors, focusAnchor, onModelClick, onTrackingChange, onModelError, onPlacedChange, onGeoStatus, onGeoHeading, tapBridge } =
     sceneNavigator.viroAppProps;
+
+  // Lets ARScreen ask "was that tap on the model?" — it sees the touch, but
+  // only the scene can reach the camera pose, the projection and the node.
+  const sceneRef = useRef(null);
+  useEffect(() => {
+    const hitTest = (x, y, view) => modelHitTest({
+      x, y, view, sceneNavigator,
+      hitNode: tapBridge.placed ? tapBridge.hitNode : null,
+      scene: sceneRef.current,
+    });
+    tapBridge.hitTest = hitTest;
+    return () => { if (tapBridge.hitTest === hitTest) tapBridge.hitTest = null; };
+  }, [tapBridge, sceneNavigator]);
 
   // ── ARCore Geospatial ────────────────────────────────────────────────────
   // Where VPS has coverage, the model is anchored to the landmark's actual
@@ -987,7 +1163,7 @@ const ARScene = ({ sceneNavigator }) => {
   }, [tracking, hasActiveAnchors, sceneNavigator, onGeoHeading]);
 
   if (!tracking) {
-    return <ViroARScene onTrackingUpdated={handleTracking} />;
+    return <ViroARScene ref={sceneRef} onTrackingUpdated={handleTracking} />;
   }
 
   // EXACTLY ONE model, and only when it is that model's turn.
@@ -1008,11 +1184,11 @@ const ARScene = ({ sceneNavigator }) => {
   // arrive (poor light, blank wall, session still starting). The HUD says the
   // same thing in plain React Native views that cannot crash.
   if (!focusAnchor) {
-    return <ViroARScene onTrackingUpdated={handleTracking} />;
+    return <ViroARScene ref={sceneRef} onTrackingUpdated={handleTracking} />;
   }
 
   return (
-    <ViroARScene onTrackingUpdated={handleTracking}>
+    <ViroARScene ref={sceneRef} onTrackingUpdated={handleTracking}>
       <ModelOnPlane
         key={focusAnchor.index}
         spot={spot}
@@ -1020,6 +1196,7 @@ const ARScene = ({ sceneNavigator }) => {
         onModelClick={() => onModelClick(focusAnchor)}
         onModelError={onModelError}
         onPlacedChange={onPlacedChange}
+        tapBridge={tapBridge}
         geoPosition={geoAnchors[focusAnchor.index] || null}
       />
     </ViroARScene>
@@ -1431,6 +1608,70 @@ export default function ARScreen({ route, navigation }) {
   // radar. A store rather than state, so these updates never re-render this
   // (very large) component — see utils/headingSource.js.
   const geoHeadingStore = useMemo(() => createValueStore(null), []);
+
+  // ── Taps on the camera view: open the model, or refocus ─────────────────
+  // A plain mutable object shared with the Viro scene (like geoHeadingStore,
+  // it never triggers a render). The scene fills in `hitTest`, `hitNode`,
+  // `tapModel` and `placed`; this screen reads them.
+  const tapBridge = useMemo(() => ({
+    hitTest: null, hitNode: null, tapModel: null, placed: false, lastModelTapAt: 0,
+  }), []);
+  const arViewRef   = useRef({ width: 0, height: 0 });
+  const touchRef    = useRef(null);
+  const refocusRef  = useRef({ at: 0, timer: null });
+  // Drives ViroARSceneNavigator's `autofocus` — flipped off and back on to
+  // force a refocus (see refocus()).
+  const [autofocusOn, setAutofocusOn] = useState(true);
+  const [focusPulse, setFocusPulse]   = useState(0);
+
+  useEffect(() => () => clearTimeout(refocusRef.current.timer), []);
+
+  // ARCore has no "focus here" — no tap-to-focus region at all. What it does
+  // have is continuous AUTO focus, which meters the middle of the frame and
+  // only re-hunts when it decides the scene changed. Dropping to FIXED for a
+  // moment moves the lens, and restoring AUTO makes it run a fresh focus pass
+  // right now. The session config is rebuilt from all of Viro's settings on
+  // each change (VROARSessionARCore::updateARCoreConfig), so Geospatial and
+  // plane finding stay as they were.
+  const refocus = () => {
+    const now = Date.now();
+    if (now - refocusRef.current.at < REFOCUS_GAP_MS) return;
+    refocusRef.current.at = now;
+    buzz.tick();
+    setFocusPulse((n) => n + 1);
+    setAutofocusOn(false);
+    clearTimeout(refocusRef.current.timer);
+    refocusRef.current.timer = setTimeout(() => setAutofocusOn(true), REFOCUS_FIXED_MS);
+  };
+
+  const handleSceneTap = async (x, y) => {
+    if (tapBridge.hitTest && tapBridge.tapModel) {
+      const hit = await tapBridge.hitTest(x, y, arViewRef.current).catch(() => false);
+      if (hit) { tapBridge.tapModel?.(); return; }
+    }
+    // Viro's own click may already have opened the model for this same tap.
+    if (Date.now() - tapBridge.lastModelTapAt < MODEL_TAP_DEDUPE_MS) return;
+    refocus();
+  };
+
+  // Observes touches on the camera view without claiming them — plain
+  // onTouchStart/End, not the responder system, so Viro still receives every
+  // touch for its own click handling.
+  const onArTouchStart = (e) => {
+    const t = e.nativeEvent;
+    touchRef.current = (t.touches?.length ?? 1) > 1
+      ? null                                        // pinch / two fingers: not a tap
+      : { x: t.pageX, y: t.pageY, at: Date.now() };
+  };
+  const onArTouchEnd = (e) => {
+    const start = touchRef.current;
+    touchRef.current = null;
+    if (!start) return;
+    const t = e.nativeEvent;
+    const moved = Math.hypot(t.pageX - start.x, t.pageY - start.y);
+    if (Date.now() - start.at > TAP_MAX_MS || moved > TAP_MAX_MOVE_DP) return;
+    handleSceneTap(t.pageX, t.pageY);
+  };
 
   useEffect(() => {
     let cancelled = false;
@@ -2053,6 +2294,15 @@ export default function ARScreen({ route, navigation }) {
     <View style={main.root}>
       <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
 
+      {/* Watches taps on the camera view (see onArTouchStart). The HUD and
+          buttons are siblings drawn on top, so their taps never land here. */}
+      <View
+        style={main.arView}
+        onLayout={(e) => { arViewRef.current = e.nativeEvent.layout; }}
+        onTouchStart={onArTouchStart}
+        onTouchEnd={onArTouchEnd}
+        onTouchCancel={() => { touchRef.current = null; }}
+      >
       <ViroARSceneNavigator
         initialScene={{ scene: ARScene }}
         // ARCore's default is FIXED focus, set near the hyperfocal distance for
@@ -2060,8 +2310,8 @@ export default function ARScreen({ route, navigation }) {
         // plaque, a statue, the ground the model stands on) is soft. `autofocus`
         // switches the session to continuous AUTO focus; Viro wires it through
         // to ArConfig_setFocusMode on Android and the ARKit session on iOS.
-        // ARCore offers no tap-to-focus region, so continuous AF is the control.
-        autofocus
+        // It's only ever false for a moment, during a tap-to-refocus.
+        autofocus={autofocusOn}
         viroAppProps={{
           spot,
           // `activeAnchors` is still every in-range anchor, because the
@@ -2077,9 +2327,14 @@ export default function ARScreen({ route, navigation }) {
           onPlacedChange:   setModelPlaced,
           onGeoStatus:      setGeoStatus,
           onGeoHeading:     geoHeadingStore.set,
+          tapBridge,
         }}
         style={{ flex: 1 }}
       />
+      </View>
+
+      {/* Tap anywhere that isn't the model → the camera refocuses. */}
+      <FocusRing pulse={focusPulse} />
 
       {/* While the user still has to walk somewhere, the camera feed is not the
           task — it's a distraction that makes the screen look like it should
@@ -2277,6 +2532,7 @@ const main = StyleSheet.create({
   root: { flex: 1, backgroundColor: TOKEN.bg },
   // Not opaque — the camera stays visible so the phone doesn't feel broken,
   // just clearly backgrounded while walking is the job.
+  arView:      { flex: 1 },
   travelScrim: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(6,18,20,0.62)" },
   topBar: {
     position:       "absolute",
