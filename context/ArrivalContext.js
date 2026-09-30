@@ -316,8 +316,8 @@ async function promptForAllTimeLocation() {
   } catch (_) {}
 
   const proceed = await confirmAsync(
-    "Get arrival alerts even when Libot is closed?",
-    `Libot uses your location in the background — even when the app is closed or not in use — to let you know when you arrive at a tourist spot and log your visit. On the next screen, choose "Allow all the time". You can change this anytime in Settings.`,
+    "Background location access needed",
+    `For a better experience, Libot needs access to your location in the background — even when the app is closed or not in use — so it can alert you when you arrive at a tourist spot and log your visit. On the next screen, choose "Allow all the time".`,
     { confirmText: "Continue", cancelText: "Not now", icon: "map-pin", tone: "info" },
   );
   if (!proceed) return false;
@@ -330,8 +330,8 @@ async function promptForAllTimeLocation() {
     }
     if (res.canAskAgain === false) {
       const openSettings = await confirmAsync(
-        `Turn on "Allow all the time" in Settings`,
-        `Android won't ask again from inside Libot. In Settings > Permissions > Location, choose "Allow all the time".`,
+        "Background location access needed",
+        `For a better experience, turn it on in Settings: Permissions > Location > "Allow all the time".`,
         { confirmText: "Go to Settings", cancelText: "Not now", icon: "map-pin", tone: "info" },
       );
       if (openSettings) Linking.openSettings();

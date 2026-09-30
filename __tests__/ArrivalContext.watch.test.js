@@ -179,7 +179,7 @@ describe('"Allow all the time" (background location)', () => {
   afterEach(() => { Platform.OS = realOS; });
 
   const disclosure = () =>
-    showAlert.mock.calls.find(([title]) => /even when Libot is closed/.test(title));
+    showAlert.mock.calls.find(([title]) => /Background location access needed/.test(title));
   const press = async (label) => {
     await act(async () => { disclosure()[2].find((b) => b.text === label).onPress(); });
     await settle();
