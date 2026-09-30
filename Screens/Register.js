@@ -10,14 +10,17 @@ import {
   Linking,
 } from "react-native";
 import { showAlert, showToast } from "../components/AppAlert";
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import CheckBox from "expo-checkbox";
 import { useSignUp, useOAuth } from "@clerk/clerk-expo";
 import * as WebBrowser from "expo-web-browser";
 import { authAPI } from "../api";
 import { auth as A, fonts, MAX_FONT_SCALE } from "../context/ThemeContext";
 import { TERMS_URL as TERMS_OF_SERVICE_URL, PRIVACY_URL as PRIVACY_POLICY_URL } from "../utils/legalLinks";
-import AuthScaffold, { authStyles as a } from "../components/AuthScaffold";
+import AuthScaffold, { authStyles as a, FieldError, FormError, AUTH_ERROR } from "../components/AuthScaffold";
+import {
+  nameError, emailError, dobError, clerkErrorToField, TERMS_ERROR,
+} from "../utils/authValidation";
 import Icon from "../components/Icon";
 
 // Same full-screen background as sign-in; it carries its own cyan→yellow wash.
@@ -50,10 +53,6 @@ function getStrength(password) {
   if (passed === 2) return { level: 1, ...STRENGTH[1] };
   if (passed === 3) return { level: 2, ...STRENGTH[2] };
   return              { level: 3, ...STRENGTH[3] };
-}
-
-function isValidEmail(email) {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
 }
 
 async function openLink(url) {
@@ -110,6 +109,22 @@ function PasswordStrengthPanel({ password }) {
   );
 }
 
+// ── Validation ────────────────────────────────────────────────────
+// Rules and wording are shared with the other auth screens
+// (utils/authValidation). The password additionally has to reach "Good"
+// on the strength meter below, i.e. meet 3 of the 4 rules.
+function validateRegister({ name, email, password, dob }) {
+  const e = {};
+  const n = nameError(name);   if (n) e.name = n;
+  const m = emailError(email); if (m) e.email = m;
+  if (!password) e.password = "Enter a password.";
+  else if (getStrength(password).level < 2) e.password = "Too weak. Meet at least 3 of the rules below.";
+  const d = dobError(dob);     if (d) e.dob = d;
+  return e;
+}
+
+const FIELD_ORDER = ["name", "email", "password", "dob"];
+
 // ── Main Component ────────────────────────────────────────────────
 export default function Register({ navigation }) {
   const { isLoaded, signUp, setActive } = useSignUp();
@@ -124,9 +139,32 @@ export default function Register({ navigation }) {
   const [isLoading, setIsLoading]         = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
 
-  // Inline validation errors (shown after field blur)
-  const [errors, setErrors] = useState({});
-  const [touched, setTouched] = useState({});
+  // A field's error shows once the user has left it (or pressed Sign up), and
+  // from then on it's recomputed on every keystroke — so it disappears the
+  // moment the value is fixed, instead of waiting for the next blur.
+  const [touched, setTouched]           = useState({});
+  // Errors the server gave back for a field (e.g. "email already exists").
+  // Cleared as soon as that field is edited.
+  const [serverErrors, setServerErrors] = useState({});
+  const [termsError, setTermsError]     = useState("");
+  const [formError, setFormError]       = useState("");
+
+  const inputRefs = { name: useRef(null), email: useRef(null), password: useRef(null), dob: useRef(null) };
+
+  const clientErrors = useMemo(
+    () => validateRegister({ name, email, password, dob }),
+    [name, email, password, dob]
+  );
+  const errorFor = (field) => serverErrors[field] || (touched[field] ? clientErrors[field] : null);
+
+  const touch = (field) => setTouched((prev) => (prev[field] ? prev : { ...prev, [field]: true }));
+
+  // Every field's onChangeText goes through here.
+  const edit = (field, setter) => (value) => {
+    setter(value);
+    if (serverErrors[field]) setServerErrors((prev) => ({ ...prev, [field]: null }));
+    if (formError) setFormError("");
+  };
 
   useEffect(() => {
     WebBrowser.warmUpAsync();
@@ -134,45 +172,6 @@ export default function Register({ navigation }) {
       if (Platform.OS !== "android") WebBrowser.coolDownAsync();
     };
   }, []);
-
-  // ── Validation logic ──
-  const validate = useCallback(() => {
-    const e = {};
-    if (!name.trim())            e.name     = "Full name is required.";
-    if (!email.trim())           e.email    = "Email address is required.";
-    else if (!isValidEmail(email)) e.email  = "Enter a valid email address.";
-    if (!password)               e.password = "Password is required.";
-    else if (getStrength(password).level < 2)
-                                 e.password = "Password is too weak.";
-
-    // Date of birth (single masked field, MM/DD/YYYY)
-    const digits = dob.replace(/\D/g, "");
-    if (digits.length < 8) {
-      e.dob = "Date of birth is required.";
-    } else {
-      const m = parseInt(digits.slice(0, 2), 10);
-      const d = parseInt(digits.slice(2, 4), 10);
-      const y = parseInt(digits.slice(4, 8), 10);
-      if (m < 1 || m > 12 || d < 1 || d > 31 || y < 1900 || y > new Date().getFullYear()) {
-        e.dob = "Enter a valid date of birth.";
-      } else {
-        const parsed = new Date(y, m - 1, d);
-        const isRealDate =
-          parsed.getFullYear() === y && parsed.getMonth() === m - 1 && parsed.getDate() === d;
-        if (!isRealDate) e.dob = "Enter a valid date of birth.";
-        else if (parsed > new Date()) e.dob = "Date of birth can't be in the future.";
-      }
-    }
-    return e;
-  }, [name, email, password, dob]);
-
-  const handleBlur = (field) => {
-    setTouched((prev) => ({ ...prev, [field]: true }));
-    const errs = validate();
-    setErrors((prev) => ({ ...prev, [field]: errs[field] }));
-  };
-
-  const fieldError = (field) => (touched[field] ? errors[field] : null);
 
   // ── Date of Birth masked input helper ──
   // Formats raw digit entry into MM/DD/YYYY as the user types.
@@ -184,31 +183,47 @@ export default function Register({ navigation }) {
     } else if (digits.length > 2) {
       formatted = `${digits.slice(0, 2)}/${digits.slice(2)}`;
     }
-    setDob(formatted);
+    edit("dob", setDob)(formatted);
   };
 
-  const handleDobBlur = () => handleBlur("dob");
+  const requireTerms = () => {
+    if (agreeToTerms) return true;
+    setTermsError(TERMS_ERROR);
+    return false;
+  };
+
+  // Puts a Clerk error under the field it's about, or in the form-level box.
+  const showServerError = (err) => {
+    const { field, message } = clerkErrorToField(err);
+    if (field && FIELD_ORDER.includes(field)) {
+      setServerErrors((prev) => ({ ...prev, [field]: message }));
+      inputRefs[field].current?.focus();
+    } else {
+      setFormError(message);
+    }
+  };
 
   // ── Google signup ──
   const handleGoogleSignUp = async () => {
     if (isGoogleLoading || !isLoaded) return;
-    if (!agreeToTerms) {
-      showAlert("Terms Required", "Please agree to the Terms of Service and Privacy Policy to continue.");
-      return;
-    }
+    setFormError("");
+    if (!requireTerms()) return;
     setIsGoogleLoading(true);
     try {
       const { createdSessionId } = await startOAuthFlow();
       if (!createdSessionId) throw new Error("No session returned from Google OAuth");
       await setActive({ session: createdSessionId });
       const saveUserResult = await authAPI.register({ clerkSessionId: createdSessionId, isGoogle: true });
-      if (!saveUserResult.success)
-        return showAlert("Sign Up Failed", saveUserResult.message || "Could not save user");
+      if (!saveUserResult.success) {
+        setFormError(saveUserResult.message || "Couldn't finish creating your account. Please try again.");
+        return;
+      }
       showToast("Account created with Google!", { type: "success" });
       navigation.navigate("Home");
     } catch (err) {
+      if (err?.code === "user-cancelled" || err?.code === "browser-closed") return;
       console.error("Google Sign Up Error:", err);
-      showAlert("Sign Up Failed", err.message || "Unable to sign up with Google.");
+      setFormError("Couldn't sign up with Google. Please try again.");
     } finally {
       setIsGoogleLoading(false);
     }
@@ -216,16 +231,18 @@ export default function Register({ navigation }) {
 
   // ── Email signup ──
   const handleRegister = async () => {
-    // Mark all fields touched so errors surface
+    setFormError("");
     setTouched({ name: true, email: true, password: true, dob: true });
-    const errs = validate();
-    setErrors(errs);
 
-    if (Object.keys(errs).length > 0) return;
-    if (!agreeToTerms)
-      return showAlert("Terms Required", "Please agree to the Terms of Service and Privacy Policy to continue.");
-    if (!isLoaded)
-      return showAlert("Error", "Authentication system is loading. Please wait.");
+    const firstBad = FIELD_ORDER.find((f) => clientErrors[f] || serverErrors[f]);
+    const termsOk = requireTerms();
+    if (firstBad) {
+      // Straight to the first thing that needs fixing.
+      inputRefs[firstBad].current?.focus();
+      return;
+    }
+    if (!termsOk) return;
+    if (!isLoaded) return setFormError("Still getting ready. Try again in a moment.");
 
     setIsLoading(true);
     try {
@@ -238,14 +255,7 @@ export default function Register({ navigation }) {
       });
     } catch (err) {
       console.error("Email Registration Error:", err);
-      const errorCode    = err.errors?.[0]?.code;
-      const errorMessage = err.errors?.[0]?.message;
-      if (errorCode === "form_identifier_exists") {
-        setErrors((prev) => ({ ...prev, email: "An account with this email already exists." }));
-        setTouched((prev) => ({ ...prev, email: true }));
-      } else {
-        showAlert("Registration Failed", errorMessage || "Unable to register. Please try again.");
-      }
+      showServerError(err);
     } finally {
       setIsLoading(false);
     }
@@ -254,10 +264,10 @@ export default function Register({ navigation }) {
   const anyLoading = isLoading || isGoogleLoading;
   const disabled   = anyLoading || !isLoaded;
 
-  const field = (hasError) => [
+  const field = (key) => [
     a.field,
     { backgroundColor: A.yellowField },
-    hasError && styles.fieldError,
+    !!errorFor(key) && a.fieldInvalid,
   ];
 
   return (
@@ -298,48 +308,64 @@ export default function Register({ navigation }) {
       {/* Full name */}
       <View>
         <TextInput
-          style={field(fieldError("name"))}
+          ref={inputRefs.name}
+          style={field("name")}
           placeholder="FULL NAME"
           placeholderTextColor={A.muted}
           value={name}
-          onChangeText={setName}
-          onBlur={() => handleBlur("name")}
+          onChangeText={edit("name", setName)}
+          onBlur={() => touch("name")}
+          autoCapitalize="words"
+          autoComplete="name"
+          textContentType="name"
+          returnKeyType="next"
+          onSubmitEditing={() => inputRefs.email.current?.focus()}
           editable={!anyLoading}
           accessibilityLabel="Full name"
           maxFontSizeMultiplier={MAX_FONT_SCALE}
         />
-        {!!fieldError("name") && <Text style={a.errorText}>{fieldError("name")}</Text>}
+        <FieldError>{errorFor("name")}</FieldError>
       </View>
 
       {/* Email */}
       <View>
         <TextInput
-          style={field(fieldError("email"))}
+          ref={inputRefs.email}
+          style={field("email")}
           placeholder="EMAIL"
           placeholderTextColor={A.muted}
           value={email}
-          onChangeText={setEmail}
-          onBlur={() => handleBlur("email")}
+          onChangeText={edit("email", setEmail)}
+          onBlur={() => touch("email")}
           keyboardType="email-address"
           autoCapitalize="none"
+          autoComplete="email"
+          textContentType="emailAddress"
+          returnKeyType="next"
+          onSubmitEditing={() => inputRefs.password.current?.focus()}
           editable={!anyLoading}
           accessibilityLabel="Email address"
           maxFontSizeMultiplier={MAX_FONT_SCALE}
         />
-        {!!fieldError("email") && <Text style={a.errorText}>{fieldError("email")}</Text>}
+        <FieldError>{errorFor("email")}</FieldError>
       </View>
 
       {/* Password */}
       <View>
         <View style={a.fieldRow}>
           <TextInput
-            style={[...field(fieldError("password")), { paddingRight: 60 }]}
+            ref={inputRefs.password}
+            style={[...field("password"), { paddingRight: 60 }]}
             placeholder="PASSWORD"
             placeholderTextColor={A.muted}
             secureTextEntry={!passwordVisible}
             value={password}
-            onChangeText={setPassword}
-            onBlur={() => handleBlur("password")}
+            onChangeText={edit("password", setPassword)}
+            onBlur={() => touch("password")}
+            autoComplete="new-password"
+            textContentType="newPassword"
+            returnKeyType="next"
+            onSubmitEditing={() => inputRefs.dob.current?.focus()}
             editable={!anyLoading}
             accessibilityLabel="Password"
             maxFontSizeMultiplier={MAX_FONT_SCALE}
@@ -354,7 +380,7 @@ export default function Register({ navigation }) {
             <Icon name={passwordVisible ? "eye-off" : "eye"} size={20} color={A.muted} />
           </TouchableOpacity>
         </View>
-        {!!fieldError("password") && <Text style={a.errorText}>{fieldError("password")}</Text>}
+        <FieldError>{errorFor("password")}</FieldError>
         <PasswordStrengthPanel password={password} />
       </View>
 
@@ -362,44 +388,50 @@ export default function Register({ navigation }) {
       <View>
         <Text style={a.label}>DATE OF BIRTH</Text>
         <TextInput
-          style={field(fieldError("dob"))}
+          ref={inputRefs.dob}
+          style={field("dob")}
           placeholder="MM/DD/YYYY"
           placeholderTextColor={A.muted}
           value={dob}
           onChangeText={handleDobChange}
-          onBlur={handleDobBlur}
+          onBlur={() => touch("dob")}
           keyboardType="number-pad"
           maxLength={10}
           editable={!anyLoading}
           accessibilityLabel="Date of birth, month slash day slash year"
           maxFontSizeMultiplier={MAX_FONT_SCALE}
         />
-        {!!fieldError("dob") && <Text style={a.errorText}>{fieldError("dob")}</Text>}
+        <FieldError>{errorFor("dob")}</FieldError>
       </View>
 
       {/* Terms */}
-      <View style={styles.termsRow}>
-        <CheckBox
-          value={agreeToTerms}
-          onValueChange={setAgreeToTerms}
-          color={agreeToTerms ? A.ink : undefined}
-          style={styles.checkbox}
-          accessibilityLabel="Agree to the Terms and Conditions"
-        />
-        <Text style={styles.termsText} maxFontSizeMultiplier={MAX_FONT_SCALE}>
-          Agree to the{" "}
-          <Text style={styles.termsLink} onPress={() => openLink(TERMS_OF_SERVICE_URL)}>
-            Terms and Conditions
+      <View>
+        <View style={styles.termsRow}>
+          <CheckBox
+            value={agreeToTerms}
+            onValueChange={(v) => { setAgreeToTerms(v); if (v) setTermsError(""); }}
+            color={termsError ? AUTH_ERROR : agreeToTerms ? A.ink : undefined}
+            style={styles.checkbox}
+            accessibilityLabel="Agree to the Terms and Conditions"
+          />
+          <Text style={styles.termsText} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+            Agree to the{" "}
+            <Text style={styles.termsLink} onPress={() => openLink(TERMS_OF_SERVICE_URL)}>
+              Terms and Conditions
+            </Text>
+            {" "}and{" "}
+            <Text style={styles.termsLink} onPress={() => openLink(PRIVACY_POLICY_URL)}>
+              Privacy Policy
+            </Text>
           </Text>
-          {" "}and{" "}
-          <Text style={styles.termsLink} onPress={() => openLink(PRIVACY_POLICY_URL)}>
-            Privacy Policy
-          </Text>
-        </Text>
+        </View>
+        <FieldError style={styles.termsErrorRow}>{termsError}</FieldError>
       </View>
 
-      {/* Sign up — WHITE, not the CTA yellow: a yellow button on a yellow panel
-          has nothing to sit against. The mockup makes the same call. */}
+      <FormError>{formError}</FormError>
+
+      {/* Sign up — WHITE, not the CTA yellow: a yellow button on a yellow
+          panel has nothing to sit against. The mockup makes the same call. */}
       <TouchableOpacity
         style={[styles.signupBtn, disabled && styles.disabled]}
         onPress={handleRegister}
@@ -428,7 +460,6 @@ export default function Register({ navigation }) {
 
 const styles = StyleSheet.create({
   disabled:   { opacity: 0.6 },
-  fieldError: { borderWidth: 1.5, borderColor: "#8E1F16" },
 
   strengthPanel: { marginTop: 12, paddingHorizontal: 8, gap: 8 },
   strengthTrack: { flexDirection: "row", gap: 5 },
@@ -442,6 +473,7 @@ const styles = StyleSheet.create({
   checkbox:  { width: 20, height: 20, borderRadius: 5, marginTop: 1 },
   termsText: { flex: 1, fontFamily: fonts.sansSemi, fontSize: 14, lineHeight: 20, color: A.ink },
   termsLink: { fontFamily: fonts.sansBold, textDecorationLine: "underline" },
+  termsErrorRow: { marginLeft: 6 },
 
   signupBtn: {
     height: 62,

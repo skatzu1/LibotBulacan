@@ -9,14 +9,18 @@ import {
   Image,
   Modal,
 } from "react-native";
-import { showAlert } from "../components/AppAlert";
-import { useState, useEffect } from "react";
+import { showToast } from "../components/AppAlert";
+import { useState, useEffect, useRef } from "react";
 import { useSignIn, useOAuth } from "@clerk/clerk-expo";
 import * as WebBrowser from "expo-web-browser";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { captureError } from "../utils/crashReporter";
 import { auth as A, fonts, MAX_FONT_SCALE } from "../context/ThemeContext";
-import AuthScaffold, { authStyles as a } from "../components/AuthScaffold";
+import AuthScaffold, { authStyles as a, FieldError, FormError } from "../components/AuthScaffold";
+import {
+  emailError as checkEmail, requiredPasswordError, newPasswordError, confirmPasswordError,
+  codeError as checkCode, clerkErrorToField, NETWORK_ERROR,
+} from "../utils/authValidation";
 import Icon from "../components/Icon";
 
 // Full-screen background for sign-in and forgot-password. It already carries
@@ -24,10 +28,6 @@ import Icon from "../components/Icon";
 const LOGIN_BG = require("../assets/bg.png");
 
 WebBrowser.maybeCompleteAuthSession();
-
-function isValidEmail(email) {
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
-}
 
 /* ── Lockout tracking ─────────────────────────────────────────────────────
    Mirrors the Clerk Dashboard lockout policy (5 attempts → 5 minute lock) so
@@ -72,27 +72,39 @@ function ForgotPasswordModal({ visible, onClose, signIn }) {
   const [showNew, setShowNew]         = useState(false);
   const [showConfirm, setShowConfirm] = useState(false);
   const [loading, setLoading]         = useState(false);
-  const [emailError, setEmailError]   = useState("");
+  // Field errors: { email, code, password, confirm }, plus one form-level one.
+  const [errors, setErrors]           = useState({});
+  const [formError, setFormError]     = useState("");
+  const codeRef    = useRef(null);
+  const newPwRef   = useRef(null);
+  const confirmRef = useRef(null);
 
   const reset = () => {
     setStep("email"); setEmail(""); setCode(""); setNewPassword("");
     setConfirmPassword(""); setShowNew(false); setShowConfirm(false);
-    setLoading(false); setEmailError("");
+    setLoading(false); setErrors({}); setFormError("");
   };
   const handleClose = () => { reset(); onClose(); };
 
+  // Typing in a field clears that field's error (and the form-level one).
+  const edit = (field, setter) => (value) => {
+    setter(value);
+    if (errors[field]) setErrors((prev) => ({ ...prev, [field]: null }));
+    if (formError) setFormError("");
+  };
+
   // Step 1 — send OTP
   const handleSendCode = async () => {
-    if (!email.trim()) return setEmailError("Please enter your email address.");
-    if (!isValidEmail(email)) return setEmailError("Enter a valid email address.");
-    setEmailError("");
+    const emailErr = checkEmail(email);
+    if (emailErr) return setErrors({ email: emailErr });
+    setErrors({});
     setLoading(true);
     try {
       await signIn.create({ strategy: "reset_password_email_code", identifier: email.trim() });
       setStep("otp");
-    } catch {
-      // Generic message — don't reveal whether the email exists
-      setEmailError("Could not send reset code. Check your email and try again.");
+    } catch (err) {
+      // Deliberately vague about whether the email exists.
+      setErrors({ email: err?.errors ? "Couldn't send a reset code. Check the email and try again." : NETWORK_ERROR });
     } finally {
       setLoading(false);
     }
@@ -100,10 +112,17 @@ function ForgotPasswordModal({ visible, onClose, signIn }) {
 
   // Step 2 — verify OTP + set new password
   const handleResetPassword = async () => {
-    if (!code.trim())           return showAlert("Error", "Please enter the code sent to your email.");
-    if (!newPassword)           return showAlert("Error", "Please enter a new password.");
-    if (newPassword.length < 8) return showAlert("Error", "Password must be at least 8 characters.");
-    if (newPassword !== confirmPassword) return showAlert("Error", "Passwords do not match.");
+    const next = {
+      code:     checkCode(code),
+      password: newPasswordError(newPassword),
+      confirm:  confirmPasswordError(newPassword, confirmPassword),
+    };
+    setErrors(next);
+    setFormError("");
+    if (next.code)     return codeRef.current?.focus();
+    if (next.password) return newPwRef.current?.focus();
+    if (next.confirm)  return confirmRef.current?.focus();
+
     setLoading(true);
     try {
       const result = await signIn.attemptFirstFactor({
@@ -114,14 +133,18 @@ function ForgotPasswordModal({ visible, onClose, signIn }) {
       if (result.status === "complete") {
         // A fresh password starts a fresh attempt count
         await clearLock(email);
-        showAlert("Password updated", "You can now log in with your new password.", [
-          { text: "OK", onPress: handleClose },
-        ]);
+        showToast("Password updated. Log in with your new password.", { type: "success" });
+        handleClose();
       } else {
-        showAlert("Error", "Could not complete password reset. Please try again.");
+        setFormError("Couldn't finish resetting your password. Please try again.");
       }
-    } catch {
-      showAlert("Error", "Invalid or expired code. Please request a new one.");
+    } catch (err) {
+      const { field, message } = clerkErrorToField(err);
+      if (field === "code" || field === "password") {
+        setErrors((prev) => ({ ...prev, [field]: message }));
+      } else {
+        setFormError(message);
+      }
     } finally {
       setLoading(false);
     }
@@ -143,18 +166,21 @@ function ForgotPasswordModal({ visible, onClose, signIn }) {
           <>
             <View>
               <TextInput
-                style={[a.field, { backgroundColor: A.cyanField }]}
+                style={[a.field, { backgroundColor: A.cyanField }, !!errors.email && a.fieldInvalid]}
                 placeholder="EMAIL"
                 placeholderTextColor={A.muted}
                 autoCapitalize="none"
                 keyboardType="email-address"
+                autoComplete="email"
                 value={email}
-                onChangeText={(v) => { setEmail(v); if (emailError) setEmailError(""); }}
+                onChangeText={edit("email", setEmail)}
+                onSubmitEditing={handleSendCode}
+                returnKeyType="send"
                 editable={!loading}
                 accessibilityLabel="Email address for password reset"
                 maxFontSizeMultiplier={MAX_FONT_SCALE}
               />
-              {!!emailError && <Text style={a.errorText}>{emailError}</Text>}
+              <FieldError>{errors.email}</FieldError>
             </View>
 
             <TouchableOpacity
@@ -170,64 +196,86 @@ function ForgotPasswordModal({ visible, onClose, signIn }) {
           </>
         ) : (
           <>
-            <TextInput
-              style={[a.field, { backgroundColor: A.cyanField, letterSpacing: 6, textAlign: "center" }]}
-              placeholder="000000"
-              placeholderTextColor={A.muted}
-              keyboardType="number-pad"
-              maxLength={6}
-              value={code}
-              onChangeText={setCode}
-              editable={!loading}
-              accessibilityLabel="6-digit reset code"
-              maxFontSizeMultiplier={MAX_FONT_SCALE}
-            />
-
-            <View style={a.fieldRow}>
+            <View>
               <TextInput
-                style={[a.field, { backgroundColor: A.cyanField, paddingRight: 60 }]}
-                placeholder="NEW PASSWORD"
+                ref={codeRef}
+                style={[a.field, { backgroundColor: A.cyanField, letterSpacing: 6, textAlign: "center" }, !!errors.code && a.fieldInvalid]}
+                placeholder="000000"
                 placeholderTextColor={A.muted}
-                secureTextEntry={!showNew}
-                value={newPassword}
-                onChangeText={setNewPassword}
+                keyboardType="number-pad"
+                maxLength={6}
+                value={code}
+                onChangeText={edit("code", setCode)}
+                autoComplete="one-time-code"
+                textContentType="oneTimeCode"
                 editable={!loading}
-                accessibilityLabel="New password"
+                accessibilityLabel="6-digit reset code"
                 maxFontSizeMultiplier={MAX_FONT_SCALE}
               />
-              <TouchableOpacity
-                onPress={() => setShowNew((v) => !v)}
-                style={a.eyeBtn}
-                hitSlop={8}
-                accessibilityRole="button"
-                accessibilityLabel={showNew ? "Hide password" : "Show password"}
-              >
-                <Icon name={showNew ? "eye-off" : "eye"} size={20} color={A.muted} />
-              </TouchableOpacity>
+              <FieldError>{errors.code}</FieldError>
             </View>
 
-            <View style={a.fieldRow}>
-              <TextInput
-                style={[a.field, { backgroundColor: A.cyanField, paddingRight: 60 }]}
-                placeholder="CONFIRM PASSWORD"
-                placeholderTextColor={A.muted}
-                secureTextEntry={!showConfirm}
-                value={confirmPassword}
-                onChangeText={setConfirmPassword}
-                editable={!loading}
-                accessibilityLabel="Confirm new password"
-                maxFontSizeMultiplier={MAX_FONT_SCALE}
-              />
-              <TouchableOpacity
-                onPress={() => setShowConfirm((v) => !v)}
-                style={a.eyeBtn}
-                hitSlop={8}
-                accessibilityRole="button"
-                accessibilityLabel={showConfirm ? "Hide password" : "Show password"}
-              >
-                <Icon name={showConfirm ? "eye-off" : "eye"} size={20} color={A.muted} />
-              </TouchableOpacity>
+            <View>
+              <View style={a.fieldRow}>
+                <TextInput
+                  ref={newPwRef}
+                  style={[a.field, { backgroundColor: A.cyanField, paddingRight: 60 }, !!errors.password && a.fieldInvalid]}
+                  placeholder="NEW PASSWORD"
+                  placeholderTextColor={A.muted}
+                  secureTextEntry={!showNew}
+                  value={newPassword}
+                  onChangeText={edit("password", setNewPassword)}
+                  autoComplete="new-password"
+                  textContentType="newPassword"
+                  returnKeyType="next"
+                  onSubmitEditing={() => confirmRef.current?.focus()}
+                  editable={!loading}
+                  accessibilityLabel="New password"
+                  maxFontSizeMultiplier={MAX_FONT_SCALE}
+                />
+                <TouchableOpacity
+                  onPress={() => setShowNew((v) => !v)}
+                  style={a.eyeBtn}
+                  hitSlop={8}
+                  accessibilityRole="button"
+                  accessibilityLabel={showNew ? "Hide password" : "Show password"}
+                >
+                  <Icon name={showNew ? "eye-off" : "eye"} size={20} color={A.muted} />
+                </TouchableOpacity>
+              </View>
+              <FieldError>{errors.password}</FieldError>
             </View>
+
+            <View>
+              <View style={a.fieldRow}>
+                <TextInput
+                  ref={confirmRef}
+                  style={[a.field, { backgroundColor: A.cyanField, paddingRight: 60 }, !!errors.confirm && a.fieldInvalid]}
+                  placeholder="CONFIRM PASSWORD"
+                  placeholderTextColor={A.muted}
+                  secureTextEntry={!showConfirm}
+                  value={confirmPassword}
+                  onChangeText={edit("confirm", setConfirmPassword)}
+                  onSubmitEditing={handleResetPassword}
+                  returnKeyType="done"
+                  editable={!loading}
+                  accessibilityLabel="Confirm new password"
+                  maxFontSizeMultiplier={MAX_FONT_SCALE}
+                />
+                <TouchableOpacity
+                  onPress={() => setShowConfirm((v) => !v)}
+                  style={a.eyeBtn}
+                  hitSlop={8}
+                  accessibilityRole="button"
+                  accessibilityLabel={showConfirm ? "Hide password" : "Show password"}
+                >
+                  <Icon name={showConfirm ? "eye-off" : "eye"} size={20} color={A.muted} />
+                </TouchableOpacity>
+              </View>
+              <FieldError>{errors.confirm}</FieldError>
+            </View>
+
+            <FormError>{formError}</FormError>
 
             <TouchableOpacity
               style={[a.cta, loading && styles.disabled]}
@@ -258,10 +306,17 @@ export default function Login({ navigation }) {
   const [passwordVisible, setPasswordVisible] = useState(false);
   const [showForgot, setShowForgot]           = useState(false);
 
-  // Inline errors
-  const [emailError, setEmailError]       = useState("");
-  const [authError, setAuthError]         = useState("");   // shown below login button
-  const [, setEmailTouched]               = useState(false);
+  // Field errors show once a field has been left (or Log in pressed), then
+  // track the value live so they clear the moment it's fixed. `authError` is
+  // the form-level box for what the server says (wrong password, lockout…).
+  const [touched, setTouched]   = useState({});
+  const [authError, setAuthError] = useState("");
+  const emailRef    = useRef(null);
+  const passwordRef = useRef(null);
+
+  const fieldErrors = { email: checkEmail(email), password: requiredPasswordError(password) };
+  const errorFor = (field) => (touched[field] ? fieldErrors[field] : null);
+  const touch = (field) => setTouched((prev) => (prev[field] ? prev : { ...prev, [field]: true }));
 
   useEffect(() => {
     WebBrowser.warmUpAsync();
@@ -270,33 +325,13 @@ export default function Login({ navigation }) {
     };
   }, []);
 
-  const handleEmailBlur = () => {
-    setEmailTouched(true);
-    if (!email.trim()) {
-      setEmailError("Email address is required.");
-    } else if (!isValidEmail(email)) {
-      setEmailError("Enter a valid email address.");
-    } else {
-      setEmailError("");
-    }
-  };
-
   // ── Email login ──
   const handleLogin = async () => {
-    // Surface inline errors first
-    setEmailTouched(true);
+    setTouched({ email: true, password: true });
     setAuthError("");
-    let hasError = false;
-    if (!email.trim()) { setEmailError("Email address is required."); hasError = true; }
-    else if (!isValidEmail(email)) { setEmailError("Enter a valid email address."); hasError = true; }
-    else setEmailError("");
-
-    if (!password) {
-      setAuthError("Please enter your password.");
-      hasError = true;
-    }
-    if (hasError) return;
-    if (!isLoaded) return setAuthError("Authentication is loading. Please wait.");
+    if (fieldErrors.email)    return emailRef.current?.focus();
+    if (fieldErrors.password) return passwordRef.current?.focus();
+    if (!isLoaded) return setAuthError("Still getting ready. Try again in a moment.");
 
     setIsLoading(true);
 
@@ -340,7 +375,7 @@ export default function Login({ navigation }) {
             emailAddressId: emailFactor.emailAddressId,
           });
           navigation.navigate("EmailVerification", { email: email.trim(), fromLogin: true });
-          showAlert("Verification Required", "Check your email for a verification code.");
+          showToast("Check your email for a verification code.", { type: "info" });
           return;
         }
       }
@@ -376,7 +411,7 @@ export default function Login({ navigation }) {
       // wrong password and shouldn't count toward the lockout.
       if (!err?.errors) {
         captureError(err, { where: "Login.handleLogin" });
-        setAuthError("Couldn't reach the server. Check your connection and try again.");
+        setAuthError(NETWORK_ERROR);
         return;
       }
 
@@ -410,6 +445,7 @@ export default function Login({ navigation }) {
   // ── Google login ──
   const handleGoogleLogin = async () => {
     if (isGoogleLoading || !isLoaded) return;
+    setAuthError("");
     setIsGoogleLoading(true);
     try {
       const { createdSessionId } = await startOAuthFlow();
@@ -425,7 +461,8 @@ export default function Login({ navigation }) {
           clerk:   err?.errors,
         });
       }
-      showAlert("Sign-in failed", "Unable to sign in with Google. Please try again.");
+      // Same place as every other sign-in problem, not a popup.
+      setAuthError("Couldn't sign in with Google. Please try again.");
     } finally {
       setIsGoogleLoading(false);
     }
@@ -466,56 +503,61 @@ export default function Login({ navigation }) {
         {/* Email */}
         <View>
           <TextInput
-            style={[a.field, { backgroundColor: A.cyanField }, !!emailError && styles.fieldError]}
+            ref={emailRef}
+            style={[a.field, { backgroundColor: A.cyanField }, !!errorFor("email") && a.fieldInvalid]}
             placeholder="EMAIL"
             placeholderTextColor={A.muted}
             autoCapitalize="none"
             keyboardType="email-address"
+            autoComplete="email"
+            textContentType="emailAddress"
+            returnKeyType="next"
+            onSubmitEditing={() => passwordRef.current?.focus()}
             value={email}
-            onChangeText={(v) => {
-              setEmail(v);
-              if (emailError) setEmailError("");
-              if (authError) setAuthError("");
-            }}
-            onBlur={handleEmailBlur}
+            onChangeText={(v) => { setEmail(v); if (authError) setAuthError(""); }}
+            onBlur={() => touch("email")}
             editable={!disabled}
             accessibilityLabel="Email address"
             maxFontSizeMultiplier={MAX_FONT_SCALE}
           />
-          {!!emailError && <Text style={a.errorText}>{emailError}</Text>}
+          <FieldError>{errorFor("email")}</FieldError>
         </View>
 
         {/* Password */}
-        <View style={a.fieldRow}>
-          <TextInput
-            style={[a.field, { backgroundColor: A.cyanField, paddingRight: 60 }]}
-            placeholder="PASSWORD"
-            placeholderTextColor={A.muted}
-            secureTextEntry={!passwordVisible}
-            value={password}
-            onChangeText={(v) => { setPassword(v); if (authError) setAuthError(""); }}
-            editable={!disabled}
-            accessibilityLabel="Password"
-            maxFontSizeMultiplier={MAX_FONT_SCALE}
-          />
-          <TouchableOpacity
-            onPress={() => setPasswordVisible((v) => !v)}
-            style={a.eyeBtn}
-            hitSlop={8}
-            accessibilityRole="button"
-            accessibilityLabel={passwordVisible ? "Hide password" : "Show password"}
-          >
-            <Icon name={passwordVisible ? "eye-off" : "eye"} size={20} color={A.muted} />
-          </TouchableOpacity>
+        <View>
+          <View style={a.fieldRow}>
+            <TextInput
+              ref={passwordRef}
+              style={[a.field, { backgroundColor: A.cyanField, paddingRight: 60 }, !!errorFor("password") && a.fieldInvalid]}
+              placeholder="PASSWORD"
+              placeholderTextColor={A.muted}
+              secureTextEntry={!passwordVisible}
+              autoComplete="current-password"
+              textContentType="password"
+              returnKeyType="go"
+              onSubmitEditing={handleLogin}
+              value={password}
+              onChangeText={(v) => { setPassword(v); if (authError) setAuthError(""); }}
+              onBlur={() => touch("password")}
+              editable={!disabled}
+              accessibilityLabel="Password"
+              maxFontSizeMultiplier={MAX_FONT_SCALE}
+            />
+            <TouchableOpacity
+              onPress={() => setPasswordVisible((v) => !v)}
+              style={a.eyeBtn}
+              hitSlop={8}
+              accessibilityRole="button"
+              accessibilityLabel={passwordVisible ? "Hide password" : "Show password"}
+            >
+              <Icon name={passwordVisible ? "eye-off" : "eye"} size={20} color={A.muted} />
+            </TouchableOpacity>
+          </View>
+          <FieldError>{errorFor("password")}</FieldError>
         </View>
 
-        {/* Generic auth error */}
-        {!!authError && (
-          <View style={a.errorBox}>
-            <Icon name="alert-circle" size={15} color="#8E1F16" />
-            <Text style={a.errorBoxText}>{authError}</Text>
-          </View>
-        )}
+        {/* What the server said: wrong password, lockout, offline… */}
+        <FormError>{authError}</FormError>
 
         {/* Log in */}
         <TouchableOpacity
@@ -565,7 +607,6 @@ export default function Login({ navigation }) {
 
 const styles = StyleSheet.create({
   disabled:   { opacity: 0.6 },
-  fieldError: { borderWidth: 1.5, borderColor: "#8E1F16" },
   ctaSpace:   { marginTop: 8 },
   forgotRow:  { alignSelf: "center", paddingVertical: 4 },
   forgotText: { fontFamily: fonts.sansBold },
