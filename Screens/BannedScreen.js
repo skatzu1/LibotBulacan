@@ -1,14 +1,17 @@
 import React, { useState } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity,
-  StyleSheet, ScrollView, ActivityIndicator, StatusBar,
+  StyleSheet, ScrollView, StatusBar,
 } from 'react-native';
 import { showAlert, showToast } from "../components/AppAlert";
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useAuth } from '@clerk/clerk-expo';
 import { appealAPI } from '../api';
 import { useTheme, spacing, radius, typography, fonts } from '../context/ThemeContext';
+import { PrimaryButton } from "../components/ui";
 import Icon from "../components/Icon";
+
+const plural = (n, word) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
 export default function BannedScreen({ banInfo }) {
   const { colors, isDark } = useTheme();
@@ -59,7 +62,7 @@ export default function BannedScreen({ banInfo }) {
           <Text style={[typography.label, { color: colors.warning, marginBottom: spacing.xs }]}>
             Time remaining to appeal
           </Text>
-          <Text style={[s.deadlineDays, { color: colors.warning }]}>{banInfo.daysLeft || '0'} days</Text>
+          <Text style={[s.deadlineDays, { color: colors.warning }]}>{plural(Number(banInfo.daysLeft) || 0, 'day')}</Text>
           <Text style={[typography.caption, s.center, { color: colors.warning, marginTop: spacing.xs, lineHeight: 18 }]}>
             After this period, your account and all associated data will be permanently deleted.
           </Text>
@@ -88,7 +91,7 @@ export default function BannedScreen({ banInfo }) {
               Submit an appeal
             </Text>
             <Text style={[typography.body, { color: colors.textSecondary, marginBottom: spacing.md }]}>
-              Explain why you believe this suspension was a mistake. Be specific.
+              Explain why you believe this ban was a mistake. Be specific.
             </Text>
             <TextInput
               style={[
@@ -102,18 +105,9 @@ export default function BannedScreen({ banInfo }) {
               value={text}
               onChangeText={setText}
               textAlignVertical="top"
+              accessibilityLabel="Your appeal"
             />
-            <TouchableOpacity
-              accessibilityRole="button"
-              style={[s.btn, { backgroundColor: colors.accent }, submitting && s.btnDisabled]}
-              onPress={handleSubmit}
-              disabled={submitting}
-              activeOpacity={0.85}
-            >
-              {submitting
-                ? <ActivityIndicator color={colors.onAccent} />
-                : <Text style={[typography.title, { color: colors.onAccent }]}>Submit appeal</Text>}
-            </TouchableOpacity>
+            <PrimaryButton title="Submit appeal" onPress={handleSubmit} loading={submitting} style={s.btn} />
           </View>
         )}
 
@@ -148,7 +142,6 @@ const s = StyleSheet.create({
     borderWidth: 1.5, borderRadius: radius.md, padding: spacing.md,
     fontSize: 14, minHeight: 130,
   },
-  btn:         { borderRadius: radius.md, padding: spacing.lg, alignItems: 'center', marginTop: spacing.md },
-  btnDisabled: { opacity: 0.6 },
+  btn:         { marginTop: spacing.md },
   signOut:     { marginTop: spacing.sm, padding: spacing.lg, width: '100%', alignItems: 'center' },
 });

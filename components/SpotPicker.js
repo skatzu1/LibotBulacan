@@ -1,9 +1,11 @@
 import React from "react";
-import { View, Text, StyleSheet, ActivityIndicator, StatusBar, FlatList } from "react-native";
+import { View, Text, StyleSheet, StatusBar, FlatList } from "react-native";
 import { useNavigation } from "@react-navigation/native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useArrival } from "../context/ArrivalContext";
 import { useTheme, fonts } from "../context/ThemeContext";
-import { ScreenHeader, SpotCard, EmptyState, H_PAD } from "./ui";
+import { ScreenHeader, SpotCard, EmptyState, ErrorState, H_PAD } from "./ui";
+import ListsSkeleton from "./ListsSkeleton";
 
 /**
  * Shared "pick a spot" list screen used by the AR / Missions / Navigate flows.
@@ -12,9 +14,13 @@ import { ScreenHeader, SpotCard, EmptyState, H_PAD } from "./ui";
  */
 export default function SpotPicker({ title, subtitle, onPick, renderRight }) {
   const navigation = useNavigation();
-  const { allSpots: spots } = useArrival();
+  const insets = useSafeAreaInsets();
+  const { allSpots: spots, spotsStatus, reloadSpots } = useArrival();
   const { colors, isDark } = useTheme();
-  const loading = spots.length === 0;
+  // Empty spots used to mean "spinner forever" — including when the request
+  // had failed and nothing was ever going to arrive.
+  const loading = spots.length === 0 && spotsStatus === "loading";
+  const failed  = spots.length === 0 && spotsStatus === "error";
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.background }]}>
@@ -23,15 +29,17 @@ export default function SpotPicker({ title, subtitle, onPick, renderRight }) {
       <ScreenHeader title={title} onBack={() => navigation.goBack()} />
 
       {loading ? (
-        <View style={styles.centered}>
-          <ActivityIndicator size="large" color={colors.brand} />
+        <ListsSkeleton cardCount={4} />
+      ) : failed ? (
+        <View style={styles.pad}>
+          <ErrorState text="Couldn't load the spots. Check your connection." onRetry={reloadSpots} />
         </View>
       ) : (
         <FlatList
           data={spots}
           keyExtractor={(item) => String(item._id)}
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.list}
+          contentContainerStyle={[styles.list, { paddingBottom: insets.bottom + 40 }]}
           ListHeaderComponent={
             subtitle ? (
               <Text style={[styles.subtitle, { color: colors.textSecondary }]}>{subtitle}</Text>
@@ -56,8 +64,8 @@ export default function SpotPicker({ title, subtitle, onPick, renderRight }) {
 
 const styles = StyleSheet.create({
   screen:   { flex: 1 },
-  centered: { flex: 1, alignItems: "center", justifyContent: "center" },
-  list:     { paddingHorizontal: H_PAD, paddingBottom: 140 },
-  subtitle: { fontSize: 13.5, fontFamily: fonts.sansMedium, marginTop: 4, marginBottom: 16 },
-  card:     { marginBottom: 12 },
+  pad:      { paddingHorizontal: H_PAD, paddingTop: 8 },
+  list:     { paddingHorizontal: H_PAD, paddingTop: 8 },
+  subtitle: { fontSize: 13.5, fontFamily: fonts.sansMedium, marginBottom: 16 },
+  card:     { marginBottom: 14 },
 });

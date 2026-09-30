@@ -1,50 +1,24 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
-  TextInput, ActivityIndicator, Image,
-  KeyboardAvoidingView, Platform,
+  ActivityIndicator, KeyboardAvoidingView, Platform,
 } from "react-native";
-import { showAlert } from "../components/AppAlert";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { showAlert, showToast } from "../components/AppAlert";
 import { useUser, useAuth } from "@clerk/clerk-expo";
 import ImageCropPicker from "react-native-image-crop-picker";
 import { useProfileImage } from "../context/ProfileImageContext";
-import { useTheme, fonts } from "../context/ThemeContext";
-import { ScreenHeader } from "../components/ui";
+import { useTheme, fonts, typography } from "../context/ThemeContext";
+import {
+  ScreenHeader, HeaderAction, FormField, GroupLabel, ListRow, LoadingState, Avatar, H_PAD,
+} from "../components/ui";
 import { BASE_URL } from "../api";
-import { avatarImage } from "../utils/image";
 import Icon from "../components/Icon";
 
 // Single source of truth for the backend host — see api.js.
-
-function toCloudinarySquare(url, size = 400) {
-  if (!url || typeof url !== "string") return url;
-  if (!url.includes("res.cloudinary.com") || !url.includes("/upload/")) return url;
-  const transform = `c_fill,ar_1:1,g_face,w_${size}`;
-  return url.replace("/upload/", `/upload/${transform}/`);
-}
-
-const Field = ({ label, icon, value, onChangeText, placeholder, keyboardType,
-  editable = true, colors }) => (
-  <View style={styles.fieldWrapper}>
-    <Text style={[styles.fieldLabel, { color: colors.textSecondary }]}>{label}</Text>
-    <View style={[
-      styles.fieldRow,
-      { backgroundColor: colors.card, borderColor: colors.cardBorder },
-      !editable && styles.fieldRowDisabled,
-    ]}>
-      <View style={[styles.fieldIcon, { backgroundColor: colors.brandLight }]}>
-        <Icon name={icon} size={16} color={colors.brand} />
-      </View>
-      <TextInput
-        style={[styles.fieldInput, { color: colors.textPrimary }]}
-        value={value} onChangeText={onChangeText}
-        placeholder={placeholder} placeholderTextColor={colors.textMuted}
-        keyboardType={keyboardType || "default"}
-        editable={editable} autoCapitalize="none" autoCorrect={false}
-      />
-    </View>
-  </View>
-);
+// The avatar is shown through <Avatar>, whose avatarImage() already crops to a
+// face-centred square. A separate c_fill,w_400 step used to be baked into the
+// URL first, which chained a second resize back UP after the crop.
 
 async function uploadImageToCloudinary(localUri, token) {
   const formData = new FormData();
@@ -72,6 +46,10 @@ export default function EditProfile({ navigation }) {
   const { getToken } = useAuth();
   const { profileImage, setProfileImage } = useProfileImage();
   const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
+  // Set just before leaving after a successful save, so the unsaved-changes
+  // guard below doesn't fire on the way out.
+  const leavingRef = useRef(false);
 
   const [firstName, setFirstName]           = useState("");
   const [lastName, setLastName]             = useState("");
@@ -93,11 +71,11 @@ export default function EditProfile({ navigation }) {
     setLastName(ln);
     setOriginalFirstName(fn);
     setOriginalLastName(ln);
-    setAvatar(toCloudinarySquare(profileImage || clerkUser.imageUrl) || null);
+    setAvatar(profileImage || clerkUser.imageUrl || null);
   }, [isLoaded, clerkUser]);
 
   useEffect(() => {
-    if (profileImage) setAvatar(toCloudinarySquare(profileImage));
+    if (profileImage) setAvatar(profileImage);
   }, [profileImage]);
 
   const hasChanges = useMemo(() => {
@@ -109,7 +87,7 @@ export default function EditProfile({ navigation }) {
 
   useEffect(() => {
     const unsubscribe = navigation.addListener("beforeRemove", (e) => {
-      if (!hasChanges) return;
+      if (!hasChanges || leavingRef.current) return;
       e.preventDefault();
       showAlert(
         "Discard changes?",
@@ -194,8 +172,7 @@ export default function EditProfile({ navigation }) {
           profileImage: imageToSave,
         }),
       });
-      const dbData = await dbRes.json();
-      console.log("[EditProfile] DB response:", dbData);
+      if (!dbRes.ok) throw new Error("Your name was saved, but the profile didn't sync. Try again.");
 
       if (finalImageUrl) await setProfileImage(finalImageUrl);
 
@@ -206,9 +183,14 @@ export default function EditProfile({ navigation }) {
       }
       setNewLocalAvatar(null);
 
-      showAlert("Success", "Profile updated successfully.", [
-        { text: "OK", onPress: () => navigation.goBack() },
-      ]);
+      // The saved values are the new baseline. Without this the name still
+      // differed from the ORIGINAL one, so tapping OK on "Success" was met with
+      // "Discard changes? You have unsaved changes".
+      setOriginalFirstName(firstName.trim());
+      setOriginalLastName(lastName.trim());
+      leavingRef.current = true;
+      showToast("Profile updated", { type: "success" });
+      navigation.goBack();
     } catch (err) {
       console.error("[EditProfile] Save error:", err);
       showAlert("Error", err?.errors?.[0]?.longMessage || err?.message || "Failed to update profile.");
@@ -231,76 +213,55 @@ export default function EditProfile({ navigation }) {
   };
 
   const fullName = `${firstName} ${lastName}`.trim() || "User";
-  const initials = fullName.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase();
   const email    = clerkUser?.primaryEmailAddress?.emailAddress || "";
+
+  const header = (
+    <ScreenHeader
+      title="Edit Profile"
+      onBack={() => navigation.goBack()}
+      right={isLoaded && (
+        <HeaderAction label="Save" onPress={handleSave} disabled={!hasChanges} loading={saving} />
+      )}
+    />
+  );
 
   if (!isLoaded) {
     return (
-      <View style={[styles.container, styles.centered, { backgroundColor: colors.background }]}>
-        <ActivityIndicator size="large" color={colors.brand} />
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
+        {header}
+        <LoadingState />
       </View>
     );
   }
 
-  const saveDisabled = saving || !hasChanges;
-
   return (
     <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
       <View style={[styles.container, { backgroundColor: colors.background }]}>
-
-        <ScreenHeader
-          title="Edit Profile"
-          onBack={() => navigation.goBack()}
-          right={
-            <TouchableOpacity
-              accessibilityRole="button"
-              style={[
-                styles.saveButton,
-                { backgroundColor: colors.accent },
-                saveDisabled && { backgroundColor: colors.cardBorder },
-              ]}
-              onPress={handleSave}
-              disabled={saveDisabled}
-            >
-              {saving
-                ? <ActivityIndicator color={colors.onAccent} size="small" />
-                : <Text style={[
-                    styles.saveButtonText,
-                    { color: colors.onAccent },
-                    saveDisabled && { color: colors.textMuted },
-                  ]}>Save</Text>
-              }
-            </TouchableOpacity>
-          }
-        />
+        {header}
 
         <ScrollView
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={styles.scrollContent}
+          contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 40 }]}
           keyboardShouldPersistTaps="handled"
         >
           <View style={styles.avatarSection}>
             <TouchableOpacity
-              accessibilityRole="button" onPress={handlePickAvatar} disabled={pickingImage} activeOpacity={0.8}>
-              <View style={[styles.profilePhotoWrapper, { backgroundColor: colors.brand }]}>
-                {avatar ? (
-                  <Image source={{ uri: avatarImage(avatar, 110) }} style={styles.profilePhoto} />
-                ) : (
-                  <View style={[styles.profilePhotoPlaceholder, { backgroundColor: colors.brand }]}>
-                    <Text style={[styles.avatarInitials, { color: colors.textInverse }]}>{initials}</Text>
-                  </View>
-                )}
-                <View style={[styles.avatarBadge, { backgroundColor: colors.brandDark, borderColor: colors.background }]}>
-                  {pickingImage
-                    ? <ActivityIndicator size="small" color={colors.textInverse} />
-                    : <Icon name="camera" size={14} color={colors.textInverse} />
-                  }
-                </View>
+              onPress={handlePickAvatar}
+              disabled={pickingImage}
+              activeOpacity={0.8}
+              accessibilityRole="button"
+              accessibilityLabel="Change profile photo"
+            >
+              <Avatar uri={avatar} name={fullName} size={100} strong />
+              <View style={[styles.avatarBadge, { backgroundColor: colors.brandDark, borderColor: colors.background }]}>
+                {pickingImage
+                  ? <ActivityIndicator size="small" color={colors.background} />
+                  : <Icon name="camera" size={14} color={colors.background} />
+                }
               </View>
             </TouchableOpacity>
-            <Text style={[styles.fullNameLabel, { color: colors.brandDark }]}>{fullName}</Text>
-            <Text style={[styles.emailLabel, { color: colors.textSecondary }]}>{email}</Text>
-            <Text style={[styles.avatarHint, { color: colors.textMuted }]}>Tap photo to change</Text>
+            <Text style={[styles.fullNameLabel, { color: colors.textPrimary }]}>{fullName}</Text>
+            <Text style={[styles.avatarHint, { color: colors.textMuted }]}>Tap the photo to change it</Text>
             {isGoogleUser && (
               <View style={[styles.googleBadge, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
                 <Icon name="globe" size={12} color={colors.brand} />
@@ -310,31 +271,22 @@ export default function EditProfile({ navigation }) {
           </View>
 
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: colors.textMuted }]}>Personal Info</Text>
-            <Field label="First Name"       icon="user" value={firstName} onChangeText={setFirstName} placeholder="First name" colors={colors} />
-            <Field label="Last Name"         icon="user" value={lastName}  onChangeText={setLastName}  placeholder="Last name"  colors={colors} />
-            <Field label="Email (read-only)" icon="mail" value={email}     placeholder="—"             editable={false} colors={colors} />
+            <GroupLabel>Personal info</GroupLabel>
+            <FormField label="First name" icon="user" value={firstName} onChangeText={setFirstName} placeholder="First name" autoCapitalize="words" />
+            <FormField label="Last name"  icon="user" value={lastName}  onChangeText={setLastName}  placeholder="Last name"  autoCapitalize="words" />
+            <FormField
+              label="Email"
+              icon="mail"
+              value={email}
+              editable={false}
+              hint="Your sign-in email can't be changed here."
+            />
           </View>
 
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, { color: colors.textMuted }]}>Danger Zone</Text>
-            <TouchableOpacity
-              accessibilityRole="button"
-              style={[styles.menuItem, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}
-              onPress={handleDeleteAccount}
-              activeOpacity={0.7}
-            >
-              <View style={styles.menuLeft}>
-                <View style={[styles.iconContainer, { backgroundColor: colors.dangerBg }]}>
-                  <Icon name="trash-2" size={18} color={colors.danger} />
-                </View>
-                <Text style={[styles.menuText, { color: colors.danger }]}>Delete Account</Text>
-              </View>
-              <Icon name="chevron-right" size={18} color={colors.danger} />
-            </TouchableOpacity>
+            <GroupLabel>Danger zone</GroupLabel>
+            <ListRow icon="trash-2" title="Delete Account" onPress={handleDeleteAccount} danger />
           </View>
-
-          <View style={{ height: 60 }} />
         </ScrollView>
       </View>
     </KeyboardAvoidingView>
@@ -343,37 +295,15 @@ export default function EditProfile({ navigation }) {
 
 const styles = StyleSheet.create({
   container: { flex: 1 },
-  centered:  { justifyContent: "center", alignItems: "center" },
 
-  saveButton:  { paddingHorizontal: 18, paddingVertical: 8, borderRadius: 999, minWidth: 58, alignItems: "center" },
-  saveButtonText: { fontFamily: fonts.sansBold, fontSize: 14 },
+  scrollContent: { paddingHorizontal: H_PAD },
 
-  scrollContent: { paddingHorizontal: 20 },
+  avatarSection:   { alignItems: "center", paddingTop: 16, paddingBottom: 28 },
+  avatarBadge:     { position: "absolute", bottom: 2, right: 2, width: 28, height: 28, borderRadius: 14, justifyContent: "center", alignItems: "center", borderWidth: 2 },
+  fullNameLabel:   { ...typography.display, fontSize: 24, lineHeight: 30, marginTop: 14, marginBottom: 2, textAlign: "center" },
+  avatarHint:      { ...typography.caption, marginBottom: 8 },
+  googleBadge:     { flexDirection: "row", alignItems: "center", borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4, borderWidth: 1, gap: 5, marginTop: 4 },
+  googleBadgeText: { fontSize: 12, fontFamily: fonts.sansSemi },
 
-  avatarSection:           { alignItems: "center", paddingVertical: 24 },
-  profilePhotoWrapper:     { width: 100, height: 100, borderRadius: 50, overflow: "hidden", justifyContent: "center", alignItems: "center", position: "relative" },
-  profilePhoto:            { width: "100%", height: "100%", resizeMode: "cover" },
-  profilePhotoPlaceholder: { width: "100%", height: "100%", justifyContent: "center", alignItems: "center" },
-  avatarInitials:          { fontSize: 32, fontFamily: fonts.sansBold },
-  avatarBadge:             { position: "absolute", bottom: 2, right: 2, width: 26, height: 26, borderRadius: 13, justifyContent: "center", alignItems: "center", borderWidth: 2 },
-  fullNameLabel:           { fontSize: 21, fontFamily: fonts.sansBold, letterSpacing: -0.3, marginTop: 14, marginBottom: 2 },
-  emailLabel:              { fontSize: 13, marginBottom: 4 },
-  avatarHint:              { fontSize: 12, marginBottom: 8 },
-  googleBadge:             { flexDirection: "row", alignItems: "center", borderRadius: 999, paddingHorizontal: 10, paddingVertical: 4, borderWidth: 1, gap: 5, marginTop: 4 },
-  googleBadgeText:         { fontSize: 12, fontFamily: fonts.sansSemi },
-
-  section:      { marginBottom: 28 },
-  sectionTitle: { fontSize: 13, fontFamily: fonts.sansBold, textTransform: "uppercase", letterSpacing: 0.8, marginBottom: 6, marginLeft: 4 },
-
-  fieldWrapper: { marginBottom: 10 },
-  fieldLabel:   { fontSize: 12, fontFamily: fonts.sansSemi, marginBottom: 5, marginLeft: 4 },
-  fieldRow:     { flexDirection: "row", alignItems: "center", borderRadius: 14, borderWidth: 1, paddingHorizontal: 13, paddingVertical: 13 },
-  fieldRowDisabled: { opacity: 0.5 },
-  fieldIcon:    { width: 28, height: 28, borderRadius: 8, justifyContent: "center", alignItems: "center", marginRight: 10 },
-  fieldInput:   { flex: 1, fontSize: 15, fontFamily: fonts.sansMedium, padding: 0 },
-
-  menuItem:      { flexDirection: "row", justifyContent: "space-between", alignItems: "center", borderRadius: 16, paddingVertical: 15, paddingHorizontal: 15, marginBottom: 10, borderWidth: 1 },
-  menuLeft:      { flexDirection: "row", alignItems: "center" },
-  iconContainer: { width: 38, height: 38, borderRadius: 12, justifyContent: "center", alignItems: "center", marginRight: 12 },
-  menuText:      { fontSize: 15, fontFamily: fonts.sansSemi },
+  section: { marginBottom: 24 },
 });

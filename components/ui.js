@@ -1,11 +1,12 @@
-import React from "react";
+import React, { useState } from "react";
 import {
   View, Text, Image, TouchableOpacity, TextInput, StyleSheet, useWindowDimensions,
+  ActivityIndicator,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
-import { useTheme, typography, fonts, radius, MAX_FONT_SCALE } from "../context/ThemeContext";
-import { spotImage } from "../utils/image";
+import { useTheme, typography, fonts, radius, shadow, MAX_FONT_SCALE } from "../context/ThemeContext";
+import { spotImage, avatarImage } from "../utils/image";
 import Icon from "./Icon";
 
 // Shared building blocks so every post-login screen matches the Home layout.
@@ -93,11 +94,11 @@ export function SectionTitle({ children, actionLabel, onAction, style }) {
 }
 
 /* ── Rounded icon tile (Home quick actions style) ─────────────────────── */
-export function IconTile({ icon, label, onPress, size = 58 }) {
+export function IconTile({ icon, label, onPress, size = 58, style }) {
   const { colors } = useTheme();
   return (
     <TouchableOpacity
-      style={s.tile}
+      style={[s.tile, style]}
       activeOpacity={0.85}
       onPress={onPress}
       accessibilityRole="button"
@@ -137,7 +138,8 @@ export function SpotCard({
   const img  = spot?.image;
   const cardH = height ?? (wide ? 185 : 150);
 
-  const a11y = [name, loc, rating != null ? `rated ${rating} of 5` : null,
+  const a11y = [rank != null ? `Number ${rank}` : null, name, loc,
+                rating != null ? `rated ${rating} of 5` : null,
                 visits != null ? `${visits} visits` : null]
     .filter(Boolean).join(", ");
 
@@ -160,7 +162,7 @@ export function SpotCard({
       <PhotoScrim />
 
       {rank != null && (
-        <Text style={s.cardRank} maxFontSizeMultiplier={1} allowFontScaling={false}>
+        <Text style={[s.cardRank, wide && s.cardRankWide]} maxFontSizeMultiplier={1} allowFontScaling={false}>
           {String(rank).padStart(2, "0")}
         </Text>
       )}
@@ -228,13 +230,325 @@ export const SearchField = React.forwardRef(function SearchField(
   );
 });
 
+/* ── Bookmark toggle for the corner of a photo card ───────────────────────
+   Lists and Saved drew this at two different sizes and scrim strengths. */
+export function PhotoBookmark({ saved, onPress }) {
+  const { colors } = useTheme();
+  return (
+    <TouchableOpacity
+      style={s.photoBtn}
+      onPress={onPress}
+      hitSlop={6}
+      activeOpacity={0.8}
+      accessibilityRole="button"
+      accessibilityState={{ selected: !!saved }}
+      accessibilityLabel={saved ? "Remove bookmark" : "Add bookmark"}
+    >
+      <Icon
+        name="bookmark"
+        size={17}
+        weight={saved ? "fill" : "regular"}
+        color={saved ? colors.star : "#fff"}
+      />
+    </TouchableOpacity>
+  );
+}
+
 /* ── Empty / placeholder card ─────────────────────────────────────────── */
-export function EmptyState({ icon = "inbox", text, style }) {
+export function EmptyState({ icon = "inbox", title, text, action, style }) {
   const { colors } = useTheme();
   return (
     <View style={[s.empty, { backgroundColor: colors.card, borderColor: colors.cardBorder }, style]}>
-      <Icon name={icon} size={26} color={colors.textMuted} />
-      <Text style={[s.emptyText, { color: colors.textSecondary }]}>{text}</Text>
+      <View style={[s.emptyIcon, { backgroundColor: colors.brandLight }]}>
+        <Icon name={icon} size={24} color={colors.brand} />
+      </View>
+      {!!title && (
+        <Text style={[s.emptyTitle, { color: colors.textPrimary }]} accessibilityRole="header">{title}</Text>
+      )}
+      {!!text && <Text style={[s.emptyText, { color: colors.textSecondary }]}>{text}</Text>}
+      {action}
+    </View>
+  );
+}
+
+/* ── Loading placeholder for a screen BODY ────────────────────────────────
+   Screens render their header first and put this under it, so the back
+   button is there while a cold backend wakes up. */
+export function LoadingState({ label, style }) {
+  const { colors } = useTheme();
+  return (
+    <View style={[s.loading, style]} accessible accessibilityLabel={label || "Loading"}>
+      <ActivityIndicator size="large" color={colors.brand} />
+      {!!label && <Text style={[s.loadingText, { color: colors.textSecondary }]}>{label}</Text>}
+    </View>
+  );
+}
+
+/* ── Primary / secondary action button ────────────────────────────────────
+   One shape for every full-width action. Screens had five: 14 / 16 / pill
+   radii, 12–18px vertical padding, three text sizes. */
+export function PrimaryButton({
+  title, onPress, loading, disabled, icon, variant = "primary", style, accessibilityLabel,
+}) {
+  const { colors } = useTheme();
+  const primary = variant === "primary";
+  const fg = primary ? colors.onAccent : colors.brand;
+  const off = !!(disabled || loading);
+  return (
+    <TouchableOpacity
+      style={[
+        s.btn,
+        primary
+          ? [{ backgroundColor: colors.accent }, shadow.sm]
+          : { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.cardBorder },
+        off && s.btnOff,
+        style,
+      ]}
+      onPress={onPress}
+      disabled={off}
+      activeOpacity={0.85}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel || title}
+      accessibilityState={{ disabled: off, busy: !!loading }}
+    >
+      {loading ? (
+        <ActivityIndicator color={fg} />
+      ) : (
+        <>
+          {!!icon && <Icon name={icon} size={17} color={fg} />}
+          <Text style={[s.btnText, { color: fg }]} maxFontSizeMultiplier={MAX_FONT_SCALE}>{title}</Text>
+        </>
+      )}
+    </TouchableOpacity>
+  );
+}
+
+/* ── Compact action for ScreenHeader's right slot (e.g. Save) ──────────── */
+export function HeaderAction({ label, onPress, disabled, loading }) {
+  const { colors } = useTheme();
+  const off = !!(disabled || loading);
+  return (
+    <TouchableOpacity
+      style={[s.headerAction, { backgroundColor: disabled ? colors.backgroundSoft : colors.accent }]}
+      onPress={onPress}
+      disabled={off}
+      activeOpacity={0.85}
+      hitSlop={6}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ disabled: off, busy: !!loading }}
+    >
+      {loading ? (
+        <ActivityIndicator size="small" color={colors.onAccent} />
+      ) : (
+        <Text
+          style={[s.headerActionText, { color: disabled ? colors.textMuted : colors.onAccent }]}
+          maxFontSizeMultiplier={MAX_FONT_SCALE}
+        >
+          {label}
+        </Text>
+      )}
+    </TouchableOpacity>
+  );
+}
+
+/* ── Segmented control ────────────────────────────────────────────────────
+   Settings' appearance picker, the spot tabs and the badge filter were three
+   separate implementations with the active/inactive colours inverted between
+   them. `role` is "tab" for switching views and "radio" for a setting. */
+export function Segmented({ options, value, onChange, role = "tab", style }) {
+  const { colors } = useTheme();
+  return (
+    <View
+      style={[s.segment, { backgroundColor: colors.backgroundSoft, borderColor: colors.cardBorder }, style]}
+      accessibilityRole={role === "radio" ? "radiogroup" : "tablist"}
+    >
+      {options.map((o) => {
+        const on = o.key === value;
+        return (
+          <TouchableOpacity
+            key={o.key}
+            style={[s.segmentItem, on && [{ backgroundColor: colors.card }, shadow.sm]]}
+            onPress={() => onChange(o.key)}
+            activeOpacity={0.85}
+            accessibilityRole={role}
+            accessibilityState={{ selected: on }}
+            accessibilityLabel={o.a11y || o.label}
+          >
+            {!!o.icon && <Icon name={o.icon} size={14} color={on ? colors.brand : colors.textMuted} />}
+            <Text
+              style={[s.segmentText, { color: on ? colors.brand : colors.textMuted }]}
+              numberOfLines={1}
+              maxFontSizeMultiplier={MAX_FONT_SCALE}
+            >
+              {o.label}
+            </Text>
+          </TouchableOpacity>
+        );
+      })}
+    </View>
+  );
+}
+
+/* ── Uppercase label above a group of rows or fields ───────────────────── */
+export function GroupLabel({ children, style }) {
+  const { colors } = useTheme();
+  return (
+    <Text
+      style={[s.groupLabel, { color: colors.textMuted }, style]}
+      accessibilityRole="header"
+      maxFontSizeMultiplier={MAX_FONT_SCALE}
+    >
+      {children}
+    </Text>
+  );
+}
+
+/* ── Settings-style row: icon well · title · chevron (or a custom right) ──
+   Profile, Settings and Edit Profile each had a copy, with 36 vs 38px icon
+   wells and 8 vs 10px gaps. Pass `right` to replace the chevron (a Switch),
+   or leave out `onPress` for a row that isn't itself tappable. */
+export function ListRow({ icon, title, subtitle, onPress, right, danger, accessibilityLabel, style }) {
+  const { colors } = useTheme();
+  const tint = danger ? colors.danger : colors.brand;
+  const body = (
+    <>
+      <View style={[s.rowIcon, { backgroundColor: danger ? colors.dangerBg : colors.brandLight }]}>
+        <Icon name={icon} size={18} color={tint} />
+      </View>
+      <View style={s.rowBody}>
+        <Text
+          style={[s.rowTitle, { color: danger ? colors.danger : colors.textPrimary }]}
+          numberOfLines={1}
+          maxFontSizeMultiplier={MAX_FONT_SCALE}
+        >
+          {title}
+        </Text>
+        {!!subtitle && (
+          <Text style={[s.rowSub, { color: colors.textMuted }]} numberOfLines={1} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+            {subtitle}
+          </Text>
+        )}
+      </View>
+      {right !== undefined
+        ? right
+        : onPress
+          ? <Icon name="chevron-right" size={18} color={danger ? colors.danger : colors.textMuted} />
+          : null}
+    </>
+  );
+  const rowStyle = [s.row, { backgroundColor: colors.card, borderColor: colors.cardBorder }, style];
+  if (!onPress) return <View style={rowStyle}>{body}</View>;
+  return (
+    <TouchableOpacity
+      style={rowStyle}
+      onPress={onPress}
+      activeOpacity={0.7}
+      accessibilityRole="button"
+      accessibilityLabel={accessibilityLabel || title}
+    >
+      {body}
+    </TouchableOpacity>
+  );
+}
+
+/* ── Labelled text field with an icon well ────────────────────────────────
+   `secure` adds the show/hide toggle. A read-only field gets a lock and a
+   recessed fill instead of the old opacity:0.5, which dropped its text
+   below AA contrast. */
+export function FormField({
+  label, icon, value, onChangeText, placeholder, secure, editable = true,
+  keyboardType, autoCapitalize = "none", hint, style,
+}) {
+  const { colors } = useTheme();
+  const [visible, setVisible] = useState(false);
+  const [focused, setFocused] = useState(false);
+  return (
+    <View style={[s.field, style]}>
+      {!!label && (
+        <Text style={[s.fieldLabel, { color: colors.textSecondary }]} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+          {label}
+        </Text>
+      )}
+      <View
+        style={[
+          s.fieldRow,
+          {
+            backgroundColor: editable ? colors.inputBg : colors.backgroundSoft,
+            borderColor: focused ? colors.inputBorderFocus : colors.inputBorder,
+          },
+        ]}
+      >
+        {!!icon && (
+          <View style={[s.fieldIcon, { backgroundColor: colors.brandLight }]}>
+            <Icon name={icon} size={16} color={colors.brand} />
+          </View>
+        )}
+        <TextInput
+          style={[s.fieldInput, { color: editable ? colors.textPrimary : colors.textSecondary }]}
+          value={value}
+          onChangeText={onChangeText}
+          placeholder={placeholder}
+          placeholderTextColor={colors.placeholder}
+          secureTextEntry={!!secure && !visible}
+          editable={editable}
+          keyboardType={keyboardType}
+          autoCapitalize={autoCapitalize}
+          autoCorrect={false}
+          onFocus={() => setFocused(true)}
+          onBlur={() => setFocused(false)}
+          accessibilityLabel={label || placeholder}
+          maxFontSizeMultiplier={MAX_FONT_SCALE}
+        />
+        {secure && (
+          <TouchableOpacity
+            onPress={() => setVisible((v) => !v)}
+            hitSlop={10}
+            style={s.fieldEye}
+            accessibilityRole="button"
+            accessibilityLabel={visible ? "Hide password" : "Show password"}
+          >
+            <Icon name={visible ? "eye-off" : "eye"} size={17} color={colors.textMuted} />
+          </TouchableOpacity>
+        )}
+        {!editable && <Icon name="lock" size={14} color={colors.textMuted} />}
+      </View>
+      {!!hint && <Text style={[s.fieldHint, { color: colors.textMuted }]}>{hint}</Text>}
+    </View>
+  );
+}
+
+/* ── Avatar: the photo, or initials on a brand fill ───────────────────────
+   Reviews used to fall back to a random stock face from pravatar.cc, so a
+   user with no photo was shown as a stranger. */
+const initialsOf = (name) =>
+  String(name || "")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((w) => w[0])
+    .join("")
+    .toUpperCase();
+
+export function Avatar({ uri, name, size = 36, strong, style }) {
+  const { colors } = useTheme();
+  const box = { width: size, height: size, borderRadius: size / 2 };
+  if (uri) {
+    return <Image source={{ uri: avatarImage(uri, size) }} style={[box, style]} accessibilityIgnoresInvertColors />;
+  }
+  const bg = strong ? colors.brand : colors.brandLight;
+  const fg = strong ? colors.onBrand : colors.brand;
+  const initials = initialsOf(name);
+  return (
+    <View style={[box, s.avatarFallback, { backgroundColor: bg }, style]}>
+      {initials ? (
+        <Text style={[s.avatarInitials, { color: fg, fontSize: Math.round(size * 0.38) }]} allowFontScaling={false}>
+          {initials}
+        </Text>
+      ) : (
+        <Icon name="user" size={Math.round(size * 0.44)} color={fg} />
+      )}
     </View>
   );
 }
@@ -266,7 +580,6 @@ export function ErrorState({ text = "Couldn't load that. Check your connection."
 /* ── Responsive grid helper ──────────────────────────────────────────────
    Replaces the module-scope `Dimensions.get("window")` each screen captured at
    import time — that value is frozen and wrong after rotation, on foldables and
-import Icon from "./Icon";
    in Android split-screen. */
 export function useGrid(gap = 12, pad = H_PAD) {
   const { width } = useWindowDimensions();
@@ -306,11 +619,13 @@ const s = StyleSheet.create({
   cardImgFallback: { alignItems: "center", justifyContent: "center" },
   cardRight: { position: "absolute", top: 10, right: 10 },
   // Editorial rank numeral — the "most visited" grid is a ranking, so show it.
+  // It bleeds off the top-left corner.
   cardRank: {
-    position: "absolute", top: -6, left: 10,
-    fontFamily: fonts.displayBlack, fontSize: 60,
-    color: "rgba(255,255,255,0.22)", letterSpacing: -3,
+    position: "absolute", top: -14, left: 8,
+    fontFamily: fonts.displayBlack, fontSize: 64,
+    color: "rgba(255,255,255,0.20)", letterSpacing: -3,
   },
+  cardRankWide: { fontSize: 88, top: -20, left: 12 },
   cardInfo: { position: "absolute", left: 0, right: 0, bottom: 0, padding: 13 },
   cardName: { fontFamily: fonts.sansBold, fontSize: 14.5, letterSpacing: -0.2, color: "#fff", marginBottom: 2 },
   cardLoc:  { fontFamily: fonts.sansMedium, fontSize: 11, color: "rgba(255,255,255,0.92)", marginBottom: 5 },
@@ -326,16 +641,76 @@ const s = StyleSheet.create({
 
   empty: {
     borderRadius: radius.card,
-    paddingVertical: 36,
-    paddingHorizontal: 20,
+    paddingVertical: 32,
+    paddingHorizontal: 22,
     alignItems: "center",
     gap: 10,
     borderWidth: 1,
   },
-  emptyText: { ...typography.body, textAlign: "center" },
+  emptyIcon:  { width: 52, height: 52, borderRadius: 26, alignItems: "center", justifyContent: "center", marginBottom: 2 },
+  emptyTitle: { ...typography.title, fontFamily: fonts.sansBold, textAlign: "center" },
+  emptyText:  { ...typography.body, textAlign: "center" },
   retryBtn: {
     flexDirection: "row", alignItems: "center", gap: 6, marginTop: 4,
     paddingVertical: 10, paddingHorizontal: 16, borderRadius: radius.pill,
   },
   retryText: { ...typography.label },
+
+  loading:     { flex: 1, alignItems: "center", justifyContent: "center", gap: 12, paddingVertical: 60 },
+  loadingText: { ...typography.bodyStrong },
+
+  photoBtn: {
+    width: 38, height: 38, borderRadius: 19,
+    alignItems: "center", justifyContent: "center",
+    backgroundColor: "rgba(6,20,22,0.5)",
+  },
+
+  btn: {
+    minHeight: 54, borderRadius: radius.button, paddingHorizontal: 24,
+    flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
+  },
+  btnOff:  { opacity: 0.55 },
+  btnText: { fontFamily: fonts.sansBold, fontSize: 15.5, letterSpacing: -0.1 },
+
+  headerAction: {
+    minWidth: 64, height: 36, borderRadius: radius.pill, paddingHorizontal: 16,
+    alignItems: "center", justifyContent: "center",
+  },
+  headerActionText: { fontFamily: fonts.sansBold, fontSize: 14 },
+
+  segment:     { flexDirection: "row", borderRadius: radius.pill, padding: 4, gap: 4, borderWidth: 1 },
+  segmentItem: {
+    flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center",
+    gap: 6, minHeight: 40, paddingHorizontal: 6, borderRadius: radius.pill,
+  },
+  segmentText: { fontFamily: fonts.sansBold, fontSize: 13, letterSpacing: -0.1 },
+
+  groupLabel: {
+    fontFamily: fonts.sansBold, fontSize: 12.5, letterSpacing: 0.9,
+    textTransform: "uppercase", marginBottom: 10, marginLeft: 4,
+  },
+
+  row: {
+    flexDirection: "row", alignItems: "center", gap: 12,
+    minHeight: 64, paddingVertical: 12, paddingHorizontal: 14,
+    borderRadius: radius.lg, borderWidth: 1, marginBottom: 10,
+  },
+  rowIcon:  { width: 38, height: 38, borderRadius: 12, alignItems: "center", justifyContent: "center" },
+  rowBody:  { flex: 1 },
+  rowTitle: { fontFamily: fonts.sansSemi, fontSize: 15 },
+  rowSub:   { ...typography.caption, marginTop: 2 },
+
+  field:      { marginBottom: 12 },
+  fieldLabel: { fontFamily: fonts.sansSemi, fontSize: 12.5, marginBottom: 6, marginLeft: 4 },
+  fieldRow: {
+    flexDirection: "row", alignItems: "center", gap: 10,
+    minHeight: 54, borderRadius: radius.md, borderWidth: 1, paddingHorizontal: 12,
+  },
+  fieldIcon:  { width: 30, height: 30, borderRadius: 10, alignItems: "center", justifyContent: "center" },
+  fieldInput: { flex: 1, fontFamily: fonts.sansMedium, fontSize: 15, paddingVertical: 12 },
+  fieldEye:   { padding: 4 },
+  fieldHint:  { ...typography.caption, marginTop: 6, marginLeft: 4 },
+
+  avatarFallback: { alignItems: "center", justifyContent: "center" },
+  avatarInitials: { fontFamily: fonts.sansBold, letterSpacing: 0.3 },
 });

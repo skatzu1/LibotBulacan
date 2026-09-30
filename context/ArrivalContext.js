@@ -350,6 +350,8 @@ const ArrivalContext = createContext({
   setActiveSpot:   () => {},
   clearActiveSpot: () => {},
   allSpots:        [],
+  spotsStatus:     "loading",
+  reloadSpots:     () => {},
 });
 
 export function useArrival() {
@@ -368,6 +370,9 @@ export function ArrivalProvider({ children }) {
 
   const [activeSpot, setActiveSpotState] = useState(null);
   const [allSpots, setAllSpots]          = useState([]);
+  // "loading" | "ready" | "error". An empty `allSpots` alone can't tell a
+  // screen whether to show a skeleton or a retry — it's empty in both cases.
+  const [spotsStatus, setSpotsStatus]    = useState("loading");
   const allSpotsRef                      = useRef([]);
   const spotsFetchedAt                   = useRef(0);
 
@@ -626,6 +631,7 @@ export function ArrivalProvider({ children }) {
     const now = Date.now();
     if (now - spotsFetchedAt.current < SPOTS_CACHE_TTL_MS && allSpotsRef.current.length > 0) return;
 
+    if (allSpotsRef.current.length === 0) setSpotsStatus("loading");
     try {
       const res  = await fetch(`${BASE_URL}/api/spots`);
       const data = await safeJson(res);
@@ -634,19 +640,36 @@ export function ArrivalProvider({ children }) {
         allSpotsRef.current    = spots;
         spotsFetchedAt.current = now;
         setAllSpots(spots);
+        setSpotsStatus("ready");
         await AsyncStorage.setItem(ALL_SPOTS_KEY, JSON.stringify(spots));
         console.log("[Arrival] Loaded", spots.length, "spots");
+      } else {
+        throw new Error(`Unexpected /api/spots response (${res.status})`);
       }
     } catch (e) {
       console.warn("[Arrival] Could not fetch spots, using cache:", e.message);
+      let cached = null;
       try {
         const raw = await AsyncStorage.getItem(ALL_SPOTS_KEY);
-        if (raw) { const c = JSON.parse(raw); allSpotsRef.current = c; setAllSpots(c); }
+        if (raw) cached = JSON.parse(raw);
       } catch (_) {}
+      if (Array.isArray(cached) && cached.length > 0) {
+        allSpotsRef.current = cached;
+        setAllSpots(cached);
+        setSpotsStatus("ready");
+      } else if (allSpotsRef.current.length === 0) {
+        setSpotsStatus("error");
+      }
     }
   }, []);
 
   useEffect(() => { if (isSignedIn) fetchAllSpots(); }, [isSignedIn, fetchAllSpots]);
+
+  // For a retry button: skip the cache TTL and ask the server again.
+  const reloadSpots = useCallback(() => {
+    spotsFetchedAt.current = 0;
+    return fetchAllSpots();
+  }, [fetchAllSpots]);
 
   // ─────────────────────────────────────────
   // Active spot
@@ -1003,7 +1026,7 @@ export function ArrivalProvider({ children }) {
   // Render
   // ─────────────────────────────────────────
   return (
-    <ArrivalContext.Provider value={{ activeSpot, setActiveSpot, clearActiveSpot, allSpots }}>
+    <ArrivalContext.Provider value={{ activeSpot, setActiveSpot, clearActiveSpot, allSpots, spotsStatus, reloadSpots }}>
       {children}
 
       <Modal visible={showPointsPopup} transparent animationType="none" statusBarTranslucent onRequestClose={() => {}}>
