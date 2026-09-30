@@ -7,7 +7,7 @@
     "@clerk/clerk-expo": "^2.19.22",
     "@expo-google-fonts/newsreader": "^0.4.1",
     "@expo-google-fonts/schibsted-grotesk": "^0.4.2",
-    "@react-native-async-storage/async-storage": "2.2.0",
+    "@react-native-async-storage/async-storage": "3.1.1",
     "@react-native-community/datetimepicker": "8.4.4",
     "@react-native-community/geolocation": "^3.4.0",
     "@react-native-community/netinfo": "11.4.1",
