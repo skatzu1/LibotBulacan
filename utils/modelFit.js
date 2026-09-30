@@ -1,19 +1,24 @@
 // Per-model fit for the spot-page 3D viewer.
 //
-// The spot models come out of different tools in different units. Most are
-// ~24 units across, but Barasoain and the Calumpit shrine are ~271 and STI is
-// 68 with its origin well off to one side. One fixed scale for all of them put
-// the camera inside the big ones and spun STI around an off-centre point.
-// Instead the viewer reads each file's own bounds and scales/centres it so
-// every model shows at the same size, turning about its own middle.
+// Uploaded models come out of different tools in different units — the first
+// spot models ranged from ~21 to ~271 units across, and one had its origin
+// well off to one side. One fixed scale put the camera inside the big ones and
+// spun the off-centre one around empty space. Instead the viewer reads each
+// file's own bounds and scales/centres it so every model shows at the same
+// size, turning about its own middle.
 //
-// Only the glTF JSON chunk at the front of a .glb is needed for that, so it is
-// fetched with HTTP Range requests (Cloudinary honours them): 32–90 KB rather
+// Size and centre are handled here for any upload. Which way a model faces
+// can't be, so the spot models follow one convention, and new ones should too:
+// facade towards +Z (glTF's "front"; Blender's Front view), base on y = 0,
+// standing on a plain square ground about 1.3× the building's footprint.
+//
+// Only the glTF JSON chunk at the front of a .glb is needed to measure it, so it's
+// fetched with HTTP Range requests (Cloudinary honours them): 32–60 KB rather
 // than the whole 1–6 MB model, which Viro downloads separately anyway.
 
 const GLB_MAGIC   = 0x46546c67;   // "glTF", little-endian
 const GLB_HEADER  = 20;           // 12-byte file header + 8-byte JSON chunk header
-const FIRST_RANGE = 32 * 1024;    // fits every spot model's JSON but Barasoain's (~90 KB)
+const FIRST_RANGE = 32 * 1024;    // fits every spot model's JSON but Barasoain's (~60 KB)
 const TIMEOUT_MS  = 10000;
 
 const IDENTITY = [1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1];
