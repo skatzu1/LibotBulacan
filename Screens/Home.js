@@ -1,5 +1,5 @@
 import "react-native-gesture-handler";
-import React, { useEffect, useState, useCallback, useMemo, useRef } from "react";
+import React, { useEffect, useState, useCallback, useMemo } from "react";
 import {
   View,
   Text,
@@ -205,7 +205,6 @@ function HomeContent({ profilePhoto, navigation }) {
   // slide 2 gets yanked to slide 3. It stops permanently once the user shows
   // they are driving the carousel themselves.
   const [autoPlay, setAutoPlay]       = useState(true);
-  const searchRef = useRef(null);
 
   const firstName = (clerkUser?.firstName || "").trim() || "Explorer";
   const HERO_H = Math.round(Math.min(width * 0.82, 340));
@@ -288,26 +287,16 @@ function HomeContent({ profilePhoto, navigation }) {
       <View style={[h.header, { backgroundColor: colors.background, paddingTop: Math.max(insets.top, 12) + 6 }]}>
         <Logo size={32} />
 
-        <View style={h.headerActions}>
-          <TouchableOpacity
-            style={h.headerBtn}
-            onPress={() => searchRef.current?.focus()}
-            accessibilityRole="button"
-            accessibilityLabel="Search spots"
-            hitSlop={8}
-          >
-            <Icon name="search" size={21} color={colors.textPrimary} />
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            onPress={() => navigation.navigate("Profile")}
-            style={h.headerBtn}
-            accessibilityRole="button"
-            accessibilityLabel="Go to your profile"
-          >
-            <Avatar uri={profilePhoto} name={clerkUser?.fullName || firstName} size={36} strong />
-          </TouchableOpacity>
-        </View>
+        {/* No search icon here: the search field sits right under the
+            greeting, so the icon only duplicated it. */}
+        <TouchableOpacity
+          onPress={() => navigation.navigate("Profile")}
+          style={h.headerBtn}
+          accessibilityRole="button"
+          accessibilityLabel="Go to your profile"
+        >
+          <Avatar uri={profilePhoto} name={clerkUser?.fullName || firstName} size={36} strong />
+        </TouchableOpacity>
       </View>
 
       <ScrollView
@@ -354,7 +343,6 @@ function HomeContent({ profilePhoto, navigation }) {
         {/* ─── Global search ─── */}
         <Wrap {...anim(1)} style={h.searchWrap}>
           <SearchField
-            ref={searchRef}
             value={query}
             onChangeText={setQuery}
             onClear={() => setQuery("")}
@@ -577,7 +565,6 @@ const h = StyleSheet.create({
     paddingBottom: 10,
     zIndex: 10,
   },
-  headerActions:  { flexDirection: "row", alignItems: "center", gap: 4 },
   headerBtn:      { width: TAP, height: TAP, alignItems: "center", justifyContent: "center" },
 
   // ── Greeting ──
