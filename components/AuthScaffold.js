@@ -69,7 +69,7 @@ export default function AuthScaffold({
         behavior={Platform.OS === "ios" ? "padding" : undefined}
       >
         <ScrollView
-          contentContainerStyle={{ flexGrow: 1, paddingBottom: Math.max(insets.bottom, 16) + 24 }}
+          contentContainerStyle={s.scrollContent}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
           bounces={false}
@@ -83,8 +83,10 @@ export default function AuthScaffold({
           </AuthHero>
 
           {/* The panel pulls up over the photo so the oversized corner cuts
-              into it. */}
-          <View style={[s.panel, { backgroundColor: colors.panelOverPhoto }]}>
+              into it. The bottom inset is padding INSIDE the panel, so the
+              panel runs to the bottom edge instead of stopping short and
+              leaving a strip of photo under the last link. */}
+          <View style={[s.panel, { backgroundColor: colors.panelOverPhoto, paddingBottom: Math.max(insets.bottom, 16) + 24 }]}>
             {onBack && (
               <TouchableOpacity
                 onPress={onBack}
@@ -235,6 +237,7 @@ const makeAuthStyles = (c, isDark) => StyleSheet.create({
 const s = StyleSheet.create({
   screen: { flex: 1 },
   flex:   { flex: 1 },
+  scrollContent: { flexGrow: 1 },
 
   hero:     { width: "100%", alignItems: "center", justifyContent: "center" },
   logoWrap: { alignItems: "center", justifyContent: "center" },
