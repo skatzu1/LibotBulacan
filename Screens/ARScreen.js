@@ -42,7 +42,7 @@ import { createValueStore, GEO_HEADING_POLL_MS } from "../utils/headingSource";
 // plane placement is the normal experience. It's there for debugging and for
 // any future screen that wants to surface the reason.
 import { evaluateGeospatial, anchorAtLocation, releaseAnchor, ensureGeospatialEnabled, readGeoHeading } from "../utils/geospatial";
-import { resolveTrail } from "../utils/arTrail";
+import { resolveTrail, triviaForModel } from "../utils/arTrail";
 import { fonts } from "../context/ThemeContext";
 import Icon from "../components/Icon";
 import { showAlert } from "../components/AppAlert";
@@ -1228,17 +1228,16 @@ const TriviaPopup = ({
 }) => {
   const slideAnim = useRef(new Animated.Value(100)).current;
   const fadeAnim  = useRef(new Animated.Value(0)).current;
-  const [currentIdx, setCurrentIdx]     = useState(0);
   const [modalMounted, setModalMounted] = useState(false);
 
-  const trivia = spot?.trivia?.length
-    ? spot.trivia
-    : [`${spot?.name ?? "This spot"} is a remarkable place worth exploring!`];
+  // One fact per model: finding model n reveals fact n, so the trivia is
+  // collected piece by piece along the trail rather than read all at once.
+  const modelNumber = (activeAnchor?.index ?? 0) + 1;
+  const fact = triviaForModel(spot?.trivia, modelNumber - 1, spot?.name);
 
   useEffect(() => {
     if (visible) {
       setModalMounted(true);
-      setCurrentIdx(0);
       requestAnimationFrame(() => {
         Animated.parallel([
           Animated.spring(slideAnim, { toValue: 0, useNativeDriver: true, tension: 70, friction: 11 }),
@@ -1255,10 +1254,6 @@ const TriviaPopup = ({
 
   if (!modalMounted) return null;
 
-  const goNext    = () => setCurrentIdx((i) => Math.min(i + 1, trivia.length - 1));
-  const goPrev    = () => setCurrentIdx((i) => Math.max(i - 1, 0));
-  const isFirst   = currentIdx === 0;
-  const isLast    = currentIdx === trivia.length - 1;
   const remaining = totalCount - tappedCount;
 
   return (
@@ -1276,7 +1271,7 @@ const TriviaPopup = ({
         <View style={popup.header}>
           <View style={popup.categoryBadge}>
             <Icon name="book-open" size={10} color={TOKEN.goldLight} style={{ marginRight: 5 }} />
-            <Text style={popup.categoryText}>ImpactFeedbackStyle</Text>
+            <Text style={popup.categoryText}>DID YOU KNOW?</Text>
           </View>
           <TouchableOpacity
             accessibilityRole="button"
@@ -1320,51 +1315,13 @@ const TriviaPopup = ({
         <View style={popup.divider} />
 
         <View style={popup.triviaBox}>
-          <View style={popup.triviaIndexBadge}>
-            <Text style={popup.triviaIndexText}>{currentIdx + 1}</Text>
+          <View style={popup.triviaIndexBadge} accessibilityLabel={`Model ${modelNumber}`}>
+            <Text style={popup.triviaIndexText}>{modelNumber}</Text>
           </View>
           <ScrollView showsVerticalScrollIndicator={false} style={{ flex: 1 }}>
-            <Text style={popup.triviaText}>{trivia[currentIdx]}</Text>
+            <Text style={popup.triviaText}>{fact}</Text>
           </ScrollView>
         </View>
-
-        {trivia.length > 1 && (
-          <>
-            <View style={popup.dotsRow}>
-              {trivia.map((_, i) => (
-                <TouchableOpacity
-                  accessibilityRole="button"
-                  key={i}
-                  onPress={() => setCurrentIdx(i)}
-                  style={[popup.dot, i === currentIdx && popup.dotActive]}
-                />
-              ))}
-            </View>
-            <View style={popup.navRow}>
-              <TouchableOpacity
-                accessibilityRole="button"
-                style={[popup.navBtn, isFirst && popup.navBtnDisabled]}
-                onPress={goPrev}
-                disabled={isFirst}
-                activeOpacity={0.7}
-              >
-                <Icon name="chevron-left" size={16} color={isFirst ? TOKEN.textMuted : TOKEN.goldLight} />
-                <Text style={[popup.navText, isFirst && popup.navTextDisabled]}>Previous</Text>
-              </TouchableOpacity>
-              <Text style={popup.counter}>{currentIdx + 1} of {trivia.length}</Text>
-              <TouchableOpacity
-                accessibilityRole="button"
-                style={[popup.navBtn, isLast && popup.navBtnDisabled]}
-                onPress={goNext}
-                disabled={isLast}
-                activeOpacity={0.7}
-              >
-                <Text style={[popup.navText, isLast && popup.navTextDisabled]}>Next</Text>
-                <Icon name="chevron-right" size={16} color={isLast ? TOKEN.textMuted : TOKEN.goldLight} />
-              </TouchableOpacity>
-            </View>
-          </>
-        )}
 
         <TouchableOpacity
           accessibilityRole="button" style={popup.doneBtn} onPress={onClose} activeOpacity={0.85}>
@@ -1492,27 +1449,6 @@ const popup = StyleSheet.create({
   },
   triviaIndexText: { color: TOKEN.goldLight, fontSize: 12, fontFamily: fonts.sansBold },
   triviaText:      { color: TOKEN.textPrimary, fontSize: 14, lineHeight: 22, flex: 1, flexShrink: 1, opacity: 0.92 },
-  dotsRow:         { flexDirection: "row", justifyContent: "center", gap: 6, marginBottom: 14 },
-  dot:             { width: 6, height: 6, borderRadius: 3, backgroundColor: TOKEN.border },
-  dotActive:       { backgroundColor: TOKEN.goldLight, width: 20, borderRadius: 3 },
-  navRow:          { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 18 },
-  navBtn: {
-    flexDirection:     "row",
-    alignItems:        "center",
-    gap:               5,
-    paddingVertical:   9,
-    paddingHorizontal: 14,
-    backgroundColor:   TOKEN.surfaceHigh,
-    borderRadius:      TOKEN.radiusSm,
-    borderWidth:       1,
-    borderColor:       TOKEN.border,
-    minWidth:          100,
-    justifyContent:    "center",
-  },
-  navBtnDisabled:  { opacity: 0.3 },
-  navText:         { color: TOKEN.textPrimary, fontSize: 13, fontFamily: fonts.sansSemi },
-  navTextDisabled: { color: TOKEN.textMuted },
-  counter:         { color: TOKEN.textSecond, fontSize: 12, fontFamily: fonts.sansMedium },
   doneBtn: {
     flexDirection:   "row",
     alignItems:      "center",
