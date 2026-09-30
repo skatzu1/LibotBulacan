@@ -897,6 +897,7 @@ export default function InformationScreen({ route, navigation }) {
               placeholderTextColor={colors.placeholder}
               value={reportDetails}
               onChangeText={setReportDetails}
+              maxLength={500}
               textAlignVertical="top"
               accessibilityLabel="Additional details"
             />

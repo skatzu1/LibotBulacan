@@ -20,6 +20,7 @@ import { TERMS_URL as TERMS_OF_SERVICE_URL, PRIVACY_URL as PRIVACY_POLICY_URL } 
 import AuthScaffold, { useAuthStyles, FieldError, FormError } from "../components/AuthScaffold";
 import {
   nameError, emailError, dobError, clerkErrorToField, TERMS_ERROR,
+  cleanName, cleanEmail, NAME_MAX, EMAIL_MAX,
 } from "../utils/authValidation";
 import Icon from "../components/Icon";
 
@@ -249,7 +250,7 @@ export default function Register({ navigation }) {
 
     setIsLoading(true);
     try {
-      const [firstName, ...lastNameParts] = name.trim().split(" ");
+      const [firstName, ...lastNameParts] = name.trim().split(/\s+/);
       const lastName = lastNameParts.join(" ") || "";
       const signUpResult = await signUp.create({ emailAddress: email.trim(), password, firstName, lastName });
       await signUp.prepareEmailAddressVerification({ strategy: "email_code" });
@@ -314,8 +315,9 @@ export default function Register({ navigation }) {
           placeholder="FULL NAME"
           placeholderTextColor={colors.placeholder}
           value={name}
-          onChangeText={edit("name", setName)}
+          onChangeText={edit("name", (v) => setName(cleanName(v)))}
           onBlur={() => touch("name")}
+          maxLength={NAME_MAX}
           autoCapitalize="words"
           autoComplete="name"
           textContentType="name"
@@ -336,10 +338,12 @@ export default function Register({ navigation }) {
           placeholder="EMAIL"
           placeholderTextColor={colors.placeholder}
           value={email}
-          onChangeText={edit("email", setEmail)}
+          onChangeText={edit("email", (v) => setEmail(cleanEmail(v)))}
           onBlur={() => touch("email")}
+          maxLength={EMAIL_MAX}
           keyboardType="email-address"
           autoCapitalize="none"
+          autoCorrect={false}
           autoComplete="email"
           textContentType="emailAddress"
           returnKeyType="next"
