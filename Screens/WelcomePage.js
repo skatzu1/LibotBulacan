@@ -1,35 +1,40 @@
-import React from "react";
+import React, { useMemo } from "react";
 import {
   View, Text, StyleSheet, TouchableOpacity, StatusBar, ImageBackground,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
-import { auth as A, typography, fonts, MAX_FONT_SCALE } from "../context/ThemeContext";
+import { useTheme, typography, fonts, shadow, MAX_FONT_SCALE } from "../context/ThemeContext";
 
 /*
- * Onboarding, screen 1 of 2 — built from the approved mockup.
+ * Onboarding, screen 1 of 2.
  *
- * bg.png (Bulacan landmarks with the cyan→yellow duotone baked in, shared with
- * the sign-in and sign-up screens), an oversized headline with two words
- * picked out in the CTA yellow, page dots, and the yellow Next button.
+ * bg.png (Bulacan landmarks, shared with the sign-in and sign-up screens), an
+ * oversized headline with two words picked out in the accent yellow, page
+ * dots, and the yellow Next button. Colours are the app's theme tokens: in
+ * dark mode the photo sits under the same dark veil as the sign-in screens.
  */
 export default function WelcomePage({ navigation }) {
   const insets = useSafeAreaInsets();
+  const { colors, isDark } = useTheme();
+  const styles = useMemo(() => makeStyles(colors), [colors]);
 
   return (
     <View style={styles.screen}>
-      <StatusBar barStyle="dark-content" backgroundColor="transparent" translucent />
+      <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor="transparent" translucent />
 
       <ImageBackground
         source={require("../assets/bg.png")}
         style={StyleSheet.absoluteFill}
         resizeMode="cover"
       >
+        {/* Light: the photo as is. Dark: veiled so it doesn't glare. */}
+        {isDark && <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.photoVeil }]} />}
         {/* White text over bg.png measures ~1.5:1 on its own. This band sits
             behind the headline only and lifts it past 6:1 without darkening
             the whole composition. */}
         <LinearGradient
-          colors={["transparent", "rgba(12,34,36,0.68)", "rgba(12,34,36,0.68)", "transparent"]}
+          colors={["transparent", colors.photoScrim, colors.photoScrim, "transparent"]}
           locations={[0.18, 0.34, 0.74, 0.92]}
           style={StyleSheet.absoluteFill}
           pointerEvents="none"
@@ -71,41 +76,40 @@ export default function WelcomePage({ navigation }) {
   );
 }
 
-const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: A.washTop },
+const makeStyles = (c) => StyleSheet.create({
+  screen: { flex: 1, backgroundColor: c.background },
 
   content: { flex: 1, paddingHorizontal: 30, justifyContent: "space-between" },
 
   headlineWrap: { flex: 1, justifyContent: "center" },
+  // White on the dark scrim band in both themes — it sits on the photo, not
+  // on a page surface.
   headline: {
     ...typography.h1,
     fontSize: 52,
     lineHeight: 60,
-    color: A.onPhoto,
+    color: "#FFFFFF",
     textAlign: "center",
     // Backs up the scrim band over the brightest parts of the photograph.
-    textShadowColor: "rgba(12,34,36,0.45)",
+    textShadowColor: c.photoScrim,
     textShadowOffset: { width: 0, height: 2 },
     textShadowRadius: 12,
   },
-  accentWord: { color: A.cta },
+  accentWord: { color: c.accent },
 
   bottom: { gap: 22 },
   dots:      { flexDirection: "row", gap: 9, alignSelf: "center" },
   dot:       { width: 9, height: 9, borderRadius: 5, backgroundColor: "#FFFFFF" },
-  dotActive: { backgroundColor: A.cta },
+  dotActive: { backgroundColor: c.accent },
 
+  // The app's primary button.
   cta: {
     height: 62,
-    borderRadius: 18,
+    borderRadius: 31,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: A.cta,
-    shadowColor: "#4A4200",
-    shadowOpacity: 0.28,
-    shadowRadius: 16,
-    shadowOffset: { width: 0, height: 6 },
-    elevation: 4,
+    backgroundColor: c.accent,
+    ...shadow.md,
   },
-  ctaText: { fontFamily: fonts.sansBold, fontSize: 18, color: A.onCta, letterSpacing: 0.2 },
+  ctaText: { fontFamily: fonts.sansBold, fontSize: 18, color: c.onAccent, letterSpacing: 0.2 },
 });

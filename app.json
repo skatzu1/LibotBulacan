@@ -28,6 +28,18 @@
       "expo-font",
       "expo-asset",
       [
+        "expo-splash-screen",
+        {
+          "image": "./assets/splash-icon.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#FBF8F2",
+          "dark": {
+            "backgroundColor": "#0E1C1E"
+          }
+        }
+      ],
+      [
         "expo-notifications",
         {
           "icon": "./assets/notification-icon.png",

@@ -27,7 +27,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useAuth, useUser } from "@clerk/clerk-expo";
 import Icon from "../components/Icon";
 import { navigationRef } from "../navigation/navigationRef";
-import { useTheme } from "./ThemeContext";
+import { useTheme, fonts } from "./ThemeContext";
 import { BASE_URL } from "../api";
 import { badgeImage } from "../utils/image";
 import { evaluateFix, watchTierFor } from "../utils/arrivalEngine";
@@ -557,7 +557,7 @@ export function ArrivalProvider({ children }) {
                 foregroundService: {
                   notificationTitle: "Libot is tracking your location",
                   notificationBody:  "Detecting nearby tourist spots in Bulacan.",
-                  notificationColor: "#0C7A84",
+                  notificationColor: "#0A6F78", // lightColors.brand
                 },
               });
               console.log("[Location] Background tracking started");
@@ -1043,7 +1043,7 @@ export function ArrivalProvider({ children }) {
           <Animated.View
             pointerEvents="none"
             style={[styles.pointsPopup, {
-              backgroundColor: colors.background,
+              backgroundColor: colors.card,
               borderColor: colors.accent,
               opacity:   pointsOpacity,
               transform: [{ translateY: pointsTranslateY }, { scale: pointsScale }],
@@ -1062,7 +1062,7 @@ export function ArrivalProvider({ children }) {
           <Animated.View
             pointerEvents="auto"
             style={[styles.badgeBanner, {
-              backgroundColor: colors.background,
+              backgroundColor: colors.card,
               borderColor: colors.accent,
               opacity:   badgeOpacity,
               transform: [{ translateY: badgeTranslateY }],
@@ -1094,30 +1094,31 @@ export function ArrivalProvider({ children }) {
 // ─────────────────────────────────────────────
 // Styles
 // ─────────────────────────────────────────────
+// Colours come from the theme inline in the JSX above; these are layout only.
 const styles = StyleSheet.create({
   pointsOverlay: { flex: 1, justifyContent: "flex-end", alignItems: "center", paddingBottom: 110 },
   pointsPopup: {
-    backgroundColor: "#fff", borderRadius: 24, paddingVertical: 22, paddingHorizontal: 40,
+    borderRadius: 24, paddingVertical: 22, paddingHorizontal: 40,
     alignItems: "center", shadowColor: "#000", shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.25, shadowRadius: 10, elevation: 25, borderWidth: 2, borderColor: "#F2CE1B", minWidth: 200,
+    shadowOpacity: 0.25, shadowRadius: 10, elevation: 25, borderWidth: 2, minWidth: 200,
   },
   pointsIcon:   { marginBottom: 6 },
-  pointsTitle:  { fontSize: 18, fontWeight: "700", color: "#4C5A5B", marginBottom: 4 },
-  pointsEarned: { fontSize: 28, fontWeight: "800", color: "#0C7A84", marginBottom: 2 },
-  pointsTotal:  { fontSize: 13, color: "#66787A", fontWeight: "500" },
+  pointsTitle:  { fontFamily: fonts.sansBold, fontSize: 18, marginBottom: 4 },
+  pointsEarned: { fontFamily: fonts.display, fontSize: 28, marginBottom: 2 },
+  pointsTotal:  { fontFamily: fonts.sansMedium, fontSize: 13 },
 
   badgeBackdrop: { flex: 1, pointerEvents: "none" },
   badgeBanner: {
-    marginTop: Platform.OS === "ios" ? 55 : 40, marginHorizontal: 16, backgroundColor: "#fff",
+    marginTop: Platform.OS === "ios" ? 55 : 40, marginHorizontal: 16,
     borderRadius: 18, paddingVertical: 14, paddingHorizontal: 16, flexDirection: "row",
     alignItems: "center", shadowColor: "#000", shadowOffset: { width: 0, height: 5 },
-    shadowOpacity: 0.2, shadowRadius: 12, elevation: 25, borderWidth: 1.5, borderColor: "#F2CE1B",
+    shadowOpacity: 0.2, shadowRadius: 12, elevation: 25, borderWidth: 1.5,
   },
   bannerTouchable:   { flex: 1, flexDirection: "row" },
   bannerLeft:        { flexDirection: "row", alignItems: "center", gap: 12, flex: 1 },
   bannerImage:       { width: 46, height: 46, borderRadius: 23, resizeMode: "cover" },
-  bannerPlaceholder: { width: 46, height: 46, borderRadius: 23, backgroundColor: "#E6F6F8", justifyContent: "center", alignItems: "center" },
-  bannerLabel:       { fontSize: 11, color: "#0C7A84", fontWeight: "700", textTransform: "uppercase", letterSpacing: 0.6 },
-  bannerName:        { fontSize: 14, color: "#232B2C", fontWeight: "600", marginTop: 2 },
-  bannerSub:         { fontSize: 11, color: "#66787A", marginTop: 3, fontWeight: "500" },
+  bannerPlaceholder: { width: 46, height: 46, borderRadius: 23, justifyContent: "center", alignItems: "center" },
+  bannerLabel:       { fontFamily: fonts.sansBold, fontSize: 11, textTransform: "uppercase", letterSpacing: 0.6 },
+  bannerName:        { fontFamily: fonts.sansSemi, fontSize: 14, marginTop: 2 },
+  bannerSub:         { fontFamily: fonts.sansMedium, fontSize: 11, marginTop: 3 },
 });
