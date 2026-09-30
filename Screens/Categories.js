@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
 import {
-  View, Text, TouchableOpacity, StyleSheet, ScrollView, StatusBar, RefreshControl,
+  View, Text, TouchableOpacity, StyleSheet, ScrollView, StatusBar, RefreshControl, Image,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -8,10 +8,13 @@ import Animated, { FadeInDown, ReduceMotion } from "react-native-reanimated";
 import {
   useTheme, typography, radius, TAB_BAR_CLEARANCE, MAX_FONT_SCALE,
 } from "../context/ThemeContext";
-import { ScreenHeader, SectionTitle, ErrorState, useGrid, H_PAD } from "../components/ui";
+import { ScreenHeader, SectionTitle, ErrorState, PhotoScrim, useGrid, H_PAD } from "../components/ui";
 import CategoriesSkeleton from "../components/CategoriesSkeleton";
 import { categoryAPI } from "../api";
+import { spotImage } from "../utils/image";
 import Icon from "../components/Icon";
+
+const CARD_H = 168;
 
 // Fallback only. The categories are served from /api/categories now, so an
 // admin can add or rename one without an app release — but a browse screen
@@ -25,12 +28,12 @@ const FALLBACK_CATEGORIES = [
   { name: "Festivals",  icon: "award" },
 ];
 
-// Categories are CONCEPTS, not places — photographing them is what forced every
-// tile into the same "photo + dark scrim + white bold name" shape the app
-// already uses for the hero, the most-visited grid and every SpotCard. These are
-// typographic instead: a material tint drawn from Bulacan's own palette
-// (terracotta roof tile, Katipunan indigo, narra, capiz gold) with the icon
-// blown up as a watermark bleeding off the corner.
+// Each tile shows its category's photo, served from /api/categories (the
+// `image` field an admin sets). A category without one — including the offline
+// fallback above — gets a typographic tile instead: a material tint drawn from
+// Bulacan's own palette (terracotta roof tile, Katipunan indigo, narra, capiz
+// gold) with the icon blown up as a watermark. The tint also sits under a photo
+// while it loads, so tiles never flash empty.
 const TILE_TINTS = [
   { light: "#F2D9CC", dark: "#2E2019" }, // terracotta
   { light: "#D9DFF0", dark: "#1B2030" }, // indigo
@@ -124,8 +127,10 @@ export default function Categories() {
 
           <View style={[styles.grid, { gap }]}>
             {categories.map((cat, i) => {
-              const tint = TILE_TINTS[i % TILE_TINTS.length];
-              const bg   = isDark ? tint.dark : tint.light;
+              const tint  = TILE_TINTS[i % TILE_TINTS.length];
+              const bg    = isDark ? tint.dark : tint.light;
+              const photo = !!cat.image;
+              const ink   = photo ? "#fff" : colors.textPrimary;
               return (
                 <Animated.View
                   key={cat._id || cat.name}
@@ -140,27 +145,44 @@ export default function Categories() {
                     accessibilityRole="button"
                     accessibilityLabel={`${cat.name} spots`}
                   >
-                    {/* Oversized icon watermark, bleeding off the bottom-right */}
-                    <Icon
-                      name={cat.icon || "map-pin"}
-                      size={112}
-                      color={colors.textPrimary}
-                      style={styles.watermark}
-                    />
+                    {photo ? (
+                      <>
+                        <Image
+                          source={{ uri: spotImage(cat.image, cardW, CARD_H) }}
+                          style={StyleSheet.absoluteFill}
+                          resizeMode="cover"
+                        />
+                        {/* Starts higher than the default so a two-line name
+                            still sits on the dark part of the gradient.
+                            Measured on the four live photos: white label
+                            ≥ 4.64:1, icon chip ≥ 4.85:1. */}
+                        <PhotoScrim from={0.1} />
+                      </>
+                    ) : (
+                      // Oversized icon watermark, bleeding off the bottom-right
+                      <Icon
+                        name={cat.icon || "map-pin"}
+                        size={112}
+                        color={colors.textPrimary}
+                        style={styles.watermark}
+                      />
+                    )}
 
                     <View style={styles.cardTop}>
-                      <Icon name={cat.icon || "map-pin"} size={18} color={colors.textPrimary} />
+                      <View style={photo && styles.iconChip}>
+                        <Icon name={cat.icon || "map-pin"} size={photo ? 16 : 18} color={ink} />
+                      </View>
                     </View>
 
                     <View style={styles.cardFooter}>
                       <Text
-                        style={[styles.cardLabel, { color: colors.textPrimary }]}
+                        style={[styles.cardLabel, { color: ink }, photo && styles.cardLabelOnPhoto]}
                         numberOfLines={2}
                         maxFontSizeMultiplier={MAX_FONT_SCALE}
                       >
                         {cat.name}
                       </Text>
-                      <Icon name="arrow-up-right" size={18} color={colors.textPrimary} />
+                      <Icon name="arrow-up-right" size={18} color={ink} />
                     </View>
                   </TouchableOpacity>
                 </Animated.View>
@@ -186,7 +208,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: H_PAD,
   },
   card: {
-    height: 168,
+    height: CARD_H,
     borderRadius: radius.card,
     overflow: "hidden",
     padding: 14,
@@ -200,6 +222,13 @@ const styles = StyleSheet.create({
     opacity: 0.09,
   },
   cardTop: { flexDirection: "row" },
+  // The icon rides in a dark chip over a photo — bare white on a bright sky
+  // would disappear.
+  iconChip: {
+    width: 32, height: 32, borderRadius: 16,
+    alignItems: "center", justifyContent: "center",
+    backgroundColor: "rgba(6,20,22,0.55)",
+  },
   cardFooter: {
     flexDirection: "row",
     alignItems: "flex-end",
@@ -208,4 +237,5 @@ const styles = StyleSheet.create({
   },
   // The serif is what makes these read as a masthead rather than a photo caption.
   cardLabel: { ...typography.display, fontSize: 21, lineHeight: 25, flex: 1 },
+  cardLabelOnPhoto: { textShadowColor: "rgba(0,0,0,0.45)", textShadowRadius: 6 },
 });
