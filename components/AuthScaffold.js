@@ -19,8 +19,7 @@ import Logo from "./Logo";
  *      corner. That single asymmetric corner is the signature of this surface;
  *      four equal radii would read as a generic card.
  *
- * Login and Forgot Password use the cyan variant, Register the yellow one (whose
- * hero is a bubble field rather than a photo, per the mockup).
+ * Login and Forgot Password use the cyan variant, Register the yellow one.
  */
 
 export function AuthHero({ children, variant = "photo", height }) {
@@ -30,39 +29,6 @@ export function AuthHero({ children, variant = "photo", height }) {
   // Transparent: the screen's own full-screen background shows through.
   if (variant === "clear") {
     return <View style={[s.hero, { height: h }]}>{children}</View>;
-  }
-
-  if (variant === "bubbles") {
-    // Register's header: cyan circles scattered on white. Positions are fixed
-    // rather than random so the composition is the same on every launch.
-    const BUBBLES = [
-      { x: -0.06, y: -0.10, r: 0.30, o: 0.55 }, { x: 0.18, y: -0.22, r: 0.36, o: 0.80 },
-      { x: 0.44, y: -0.06, r: 0.26, o: 0.45 },  { x: 0.55, y: -0.26, r: 0.34, o: 0.70 },
-      { x: 0.78, y: -0.14, r: 0.30, o: 0.55 },  { x: 0.30, y: 0.10, r: 0.22, o: 0.35 },
-      { x: 0.02, y: 0.16, r: 0.18, o: 0.65 },   { x: 0.88, y: 0.06, r: 0.20, o: 0.40 },
-    ];
-    return (
-      <View style={[s.hero, { height: h, backgroundColor: "#FFFFFF" }]}>
-        {BUBBLES.map((b, i) => {
-          const d = Math.round(h * b.r * 2);
-          return (
-            <View
-              key={i}
-              pointerEvents="none"
-              style={{
-                position: "absolute",
-                left: `${b.x * 100}%`,
-                top: h * b.y,
-                width: d, height: d, borderRadius: d / 2,
-                backgroundColor: "#3FD4E6",
-                opacity: b.o,
-              }}
-            />
-          );
-        })}
-        {children}
-      </View>
-    );
   }
 
   return (
@@ -89,8 +55,9 @@ export function AuthHero({ children, variant = "photo", height }) {
 // With a full-screen background the panel is slightly see-through, so the
 // picture carries on behind the form. 0.88 is the lowest opacity that keeps
 // every text colour on the panel at WCAG AA (≥ 4.5:1) even over the darkest
-// part of bg.png — measured: body 6.99:1, muted 4.57:1 (0.85 drops muted
-// to 4.45:1). Re-measure if the background image changes.
+// part of bg.png — measured on cyan: body 6.92:1, muted 4.53:1; on yellow:
+// body 7.10:1, muted 4.64:1 (0.85 drops cyan muted to 4.45:1). Re-measure if
+// the background image changes.
 const PANEL_OVER_IMAGE_OPACITY = 0.88;
 
 const withAlpha = (hex, alpha) => {
@@ -109,7 +76,6 @@ const withAlpha = (hex, alpha) => {
  */
 export default function AuthScaffold({
   variant = "cyan",
-  hero = "photo",
   showLogo = true,
   onBack,
   title,
@@ -120,7 +86,6 @@ export default function AuthScaffold({
 }) {
   const insets = useSafeAreaInsets();
   const panel  = variant === "yellow" ? A.yellowPanel : A.cyanPanel;
-  const heroVariant = background && hero === "photo" ? "clear" : hero;
   const panelBg = background ? withAlpha(panel, PANEL_OVER_IMAGE_OPACITY) : panel;
 
   // The background stays put while the form scrolls over it.
@@ -141,29 +106,18 @@ export default function AuthScaffold({
           showsVerticalScrollIndicator={false}
           bounces={false}
         >
-          <AuthHero variant={heroVariant}>
+          <AuthHero variant={background ? "clear" : "photo"}>
             {showLogo && (
               <View style={[s.logoWrap, { marginTop: insets.top }]}>
                 <Logo size={120} />
               </View>
-            )}
-            {hero === "bubbles" && onBack && (
-              <TouchableOpacity
-                onPress={onBack}
-                style={[s.backBtn, { top: insets.top + 8 }]}
-                hitSlop={12}
-                accessibilityRole="button"
-                accessibilityLabel="Go back"
-              >
-                <Icon name="chevron-left" size={26} color={A.muted} />
-              </TouchableOpacity>
             )}
           </AuthHero>
 
           {/* The panel pulls up over the hero so the oversized corner cuts into
               the photograph, exactly as the mockup draws it. */}
           <View style={[s.panel, { backgroundColor: panelBg }]}>
-            {hero !== "bubbles" && onBack && (
+            {onBack && (
               <TouchableOpacity
                 onPress={onBack}
                 style={s.backInline}
@@ -271,7 +225,6 @@ const s = StyleSheet.create({
 
   logoWrap: { alignItems: "center", justifyContent: "center" },
 
-  backBtn:    { position: "absolute", left: 18, width: 44, height: 44, alignItems: "center", justifyContent: "center" },
   backInline: { width: 44, height: 44, alignItems: "flex-start", justifyContent: "center", marginBottom: 4 },
 
   panel: {
