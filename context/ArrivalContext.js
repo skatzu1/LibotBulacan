@@ -31,10 +31,12 @@ import { useTheme } from "./ThemeContext";
 import { BASE_URL } from "../api";
 import { badgeImage } from "../utils/image";
 import { evaluateFix, watchTierFor } from "../utils/arrivalEngine";
+import { ARRIVAL_POINTS } from "../utils/missionTiers";
+import { usePoints } from "./PointsContext";
 
 // Single source of truth for the backend host — see api.js.
 const ARRIVAL_RADIUS_METERS    = 50;
-const POINTS_PER_VISIT         = 10;
+const POINTS_PER_VISIT         = ARRIVAL_POINTS;   // display only; the server awards it
 const ACTIVE_SPOT_KEY          = "activeSpot";
 const ALL_SPOTS_KEY            = "allSpots";
 const SPOTS_CACHE_TTL_MS       = 5 * 60 * 1000;
@@ -365,6 +367,12 @@ export function useArrival() {
 // ─────────────────────────────────────────────
 export function ArrivalProvider({ children }) {
   const { getToken, isSignedIn } = useAuth();
+  // After a visit is logged, re-read points + visited spots so the Home pill
+  // and the "Arrive at the spot" major mission update without a screen change.
+  // A ref, so the long-lived arrival callbacks never hold a stale copy.
+  const { refresh: refreshPoints } = usePoints();
+  const refreshPointsRef = useRef(refreshPoints);
+  refreshPointsRef.current = refreshPoints;
   const { user: clerkUser }      = useUser();
   const { colors }               = useTheme();
 
@@ -816,6 +824,7 @@ export function ArrivalProvider({ children }) {
         body:    JSON.stringify({ spotId }),
       });
       console.log("[VisitLog] Logged visit for:", spot.name);
+      refreshPointsRef.current?.();
     } catch (e) { console.warn("[VisitLog] Failed:", e); }
 
     // ── Notification (every fresh arrival) ─────────────────────────────────
