@@ -13,7 +13,7 @@ import { useReviews } from "../context/ReviewContext";
 import { useMissions } from "../context/MissionContext";
 import { usePoints } from "../context/PointsContext";
 import { useProfileImage } from "../context/ProfileImageContext";
-import { splitByTier, ARRIVAL_POINTS } from "../utils/missionTiers";
+import { splitByTier, ARRIVAL_POINTS, TIER_LABELS } from "../utils/missionTiers";
 import { useTheme, radius, shadow, fonts, typography, MAX_FONT_SCALE } from "../context/ThemeContext";
 import ModelViewer from "../utils/ModelViewer";
 import { ensureAtSpotForAR } from "../utils/arLocationGate";
@@ -277,13 +277,14 @@ function ReviewCard({ review, spotId, clerkUser, profileImage, reactToReview, on
   );
 }
 
-// Major missions (arriving, AR) — full-width gold cards with a clear next step.
-// Minor ones use the compact MissionRow list below, in teal.
+// Major missions ("Must-Dos": arriving, AR) — full-width gold cards with a
+// clear next step. Minor ones ("Side Trips") use the compact MissionRow list
+// below, in teal. Labels live in utils/missionTiers.js.
 function MajorMissionCard({ icon, title, description, points, isDone, actionLabel, onPress, colors }) {
   return (
     <TouchableOpacity
       accessibilityRole="button"
-      accessibilityLabel={`Major mission: ${title}, ${points} points${isDone ? ", completed" : `. ${actionLabel}`}`}
+      accessibilityLabel={`${TIER_LABELS.major.title}: ${title}, ${points} points${isDone ? ", completed" : `. ${actionLabel}`}`}
       style={[styles.majorCard, { backgroundColor: colors.card, borderColor: isDone ? colors.success : colors.cardBorder }]}
       onPress={onPress}
       activeOpacity={0.85}
@@ -536,7 +537,7 @@ export default function InformationScreen({ route, navigation }) {
         return;
       }
       setShowReportModal(false);
-      if (result) showToast("Report sent — our moderators will review it.", { type: "success" });
+      if (result) showToast("Report sent. Our moderators will review it.", { type: "success" });
       else showAlert("Error", "Failed to submit report. Please try again.");
     } catch (err) {
       setSubmittingReport(false);
@@ -662,21 +663,22 @@ export default function InformationScreen({ route, navigation }) {
                     <View style={[styles.progressFill, { width: `${progressRatio * 100}%`, backgroundColor: colors.brand }]} />
                   </View>
                   <Text style={[styles.progressSub, { color: colors.textMuted }]}>
-                    {majorDone} of {majorTotal} major{minorTotal > 0 ? ` · ${minorDone} of ${minorTotal} minor` : ""}
+                    {majorDone} of {majorTotal} {TIER_LABELS.major.title.toLowerCase()}
+                    {minorTotal > 0 ? ` · ${minorDone} of ${minorTotal} ${TIER_LABELS.minor.title.toLowerCase()}` : ""}
                   </Text>
                 </View>
 
                 <Text style={[styles.sectionHeading, styles.tierHeading, { color: colors.textPrimary }]} accessibilityRole="header">
-                  Major missions
+                  {TIER_LABELS.major.title}
                 </Text>
-                <Text style={[styles.tierSub, { color: colors.textMuted }]}>The reason to go — worth the most points</Text>
+                <Text style={[styles.tierSub, { color: colors.textMuted }]}>{TIER_LABELS.major.sub}</Text>
                 <View style={styles.majorList}>
                   <MajorMissionCard
                     icon="map-pin"
                     title={`Arrive at ${spot.name}`}
                     description={arrived
-                      ? "You've been here — your visit is logged."
-                      : "Get there in person. Your phone's location confirms you've arrived."}
+                      ? "You've been here. Your visit is logged."
+                      : "Go there in person. Your phone's location confirms you arrived."}
                     points={ARRIVAL_POINTS}
                     isDone={arrived}
                     actionLabel="Navigate"
@@ -701,9 +703,9 @@ export default function InformationScreen({ route, navigation }) {
                 {tiers.minor.length > 0 && (
                   <>
                     <Text style={[styles.sectionHeading, styles.tierHeading, { color: colors.textPrimary }]} accessibilityRole="header">
-                      Minor missions
+                      {TIER_LABELS.minor.title}
                     </Text>
-                    <Text style={[styles.tierSub, { color: colors.textMuted }]}>Extras while you're there</Text>
+                    <Text style={[styles.tierSub, { color: colors.textMuted }]}>{TIER_LABELS.minor.sub}</Text>
                     <View style={[styles.missionList, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
                       {tiers.minor.map((mission, i) => (
                         <React.Fragment key={mission._id}>
@@ -732,7 +734,7 @@ export default function InformationScreen({ route, navigation }) {
               </View>
               <Text style={[styles.sectionHeading, { color: colors.textPrimary }]}>All reviews ({reviewCount})</Text>
               {reviews.length === 0 ? (
-                <EmptyState icon="message-square" text="No reviews yet — be the first to write one below." />
+                <EmptyState icon="message-square" text="No reviews yet. Be the first to write one below." />
               ) : reviews.map((review) => (
                 <ReviewCard
                   key={review._id}
