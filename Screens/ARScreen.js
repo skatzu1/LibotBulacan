@@ -2055,6 +2055,13 @@ export default function ARScreen({ route, navigation }) {
 
       <ViroARSceneNavigator
         initialScene={{ scene: ARScene }}
+        // ARCore's default is FIXED focus, set near the hyperfocal distance for
+        // tracking far surfaces, so anything within a couple of metres (a
+        // plaque, a statue, the ground the model stands on) is soft. `autofocus`
+        // switches the session to continuous AUTO focus; Viro wires it through
+        // to ArConfig_setFocusMode on Android and the ARKit session on iOS.
+        // ARCore offers no tap-to-focus region, so continuous AF is the control.
+        autofocus
         viroAppProps={{
           spot,
           // `activeAnchors` is still every in-range anchor, because the
