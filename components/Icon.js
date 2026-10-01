@@ -123,8 +123,14 @@ import { WifiSlashIcon } from "phosphor-react-native/src/icons/WifiSlash";
 import { XIcon } from "phosphor-react-native/src/icons/X";
 import { XCircleIcon } from "phosphor-react-native/src/icons/XCircle";
 
+import { DotsThreeVerticalIcon } from "phosphor-react-native/src/icons/DotsThreeVertical";
+import { FunnelIcon } from "phosphor-react-native/src/icons/Funnel";
+import { SlidersHorizontalIcon } from "phosphor-react-native/src/icons/SlidersHorizontal";
 // Explicit component table, built from the named imports above.
 const PH = {
+  SlidersHorizontal: SlidersHorizontalIcon,
+  Funnel: FunnelIcon,
+  DotsThreeVertical: DotsThreeVerticalIcon,
   Aperture: ApertureIcon,
   ArrowCircleRight: ArrowCircleRightIcon,
   ArrowLeft: ArrowLeftIcon,
@@ -289,6 +295,9 @@ const MAP = {
   "send":              "PaperPlaneTilt",
   "share-2":           "ShareNetwork",
   "trash-2":           "Trash",
+  "sliders":          "SlidersHorizontal",
+  "filter":           "Funnel",
+  "more-vertical":    "DotsThreeVertical",
 
   // camera / AR / media
   "camera":            "Camera",
