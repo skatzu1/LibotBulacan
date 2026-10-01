@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import {
   View, Text, Image, TouchableOpacity, StyleSheet,
   ScrollView, TextInput, KeyboardAvoidingView, Platform,
-  ActivityIndicator, Modal, StatusBar,
+  Modal, StatusBar,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { showAlert, showToast } from "../components/AppAlert";
@@ -121,11 +121,15 @@ const showSuspendedAlert = (result) => {
   );
 };
 
+// Reviews live at the foot of Overview rather than in a tab of their own: what
+// a place is and what people thought of it are read together.
 const TABS = [
   { key: "Overview",   label: "Overview",   icon: "book-open" },
   { key: "BucketList", label: "Bakit List", icon: "flag"      },
-  { key: "Reviews",    label: "Reviews",    icon: "star"      },
 ];
+
+// Overview shows this many reviews before "Show all".
+const REVIEWS_PREVIEW = 3;
 
 /* ── Pieces of the screen ─────────────────────────────────────────────────
    These used to be declared INSIDE InformationScreen, which makes each one a
@@ -365,7 +369,8 @@ export default function InformationScreen({ route, navigation }) {
   const [show3D,           setShow3D]           = useState(false);
   const [newRating,        setNewRating]        = useState(0);
   const [newReview,        setNewReview]        = useState("");
-  const [showStarPicker,   setShowStarPicker]   = useState(false);
+  const [showComposer,     setShowComposer]     = useState(false);
+  const [showAllReviews,   setShowAllReviews]   = useState(false);
   const [screenReady,      setScreenReady]      = useState(false);
   const [reportTarget,     setReportTarget]     = useState(null);
   const [showReportModal,  setShowReportModal]  = useState(false);
@@ -440,7 +445,6 @@ export default function InformationScreen({ route, navigation }) {
   const averageRating    = getAverageRating(spot._id) || "0.0";
   const reviewCount      = getReviewCount(spot._id);
   const missions         = getMissionsForSpot(spot._id);
-  const isReviewsTab     = activeTab === "Reviews";
   // Hierarchy: arriving + AR are major, AI + food are minor (utils/missionTiers).
   // Arriving isn't a Mission document, so it's counted in by hand.
   const isDoneMission    = (m) => !!completedMissions?.includes(m._id);
@@ -467,31 +471,42 @@ export default function InformationScreen({ route, navigation }) {
     { icon: "phone",   label: "Contact",        value: spot.contact },
   ].filter((row) => !!row.value);
 
+  // A tap on a star in the summary opens the sheet with that rating chosen.
+  const openComposer = (rating = newRating) => {
+    setNewRating(rating);
+    setShowComposer(true);
+  };
+
   const handleSubmit = async () => {
-    if (newRating === 0) { setShowStarPicker(true); return; }
-    if (newReview.trim() === "") return;
-    if (submittingReview) return;
+    if (newRating === 0 || newReview.trim() === "" || submittingReview) return;
 
     setSubmittingReview(true);
     try {
       const result = await addReview(spot._id, newRating, newReview.trim());
+      // Suspended or muted: the sheet closes (they can't post) before the alert.
       if (isSuspendedResult(result)) {
+        setShowComposer(false);
         showSuspendedAlert(result);
         return;
       }
       if (isMutedResult(result)) {
+        setShowComposer(false);
         showMutedAlert(result);
         return;
       }
+      // Any other failure keeps the sheet open, so the text isn't lost.
       if (result && result.success === false) {
         showAlert("Error", result.message || "Failed to post your review. Please try again.");
         return;
       }
-      setNewRating(0); setNewReview(""); setShowStarPicker(false); inputRef.current?.blur();
+      setNewRating(0); setNewReview(""); setShowComposer(false);
+      showToast("Review posted. Thanks for sharing!", { type: "success" });
     } catch (err) {
       if (isSuspendedResult(err)) {
+        setShowComposer(false);
         showSuspendedAlert(err);
       } else if (isMutedResult(err)) {
+        setShowComposer(false);
         showMutedAlert(err);
       } else {
         showAlert("Error", "Failed to post your review. Please try again.");
@@ -614,7 +629,7 @@ export default function InformationScreen({ route, navigation }) {
           <Segmented
             options={TABS}
             value={activeTab}
-            onChange={(key) => { setActiveTab(key); setShowStarPicker(false); }}
+            onChange={setActiveTab}
           />
         </View>
 
@@ -643,6 +658,91 @@ export default function InformationScreen({ route, navigation }) {
                   </React.Fragment>
                 ))}
               </View>
+
+              {/* ── Reviews ── */}
+              <Text style={[styles.sectionHeading, styles.reviewsHeading, { color: colors.textPrimary }]} accessibilityRole="header">
+                Reviews{reviewCount > 0 ? ` (${reviewCount})` : ""}
+              </Text>
+
+              <View style={[styles.ratingSummary, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
+                <View style={styles.ratingTop}>
+                  <Text style={[styles.ratingBig, { color: colors.textPrimary }]}>{reviewCount > 0 ? averageRating : "–"}</Text>
+                  <View style={styles.ratingMeta}>
+                    <StarRating rating={Math.round(parseFloat(averageRating))} size={16} colors={colors} />
+                    <Text style={[styles.reviewCountText, { color: colors.textMuted }]}>
+                      {reviewCount > 0 ? `${reviewCount} ${reviewCount === 1 ? "review" : "reviews"}` : "No ratings yet"}
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={[styles.rateDivider, { backgroundColor: colors.cardBorder }]} />
+
+                {/* Tap a star to start a review with that rating. */}
+                <Text style={[styles.rateLabel, { color: colors.textSecondary }]}>Been here? Rate it</Text>
+                <View style={styles.rateRow}>
+                  <View style={styles.rateStars}>
+                    {[1, 2, 3, 4, 5].map((s) => (
+                      <TouchableOpacity
+                        key={s}
+                        onPress={() => openComposer(s)}
+                        hitSlop={6}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Rate ${s} out of 5 stars and write a review`}
+                      >
+                        <Icon name="star" size={26} color={colors.starEmpty} />
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                  <TouchableOpacity
+                    style={[styles.writeBtn, { backgroundColor: colors.brandLight }]}
+                    onPress={() => openComposer()}
+                    accessibilityRole="button"
+                    accessibilityLabel="Write a review"
+                    activeOpacity={0.8}
+                  >
+                    <Icon name="edit-2" size={14} color={colors.brand} />
+                    <Text style={[styles.writeBtnText, { color: colors.brand }]}>Write</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+
+              {reviews.length === 0 ? (
+                <EmptyState icon="message-square" text="No reviews yet. Be the first to share your experience." />
+              ) : (
+                <>
+                  {(showAllReviews ? reviews : reviews.slice(0, REVIEWS_PREVIEW)).map((review) => (
+                    <ReviewCard
+                      key={review._id}
+                      review={review}
+                      spotId={spot._id}
+                      clerkUser={clerkUser}
+                      profileImage={profileImage}
+                      reactToReview={reactToReview}
+                      onReport={openReportModal}
+                      colors={colors}
+                    />
+                  ))}
+                  {reviews.length > REVIEWS_PREVIEW && (
+                    <TouchableOpacity
+                      style={[styles.showAllBtn, { borderColor: colors.cardBorder }]}
+                      onPress={() => setShowAllReviews((v) => !v)}
+                      accessibilityRole="button"
+                      accessibilityState={{ expanded: showAllReviews }}
+                      activeOpacity={0.8}
+                    >
+                      <Text style={[styles.showAllText, { color: colors.brand }]}>
+                        {showAllReviews ? "Show fewer" : `Show all ${reviews.length} reviews`}
+                      </Text>
+                      <Icon
+                        name="chevron-down"
+                        size={16}
+                        color={colors.brand}
+                        style={showAllReviews ? styles.chevronUp : undefined}
+                      />
+                    </TouchableOpacity>
+                  )}
+                </>
+              )}
             </>
           )}
 
@@ -725,126 +825,110 @@ export default function InformationScreen({ route, navigation }) {
               </>
           )}
 
-          {activeTab === "Reviews" && (
-            <>
-              <View style={[styles.ratingSummary, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
-                <Text style={[styles.ratingBig, { color: colors.textPrimary }]}>{averageRating}</Text>
-                <StarRating rating={Math.round(parseFloat(averageRating))} size={18} colors={colors} />
-                <Text style={[styles.reviewCountText, { color: colors.textMuted }]}>{reviewCount} {reviewCount === 1 ? "review" : "reviews"}</Text>
-              </View>
-              <Text style={[styles.sectionHeading, { color: colors.textPrimary }]}>All reviews ({reviewCount})</Text>
-              {reviews.length === 0 ? (
-                <EmptyState icon="message-square" text="No reviews yet. Be the first to write one below." />
-              ) : reviews.map((review) => (
-                <ReviewCard
-                  key={review._id}
-                  review={review}
-                  spotId={spot._id}
-                  clerkUser={clerkUser}
-                  profileImage={profileImage}
-                  reactToReview={reactToReview}
-                  onReport={openReportModal}
-                  colors={colors}
-                />
-              ))}
-            </>
-          )}
-
-          <View style={{ height: isReviewsTab ? 96 : 108 }} />
+          {/* Clears the floating Navigate / AR card. */}
+          <View style={{ height: 108 }} />
         </View>
       </ScrollView>
 
-      {/* Comment bar */}
-      {isReviewsTab && (
-        <View style={[styles.commentBarWrapper, { backgroundColor: colors.background, borderTopColor: colors.divider, paddingBottom: Math.max(insets.bottom, 12) }]}>
-          {showStarPicker && (
-            <View style={styles.starPickerRow}>
-              <Text style={[styles.starPickerLabel, { color: colors.textMuted }]}>Your rating</Text>
-              {[1, 2, 3, 4, 5].map((s) => (
+      {/* Floating action card — Navigate + AR, on both tabs */}
+      <View style={[styles.actionCard, { backgroundColor: colors.card, borderColor: colors.cardBorder, bottom: Math.max(insets.bottom, 14) + 10 }, shadow.lg]}>
+        <TouchableOpacity
+          accessibilityRole="button"
+          accessibilityLabel={`Navigate to ${spot.name}`}
+          style={styles.actionItem}
+          onPress={() => navigation.navigate("Track", { spot })}
+          activeOpacity={0.75}
+        >
+          <Icon name="navigation" size={17} color={colors.brand} />
+          <Text style={[styles.actionText, { color: colors.textPrimary }]}>Navigate</Text>
+        </TouchableOpacity>
+        <View style={[styles.actionDivider, { backgroundColor: colors.divider }]} />
+        <TouchableOpacity
+          accessibilityRole="button"
+          accessibilityLabel={`Open ${spot.name} in AR`}
+          style={styles.actionItem}
+          onPress={handleLaunchAR}
+          activeOpacity={0.75}
+        >
+          <Icon name="aperture" size={17} color={colors.brand} />
+          <Text style={[styles.actionText, { color: colors.textPrimary }]}>AR View</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Review composer. A sheet, not a bar pinned to the bottom: reviews now
+          sit under Overview, where the bar would have covered the Navigate /
+          AR card. Its own KeyboardAvoidingView, because a Modal is a separate
+          window and the screen's one doesn't reach it. */}
+      <Modal visible={showComposer} animationType="slide" transparent onRequestClose={() => setShowComposer(false)}>
+        <KeyboardAvoidingView style={styles.modalKav} behavior="padding">
+          <View style={[styles.modalOverlay, { backgroundColor: colors.overlay }]}>
+            <View style={[styles.modalContent, { backgroundColor: colors.background, paddingBottom: Math.max(insets.bottom, 24) }]}>
+              <View style={[styles.modalGrabber, { backgroundColor: colors.divider }]} />
+              <View style={styles.modalHeader}>
+                <Text style={[styles.modalTitle, { color: colors.textPrimary }]} accessibilityRole="header">Write a review</Text>
                 <TouchableOpacity
-                  key={s}
-                  onPress={() => setNewRating(s)}
-                  hitSlop={8}
                   accessibilityRole="button"
-                  accessibilityLabel={`Rate ${s} out of 5 stars`}
-                  accessibilityState={{ selected: s <= newRating }}
+                  accessibilityLabel="Close"
+                  onPress={() => setShowComposer(false)}
+                  style={styles.modalClose}
                 >
-                  <Icon
-                    name="star"
-                    size={26}
-                    weight={s <= newRating ? "fill" : "regular"}
-                    color={s <= newRating ? colors.star : colors.starEmpty}
-                  />
+                  <Icon name="x" size={22} color={colors.textMuted} />
                 </TouchableOpacity>
-              ))}
-            </View>
-          )}
-          <View style={styles.commentBar}>
-            <Avatar
-              uri={profileImage || clerkUser?.imageUrl}
-              name={clerkUser?.fullName || clerkUser?.firstName}
-              size={36}
-              style={styles.commentAvatar}
-            />
-            <TouchableOpacity
-              accessibilityRole="button"
-              style={[styles.commentInputWrap, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}
-              activeOpacity={1}
-              onPress={() => { setShowStarPicker(true); inputRef.current?.focus(); }}
-            >
+              </View>
+              <View style={styles.composerWho}>
+                <Avatar
+                  uri={profileImage || clerkUser?.imageUrl}
+                  name={clerkUser?.fullName || clerkUser?.firstName}
+                  size={32}
+                />
+                <Text style={[styles.composerSpot, { color: colors.textMuted }]} numberOfLines={1}>
+                  Reviewing <Text style={{ fontFamily: fonts.sansBold, color: colors.textPrimary }}>{spot.name}</Text>
+                </Text>
+              </View>
+
+              <Text style={[styles.modalLabel, { color: colors.textPrimary }]}>Your rating</Text>
+              <View style={styles.composerStars} accessibilityRole="radiogroup">
+                {[1, 2, 3, 4, 5].map((s) => (
+                  <TouchableOpacity
+                    key={s}
+                    onPress={() => setNewRating(s)}
+                    hitSlop={6}
+                    accessibilityRole="radio"
+                    accessibilityLabel={`${s} out of 5 stars`}
+                    accessibilityState={{ checked: s === newRating }}
+                  >
+                    <Icon
+                      name="star"
+                      size={34}
+                      weight={s <= newRating ? "fill" : "regular"}
+                      color={s <= newRating ? colors.star : colors.starEmpty}
+                    />
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <Text style={[styles.modalLabel, { color: colors.textPrimary }]}>Your review</Text>
               <TextInput
                 ref={inputRef}
-                style={[styles.commentInput, { color: colors.textPrimary }]}
-                placeholder="Write a review..."
+                style={[styles.composerInput, { backgroundColor: colors.inputBg, borderColor: colors.inputBorder, color: colors.textPrimary }]}
+                placeholder="What was it like? Tips for the next visitor?"
                 placeholderTextColor={colors.placeholder}
                 value={newReview}
                 onChangeText={setNewReview}
-                onFocus={() => setShowStarPicker(true)}
                 multiline
                 maxLength={500}
-                accessibilityLabel="Write a review"
+                textAlignVertical="top"
+                accessibilityLabel="Your review"
               />
-            </TouchableOpacity>
-            <TouchableOpacity
-              accessibilityRole="button"
-              accessibilityLabel={submittingReview ? "Posting review" : "Post review"}
-              accessibilityState={{ disabled: !canPost }}
-              style={[styles.sendBtn, { backgroundColor: colors.accent }, !canPost && styles.sendBtnDisabled]}
-              onPress={handleSubmit}
-              disabled={!canPost}
-            >
-              {submittingReview ? <ActivityIndicator size="small" color={colors.onAccent} /> : <Icon name="send" size={17} color={colors.onAccent} />}
-            </TouchableOpacity>
-          </View>
-        </View>
-      )}
+              <Text style={[styles.composerCount, { color: colors.textMuted }]}>
+                {newRating === 0 ? "Tap a star to rate · " : ""}{newReview.length}/500
+              </Text>
 
-      {/* Floating action card — Navigate + AR */}
-      {!isReviewsTab && (
-        <View style={[styles.actionCard, { backgroundColor: colors.card, borderColor: colors.cardBorder, bottom: Math.max(insets.bottom, 14) + 10 }, shadow.lg]}>
-          <TouchableOpacity
-            accessibilityRole="button"
-            accessibilityLabel={`Navigate to ${spot.name}`}
-            style={styles.actionItem}
-            onPress={() => navigation.navigate("Track", { spot })}
-            activeOpacity={0.75}
-          >
-            <Icon name="navigation" size={17} color={colors.brand} />
-            <Text style={[styles.actionText, { color: colors.textPrimary }]}>Navigate</Text>
-          </TouchableOpacity>
-          <View style={[styles.actionDivider, { backgroundColor: colors.divider }]} />
-          <TouchableOpacity
-            accessibilityRole="button"
-            accessibilityLabel={`Open ${spot.name} in AR`}
-            style={styles.actionItem}
-            onPress={handleLaunchAR}
-            activeOpacity={0.75}
-          >
-            <Icon name="aperture" size={17} color={colors.brand} />
-            <Text style={[styles.actionText, { color: colors.textPrimary }]}>AR View</Text>
-          </TouchableOpacity>
-        </View>
-      )}
+              <PrimaryButton title="Post review" icon="send" onPress={handleSubmit} loading={submittingReview} disabled={!canPost} />
+            </View>
+          </View>
+        </KeyboardAvoidingView>
+      </Modal>
 
       {/* Report modal */}
       <Modal visible={showReportModal} animationType="slide" transparent onRequestClose={() => setShowReportModal(false)}>
@@ -990,10 +1074,24 @@ const styles = StyleSheet.create({
   ptsPill:         { flexDirection: "row", alignItems: "center", gap: 4, borderRadius: radius.pill, paddingHorizontal: 9, paddingVertical: 4 },
   ptsText:         { fontFamily: fonts.sansBold, fontSize: 12 },
 
-  ratingSummary:   { borderRadius: radius.card, padding: 22, marginBottom: 16, alignItems: "center", borderWidth: 1 },
-  ratingBig:       { ...typography.display, fontSize: 48, lineHeight: 54, marginBottom: 6 },
+  // Reviews at the foot of Overview: a summary card (average + "rate it" stars)
+  // then the first few reviews.
+  reviewsHeading:  { marginTop: 28 },
+  ratingSummary:   { borderRadius: radius.card, paddingHorizontal: 18, paddingVertical: 16, marginBottom: 16, borderWidth: 1 },
+  ratingTop:       { flexDirection: "row", alignItems: "center", gap: 14 },
+  ratingBig:       { ...typography.display, fontSize: 42, lineHeight: 48 },
+  ratingMeta:      { flex: 1 },
   starsRow:        { flexDirection: "row", gap: 3, marginBottom: 4 },
   reviewCountText: { fontSize: 12.5, fontFamily: fonts.sansSemi, marginTop: 4 },
+  rateDivider:     { height: 1, marginVertical: 14 },
+  rateLabel:       { fontSize: 13, fontFamily: fonts.sansSemi, marginBottom: 8 },
+  rateRow:         { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
+  rateStars:       { flexDirection: "row", gap: 10 },
+  writeBtn:        { flexDirection: "row", alignItems: "center", gap: 6, borderRadius: radius.pill, paddingHorizontal: 14, minHeight: 36 },
+  writeBtnText:    { fontFamily: fonts.sansBold, fontSize: 13 },
+  showAllBtn:      { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, minHeight: TAP, borderRadius: radius.pill, borderWidth: 1, marginTop: 4 },
+  showAllText:     { fontFamily: fonts.sansBold, fontSize: 13.5 },
+  chevronUp:       { transform: [{ rotate: "180deg" }] },
 
   reviewCard:      { flexDirection: "row", alignItems: "flex-start", gap: 10, marginBottom: 12 },
   avatar:          { marginTop: 2, borderWidth: 1.5 },
@@ -1009,15 +1107,13 @@ const styles = StyleSheet.create({
   reactionCount:   { fontSize: 12, fontFamily: fonts.sansBold },
   reportButton:    { padding: 2 },
 
-  commentBarWrapper: { borderTopWidth: 1, paddingTop: 10, paddingHorizontal: H_PAD },
-  starPickerRow:   { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 4, paddingBottom: 10 },
-  starPickerLabel: { fontSize: 12.5, fontFamily: fonts.sansBold, marginRight: 4 },
-  commentBar:      { flexDirection: "row", alignItems: "flex-end", gap: 8 },
-  commentAvatar:   { marginBottom: 3 },
-  commentInputWrap:{ flex: 1, borderRadius: 22, borderWidth: 1, paddingHorizontal: 16, paddingVertical: 10, minHeight: 42, maxHeight: 100, justifyContent: "center" },
-  commentInput:    { fontSize: 14, fontFamily: fonts.sans, padding: 0 },
-  sendBtn:         { width: TAP, height: TAP, borderRadius: TAP / 2, justifyContent: "center", alignItems: "center" },
-  sendBtnDisabled: { opacity: 0.5 },
+  // Review composer sheet
+  modalKav:        { flex: 1 },
+  composerWho:     { flexDirection: "row", alignItems: "center", gap: 10, marginTop: 2 },
+  composerSpot:    { flex: 1, fontSize: 13.5, fontFamily: fonts.sans },
+  composerStars:   { flexDirection: "row", gap: 12 },
+  composerInput:   { borderRadius: radius.md, borderWidth: 1, padding: 14, fontSize: 14.5, lineHeight: 21, fontFamily: fonts.sans, minHeight: 120, maxHeight: 200 },
+  composerCount:   { fontSize: 12, fontFamily: fonts.sansMedium, textAlign: "right", marginTop: 6, marginBottom: 16 },
 
   actionCard:      { position: "absolute", alignSelf: "center", flexDirection: "row", alignItems: "center", borderRadius: 999, borderWidth: 1, paddingHorizontal: 6, paddingVertical: 4 },
   actionItem:      { flexDirection: "row", alignItems: "center", gap: 8, minHeight: TAP, paddingHorizontal: 22 },
