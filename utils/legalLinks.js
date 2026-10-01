@@ -16,3 +16,9 @@ export const HELP_URL    = "https://libotbackend.onrender.com/help";
 export const ABOUT_URL   = "https://libotbackend.onrender.com/about";
 export const TERMS_URL   = "https://libotbackend.onrender.com/terms";
 export const PRIVACY_URL = "https://libotbackend.onrender.com/privacy";
+
+// The public download site (the LibotWeb repo). A shared badge links to its
+// badge page, which shows the badge and the download button:
+// libot-download-site/badge.html, served at /badge/<id> by its vercel.json.
+export const SITE_URL = "https://libotbulacan.com";
+export const badgeShareUrl = (badgeId) => `${SITE_URL}/badge/${badgeId}`;
