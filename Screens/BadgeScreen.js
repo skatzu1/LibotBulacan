@@ -26,6 +26,7 @@ import {
 } from "../components/ui";
 import { useArrival } from "../context/ArrivalContext";
 import { BASE_URL } from "../api";
+import { badgeShareUrl } from "../utils/legalLinks";
 import { badgeImage } from "../utils/image";
 import Icon from "../components/Icon";
 
@@ -213,11 +214,16 @@ export default function BadgeScreen() {
         result: "tmpfile",
       });
 
+      // The link opens the badge on the Libot website, where whoever receives
+      // it can download the app. Some apps (Facebook, Instagram) drop the text
+      // and post only the image; chat apps keep both.
       await RNShare.open({
         title: `${selectedBadge.name} Badge`,
         url: uri,
         type: "image/png",
-        message: `I just earned the "${selectedBadge.name}" badge on Libot! Discover Bulacan\'s history!`,
+        message:
+          `I just earned the "${selectedBadge.name}" badge on Libot! Discover Bulacan's history!\n` +
+          badgeShareUrl(selectedBadge._id),
         failOnCancel: false,
       });
     } catch (e) {
