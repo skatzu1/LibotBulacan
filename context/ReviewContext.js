@@ -1,12 +1,17 @@
 import React, { createContext, useState, useContext, useCallback, useEffect } from "react";
 import { useAuth } from "@clerk/clerk-expo";
-import api from "../api";
+import api, { BASE_URL } from "../api";
+
+// The server's limit (LibotBackend utils/reviewPhotos.js).
+export const MAX_REVIEW_PHOTOS = 4;
+// Photos can take a while on mobile data; a dead connection must still end.
+const PHOTO_UPLOAD_TIMEOUT_MS = 120_000;
 
 const ReviewContext = createContext();
 export const useReviews = () => useContext(ReviewContext);
 
 export const ReviewProvider = ({ children }) => {
-  const { isLoaded, isSignedIn } = useAuth();
+  const { isLoaded, isSignedIn, getToken } = useAuth();
 
   const [reviewsBySpot,     setReviewsBySpot]     = useState({});
   const [loading,           setLoading]           = useState(false);
@@ -77,13 +82,56 @@ export const ReviewProvider = ({ children }) => {
     }
   }, []);
 
-  const addReview = useCallback(async (spotId, rating, comment) => {
+  // Without photos: the usual JSON request. With photos: one multipart request
+  // carrying the review and its photos together, so the server can store them
+  // all or none. Sent with fetch, like the profile photo upload, because
+  // axios's FormData handling in React Native is unreliable. Failures are
+  // shaped like axios errors (err.response.status / .data) so addReview's
+  // handling below works the same for both.
+  const postReview = useCallback(async ({ spotId, rating, comment, photos }) => {
+    if (!photos?.length) return api.post("/api/reviews", { spotId, rating, comment });
+
+    const form = new FormData();
+    form.append("spotId", String(spotId));
+    form.append("rating", String(rating));
+    form.append("comment", comment);
+    photos.forEach((p, i) => {
+      form.append("photos", { uri: p.uri, type: p.mime || "image/jpeg", name: `photo-${i + 1}.jpg` });
+    });
+
+    const token = await getToken();
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), PHOTO_UPLOAD_TIMEOUT_MS);
+    try {
+      const res = await fetch(`${BASE_URL}/api/reviews`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        body: form,
+        signal: controller.signal,
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const err = new Error(data.message || `Request failed (${res.status})`);
+        err.response = { status: res.status, data };
+        throw err;
+      }
+      return { data };
+    } catch (err) {
+      if (err.name === "AbortError") throw new Error("The upload took too long. Check your connection and try again.");
+      throw err;
+    } finally {
+      clearTimeout(timer);
+    }
+  }, [getToken]);
+
+  /** photos: [{ uri, mime }] from the picker, at most MAX_REVIEW_PHOTOS. */
+  const addReview = useCallback(async (spotId, rating, comment, photos = []) => {
     if (!spotId || !rating || !comment) {
       setError("All fields are required");
       return { success: false, message: "All fields are required" };
     }
     try {
-      const res = await api.post("/api/reviews", { spotId, rating, comment });
+      const res = await postReview({ spotId, rating, comment, photos });
       const data = res.data;
       if (data.success) {
         await fetchReviews(spotId);
@@ -108,7 +156,7 @@ export const ReviewProvider = ({ children }) => {
       const { success: _statusSuccess, ...statusFields } = status || {};
       return { success: false, message, ...statusFields };
     }
-  }, [fetchReviews, fetchModerationStatus]);
+  }, [postReview, fetchReviews, fetchModerationStatus]);
 
   const reportReview = useCallback(async ({ reviewId, reportedClerkUserId, reason, details = "" }) => {
     if (!reviewId || !reportedClerkUserId || !reason) {

@@ -2,14 +2,15 @@ import React, { useState, useEffect, useRef } from "react";
 import {
   View, Text, Image, TouchableOpacity, StyleSheet,
   ScrollView, TextInput, KeyboardAvoidingView, Platform,
-  Modal, StatusBar,
+  Modal, StatusBar, FlatList, useWindowDimensions,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import ImageCropPicker from "react-native-image-crop-picker";
 import { showAlert, showToast } from "../components/AppAlert";
 import { useUser } from "@clerk/clerk-expo";
 import { useIsFocused } from "@react-navigation/native";
 import { useBookmark } from "../context/BookmarkContext";
-import { useReviews } from "../context/ReviewContext";
+import { useReviews, MAX_REVIEW_PHOTOS } from "../context/ReviewContext";
 import { useMissions } from "../context/MissionContext";
 import { usePoints } from "../context/PointsContext";
 import { useProfileImage } from "../context/ProfileImageContext";
@@ -21,7 +22,7 @@ import InformationSkeleton from "../components/InformationSkeleton";
 import {
   PhotoScrim, Segmented, EmptyState, PrimaryButton, Avatar, H_PAD, TAP,
 } from "../components/ui";
-import { spotImage } from "../utils/image";
+import { spotImage, cdn } from "../utils/image";
 import Icon from "../components/Icon";
 
 // Icon + label per mission type. Colour is theme-driven (see MissionRow).
@@ -170,7 +171,57 @@ function CircleBtn({ icon, onPress, active, iconNode, colors, ...rest }) {
   );
 }
 
-function ReviewCard({ review, spotId, clerkUser, profileImage, reactToReview, onReport, colors }) {
+/* Full-screen photos, swiped sideways. Black in both themes: it's a photo
+   viewer, and the photos are what should carry the colour. */
+function PhotoViewer({ viewer, onClose }) {
+  const { width, height } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
+  const [index, setIndex] = useState(viewer?.index ?? 0);
+  useEffect(() => { setIndex(viewer?.index ?? 0); }, [viewer]);
+  if (!viewer) return null;
+  const caption = viewer.photos[index]?.caption;
+  return (
+    <Modal visible animationType="fade" onRequestClose={onClose} statusBarTranslucent>
+      <View style={styles.viewer}>
+        <FlatList
+          data={viewer.photos}
+          keyExtractor={(p) => p.url}
+          horizontal
+          pagingEnabled
+          showsHorizontalScrollIndicator={false}
+          initialScrollIndex={viewer.index}
+          getItemLayout={(_, i) => ({ length: width, offset: width * i, index: i })}
+          onMomentumScrollEnd={(e) => setIndex(Math.round(e.nativeEvent.contentOffset.x / width))}
+          renderItem={({ item, index: i }) => (
+            <Image
+              source={{ uri: cdn(item.url, { width: 1200 }) }}
+              style={{ width, height }}
+              resizeMode="contain"
+              accessibilityLabel={`Photo ${i + 1} of ${viewer.photos.length}${item.caption ? ` by ${item.caption}` : ""}`}
+            />
+          )}
+        />
+        <View style={[styles.viewerTop, { paddingTop: insets.top + 8 }]}>
+          <View style={styles.viewerInfo}>
+            <Text style={styles.viewerCount}>{index + 1} / {viewer.photos.length}</Text>
+            {!!caption && <Text style={styles.viewerCaption} numberOfLines={1}>{caption}</Text>}
+          </View>
+          <TouchableOpacity
+            onPress={onClose}
+            style={styles.viewerClose}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel="Close photos"
+          >
+            <Icon name="x" size={24} color="#FFFFFF" />
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+function ReviewCard({ review, spotId, clerkUser, profileImage, reactToReview, onReport, onOpenPhoto, colors }) {
   const isMe = clerkUser?.id === review.clerkUserId;
   // No more pravatar.cc fallback — a reviewer without a photo gets their
   // initials, not a random stranger's face.
@@ -220,6 +271,24 @@ function ReviewCard({ review, spotId, clerkUser, profileImage, reactToReview, on
           </View>
         </View>
         <Text style={[styles.reviewComment, { color: colors.textPrimary }]}>{review.comment}</Text>
+        {review.photos?.length > 0 && (
+          <View style={styles.reviewPhotos}>
+            {review.photos.map((p, i) => (
+              <TouchableOpacity
+                key={p.url}
+                onPress={() => onOpenPhoto(review.photos.map((x) => ({ ...x, caption: author })), i)}
+                activeOpacity={0.85}
+                accessibilityRole="imagebutton"
+                accessibilityLabel={`Photo ${i + 1} of ${review.photos.length} from ${author}'s review`}
+              >
+                <Image
+                  source={{ uri: cdn(p.url, { width: 72, height: 72, crop: "fill" }) }}
+                  style={[styles.reviewPhoto, { backgroundColor: colors.backgroundSoft }]}
+                />
+              </TouchableOpacity>
+            ))}
+          </View>
+        )}
         <View style={styles.reviewFooterRow}>
           <Text style={[styles.reviewDate, { color: colors.textMuted }]}>
             {review.createdAt ? new Date(review.createdAt).toLocaleDateString() : "Just now"}
@@ -371,6 +440,8 @@ export default function InformationScreen({ route, navigation }) {
   const [newReview,        setNewReview]        = useState("");
   const [showComposer,     setShowComposer]     = useState(false);
   const [showAllReviews,   setShowAllReviews]   = useState(false);
+  const [reviewPhotos,     setReviewPhotos]     = useState([]);   // [{ uri, mime }] for the review being written
+  const [viewer,           setViewer]           = useState(null); // { photos, index } while the full-screen viewer is open
   const [screenReady,      setScreenReady]      = useState(false);
   const [reportTarget,     setReportTarget]     = useState(null);
   const [showReportModal,  setShowReportModal]  = useState(false);
@@ -444,6 +515,9 @@ export default function InformationScreen({ route, navigation }) {
   const reviews          = getReviewsForSpot(spot._id);
   const averageRating    = getAverageRating(spot._id) || "0.0";
   const reviewCount      = getReviewCount(spot._id);
+  // Every photo travelers attached to their reviews, newest review first,
+  // each labelled with who took it.
+  const visitorPhotos    = reviews.flatMap((r) => (r.photos || []).map((p) => ({ ...p, caption: r.userName || "Anonymous" })));
   const missions         = getMissionsForSpot(spot._id);
   // Hierarchy: arriving + AR are major, AI + food are minor (utils/missionTiers).
   // Arriving isn't a Mission document, so it's counted in by hand.
@@ -477,12 +551,56 @@ export default function InformationScreen({ route, navigation }) {
     setShowComposer(true);
   };
 
+  // Shrunk on the phone before upload: a 12 MP original is 4–6 MB, this is a
+  // few hundred KB and still sharp full-screen.
+  const PHOTO_PICK = {
+    mediaType: "photo",
+    compressImageMaxWidth: 1600,
+    compressImageMaxHeight: 1600,
+    compressImageQuality: 0.8,
+    forceJpg: true,
+  };
+
+  const addPhotos = async (source) => {
+    const room = MAX_REVIEW_PHOTOS - reviewPhotos.length;
+    if (room <= 0) return;
+    try {
+      const picked = source === "camera"
+        ? [await ImageCropPicker.openCamera(PHOTO_PICK)]
+        // maxFiles is honoured on iOS only, hence the slice below.
+        : await ImageCropPicker.openPicker({ ...PHOTO_PICK, multiple: true, maxFiles: room });
+      const list = (Array.isArray(picked) ? picked : [picked])
+        .filter((p) => p?.path)
+        .map((p) => ({ uri: p.path, mime: p.mime || "image/jpeg" }));
+      if (list.length > room) {
+        list.slice(room).forEach((p) => ImageCropPicker.cleanSingle(p.uri).catch(() => {}));
+        showToast(`A review can have ${MAX_REVIEW_PHOTOS} photos. Kept the first ${room}.`, { type: "info" });
+      }
+      setReviewPhotos((prev) => [...prev, ...list.slice(0, room)]);
+    } catch (err) {
+      if (err?.code !== "E_PICKER_CANCELLED") {
+        console.error("[Review] photo pick error:", err);
+        showAlert("Couldn't add the photo", "Please try again.");
+      }
+    }
+  };
+
+  const removePhoto = (i) => {
+    setReviewPhotos((prev) => {
+      const gone = prev[i];
+      if (gone) ImageCropPicker.cleanSingle(gone.uri).catch(() => {});
+      return prev.filter((_, j) => j !== i);
+    });
+  };
+
+  const openPhotos = (photos, index) => setViewer({ photos, index });
+
   const handleSubmit = async () => {
     if (newRating === 0 || newReview.trim() === "" || submittingReview) return;
 
     setSubmittingReview(true);
     try {
-      const result = await addReview(spot._id, newRating, newReview.trim());
+      const result = await addReview(spot._id, newRating, newReview.trim(), reviewPhotos);
       // Suspended or muted: the sheet closes (they can't post) before the alert.
       if (isSuspendedResult(result)) {
         setShowComposer(false);
@@ -499,7 +617,9 @@ export default function InformationScreen({ route, navigation }) {
         showAlert("Error", result.message || "Failed to post your review. Please try again.");
         return;
       }
-      setNewRating(0); setNewReview(""); setShowComposer(false);
+      // The compressed copies the picker made are uploaded now; free the space.
+      reviewPhotos.forEach((p) => ImageCropPicker.cleanSingle(p.uri).catch(() => {}));
+      setNewRating(0); setNewReview(""); setReviewPhotos([]); setShowComposer(false);
       showToast("Review posted. Thanks for sharing!", { type: "success" });
     } catch (err) {
       if (isSuspendedResult(err)) {
@@ -706,6 +826,35 @@ export default function InformationScreen({ route, navigation }) {
                 </View>
               </View>
 
+              {visitorPhotos.length > 0 && (
+                <>
+                  <Text style={[styles.photoStripLabel, { color: colors.textSecondary }]}>
+                    Visitor photos ({visitorPhotos.length})
+                  </Text>
+                  <ScrollView
+                    horizontal
+                    showsHorizontalScrollIndicator={false}
+                    style={styles.photoStrip}
+                    contentContainerStyle={styles.photoStripContent}
+                  >
+                    {visitorPhotos.map((p, i) => (
+                      <TouchableOpacity
+                        key={p.url}
+                        onPress={() => openPhotos(visitorPhotos, i)}
+                        activeOpacity={0.85}
+                        accessibilityRole="imagebutton"
+                        accessibilityLabel={`Visitor photo ${i + 1} of ${visitorPhotos.length}, by ${p.caption}`}
+                      >
+                        <Image
+                          source={{ uri: cdn(p.url, { width: 112, height: 112, crop: "fill" }) }}
+                          style={[styles.stripPhoto, { backgroundColor: colors.backgroundSoft }]}
+                        />
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                </>
+              )}
+
               {reviews.length === 0 ? (
                 <EmptyState icon="message-square" text="No reviews yet. Be the first to share your experience." />
               ) : (
@@ -719,6 +868,7 @@ export default function InformationScreen({ route, navigation }) {
                       profileImage={profileImage}
                       reactToReview={reactToReview}
                       onReport={openReportModal}
+                      onOpenPhoto={openPhotos}
                       colors={colors}
                     />
                   ))}
@@ -875,60 +1025,124 @@ export default function InformationScreen({ route, navigation }) {
                   <Icon name="x" size={22} color={colors.textMuted} />
                 </TouchableOpacity>
               </View>
-              <View style={styles.composerWho}>
-                <Avatar
-                  uri={profileImage || clerkUser?.imageUrl}
-                  name={clerkUser?.fullName || clerkUser?.firstName}
-                  size={32}
+              {/* Scrolls under the header: with the keyboard up, the stars,
+                  text, photos and button are taller than what's left. */}
+              <ScrollView style={styles.composerBody} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
+                <View style={styles.composerWho}>
+                  <Avatar
+                    uri={profileImage || clerkUser?.imageUrl}
+                    name={clerkUser?.fullName || clerkUser?.firstName}
+                    size={32}
+                  />
+                  <Text style={[styles.composerSpot, { color: colors.textMuted }]} numberOfLines={1}>
+                    Reviewing <Text style={{ fontFamily: fonts.sansBold, color: colors.textPrimary }}>{spot.name}</Text>
+                  </Text>
+                </View>
+
+                <Text style={[styles.modalLabel, { color: colors.textPrimary }]}>Your rating</Text>
+                <View style={styles.composerStars} accessibilityRole="radiogroup">
+                  {[1, 2, 3, 4, 5].map((s) => (
+                    <TouchableOpacity
+                      key={s}
+                      onPress={() => setNewRating(s)}
+                      hitSlop={6}
+                      accessibilityRole="radio"
+                      accessibilityLabel={`${s} out of 5 stars`}
+                      accessibilityState={{ checked: s === newRating }}
+                    >
+                      <Icon
+                        name="star"
+                        size={34}
+                        weight={s <= newRating ? "fill" : "regular"}
+                        color={s <= newRating ? colors.star : colors.starEmpty}
+                      />
+                    </TouchableOpacity>
+                  ))}
+                </View>
+
+                <Text style={[styles.modalLabel, { color: colors.textPrimary }]}>Your review</Text>
+                <TextInput
+                  ref={inputRef}
+                  style={[styles.composerInput, { backgroundColor: colors.inputBg, borderColor: colors.inputBorder, color: colors.textPrimary }]}
+                  placeholder="What was it like? Tips for the next visitor?"
+                  placeholderTextColor={colors.placeholder}
+                  value={newReview}
+                  onChangeText={setNewReview}
+                  multiline
+                  maxLength={500}
+                  textAlignVertical="top"
+                  accessibilityLabel="Your review"
                 />
-                <Text style={[styles.composerSpot, { color: colors.textMuted }]} numberOfLines={1}>
-                  Reviewing <Text style={{ fontFamily: fonts.sansBold, color: colors.textPrimary }}>{spot.name}</Text>
+                <Text style={[styles.composerCount, { color: colors.textMuted }]}>
+                  {newRating === 0 ? "Tap a star to rate · " : ""}{newReview.length}/500
                 </Text>
-              </View>
 
-              <Text style={[styles.modalLabel, { color: colors.textPrimary }]}>Your rating</Text>
-              <View style={styles.composerStars} accessibilityRole="radiogroup">
-                {[1, 2, 3, 4, 5].map((s) => (
-                  <TouchableOpacity
-                    key={s}
-                    onPress={() => setNewRating(s)}
-                    hitSlop={6}
-                    accessibilityRole="radio"
-                    accessibilityLabel={`${s} out of 5 stars`}
-                    accessibilityState={{ checked: s === newRating }}
-                  >
-                    <Icon
-                      name="star"
-                      size={34}
-                      weight={s <= newRating ? "fill" : "regular"}
-                      color={s <= newRating ? colors.star : colors.starEmpty}
-                    />
-                  </TouchableOpacity>
-                ))}
-              </View>
+                <Text style={[styles.modalLabel, styles.photosLabel, { color: colors.textPrimary }]}>
+                  Photos <Text style={[styles.photosHint, { color: colors.textMuted }]}>optional · up to {MAX_REVIEW_PHOTOS}</Text>
+                </Text>
+                <View style={styles.composerPhotos}>
+                  {reviewPhotos.map((p, i) => (
+                    <View key={p.uri} style={styles.composerThumbWrap}>
+                      <Image source={{ uri: p.uri }} style={[styles.composerThumb, { backgroundColor: colors.backgroundSoft }]} />
+                      <TouchableOpacity
+                        onPress={() => removePhoto(i)}
+                        disabled={submittingReview}
+                        style={[styles.thumbRemove, { backgroundColor: colors.textPrimary, borderColor: colors.background }]}
+                        hitSlop={8}
+                        accessibilityRole="button"
+                        accessibilityLabel={`Remove photo ${i + 1}`}
+                      >
+                        <Icon name="x" size={12} color={colors.background} />
+                      </TouchableOpacity>
+                    </View>
+                  ))}
+                  {reviewPhotos.length < MAX_REVIEW_PHOTOS && (
+                    <>
+                      <TouchableOpacity
+                        onPress={() => addPhotos("camera")}
+                        disabled={submittingReview}
+                        style={[styles.addPhotoTile, { backgroundColor: colors.brandLight, borderColor: colors.cardBorder }]}
+                        accessibilityRole="button"
+                        accessibilityLabel="Take a photo"
+                        activeOpacity={0.8}
+                      >
+                        <Icon name="camera" size={20} color={colors.brand} />
+                        <Text style={[styles.addPhotoText, { color: colors.brand }]}>Camera</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        onPress={() => addPhotos("gallery")}
+                        disabled={submittingReview}
+                        style={[styles.addPhotoTile, { backgroundColor: colors.brandLight, borderColor: colors.cardBorder }]}
+                        accessibilityRole="button"
+                        accessibilityLabel="Choose photos from your gallery"
+                        activeOpacity={0.8}
+                      >
+                        <Icon name="image" size={20} color={colors.brand} />
+                        <Text style={[styles.addPhotoText, { color: colors.brand }]}>Gallery</Text>
+                      </TouchableOpacity>
+                    </>
+                  )}
+                </View>
 
-              <Text style={[styles.modalLabel, { color: colors.textPrimary }]}>Your review</Text>
-              <TextInput
-                ref={inputRef}
-                style={[styles.composerInput, { backgroundColor: colors.inputBg, borderColor: colors.inputBorder, color: colors.textPrimary }]}
-                placeholder="What was it like? Tips for the next visitor?"
-                placeholderTextColor={colors.placeholder}
-                value={newReview}
-                onChangeText={setNewReview}
-                multiline
-                maxLength={500}
-                textAlignVertical="top"
-                accessibilityLabel="Your review"
-              />
-              <Text style={[styles.composerCount, { color: colors.textMuted }]}>
-                {newRating === 0 ? "Tap a star to rate · " : ""}{newReview.length}/500
-              </Text>
-
-              <PrimaryButton title="Post review" icon="send" onPress={handleSubmit} loading={submittingReview} disabled={!canPost} />
+                <PrimaryButton
+                  title={submittingReview && reviewPhotos.length ? "Uploading photos…" : "Post review"}
+                  icon="send"
+                  onPress={handleSubmit}
+                  loading={submittingReview}
+                  disabled={!canPost}
+                />
+                {submittingReview && reviewPhotos.length > 0 && (
+                  <Text style={[styles.uploadNote, { color: colors.textMuted }]} accessibilityLiveRegion="polite">
+                    Uploading {reviewPhotos.length} {reviewPhotos.length === 1 ? "photo" : "photos"}. This can take a moment on mobile data.
+                  </Text>
+                )}
+              </ScrollView>
             </View>
           </View>
         </KeyboardAvoidingView>
       </Modal>
+
+      <PhotoViewer viewer={viewer} onClose={() => setViewer(null)} />
 
       {/* Report modal */}
       <Modal visible={showReportModal} animationType="slide" transparent onRequestClose={() => setShowReportModal(false)}>
@@ -1093,6 +1307,22 @@ const styles = StyleSheet.create({
   showAllText:     { fontFamily: fonts.sansBold, fontSize: 13.5 },
   chevronUp:       { transform: [{ rotate: "180deg" }] },
 
+  // Visitor photos: a strip that runs to the screen edges, under the summary.
+  photoStripLabel:   { fontSize: 13, fontFamily: fonts.sansSemi, marginBottom: 8 },
+  photoStrip:        { marginHorizontal: -H_PAD, marginBottom: 18 },
+  photoStripContent: { paddingHorizontal: H_PAD, gap: 8 },
+  stripPhoto:        { width: 112, height: 112, borderRadius: radius.md },
+  reviewPhotos:      { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 8 },
+  reviewPhoto:       { width: 72, height: 72, borderRadius: radius.sm },
+
+  // Full-screen viewer (black in both themes).
+  viewer:          { flex: 1, backgroundColor: "#000000" },
+  viewerTop:       { position: "absolute", top: 0, left: 0, right: 0, flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingBottom: 12, backgroundColor: "rgba(0,0,0,0.45)" },
+  viewerInfo:      { flex: 1 },
+  viewerCount:     { color: "#FFFFFF", fontFamily: fonts.sansBold, fontSize: 15 },
+  viewerCaption:   { color: "rgba(255,255,255,0.85)", fontFamily: fonts.sans, fontSize: 13, marginTop: 2 },
+  viewerClose:     { width: TAP, height: TAP, alignItems: "center", justifyContent: "center" },
+
   reviewCard:      { flexDirection: "row", alignItems: "flex-start", gap: 10, marginBottom: 12 },
   avatar:          { marginTop: 2, borderWidth: 1.5 },
   reviewBubble:    { flex: 1, borderRadius: radius.lg, borderWidth: 1, paddingHorizontal: 15, paddingVertical: 12 },
@@ -1109,11 +1339,21 @@ const styles = StyleSheet.create({
 
   // Review composer sheet
   modalKav:        { flex: 1 },
+  composerBody:    { flexGrow: 0 },
   composerWho:     { flexDirection: "row", alignItems: "center", gap: 10, marginTop: 2 },
   composerSpot:    { flex: 1, fontSize: 13.5, fontFamily: fonts.sans },
   composerStars:   { flexDirection: "row", gap: 12 },
   composerInput:   { borderRadius: radius.md, borderWidth: 1, padding: 14, fontSize: 14.5, lineHeight: 21, fontFamily: fonts.sans, minHeight: 120, maxHeight: 200 },
-  composerCount:   { fontSize: 12, fontFamily: fonts.sansMedium, textAlign: "right", marginTop: 6, marginBottom: 16 },
+  composerCount:   { fontSize: 12, fontFamily: fonts.sansMedium, textAlign: "right", marginTop: 6 },
+  photosLabel:     { marginTop: 4 },
+  photosHint:      { fontSize: 12, fontFamily: fonts.sansMedium },
+  composerPhotos:  { flexDirection: "row", flexWrap: "wrap", gap: 10, marginBottom: 18 },
+  composerThumbWrap: { width: 68, height: 68 },
+  composerThumb:   { width: 68, height: 68, borderRadius: radius.md },
+  thumbRemove:     { position: "absolute", top: -7, right: -7, width: 24, height: 24, borderRadius: 12, borderWidth: 2, alignItems: "center", justifyContent: "center" },
+  addPhotoTile:    { width: 68, height: 68, borderRadius: radius.md, borderWidth: 1, alignItems: "center", justifyContent: "center", gap: 3 },
+  addPhotoText:    { fontSize: 11, fontFamily: fonts.sansBold },
+  uploadNote:      { fontSize: 12, fontFamily: fonts.sansMedium, textAlign: "center", marginTop: 10 },
 
   actionCard:      { position: "absolute", alignSelf: "center", flexDirection: "row", alignItems: "center", borderRadius: 999, borderWidth: 1, paddingHorizontal: 6, paddingVertical: 4 },
   actionItem:      { flexDirection: "row", alignItems: "center", gap: 8, minHeight: TAP, paddingHorizontal: 22 },
