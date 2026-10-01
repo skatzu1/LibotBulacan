@@ -74,7 +74,7 @@ export default function BadgeScreen() {
   const [filter, setFilter]             = useState("all");
   const [selectedBadge, setSelectedBadge] = useState(null);
   const [modalVisible, setModalVisible]   = useState(false);
-  const [sharing, setSharing]             = useState(false);
+  const [sharing, setSharing]             = useState(null); // "link" | "image" | null
 
   const modalOpacity   = useRef(new Animated.Value(0)).current;
   const modalScale     = useRef(new Animated.Value(0.85)).current;
@@ -198,10 +198,39 @@ export default function BadgeScreen() {
     });
   };
 
-  const handleShare = async () => {
+  const shareMessage = (badge) =>
+    `I just earned the "${badge.name}" badge on Libot! Discover Bulacan's history!\n${badgeShareUrl(badge._id)}`;
+
+  // The main way to share: the link alone. Messenger and other chat apps keep
+  // only the picture OR only the text when given both, so a picture-with-link
+  // share arrived as a bare picture. A link on its own becomes a preview card
+  // showing the badge (the website writes per-badge preview tags), and tapping
+  // it opens the badge on the website, where the app can be downloaded.
+  const handleShareLink = async () => {
+    if (!selectedBadge?.claimed) return;
+    try {
+      setSharing("link");
+      await RNShare.open({
+        title: `${selectedBadge.name} Badge`,
+        message: shareMessage(selectedBadge),
+        failOnCancel: false,
+      });
+    } catch (e) {
+      if (e?.message !== "User did not share") {
+        console.warn("[Share] Failed:", e);
+        showAlert("Error", "Could not open sharing. Please try again.");
+      }
+    } finally {
+      setSharing(null);
+    }
+  };
+
+  // The badge as a picture, for places that want one (Instagram, stories).
+  // Most of those drop the text, so the link usually doesn't go with it.
+  const handleShareImage = async () => {
     if (!selectedBadge?.claimed || !shareCardRef.current) return;
     try {
-      setSharing(true);
+      setSharing("image");
 
       // Give the hidden card a frame to render selectedBadge's image before
       // capture — avoids the classic "captured blank" race on Android when
@@ -214,16 +243,11 @@ export default function BadgeScreen() {
         result: "tmpfile",
       });
 
-      // The link opens the badge on the Libot website, where whoever receives
-      // it can download the app. Some apps (Facebook, Instagram) drop the text
-      // and post only the image; chat apps keep both.
       await RNShare.open({
         title: `${selectedBadge.name} Badge`,
         url: uri,
         type: "image/png",
-        message:
-          `I just earned the "${selectedBadge.name}" badge on Libot! Discover Bulacan's history!\n` +
-          badgeShareUrl(selectedBadge._id),
+        message: shareMessage(selectedBadge),
         failOnCancel: false,
       });
     } catch (e) {
@@ -232,7 +256,7 @@ export default function BadgeScreen() {
         showAlert("Error", "Could not prepare the badge image to share.");
       }
     } finally {
-      setSharing(false);
+      setSharing(null);
     }
   };
 
@@ -556,13 +580,26 @@ export default function BadgeScreen() {
             <View style={[styles.divider, { backgroundColor: colors.divider }]} />
 
             {selectedBadge?.claimed ? (
-              <PrimaryButton
-                title="Share this badge"
-                icon="share-2"
-                onPress={handleShare}
-                loading={sharing}
-                style={styles.modalButton}
-              />
+              <>
+                <PrimaryButton
+                  title="Share badge"
+                  icon="share-2"
+                  onPress={handleShareLink}
+                  loading={sharing === "link"}
+                  disabled={!!sharing}
+                  style={styles.modalButton}
+                  accessibilityLabel="Share a link to this badge"
+                />
+                <PrimaryButton
+                  title="Share as image"
+                  icon="image"
+                  variant="secondary"
+                  onPress={handleShareImage}
+                  loading={sharing === "image"}
+                  disabled={!!sharing}
+                  style={[styles.modalButton, styles.modalButtonGap]}
+                />
+              </>
             ) : selectedSpot ? (
               // "Go Explore" used to just close the modal. It now opens the
               // spot the badge is earned at.
@@ -793,4 +830,5 @@ const styles = StyleSheet.create({
     marginVertical: 20,
   },
   modalButton: { alignSelf: "stretch" },
+  modalButtonGap: { marginTop: 10 },
 });
