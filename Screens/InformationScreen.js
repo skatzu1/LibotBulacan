@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import {
   View, Text, Image, TouchableOpacity, StyleSheet,
   ScrollView, TextInput, KeyboardAvoidingView, Platform,
-  Modal, StatusBar, FlatList, useWindowDimensions,
+  Modal, StatusBar, FlatList, useWindowDimensions, Keyboard, ActivityIndicator,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import ImageCropPicker from "react-native-image-crop-picker";
@@ -457,7 +457,11 @@ export default function InformationScreen({ route, navigation }) {
   const [show3D,           setShow3D]           = useState(false);
   const [newRating,        setNewRating]        = useState(0);
   const [newReview,        setNewReview]        = useState("");
-  const [showComposer,     setShowComposer]     = useState(false);
+  // The Facebook-style review box at the end of the reviews: focused while
+  // the user is typing (it opens up, and the floating Navigate / AR card
+  // steps aside so it doesn't cover the box).
+  const [composerFocused,  setComposerFocused]  = useState(false);
+  const [ratingNudge,      setRatingNudge]      = useState(false); // tried to send with no stars
   // The review list's search / sort / filters / page (see utils/reviewList).
   const [reviewQuery,      setReviewQuery]      = useState("");
   const [reviewSort,       setReviewSort]       = useState("recent");
@@ -476,6 +480,7 @@ export default function InformationScreen({ route, navigation }) {
   const [submittingReview, setSubmittingReview] = useState(false);
 
   const inputRef = useRef(null);
+  const scrollRef = useRef(null);
   const { user: clerkUser } = useUser();
   const { isBookmarked, toggleBookmark } = useBookmark();
   const { getReviewsForSpot, addReview, reportReview, reactToReview, getAverageRating, getReviewCount, fetchReviews, deleteReview } = useReviews();
@@ -485,6 +490,17 @@ export default function InformationScreen({ route, navigation }) {
   const isFocused = useIsFocused();
 
   useEffect(() => { if (!isFocused) setShow3D(false); }, [isFocused]);
+
+  // The review box is the last thing on the page. When the keyboard opens
+  // for it, scroll to the end so the box sits just above the keyboard
+  // instead of under it.
+  useEffect(() => {
+    if (!composerFocused) return undefined;
+    const sub = Keyboard.addListener("keyboardDidShow", () => {
+      scrollRef.current?.scrollToEnd({ animated: true });
+    });
+    return () => sub.remove();
+  }, [composerFocused]);
   // "Arrive at the spot" is ticked from the visit logs, so re-read them when
   // the user comes back here — e.g. from navigating to the spot.
   useEffect(() => { if (isFocused) refreshPoints(); }, [isFocused, refreshPoints]);
@@ -547,6 +563,8 @@ export default function InformationScreen({ route, navigation }) {
   const shownReviews     = filterAndSortReviews(reviews, { query: reviewQuery, sort: reviewSort, stars: starFilter, withPhotos: onlyWithPhotos });
   const reviewPage       = pageOf(shownReviews, reviewPageIndex);
   const sortLabel        = (REVIEW_SORTS.find((o) => o.key === reviewSort) || REVIEW_SORTS[0]).label;
+  // The review box opens up while in use or holding a draft.
+  const composerOpen     = composerFocused || !!newReview || newRating > 0 || reviewPhotos.length > 0;
   const missions         = getMissionsForSpot(spot._id);
   // Hierarchy: arriving + AR are major, AI + food are minor (utils/missionTiers).
   // Arriving isn't a Mission document, so it's counted in by hand.
@@ -574,10 +592,22 @@ export default function InformationScreen({ route, navigation }) {
     { icon: "phone",   label: "Contact",        value: spot.contact },
   ].filter((row) => !!row.value);
 
-  // A tap on a star in the summary opens the sheet with that rating chosen.
-  const openComposer = (rating = newRating) => {
-    setNewRating(rating);
-    setShowComposer(true);
+  // The camera icon in the review box, like Facebook's: one tap, then where
+  // the photo comes from.
+  const pickPhotoSource = () => {
+    showAlert("Add a photo", undefined, [
+      { text: "Cancel", style: "cancel" },
+      { text: "Camera",  onPress: () => addPhotos("camera") },
+      { text: "Gallery", onPress: () => addPhotos("gallery") },
+    ]);
+  };
+
+  const chooseRating = (s) => { setNewRating(s); setRatingNudge(false); };
+
+  // Send with text but no stars: point at the stars instead of failing.
+  const sendReview = () => {
+    if (newRating === 0) { setRatingNudge(true); return; }
+    handleSubmit();
   };
 
   // Shrunk on the phone before upload: a 12 MP original is 4–6 MB, this is a
@@ -652,32 +682,33 @@ export default function InformationScreen({ route, navigation }) {
     setSubmittingReview(true);
     try {
       const result = await addReview(spot._id, newRating, newReview.trim(), reviewPhotos);
-      // Suspended or muted: the sheet closes (they can't post) before the alert.
+      // Suspended or muted: put the keyboard away (they can't post) before the alert.
       if (isSuspendedResult(result)) {
-        setShowComposer(false);
+        inputRef.current?.blur();
         showSuspendedAlert(result);
         return;
       }
       if (isMutedResult(result)) {
-        setShowComposer(false);
+        inputRef.current?.blur();
         showMutedAlert(result);
         return;
       }
-      // Any other failure keeps the sheet open, so the text isn't lost.
+      // Any other failure leaves the box as it is, so the text isn't lost.
       if (result && result.success === false) {
         showAlert("Error", result.message || "Failed to post your review. Please try again.");
         return;
       }
       // The compressed copies the picker made are uploaded now; free the space.
       reviewPhotos.forEach((p) => ImageCropPicker.cleanSingle(p.uri).catch(() => {}));
-      setNewRating(0); setNewReview(""); setReviewPhotos([]); setShowComposer(false);
+      setNewRating(0); setNewReview(""); setReviewPhotos([]); setRatingNudge(false);
+      inputRef.current?.blur();
       showToast("Review posted. Thanks for sharing!", { type: "success" });
     } catch (err) {
       if (isSuspendedResult(err)) {
-        setShowComposer(false);
+        inputRef.current?.blur();
         showSuspendedAlert(err);
       } else if (isMutedResult(err)) {
-        setShowComposer(false);
+        inputRef.current?.blur();
         showMutedAlert(err);
       } else {
         showAlert("Error", "Failed to post your review. Please try again.");
@@ -737,7 +768,6 @@ export default function InformationScreen({ route, navigation }) {
   };
 
   const showing3D = show3D && !!spot.modelUrl && isFocused;
-  const canPost   = !!newReview.trim() && newRating > 0 && !submittingReview;
 
   return (
     <KeyboardAvoidingView style={[styles.container, { backgroundColor: colors.background }]} behavior={Platform.OS === "ios" ? "padding" : "height"} keyboardVerticalOffset={0}>
@@ -765,6 +795,7 @@ export default function InformationScreen({ route, navigation }) {
       )}
 
       <ScrollView
+        ref={scrollRef}
         style={styles.scrollView}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
@@ -1049,7 +1080,121 @@ export default function InformationScreen({ route, navigation }) {
                 </>
               )}
 
-              <PrimaryButton title="Review this spot" icon="edit-2" onPress={() => openComposer()} style={styles.reviewCta} />
+              {/* Write a review, Facebook-comment style: your avatar and a
+                  rounded box with a camera icon. It opens up (stars, photo
+                  thumbnails, send) once you tap in or start. */}
+              <View style={[styles.fbComposer, { borderTopColor: colors.divider }]}>
+                {composerOpen && (
+                  <View style={styles.fbRateRow}>
+                    <Text style={[styles.fbRateLabel, { color: ratingNudge ? colors.danger : colors.textSecondary }]}>
+                      {ratingNudge ? "Tap a star to rate first" : "Your rating"}
+                    </Text>
+                    <View style={styles.fbStars} accessibilityRole="radiogroup" accessibilityLabel="Your rating">
+                      {[1, 2, 3, 4, 5].map((s) => (
+                        <TouchableOpacity
+                          key={s}
+                          onPress={() => chooseRating(s)}
+                          hitSlop={6}
+                          accessibilityRole="radio"
+                          accessibilityLabel={`${s} out of 5 stars`}
+                          accessibilityState={{ checked: s === newRating }}
+                        >
+                          <Icon
+                            name="star"
+                            size={24}
+                            weight={s <= newRating ? "fill" : "regular"}
+                            color={s <= newRating ? colors.star : ratingNudge ? colors.danger : colors.starEmpty}
+                          />
+                        </TouchableOpacity>
+                      ))}
+                    </View>
+                  </View>
+                )}
+
+                {reviewPhotos.length > 0 && (
+                  <View style={styles.fbPhotos}>
+                    {reviewPhotos.map((p, i) => (
+                      <View key={p.uri} style={styles.fbThumbWrap}>
+                        <Image source={{ uri: p.uri }} style={[styles.fbThumb, { backgroundColor: colors.backgroundSoft }]} />
+                        <TouchableOpacity
+                          onPress={() => removePhoto(i)}
+                          disabled={submittingReview}
+                          style={[styles.fbThumbRemove, { backgroundColor: colors.textPrimary, borderColor: colors.background }]}
+                          hitSlop={8}
+                          accessibilityRole="button"
+                          accessibilityLabel={`Remove photo ${i + 1}`}
+                        >
+                          <Icon name="x" size={11} color={colors.background} />
+                        </TouchableOpacity>
+                      </View>
+                    ))}
+                  </View>
+                )}
+
+                <View style={styles.fbRow}>
+                  <Avatar
+                    uri={profileImage || clerkUser?.imageUrl}
+                    name={clerkUser?.fullName || clerkUser?.firstName}
+                    size={36}
+                    style={styles.fbAvatar}
+                  />
+                  <View
+                    style={[
+                      styles.fbPill,
+                      { backgroundColor: colors.backgroundSoft, borderColor: composerFocused ? colors.inputBorderFocus : "transparent" },
+                    ]}
+                  >
+                    <TextInput
+                      ref={inputRef}
+                      style={[styles.fbInput, { color: colors.textPrimary }]}
+                      placeholder="Write a review…"
+                      placeholderTextColor={colors.placeholder}
+                      value={newReview}
+                      onChangeText={setNewReview}
+                      onFocus={() => setComposerFocused(true)}
+                      onBlur={() => setComposerFocused(false)}
+                      editable={!submittingReview}
+                      multiline
+                      maxLength={500}
+                      accessibilityLabel="Write a review"
+                    />
+                    <TouchableOpacity
+                      onPress={pickPhotoSource}
+                      disabled={submittingReview || reviewPhotos.length >= MAX_REVIEW_PHOTOS}
+                      style={[styles.fbIconBtn, reviewPhotos.length >= MAX_REVIEW_PHOTOS && styles.fbIconOff]}
+                      hitSlop={6}
+                      accessibilityRole="button"
+                      accessibilityLabel={reviewPhotos.length >= MAX_REVIEW_PHOTOS ? `Photo limit reached (${MAX_REVIEW_PHOTOS})` : "Add photos"}
+                    >
+                      <Icon name="camera" size={20} color={colors.textMuted} />
+                    </TouchableOpacity>
+                    {/* Like Facebook, the send arrow only appears once there's something to send. */}
+                    {!!newReview.trim() && (
+                      <TouchableOpacity
+                        onPress={sendReview}
+                        disabled={submittingReview}
+                        style={styles.fbIconBtn}
+                        hitSlop={6}
+                        accessibilityRole="button"
+                        accessibilityLabel={submittingReview ? "Posting review" : "Post review"}
+                      >
+                        {submittingReview
+                          ? <ActivityIndicator size="small" color={colors.brand} />
+                          : <Icon name="send" size={20} weight="fill" color={colors.brand} />}
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                </View>
+
+                {composerOpen && newReview.length > 400 && (
+                  <Text style={[styles.fbCount, { color: colors.textMuted }]}>{newReview.length}/500</Text>
+                )}
+                {submittingReview && reviewPhotos.length > 0 && (
+                  <Text style={[styles.fbNote, { color: colors.textMuted }]} accessibilityLiveRegion="polite">
+                    Uploading {reviewPhotos.length} {reviewPhotos.length === 1 ? "photo" : "photos"}. This can take a moment on mobile data.
+                  </Text>
+                )}
+              </View>
             </>
           )}
 
@@ -1137,167 +1282,33 @@ export default function InformationScreen({ route, navigation }) {
         </View>
       </ScrollView>
 
-      {/* Floating action card — Navigate + AR, on both tabs */}
-      <View style={[styles.actionCard, { backgroundColor: colors.card, borderColor: colors.cardBorder, bottom: Math.max(insets.bottom, 14) + 10 }, shadow.lg]}>
-        <TouchableOpacity
-          accessibilityRole="button"
-          accessibilityLabel={`Navigate to ${spot.name}`}
-          style={styles.actionItem}
-          onPress={() => navigation.navigate("Track", { spot })}
-          activeOpacity={0.75}
-        >
-          <Icon name="navigation" size={17} color={colors.brand} />
-          <Text style={[styles.actionText, { color: colors.textPrimary }]}>Navigate</Text>
-        </TouchableOpacity>
-        <View style={[styles.actionDivider, { backgroundColor: colors.divider }]} />
-        <TouchableOpacity
-          accessibilityRole="button"
-          accessibilityLabel={`Open ${spot.name} in AR`}
-          style={styles.actionItem}
-          onPress={handleLaunchAR}
-          activeOpacity={0.75}
-        >
-          <Icon name="aperture" size={17} color={colors.brand} />
-          <Text style={[styles.actionText, { color: colors.textPrimary }]}>AR View</Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Review composer. A sheet, not a bar pinned to the bottom: reviews now
-          sit under Overview, where the bar would have covered the Navigate /
-          AR card. Its own KeyboardAvoidingView, because a Modal is a separate
-          window and the screen's one doesn't reach it. */}
-      <Modal visible={showComposer} animationType="slide" transparent onRequestClose={() => setShowComposer(false)}>
-        <KeyboardAvoidingView style={styles.modalKav} behavior="padding">
-          <View style={[styles.modalOverlay, { backgroundColor: colors.overlay }]}>
-            <View style={[styles.modalContent, { backgroundColor: colors.background, paddingBottom: Math.max(insets.bottom, 24) }]}>
-              <View style={[styles.modalGrabber, { backgroundColor: colors.divider }]} />
-              <View style={styles.modalHeader}>
-                <Text style={[styles.modalTitle, { color: colors.textPrimary }]} accessibilityRole="header">Write a review</Text>
-                <TouchableOpacity
-                  accessibilityRole="button"
-                  accessibilityLabel="Close"
-                  onPress={() => setShowComposer(false)}
-                  style={styles.modalClose}
-                >
-                  <Icon name="x" size={22} color={colors.textMuted} />
-                </TouchableOpacity>
-              </View>
-              {/* Scrolls under the header: with the keyboard up, the stars,
-                  text, photos and button are taller than what's left. */}
-              <ScrollView style={styles.composerBody} keyboardShouldPersistTaps="handled" showsVerticalScrollIndicator={false}>
-                <View style={styles.composerWho}>
-                  <Avatar
-                    uri={profileImage || clerkUser?.imageUrl}
-                    name={clerkUser?.fullName || clerkUser?.firstName}
-                    size={32}
-                  />
-                  <Text style={[styles.composerSpot, { color: colors.textMuted }]} numberOfLines={1}>
-                    Reviewing <Text style={{ fontFamily: fonts.sansBold, color: colors.textPrimary }}>{spot.name}</Text>
-                  </Text>
-                </View>
-
-                <Text style={[styles.modalLabel, { color: colors.textPrimary }]}>Your rating</Text>
-                <View style={styles.composerStars} accessibilityRole="radiogroup">
-                  {[1, 2, 3, 4, 5].map((s) => (
-                    <TouchableOpacity
-                      key={s}
-                      onPress={() => setNewRating(s)}
-                      hitSlop={6}
-                      accessibilityRole="radio"
-                      accessibilityLabel={`${s} out of 5 stars`}
-                      accessibilityState={{ checked: s === newRating }}
-                    >
-                      <Icon
-                        name="star"
-                        size={34}
-                        weight={s <= newRating ? "fill" : "regular"}
-                        color={s <= newRating ? colors.star : colors.starEmpty}
-                      />
-                    </TouchableOpacity>
-                  ))}
-                </View>
-
-                <Text style={[styles.modalLabel, { color: colors.textPrimary }]}>Your review</Text>
-                <TextInput
-                  ref={inputRef}
-                  style={[styles.composerInput, { backgroundColor: colors.inputBg, borderColor: colors.inputBorder, color: colors.textPrimary }]}
-                  placeholder="What was it like? Tips for the next visitor?"
-                  placeholderTextColor={colors.placeholder}
-                  value={newReview}
-                  onChangeText={setNewReview}
-                  multiline
-                  maxLength={500}
-                  textAlignVertical="top"
-                  accessibilityLabel="Your review"
-                />
-                <Text style={[styles.composerCount, { color: colors.textMuted }]}>
-                  {newRating === 0 ? "Tap a star to rate · " : ""}{newReview.length}/500
-                </Text>
-
-                <Text style={[styles.modalLabel, styles.photosLabel, { color: colors.textPrimary }]}>
-                  Photos <Text style={[styles.photosHint, { color: colors.textMuted }]}>optional · up to {MAX_REVIEW_PHOTOS}</Text>
-                </Text>
-                <View style={styles.composerPhotos}>
-                  {reviewPhotos.map((p, i) => (
-                    <View key={p.uri} style={styles.composerThumbWrap}>
-                      <Image source={{ uri: p.uri }} style={[styles.composerThumb, { backgroundColor: colors.backgroundSoft }]} />
-                      <TouchableOpacity
-                        onPress={() => removePhoto(i)}
-                        disabled={submittingReview}
-                        style={[styles.thumbRemove, { backgroundColor: colors.textPrimary, borderColor: colors.background }]}
-                        hitSlop={8}
-                        accessibilityRole="button"
-                        accessibilityLabel={`Remove photo ${i + 1}`}
-                      >
-                        <Icon name="x" size={12} color={colors.background} />
-                      </TouchableOpacity>
-                    </View>
-                  ))}
-                  {reviewPhotos.length < MAX_REVIEW_PHOTOS && (
-                    <>
-                      <TouchableOpacity
-                        onPress={() => addPhotos("camera")}
-                        disabled={submittingReview}
-                        style={[styles.addPhotoTile, { backgroundColor: colors.brandLight, borderColor: colors.cardBorder }]}
-                        accessibilityRole="button"
-                        accessibilityLabel="Take a photo"
-                        activeOpacity={0.8}
-                      >
-                        <Icon name="camera" size={20} color={colors.brand} />
-                        <Text style={[styles.addPhotoText, { color: colors.brand }]}>Camera</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        onPress={() => addPhotos("gallery")}
-                        disabled={submittingReview}
-                        style={[styles.addPhotoTile, { backgroundColor: colors.brandLight, borderColor: colors.cardBorder }]}
-                        accessibilityRole="button"
-                        accessibilityLabel="Choose photos from your gallery"
-                        activeOpacity={0.8}
-                      >
-                        <Icon name="image" size={20} color={colors.brand} />
-                        <Text style={[styles.addPhotoText, { color: colors.brand }]}>Gallery</Text>
-                      </TouchableOpacity>
-                    </>
-                  )}
-                </View>
-
-                <PrimaryButton
-                  title={submittingReview && reviewPhotos.length ? "Uploading photos…" : "Post review"}
-                  icon="send"
-                  onPress={handleSubmit}
-                  loading={submittingReview}
-                  disabled={!canPost}
-                />
-                {submittingReview && reviewPhotos.length > 0 && (
-                  <Text style={[styles.uploadNote, { color: colors.textMuted }]} accessibilityLiveRegion="polite">
-                    Uploading {reviewPhotos.length} {reviewPhotos.length === 1 ? "photo" : "photos"}. This can take a moment on mobile data.
-                  </Text>
-                )}
-              </ScrollView>
-            </View>
-          </View>
-        </KeyboardAvoidingView>
-      </Modal>
+      {/* Floating action card — Navigate + AR, on both tabs. Steps aside while
+          the review box has the keyboard, or it would sit right on top of it. */}
+      {!composerFocused && (
+        <View style={[styles.actionCard, { backgroundColor: colors.card, borderColor: colors.cardBorder, bottom: Math.max(insets.bottom, 14) + 10 }, shadow.lg]}>
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel={`Navigate to ${spot.name}`}
+            style={styles.actionItem}
+            onPress={() => navigation.navigate("Track", { spot })}
+            activeOpacity={0.75}
+          >
+            <Icon name="navigation" size={17} color={colors.brand} />
+            <Text style={[styles.actionText, { color: colors.textPrimary }]}>Navigate</Text>
+          </TouchableOpacity>
+          <View style={[styles.actionDivider, { backgroundColor: colors.divider }]} />
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel={`Open ${spot.name} in AR`}
+            style={styles.actionItem}
+            onPress={handleLaunchAR}
+            activeOpacity={0.75}
+          >
+            <Icon name="aperture" size={17} color={colors.brand} />
+            <Text style={[styles.actionText, { color: colors.textPrimary }]}>AR View</Text>
+          </TouchableOpacity>
+        </View>
+      )}
 
       <PhotoViewer viewer={viewer} onClose={() => setViewer(null)} />
 
@@ -1500,7 +1511,7 @@ const styles = StyleSheet.create({
   reactionLabel:   { fontSize: 13, fontFamily: fonts.sansMedium },
   reportLink:      { fontSize: 13, fontFamily: fonts.sansBold },
 
-  // Pages under the list, then the big "Review this spot" button.
+  // Pages under the list.
   pager:           { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 6, marginBottom: 6 },
   pagerArrow:      { width: TAP, height: TAP, borderRadius: TAP / 2, alignItems: "center", justifyContent: "center" },
   pagerOff:        { opacity: 0.35 },
@@ -1508,7 +1519,25 @@ const styles = StyleSheet.create({
   pagerNum:        { minWidth: 38, height: 38, borderRadius: 19, alignItems: "center", justifyContent: "center", paddingHorizontal: 6 },
   pagerNumText:    { fontSize: 14, fontFamily: fonts.sansSemi },
   pagerGap:        { fontSize: 14, paddingHorizontal: 4 },
-  reviewCta:       { marginTop: 14 },
+
+  // The Facebook-style review box at the end of the reviews.
+  fbComposer:      { borderTopWidth: 1, marginTop: 14, paddingTop: 14, gap: 10 },
+  fbRateRow:       { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingLeft: 46 },
+  fbRateLabel:     { fontSize: 13, fontFamily: fonts.sansSemi },
+  fbStars:         { flexDirection: "row", gap: 8 },
+  fbPhotos:        { flexDirection: "row", flexWrap: "wrap", gap: 10, paddingLeft: 46, paddingTop: 6 },
+  fbThumbWrap:     { width: 58, height: 58 },
+  fbThumb:         { width: 58, height: 58, borderRadius: radius.md },
+  fbThumbRemove:   { position: "absolute", top: -7, right: -7, width: 22, height: 22, borderRadius: 11, borderWidth: 2, alignItems: "center", justifyContent: "center" },
+  fbRow:           { flexDirection: "row", alignItems: "flex-end", gap: 10 },
+  fbAvatar:        { marginBottom: 2 },
+  // The rounded grey box Facebook uses: no outline until it has focus.
+  fbPill:          { flex: 1, flexDirection: "row", alignItems: "flex-end", borderRadius: 20, borderWidth: 1, paddingLeft: 14, paddingRight: 4, minHeight: 40 },
+  fbInput:         { flex: 1, fontSize: 14.5, fontFamily: fonts.sans, lineHeight: 20, paddingTop: 10, paddingBottom: 10, maxHeight: 120 },
+  fbIconBtn:       { width: 36, height: 38, alignItems: "center", justifyContent: "center" },
+  fbIconOff:       { opacity: 0.4 },
+  fbCount:         { fontSize: 11.5, fontFamily: fonts.sansMedium, textAlign: "right" },
+  fbNote:          { fontSize: 12, fontFamily: fonts.sansMedium, paddingLeft: 46 },
 
   // Full-screen photo viewer (black in both themes).
   viewer:          { flex: 1, backgroundColor: "#000000" },
@@ -1518,23 +1547,6 @@ const styles = StyleSheet.create({
   viewerCaption:   { color: "rgba(255,255,255,0.85)", fontFamily: fonts.sans, fontSize: 13, marginTop: 2 },
   viewerClose:     { width: TAP, height: TAP, alignItems: "center", justifyContent: "center" },
 
-  // Review composer sheet
-  modalKav:        { flex: 1 },
-  composerBody:    { flexGrow: 0 },
-  composerWho:     { flexDirection: "row", alignItems: "center", gap: 10, marginTop: 2 },
-  composerSpot:    { flex: 1, fontSize: 13.5, fontFamily: fonts.sans },
-  composerStars:   { flexDirection: "row", gap: 12 },
-  composerInput:   { borderRadius: radius.md, borderWidth: 1, padding: 14, fontSize: 14.5, lineHeight: 21, fontFamily: fonts.sans, minHeight: 120, maxHeight: 200 },
-  composerCount:   { fontSize: 12, fontFamily: fonts.sansMedium, textAlign: "right", marginTop: 6 },
-  photosLabel:     { marginTop: 4 },
-  photosHint:      { fontSize: 12, fontFamily: fonts.sansMedium },
-  composerPhotos:  { flexDirection: "row", flexWrap: "wrap", gap: 10, marginBottom: 18 },
-  composerThumbWrap: { width: 68, height: 68 },
-  composerThumb:   { width: 68, height: 68, borderRadius: radius.md },
-  thumbRemove:     { position: "absolute", top: -7, right: -7, width: 24, height: 24, borderRadius: 12, borderWidth: 2, alignItems: "center", justifyContent: "center" },
-  addPhotoTile:    { width: 68, height: 68, borderRadius: radius.md, borderWidth: 1, alignItems: "center", justifyContent: "center", gap: 3 },
-  addPhotoText:    { fontSize: 11, fontFamily: fonts.sansBold },
-  uploadNote:      { fontSize: 12, fontFamily: fonts.sansMedium, textAlign: "center", marginTop: 10 },
 
   actionCard:      { position: "absolute", alignSelf: "center", flexDirection: "row", alignItems: "center", borderRadius: 999, borderWidth: 1, paddingHorizontal: 6, paddingVertical: 4 },
   actionItem:      { flexDirection: "row", alignItems: "center", gap: 8, minHeight: TAP, paddingHorizontal: 22 },
