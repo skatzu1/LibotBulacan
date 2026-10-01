@@ -20,9 +20,12 @@ import ModelViewer from "../utils/ModelViewer";
 import { ensureAtSpotForAR } from "../utils/arLocationGate";
 import InformationSkeleton from "../components/InformationSkeleton";
 import {
-  PhotoScrim, Segmented, EmptyState, PrimaryButton, Avatar, H_PAD, TAP,
+  PhotoScrim, Segmented, EmptyState, PrimaryButton, Avatar, SearchField, H_PAD, TAP,
 } from "../components/ui";
 import { spotImage, cdn } from "../utils/image";
+import {
+  REVIEW_SORTS, ratingBreakdown, filterAndSortReviews, pageOf, pageNumbers, timeAgo,
+} from "../utils/reviewList";
 import Icon from "../components/Icon";
 
 // Icon + label per mission type. Colour is theme-driven (see MissionRow).
@@ -129,9 +132,6 @@ const TABS = [
   { key: "BucketList", label: "Bakit List", icon: "flag"      },
 ];
 
-// Overview shows this many reviews before "Show all".
-const REVIEWS_PREVIEW = 3;
-
 /* ── Pieces of the screen ─────────────────────────────────────────────────
    These used to be declared INSIDE InformationScreen, which makes each one a
    brand-new component type on every render. Typing a single character in the
@@ -221,7 +221,7 @@ function PhotoViewer({ viewer, onClose }) {
   );
 }
 
-function ReviewCard({ review, spotId, clerkUser, profileImage, reactToReview, onReport, onOpenPhoto, colors }) {
+function ReviewCard({ review, spotId, clerkUser, profileImage, reactToReview, onReport, onDelete, onOpenPhoto, colors }) {
   const isMe = clerkUser?.id === review.clerkUserId;
   // No more pravatar.cc fallback — a reviewer without a photo gets their
   // initials, not a random stranger's face.
@@ -249,102 +249,121 @@ function ReviewCard({ review, spotId, clerkUser, profileImage, reactToReview, on
   };
 
   const author = review.userName || "Anonymous";
+  const when = timeAgo(review.createdAt) || "Just now";
+
+  // ⋮ — your own review can be deleted (onDelete asks to confirm); anyone
+  // else's reported.
+  const openMenu = () => {
+    if (isMe) {
+      onDelete(review);
+    } else {
+      showAlert(`Review by ${author}`, undefined, [
+        { text: "Cancel", style: "cancel" },
+        { text: "Report review", style: "destructive", onPress: () => onReport(review) },
+      ]);
+    }
+  };
+
+  // "Helpful" / "Unhelpful" are the like / dislike reactions, named for what
+  // they mean on a review. A render helper, not a component: a component
+  // declared in here would be a new type every render and remount each time.
+  const reaction = ({ type, icon, label, count, activeColor }) => {
+    const on = userReaction === type;
+    const tint = on ? activeColor : colors.textMuted;
+    if (isMe) {
+      return (
+        <View style={styles.reactionBtn}>
+          <Icon name={icon} size={14} color={colors.textMuted} />
+          <Text style={[styles.reactionLabel, { color: colors.textMuted }]}>{label} ({count})</Text>
+        </View>
+      );
+    }
+    return (
+      <TouchableOpacity
+        onPress={() => handleReact(type)}
+        disabled={reacting}
+        hitSlop={{ top: 12, bottom: 12, left: 6, right: 6 }}
+        style={styles.reactionBtn}
+        activeOpacity={0.7}
+        accessibilityRole="button"
+        accessibilityState={{ selected: on }}
+        accessibilityLabel={`Mark this review ${label.toLowerCase()}, ${count} so far`}
+      >
+        <Icon name={icon} size={14} weight={on ? "fill" : "regular"} color={tint} />
+        <Text style={[styles.reactionLabel, { color: on ? activeColor : colors.textSecondary }]}>
+          {label} <Text style={{ color: tint }}>({count})</Text>
+        </Text>
+      </TouchableOpacity>
+    );
+  };
 
   return (
-    <View style={styles.reviewCard}>
-      <Avatar uri={avatarUri} name={author} size={36} style={[styles.avatar, { borderColor: colors.cardBorder }]} />
-      <View style={[styles.reviewBubble, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
-        <View style={styles.reviewBubbleHeader}>
-          <Text style={[styles.reviewAuthor, { color: colors.textPrimary }]} numberOfLines={1}>{author}</Text>
-          <View style={styles.reviewBubbleHeaderRight}>
-            <StarRating rating={review.rating} size={11} colors={colors} />
-            <TouchableOpacity
-              onPress={() => onReport(review)}
-              activeOpacity={0.7}
-              hitSlop={{ top: 16, bottom: 16, left: 16, right: 16 }}
-              style={styles.reportButton}
-              accessibilityRole="button"
-              accessibilityLabel={`Report the review by ${review.userName || "this user"}`}
-            >
-              <Icon name="flag" size={13} color={colors.textMuted} />
-            </TouchableOpacity>
-          </View>
-        </View>
-        <Text style={[styles.reviewComment, { color: colors.textPrimary }]}>{review.comment}</Text>
-        {review.photos?.length > 0 && (
-          <View style={styles.reviewPhotos}>
-            {review.photos.map((p, i) => (
-              <TouchableOpacity
-                key={p.url}
-                onPress={() => onOpenPhoto(review.photos.map((x) => ({ ...x, caption: author })), i)}
-                activeOpacity={0.85}
-                accessibilityRole="imagebutton"
-                accessibilityLabel={`Photo ${i + 1} of ${review.photos.length} from ${author}'s review`}
-              >
-                <Image
-                  source={{ uri: cdn(p.url, { width: 72, height: 72, crop: "fill" }) }}
-                  style={[styles.reviewPhoto, { backgroundColor: colors.backgroundSoft }]}
-                />
-              </TouchableOpacity>
-            ))}
-          </View>
+    <View style={[styles.reviewCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
+      <View style={styles.reviewHead}>
+        <Avatar uri={avatarUri} name={author} size={32} />
+        <Text style={[styles.reviewAuthor, { color: colors.textPrimary }]} numberOfLines={1}>
+          By {author}{isMe ? <Text style={{ color: colors.textMuted, fontFamily: fonts.sansMedium }}> (you)</Text> : null}
+        </Text>
+        <TouchableOpacity
+          onPress={openMenu}
+          hitSlop={10}
+          style={styles.reviewMenu}
+          accessibilityRole="button"
+          accessibilityLabel={isMe ? "Options for your review" : `Options for the review by ${author}`}
+        >
+          <Icon name="more-vertical" size={18} color={colors.textMuted} />
+        </TouchableOpacity>
+      </View>
+
+      <StarRating rating={review.rating} size={16} colors={colors} />
+
+      <Text style={[styles.reviewComment, { color: colors.textSecondary }]}>{review.comment}</Text>
+
+      <View style={styles.reviewMeta}>
+        <Text style={[styles.reviewDate, { color: colors.textMuted }]}>{when}</Text>
+        {review.verifiedVisit && (
+          <>
+            <View style={[styles.metaDot, { backgroundColor: colors.textMuted }]} />
+            <Icon name="check-circle" size={14} weight="fill" color={colors.success} />
+            <Text style={[styles.reviewVerified, { color: colors.textSecondary }]}>Verified visit</Text>
+          </>
         )}
-        <View style={styles.reviewFooterRow}>
-          <Text style={[styles.reviewDate, { color: colors.textMuted }]}>
-            {review.createdAt ? new Date(review.createdAt).toLocaleDateString() : "Just now"}
-          </Text>
-          {/* Your own review can't be reacted to. Rather than rendering two
-              greyed-out buttons with no explanation, show the tallies as plain
-              text — nothing looks broken and nothing invites a dead tap. */}
-          {isMe ? (
-            <View
-              style={styles.reactionsRow}
-              accessibilityLabel={`${review.likes || 0} likes, ${review.dislikes || 0} dislikes on your review`}
+      </View>
+
+      {review.photos?.length > 0 && (
+        <View style={styles.reviewPhotos}>
+          {review.photos.map((p, i) => (
+            <TouchableOpacity
+              key={p.url}
+              onPress={() => onOpenPhoto(review.photos.map((x) => ({ ...x, caption: author })), i)}
+              activeOpacity={0.85}
+              accessibilityRole="imagebutton"
+              accessibilityLabel={`Photo ${i + 1} of ${review.photos.length} from ${author}'s review`}
             >
-              <View style={styles.reactionBtn}>
-                <Icon name="thumbs-up" size={13} color={colors.textMuted} />
-                <Text style={[styles.reactionCount, { color: colors.textMuted }]}>{review.likes || 0}</Text>
-              </View>
-              <View style={styles.reactionBtn}>
-                <Icon name="thumbs-down" size={13} color={colors.textMuted} />
-                <Text style={[styles.reactionCount, { color: colors.textMuted }]}>{review.dislikes || 0}</Text>
-              </View>
-            </View>
-          ) : (
-            <View style={styles.reactionsRow}>
-              <TouchableOpacity
-                onPress={() => handleReact("like")}
-                disabled={reacting}
-                hitSlop={{ top: 14, bottom: 14, left: 12, right: 12 }}
-                style={styles.reactionBtn}
-                activeOpacity={0.7}
-                accessibilityRole="button"
-                accessibilityState={{ selected: userReaction === "like" }}
-                accessibilityLabel={`Like this review, ${review.likes || 0} likes`}
-              >
-                <Icon name="thumbs-up" size={13} weight={userReaction === "like" ? "fill" : "regular"} color={userReaction === "like" ? colors.brand : colors.textMuted} />
-                <Text style={[styles.reactionCount, { color: userReaction === "like" ? colors.brand : colors.textMuted }]}>
-                  {review.likes || 0}
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={() => handleReact("dislike")}
-                disabled={reacting}
-                hitSlop={{ top: 14, bottom: 14, left: 12, right: 12 }}
-                style={styles.reactionBtn}
-                activeOpacity={0.7}
-                accessibilityRole="button"
-                accessibilityState={{ selected: userReaction === "dislike" }}
-                accessibilityLabel={`Dislike this review, ${review.dislikes || 0} dislikes`}
-              >
-                <Icon name="thumbs-down" size={13} weight={userReaction === "dislike" ? "fill" : "regular"} color={userReaction === "dislike" ? colors.danger : colors.textMuted} />
-                <Text style={[styles.reactionCount, { color: userReaction === "dislike" ? colors.danger : colors.textMuted }]}>
-                  {review.dislikes || 0}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          )}
+              <Image
+                source={{ uri: cdn(p.url, { width: 76, height: 76, crop: "fill" }) }}
+                style={[styles.reviewPhoto, { backgroundColor: colors.backgroundSoft, borderColor: colors.cardBorder }]}
+              />
+            </TouchableOpacity>
+          ))}
         </View>
+      )}
+
+      <View style={styles.reviewFooterRow}>
+        <View style={styles.reactionsRow}>
+          {reaction({ type: "like",    icon: "thumbs-up",   label: "Helpful",   count: review.likes || 0,    activeColor: colors.brand })}
+          {reaction({ type: "dislike", icon: "thumbs-down", label: "Unhelpful", count: review.dislikes || 0, activeColor: colors.danger })}
+        </View>
+        {!isMe && (
+          <TouchableOpacity
+            onPress={() => onReport(review)}
+            hitSlop={{ top: 12, bottom: 12, left: 10, right: 10 }}
+            accessibilityRole="button"
+            accessibilityLabel={`Report the review by ${author}`}
+          >
+            <Text style={[styles.reportLink, { color: colors.brand }]}>Report</Text>
+          </TouchableOpacity>
+        )}
       </View>
     </View>
   );
@@ -439,7 +458,13 @@ export default function InformationScreen({ route, navigation }) {
   const [newRating,        setNewRating]        = useState(0);
   const [newReview,        setNewReview]        = useState("");
   const [showComposer,     setShowComposer]     = useState(false);
-  const [showAllReviews,   setShowAllReviews]   = useState(false);
+  // The review list's search / sort / filters / page (see utils/reviewList).
+  const [reviewQuery,      setReviewQuery]      = useState("");
+  const [reviewSort,       setReviewSort]       = useState("recent");
+  const [starFilter,       setStarFilter]       = useState(null);
+  const [onlyWithPhotos,   setOnlyWithPhotos]   = useState(false);
+  const [showSortMenu,     setShowSortMenu]     = useState(false);
+  const [reviewPageIndex,  setReviewPageIndex]  = useState(0);
   const [reviewPhotos,     setReviewPhotos]     = useState([]);   // [{ uri, mime }] for the review being written
   const [viewer,           setViewer]           = useState(null); // { photos, index } while the full-screen viewer is open
   const [screenReady,      setScreenReady]      = useState(false);
@@ -453,7 +478,7 @@ export default function InformationScreen({ route, navigation }) {
   const inputRef = useRef(null);
   const { user: clerkUser } = useUser();
   const { isBookmarked, toggleBookmark } = useBookmark();
-  const { getReviewsForSpot, addReview, reportReview, reactToReview, getAverageRating, getReviewCount, fetchReviews } = useReviews();
+  const { getReviewsForSpot, addReview, reportReview, reactToReview, getAverageRating, getReviewCount, fetchReviews, deleteReview } = useReviews();
   const { fetchMissions, getMissionsForSpot, completedMissions } = useMissions();
   const { hasVisited, refresh: refreshPoints } = usePoints();
   const { profileImage } = useProfileImage();
@@ -518,6 +543,10 @@ export default function InformationScreen({ route, navigation }) {
   // Every photo travelers attached to their reviews, newest review first,
   // each labelled with who took it.
   const visitorPhotos    = reviews.flatMap((r) => (r.photos || []).map((p) => ({ ...p, caption: r.userName || "Anonymous" })));
+  const breakdown        = ratingBreakdown(reviews);
+  const shownReviews     = filterAndSortReviews(reviews, { query: reviewQuery, sort: reviewSort, stars: starFilter, withPhotos: onlyWithPhotos });
+  const reviewPage       = pageOf(shownReviews, reviewPageIndex);
+  const sortLabel        = (REVIEW_SORTS.find((o) => o.key === reviewSort) || REVIEW_SORTS[0]).label;
   const missions         = getMissionsForSpot(spot._id);
   // Hierarchy: arriving + AR are major, AI + food are minor (utils/missionTiers).
   // Arriving isn't a Mission document, so it's counted in by hand.
@@ -594,6 +623,28 @@ export default function InformationScreen({ route, navigation }) {
   };
 
   const openPhotos = (photos, index) => setViewer({ photos, index });
+
+  // Any change to what's listed goes back to page 1. Done in the handlers
+  // rather than an effect: this component returns early above, so a hook
+  // down here would break the rules of hooks.
+  const changeReviewFilter = (setter, value) => { setter(value); setReviewPageIndex(0); };
+  const clearReviewFilters = () => {
+    setReviewQuery(""); setStarFilter(null); setOnlyWithPhotos(false); setReviewPageIndex(0);
+  };
+
+  const confirmDeleteReview = (review) => {
+    showAlert("Delete your review?", "Your review and its photos will be removed. This can't be undone.", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Delete",
+        style: "destructive",
+        onPress: async () => {
+          const ok = await deleteReview(review._id, spot._id);
+          showToast(ok ? "Review deleted." : "Couldn't delete the review. Please try again.", { type: ok ? "success" : "error" });
+        },
+      },
+    ]);
+  };
 
   const handleSubmit = async () => {
     if (newRating === 0 || newReview.trim() === "" || submittingReview) return;
@@ -779,50 +830,47 @@ export default function InformationScreen({ route, navigation }) {
                 ))}
               </View>
 
-              {/* ── Reviews ── */}
-              <Text style={[styles.sectionHeading, styles.reviewsHeading, { color: colors.textPrimary }]} accessibilityRole="header">
-                Reviews{reviewCount > 0 ? ` (${reviewCount})` : ""}
-              </Text>
+              {/* ── Ratings & Reviews ── */}
+              <View style={styles.rrHeading}>
+                <Icon name="star" size={18} color={colors.textPrimary} />
+                <Text style={[styles.sectionHeading, styles.rrHeadingText, { color: colors.textPrimary }]} accessibilityRole="header">
+                  Ratings &amp; Reviews
+                </Text>
+              </View>
 
+              {/* Average on the left, the 5→1 breakdown on the right. A bar is
+                  also a filter: tap it to see only that rating. */}
               <View style={[styles.ratingSummary, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
-                <View style={styles.ratingTop}>
+                <View style={styles.ratingLeft}>
                   <Text style={[styles.ratingBig, { color: colors.textPrimary }]}>{reviewCount > 0 ? averageRating : "–"}</Text>
-                  <View style={styles.ratingMeta}>
-                    <StarRating rating={Math.round(parseFloat(averageRating))} size={16} colors={colors} />
-                    <Text style={[styles.reviewCountText, { color: colors.textMuted }]}>
-                      {reviewCount > 0 ? `${reviewCount} ${reviewCount === 1 ? "review" : "reviews"}` : "No ratings yet"}
-                    </Text>
-                  </View>
+                  <Text style={[styles.reviewCountText, { color: colors.textMuted }]}>
+                    {reviewCount > 0 ? `${reviewCount} ${reviewCount === 1 ? "review" : "reviews"}` : "No ratings yet"}
+                  </Text>
+                  <StarRating rating={Math.round(parseFloat(averageRating))} size={14} colors={colors} />
                 </View>
-
-                <View style={[styles.rateDivider, { backgroundColor: colors.cardBorder }]} />
-
-                {/* Tap a star to start a review with that rating. */}
-                <Text style={[styles.rateLabel, { color: colors.textSecondary }]}>Been here? Rate it</Text>
-                <View style={styles.rateRow}>
-                  <View style={styles.rateStars}>
-                    {[1, 2, 3, 4, 5].map((s) => (
+                <View style={styles.ratingBars}>
+                  {breakdown.map((row) => {
+                    const on = starFilter === row.stars;
+                    return (
                       <TouchableOpacity
-                        key={s}
-                        onPress={() => openComposer(s)}
-                        hitSlop={6}
+                        key={row.stars}
+                        onPress={() => changeReviewFilter(setStarFilter, on ? null : row.stars)}
+                        disabled={row.count === 0 && !on}
+                        style={[styles.barRow, on && { backgroundColor: colors.brandLight }]}
+                        activeOpacity={0.7}
                         accessibilityRole="button"
-                        accessibilityLabel={`Rate ${s} out of 5 stars and write a review`}
+                        accessibilityState={{ selected: on, disabled: row.count === 0 && !on }}
+                        accessibilityLabel={`${row.stars} stars: ${row.count} ${row.count === 1 ? "review" : "reviews"}, ${row.percent} percent. ${on ? "Showing only these; tap to show all." : "Tap to show only these."}`}
                       >
-                        <Icon name="star" size={26} color={colors.starEmpty} />
+                        <Text style={[styles.barStars, { color: colors.textSecondary }]}>{row.stars}</Text>
+                        <Icon name="star" size={11} weight="fill" color={colors.star} />
+                        <View style={[styles.barTrack, { backgroundColor: colors.brandLight }]}>
+                          <View style={[styles.barFill, { width: `${row.percent}%`, backgroundColor: colors.brand }]} />
+                        </View>
+                        <Text style={[styles.barPct, { color: colors.textMuted }]}>{row.percent}%</Text>
                       </TouchableOpacity>
-                    ))}
-                  </View>
-                  <TouchableOpacity
-                    style={[styles.writeBtn, { backgroundColor: colors.brandLight }]}
-                    onPress={() => openComposer()}
-                    accessibilityRole="button"
-                    accessibilityLabel="Write a review"
-                    activeOpacity={0.8}
-                  >
-                    <Icon name="edit-2" size={14} color={colors.brand} />
-                    <Text style={[styles.writeBtnText, { color: colors.brand }]}>Write</Text>
-                  </TouchableOpacity>
+                    );
+                  })}
                 </View>
               </View>
 
@@ -859,40 +907,149 @@ export default function InformationScreen({ route, navigation }) {
                 <EmptyState icon="message-square" text="No reviews yet. Be the first to share your experience." />
               ) : (
                 <>
-                  {(showAllReviews ? reviews : reviews.slice(0, REVIEWS_PREVIEW)).map((review) => (
-                    <ReviewCard
-                      key={review._id}
-                      review={review}
-                      spotId={spot._id}
-                      clerkUser={clerkUser}
-                      profileImage={profileImage}
-                      reactToReview={reactToReview}
-                      onReport={openReportModal}
-                      onOpenPhoto={openPhotos}
-                      colors={colors}
-                    />
-                  ))}
-                  {reviews.length > REVIEWS_PREVIEW && (
+                  {/* Search + sort + "with photos", like the reference toolbar. */}
+                  <Text style={[styles.searchLabel, { color: colors.textSecondary }]}>Search for a keyword</Text>
+                  <SearchField
+                    value={reviewQuery}
+                    onChangeText={(v) => changeReviewFilter(setReviewQuery, v)}
+                    onClear={() => changeReviewFilter(setReviewQuery, "")}
+                    placeholder="Search a specific review…"
+                    style={styles.reviewSearch}
+                  />
+                  <View style={styles.reviewToolbar}>
                     <TouchableOpacity
-                      style={[styles.showAllBtn, { borderColor: colors.cardBorder }]}
-                      onPress={() => setShowAllReviews((v) => !v)}
+                      onPress={() => setShowSortMenu((v) => !v)}
+                      style={[styles.toolChip, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}
                       accessibilityRole="button"
-                      accessibilityState={{ expanded: showAllReviews }}
+                      accessibilityState={{ expanded: showSortMenu }}
+                      accessibilityLabel={`Sort reviews, currently ${sortLabel}`}
                       activeOpacity={0.8}
                     >
-                      <Text style={[styles.showAllText, { color: colors.brand }]}>
-                        {showAllReviews ? "Show fewer" : `Show all ${reviews.length} reviews`}
-                      </Text>
-                      <Icon
-                        name="chevron-down"
-                        size={16}
-                        color={colors.brand}
-                        style={showAllReviews ? styles.chevronUp : undefined}
-                      />
+                      <Icon name="sliders" size={15} color={colors.textSecondary} />
+                      <Text style={[styles.toolChipText, { color: colors.textPrimary }]}>Sort: {sortLabel}</Text>
+                      <Icon name="chevron-down" size={14} color={colors.textSecondary} style={showSortMenu ? styles.chevronUp : undefined} />
                     </TouchableOpacity>
+                    <TouchableOpacity
+                      onPress={() => changeReviewFilter(setOnlyWithPhotos, !onlyWithPhotos)}
+                      style={[
+                        styles.toolChip,
+                        onlyWithPhotos
+                          ? { backgroundColor: colors.brand, borderColor: colors.brand }
+                          : { backgroundColor: colors.card, borderColor: colors.cardBorder },
+                      ]}
+                      accessibilityRole="button"
+                      accessibilityState={{ selected: onlyWithPhotos }}
+                      accessibilityLabel="Only reviews with photos"
+                      activeOpacity={0.8}
+                    >
+                      <Icon name="image" size={15} color={onlyWithPhotos ? colors.onBrand : colors.textSecondary} />
+                      <Text style={[styles.toolChipText, { color: onlyWithPhotos ? colors.onBrand : colors.textPrimary }]}>With photos</Text>
+                    </TouchableOpacity>
+                  </View>
+
+                  {showSortMenu && (
+                    <View style={[styles.sortMenu, { backgroundColor: colors.card, borderColor: colors.cardBorder }, shadow.md]} accessibilityRole="menu">
+                      {REVIEW_SORTS.map((o) => {
+                        const on = o.key === reviewSort;
+                        return (
+                          <TouchableOpacity
+                            key={o.key}
+                            onPress={() => { changeReviewFilter(setReviewSort, o.key); setShowSortMenu(false); }}
+                            style={styles.sortOption}
+                            accessibilityRole="menuitem"
+                            accessibilityState={{ selected: on }}
+                          >
+                            <Text style={[styles.sortOptionText, { color: on ? colors.brand : colors.textPrimary, fontFamily: on ? fonts.sansBold : fonts.sans }]}>
+                              {o.label}
+                            </Text>
+                            {on && <Icon name="check" size={16} color={colors.brand} />}
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  )}
+
+                  {(starFilter || onlyWithPhotos || reviewQuery.trim()) && (
+                    <View style={styles.filterNote}>
+                      <Text style={[styles.filterNoteText, { color: colors.textMuted }]}>
+                        {shownReviews.length} of {reviewCount} {reviewCount === 1 ? "review" : "reviews"}
+                        {starFilter ? ` · ${starFilter}-star` : ""}
+                        {onlyWithPhotos ? " · with photos" : ""}
+                      </Text>
+                      <TouchableOpacity
+                        onPress={clearReviewFilters}
+                        hitSlop={10}
+                        accessibilityRole="button"
+                        accessibilityLabel="Clear review filters"
+                      >
+                        <Text style={[styles.filterClear, { color: colors.brand }]}>Clear</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+
+                  {shownReviews.length === 0 ? (
+                    <EmptyState icon="search" text="No reviews match. Try another word, or clear the filters." />
+                  ) : (
+                    reviewPage.items.map((review) => (
+                      <ReviewCard
+                        key={review._id}
+                        review={review}
+                        spotId={spot._id}
+                        clerkUser={clerkUser}
+                        profileImage={profileImage}
+                        reactToReview={reactToReview}
+                        onReport={openReportModal}
+                        onDelete={confirmDeleteReview}
+                        onOpenPhoto={openPhotos}
+                        colors={colors}
+                      />
+                    ))
+                  )}
+
+                  {reviewPage.pageCount > 1 && (
+                    <View style={styles.pager} accessibilityRole="tablist" accessibilityLabel="Review pages">
+                      <TouchableOpacity
+                        onPress={() => setReviewPageIndex(reviewPage.page - 1)}
+                        disabled={reviewPage.page === 0}
+                        style={[styles.pagerArrow, { backgroundColor: colors.backgroundSoft }, reviewPage.page === 0 && styles.pagerOff]}
+                        accessibilityRole="button"
+                        accessibilityLabel="Previous page"
+                      >
+                        <Icon name="chevron-left" size={18} color={colors.textPrimary} />
+                      </TouchableOpacity>
+                      <View style={styles.pagerNumbers}>
+                        {pageNumbers(reviewPage.page, reviewPage.pageCount).map((n, i) => (
+                          n === null ? (
+                            <Text key={`gap${i}`} style={[styles.pagerGap, { color: colors.textMuted }]}>…</Text>
+                          ) : (
+                            <TouchableOpacity
+                              key={n}
+                              onPress={() => setReviewPageIndex(n)}
+                              style={[styles.pagerNum, n === reviewPage.page && { backgroundColor: colors.brandLight }]}
+                              accessibilityRole="tab"
+                              accessibilityState={{ selected: n === reviewPage.page }}
+                              accessibilityLabel={`Page ${n + 1} of ${reviewPage.pageCount}`}
+                            >
+                              <Text style={[styles.pagerNumText, { color: n === reviewPage.page ? colors.brand : colors.textSecondary }]}>{n + 1}</Text>
+                            </TouchableOpacity>
+                          )
+                        ))}
+                      </View>
+                      <TouchableOpacity
+                        onPress={() => setReviewPageIndex(reviewPage.page + 1)}
+                        disabled={reviewPage.page >= reviewPage.pageCount - 1}
+                        style={[styles.pagerArrow, { backgroundColor: colors.backgroundSoft }, reviewPage.page >= reviewPage.pageCount - 1 && styles.pagerOff]}
+                        accessibilityRole="button"
+                        accessibilityLabel="Next page"
+                      >
+                        <Icon name="chevron-right" size={18} color={colors.textPrimary} />
+                      </TouchableOpacity>
+                    </View>
                   )}
                 </>
               )}
+
+              <PrimaryButton title="Review this spot" icon="edit-2" onPress={() => openComposer()} style={styles.reviewCta} />
             </>
           )}
 
@@ -1288,23 +1445,21 @@ const styles = StyleSheet.create({
   ptsPill:         { flexDirection: "row", alignItems: "center", gap: 4, borderRadius: radius.pill, paddingHorizontal: 9, paddingVertical: 4 },
   ptsText:         { fontFamily: fonts.sansBold, fontSize: 12 },
 
-  // Reviews at the foot of Overview: a summary card (average + "rate it" stars)
-  // then the first few reviews.
-  reviewsHeading:  { marginTop: 28 },
-  ratingSummary:   { borderRadius: radius.card, paddingHorizontal: 18, paddingVertical: 16, marginBottom: 16, borderWidth: 1 },
-  ratingTop:       { flexDirection: "row", alignItems: "center", gap: 14 },
-  ratingBig:       { ...typography.display, fontSize: 42, lineHeight: 48 },
-  ratingMeta:      { flex: 1 },
-  starsRow:        { flexDirection: "row", gap: 3, marginBottom: 4 },
-  reviewCountText: { fontSize: 12.5, fontFamily: fonts.sansSemi, marginTop: 4 },
-  rateDivider:     { height: 1, marginVertical: 14 },
-  rateLabel:       { fontSize: 13, fontFamily: fonts.sansSemi, marginBottom: 8 },
-  rateRow:         { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  rateStars:       { flexDirection: "row", gap: 10 },
-  writeBtn:        { flexDirection: "row", alignItems: "center", gap: 6, borderRadius: radius.pill, paddingHorizontal: 14, minHeight: 36 },
-  writeBtnText:    { fontFamily: fonts.sansBold, fontSize: 13 },
-  showAllBtn:      { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, minHeight: TAP, borderRadius: radius.pill, borderWidth: 1, marginTop: 4 },
-  showAllText:     { fontFamily: fonts.sansBold, fontSize: 13.5 },
+  // ── Ratings & Reviews (after the reference review UI) ──
+  rrHeading:       { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 28, marginBottom: 10 },
+  rrHeadingText:   { marginTop: 0, marginBottom: 0 },
+  // Average on the left, the 5→1 bars on the right.
+  ratingSummary:   { flexDirection: "row", alignItems: "center", gap: 16, borderRadius: radius.card, paddingHorizontal: 16, paddingVertical: 16, marginBottom: 18, borderWidth: 1 },
+  ratingLeft:      { alignItems: "center", minWidth: 92 },
+  ratingBig:       { ...typography.display, fontSize: 44, lineHeight: 50 },
+  reviewCountText: { fontSize: 12.5, fontFamily: fonts.sansMedium, marginTop: 2, marginBottom: 6 },
+  starsRow:        { flexDirection: "row", gap: 3 },
+  ratingBars:      { flex: 1, gap: 1 },
+  barRow:          { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 6, paddingVertical: 3, borderRadius: radius.sm, minHeight: 24 },
+  barStars:        { width: 10, fontSize: 12, fontFamily: fonts.sansSemi, textAlign: "right" },
+  barTrack:        { flex: 1, height: 6, borderRadius: 3, overflow: "hidden" },
+  barFill:         { height: 6, borderRadius: 3 },
+  barPct:          { width: 34, fontSize: 11.5, fontFamily: fonts.sansMedium, textAlign: "right" },
   chevronUp:       { transform: [{ rotate: "180deg" }] },
 
   // Visitor photos: a strip that runs to the screen edges, under the summary.
@@ -1312,30 +1467,56 @@ const styles = StyleSheet.create({
   photoStrip:        { marginHorizontal: -H_PAD, marginBottom: 18 },
   photoStripContent: { paddingHorizontal: H_PAD, gap: 8 },
   stripPhoto:        { width: 112, height: 112, borderRadius: radius.md },
-  reviewPhotos:      { flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 8 },
-  reviewPhoto:       { width: 72, height: 72, borderRadius: radius.sm },
 
-  // Full-screen viewer (black in both themes).
+  // Search, sort and the "with photos" chip.
+  searchLabel:     { fontSize: 13, fontFamily: fonts.sansSemi, marginBottom: 8 },
+  reviewSearch:    { marginBottom: 10 },
+  reviewToolbar:   { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 12 },
+  toolChip:        { flexDirection: "row", alignItems: "center", gap: 7, borderWidth: 1, borderRadius: radius.pill, paddingHorizontal: 14, minHeight: 40 },
+  toolChipText:    { fontSize: 13, fontFamily: fonts.sansSemi },
+  sortMenu:        { borderWidth: 1, borderRadius: radius.md, paddingVertical: 4, marginTop: -4, marginBottom: 12 },
+  sortOption:      { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 14, minHeight: TAP },
+  sortOptionText:  { fontSize: 14 },
+  filterNote:      { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 10 },
+  filterNoteText:  { fontSize: 12.5, fontFamily: fonts.sansMedium, flex: 1 },
+  filterClear:     { fontSize: 13, fontFamily: fonts.sansBold },
+
+  // One review: flat card, name row with ⋮, stars, text, time · verified,
+  // photos, then Helpful / Unhelpful and Report.
+  reviewCard:      { borderRadius: radius.card, borderWidth: 1, padding: 16, marginBottom: 12, gap: 8 },
+  reviewHead:      { flexDirection: "row", alignItems: "center", gap: 10 },
+  reviewAuthor:    { flex: 1, fontSize: 14.5, fontFamily: fonts.sansBold },
+  reviewMenu:      { width: 32, height: 32, alignItems: "flex-end", justifyContent: "center" },
+  reviewComment:   { fontSize: 14, lineHeight: 21, fontFamily: fonts.sans },
+  reviewMeta:      { flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" },
+  reviewDate:      { fontSize: 12.5, fontFamily: fonts.sansMedium },
+  metaDot:         { width: 3, height: 3, borderRadius: 1.5, marginHorizontal: 2 },
+  reviewVerified:  { fontSize: 12.5, fontFamily: fonts.sansMedium },
+  reviewPhotos:    { flexDirection: "row", flexWrap: "wrap", gap: 8, marginTop: 2 },
+  reviewPhoto:     { width: 76, height: 76, borderRadius: radius.md, borderWidth: 1 },
+  reviewFooterRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 2 },
+  reactionsRow:    { flexDirection: "row", alignItems: "center", gap: 16 },
+  reactionBtn:     { flexDirection: "row", alignItems: "center", gap: 5, minHeight: 32 },
+  reactionLabel:   { fontSize: 13, fontFamily: fonts.sansMedium },
+  reportLink:      { fontSize: 13, fontFamily: fonts.sansBold },
+
+  // Pages under the list, then the big "Review this spot" button.
+  pager:           { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 6, marginBottom: 6 },
+  pagerArrow:      { width: TAP, height: TAP, borderRadius: TAP / 2, alignItems: "center", justifyContent: "center" },
+  pagerOff:        { opacity: 0.35 },
+  pagerNumbers:    { flexDirection: "row", alignItems: "center", gap: 4 },
+  pagerNum:        { minWidth: 38, height: 38, borderRadius: 19, alignItems: "center", justifyContent: "center", paddingHorizontal: 6 },
+  pagerNumText:    { fontSize: 14, fontFamily: fonts.sansSemi },
+  pagerGap:        { fontSize: 14, paddingHorizontal: 4 },
+  reviewCta:       { marginTop: 14 },
+
+  // Full-screen photo viewer (black in both themes).
   viewer:          { flex: 1, backgroundColor: "#000000" },
   viewerTop:       { position: "absolute", top: 0, left: 0, right: 0, flexDirection: "row", alignItems: "center", paddingHorizontal: 16, paddingBottom: 12, backgroundColor: "rgba(0,0,0,0.45)" },
   viewerInfo:      { flex: 1 },
   viewerCount:     { color: "#FFFFFF", fontFamily: fonts.sansBold, fontSize: 15 },
   viewerCaption:   { color: "rgba(255,255,255,0.85)", fontFamily: fonts.sans, fontSize: 13, marginTop: 2 },
   viewerClose:     { width: TAP, height: TAP, alignItems: "center", justifyContent: "center" },
-
-  reviewCard:      { flexDirection: "row", alignItems: "flex-start", gap: 10, marginBottom: 12 },
-  avatar:          { marginTop: 2, borderWidth: 1.5 },
-  reviewBubble:    { flex: 1, borderRadius: radius.lg, borderWidth: 1, paddingHorizontal: 15, paddingVertical: 12 },
-  reviewBubbleHeader:      { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginBottom: 4, gap: 8 },
-  reviewBubbleHeaderRight: { flexDirection: "row", alignItems: "center", gap: 8 },
-  reviewAuthor:    { fontSize: 13, fontFamily: fonts.sansBold, flexShrink: 1 },
-  reviewComment:   { fontSize: 13.5, lineHeight: 20 },
-  reviewFooterRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 6 },
-  reviewDate:      { fontSize: 11, fontFamily: fonts.sansMedium },
-  reactionsRow:    { flexDirection: "row", alignItems: "center", gap: 14 },
-  reactionBtn:     { flexDirection: "row", alignItems: "center", gap: 4 },
-  reactionCount:   { fontSize: 12, fontFamily: fonts.sansBold },
-  reportButton:    { padding: 2 },
 
   // Review composer sheet
   modalKav:        { flex: 1 },
