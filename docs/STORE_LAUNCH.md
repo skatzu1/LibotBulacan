@@ -65,9 +65,10 @@ answer, mark precise location as shared.
 Security practices: data is **encrypted in transit** (yes); users **can request
 deletion** (yes, with the deletion link).
 
-Your privacy policy uses broader wording than this table (it mentions
-analytics and marketing that the app does not currently do). That is allowed.
-The reverse would not be: never collect anything the table leaves out.
+The privacy policy (backend `legal/privacy.html`, written 2026-10-02 for the
+Philippine Data Privacy Act) describes exactly what the app does, so it and
+this table should agree. Never collect anything either of them leaves out;
+when a feature changes, update both.
 
 ### 4. Store listing
 
