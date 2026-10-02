@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import {
   View, Text, Image, TouchableOpacity, StyleSheet,
-  ScrollView, TextInput, KeyboardAvoidingView, Platform,
+  ScrollView, TextInput,
   Modal, StatusBar, FlatList, useWindowDimensions, Keyboard, ActivityIndicator,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -20,6 +20,7 @@ import { useTheme, radius, shadow, fonts, typography, MAX_FONT_SCALE } from "../
 import ModelViewer from "../utils/ModelViewer";
 import { ensureAtSpotForAR, spotHasAR } from "../utils/arLocationGate";
 import InformationSkeleton from "../components/InformationSkeleton";
+import KeyboardAvoider from "../components/KeyboardAvoider";
 import {
   PhotoScrim, Segmented, EmptyState, PrimaryButton, Avatar, SearchField, H_PAD, TAP,
 } from "../components/ui";
@@ -544,13 +545,19 @@ export default function InformationScreen({ route, navigation }) {
 
   // The review box is the last thing on the page. When the keyboard opens
   // for it, scroll to the end so the box sits just above the keyboard
-  // instead of under it.
+  // instead of under it. One beat first, for the KeyboardAvoider's padding:
+  // the end of the page moves once the padding is in.
   useEffect(() => {
     if (!composerFocused) return undefined;
+    let timer;
     const sub = Keyboard.addListener("keyboardDidShow", () => {
-      scrollRef.current?.scrollToEnd({ animated: true });
+      clearTimeout(timer);
+      timer = setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 150);
     });
-    return () => sub.remove();
+    return () => {
+      clearTimeout(timer);
+      sub.remove();
+    };
   }, [composerFocused]);
   // "Arrive at the spot" is ticked from the visit logs, so re-read them when
   // the user comes back here — e.g. from navigating to the spot.
@@ -836,7 +843,7 @@ export default function InformationScreen({ route, navigation }) {
   const showing3D = show3D && !!spot.modelUrl && isFocused;
 
   return (
-    <KeyboardAvoidingView style={[styles.container, { backgroundColor: colors.background }]} behavior={Platform.OS === "ios" ? "padding" : "height"} keyboardVerticalOffset={0}>
+    <KeyboardAvoider style={[styles.container, { backgroundColor: colors.background }]}>
       <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={colors.background} />
 
       {header(
@@ -1484,7 +1491,7 @@ export default function InformationScreen({ route, navigation }) {
           </View>
         </View>
       </Modal>
-    </KeyboardAvoidingView>
+    </KeyboardAvoider>
   );
 }
 

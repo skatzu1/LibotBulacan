@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import {
   View, Text, StyleSheet, ScrollView,
-  KeyboardAvoidingView, StatusBar,
+  StatusBar,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { showAlert, showToast } from "../components/AppAlert";
@@ -11,7 +11,8 @@ import {
   ScreenHeader, HeaderAction, FormField, GroupLabel, LoadingState, H_PAD,
 } from "../components/ui";
 import Icon from "../components/Icon";
-import useKeyboardAwareScroll, { KEYBOARD_BEHAVIOR } from "../hooks/useKeyboardAwareScroll";
+import KeyboardAvoider from "../components/KeyboardAvoider";
+import useKeyboardAwareScroll from "../hooks/useKeyboardAwareScroll";
 
 export default function LoginSecurity({ navigation }) {
   const { colors, isDark } = useTheme();
@@ -95,7 +96,7 @@ export default function LoginSecurity({ navigation }) {
   return (
     <View style={[styles.flex, { backgroundColor: colors.background }]}>
       <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={colors.background} />
-      <KeyboardAvoidingView style={styles.flex} behavior={KEYBOARD_BEHAVIOR}>
+      <KeyboardAvoider style={styles.flex}>
         {header}
 
         <ScrollView
@@ -159,7 +160,7 @@ export default function LoginSecurity({ navigation }) {
             secure
           />
         </ScrollView>
-      </KeyboardAvoidingView>
+      </KeyboardAvoider>
     </View>
   );
 }

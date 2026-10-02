@@ -3,24 +3,23 @@ import { Keyboard, Platform, TextInput } from "react-native";
 
 /*
  * Keeps the field you're typing in above the keyboard, for a form that is a
- * ScrollView inside a KeyboardAvoidingView.
+ * ScrollView inside a KeyboardAvoider.
  *
  * The app runs edge-to-edge on Android (app.json edgeToEdgeEnabled), so the
- * window no longer shrinks when the keyboard opens: the KeyboardAvoidingView
- * has to pad for it (KEYBOARD_BEHAVIOR below) — with no behavior on Android,
- * as these forms had, the keyboard simply covered the lower fields, e.g. the
- * date of birth on sign-up. Even with the padding, the field that OPENED the
- * keyboard was scrolled into view before the padding existed, i.e. into the
- * part the keyboard then covers; once the keyboard is up this scrolls it back
- * above it. (Moving focus to another field later is handled by the native
- * ScrollView, which scrolls a newly focused child into its now-shorter frame.)
+ * window no longer shrinks when the keyboard opens: the KeyboardAvoider has
+ * to pad for it — with nothing doing that on Android, as these forms had, the
+ * keyboard simply covered the lower fields, e.g. the date of birth on sign-up.
+ * Even with the padding, the field that OPENED the keyboard was scrolled into
+ * view before the padding existed, i.e. into the part the keyboard then
+ * covers; once the keyboard is up this scrolls it back above it. (Moving
+ * focus to another field later is handled by the native ScrollView, which
+ * scrolls a newly focused child into its now-shorter frame.)
  *
  * Usage:
  *   const kb = useKeyboardAwareScroll();
- *   <KeyboardAvoidingView behavior={KEYBOARD_BEHAVIOR}>
+ *   <KeyboardAvoider style={{ flex: 1 }}>
  *     <ScrollView ref={kb.ref} onScroll={kb.onScroll} scrollEventThrottle={16}>
  */
-export const KEYBOARD_BEHAVIOR = "padding";
 
 // Room left between the field and the keyboard, for the error line under it.
 const MARGIN = 28;
@@ -34,7 +33,7 @@ export default function useKeyboardAwareScroll() {
     let timer;
     const sub = Keyboard.addListener("keyboardDidShow", (e) => {
       clearTimeout(timer);
-      // One beat for the KeyboardAvoidingView to apply its padding, so the
+      // One beat for the KeyboardAvoider to apply its padding, so the
       // ScrollView can scroll as far as the field needs.
       timer = setTimeout(() => {
         const input = TextInput.State.currentlyFocusedInput();
