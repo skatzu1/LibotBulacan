@@ -6,6 +6,7 @@ import { useArrival } from "../context/ArrivalContext";
 import { useTheme, fonts } from "../context/ThemeContext";
 import { ScreenHeader, SpotCard, EmptyState, ErrorState, H_PAD } from "./ui";
 import ListsSkeleton from "./ListsSkeleton";
+import usePullToRefresh from "../hooks/usePullToRefresh";
 
 /**
  * Shared "pick a spot" list screen used by the AR / Missions / Navigate flows.
@@ -19,10 +20,11 @@ export default function SpotPicker({ title, subtitle, onPick, renderRight, filte
   const { allSpots, spotsStatus, reloadSpots } = useArrival();
   const { colors, isDark } = useTheme();
   const spots = useMemo(() => (filter ? allSpots.filter(filter) : allSpots), [allSpots, filter]);
+  const { refreshing, refreshControl } = usePullToRefresh(reloadSpots);
   // Empty spots used to mean "spinner forever" — including when the request
   // had failed and nothing was ever going to arrive. (Checked on the full
   // list: a filter that matches nothing is "no spots", not "still loading".)
-  const loading = allSpots.length === 0 && spotsStatus === "loading";
+  const loading = allSpots.length === 0 && spotsStatus === "loading" && !refreshing;
   const failed  = allSpots.length === 0 && spotsStatus === "error";
 
   return (
@@ -41,6 +43,7 @@ export default function SpotPicker({ title, subtitle, onPick, renderRight, filte
         <FlatList
           data={spots}
           keyExtractor={(item) => String(item._id)}
+          refreshControl={refreshControl}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={[styles.list, { paddingBottom: insets.bottom + 40 }]}
           ListHeaderComponent={
