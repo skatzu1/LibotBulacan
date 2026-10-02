@@ -15,7 +15,7 @@ import { ScreenHeader, ListRow, GroupLabel, Segmented, H_PAD } from "../componen
 import * as Notifications from "expo-notifications";
 import { HELP_URL, ABOUT_URL, TERMS_URL, PRIVACY_URL } from "../utils/legalLinks";
 
-const SUPPORT_EMAIL = "support@libot.app";
+const SUPPORT_EMAIL = "support@libotbulacan.com";
 
 const openURL = async (url) => {
   try {
