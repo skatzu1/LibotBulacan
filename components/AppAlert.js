@@ -9,10 +9,11 @@ import Icon from "./Icon";
 
 /*
  * In-app alert / toast system that replaces the OS `Alert.alert` dialog and any
- * platform toast. The visible UI is 100% themed and drawn by this app — the only
- * primitive used is React Native's cross-platform <Modal transparent> as a
- * portal so the card always stacks above screen-level modals and catches the
- * Android back button. No native dialog / notification chrome is shown.
+ * platform toast. The visible UI is 100% themed and drawn by this app. The alert
+ * card uses React Native's cross-platform <Modal transparent> as a portal so it
+ * always stacks above screen-level modals and catches the Android back button;
+ * the toast is a plain overlay so it never blocks touches (see the provider).
+ * No native dialog / notification chrome is shown.
  *
  * Drop-in usage (same signature as Alert.alert):
  *   import { showAlert, showToast } from "../components/AppAlert";
@@ -64,8 +65,10 @@ function Toast({ data, colors, onDone }) {
     info:    { icon: "info",         color: colors.brand,    bg: colors.brandLight },
   }[data.type ?? "info"];
 
+  // pointerEvents "none", the pill included: a toast is read-only, and it sits
+  // over screen headers (Track's back button is right under it).
   return (
-    <View pointerEvents="box-none" style={styles.toastWrap}>
+    <View pointerEvents="none" style={styles.toastWrap}>
       <Animated.View
         style={[
           styles.toast,
@@ -230,10 +233,15 @@ export function AppAlertProvider({ children }) {
     <AlertContext.Provider value={{ alert, toast }}>
       {children}
 
+      {/* A toast is NOT in a <Modal>, unlike the alert: on Android a Modal is
+          its own window and takes every touch on the screen, so the whole app
+          ignored taps for as long as a toast showed. As a plain overlay at the
+          root, touches go straight through it. The trade-off: a toast raised
+          while a screen's own <Modal> is open would sit under it — none are
+          (they close the modal first). Edge-to-edge is on, so the overlay
+          starts at the top of the screen like the Modal did. */}
       {toastData && (
-        <Modal transparent visible animationType="none" statusBarTranslucent onRequestClose={() => setToastData(null)}>
-          <Toast key={toastData.key} data={toastData} colors={colors} onDone={() => setToastData(null)} />
-        </Modal>
+        <Toast key={toastData.key} data={toastData} colors={colors} onDone={() => setToastData(null)} />
       )}
 
       {alertData && (
@@ -275,7 +283,11 @@ const styles = StyleSheet.create({
   btnFlex: { flex: 1 },
   btnFull: { width: "100%" },
 
-  toastWrap: { position: "absolute", top: 0, left: 0, right: 0, alignItems: "center", paddingTop: 54, paddingHorizontal: spacing.lg },
+  // zIndex / elevation keep it above the navigator, which renders before it.
+  toastWrap: {
+    position: "absolute", top: 0, left: 0, right: 0, zIndex: 1000, elevation: 1000,
+    alignItems: "center", paddingTop: 54, paddingHorizontal: spacing.lg,
+  },
   toast: {
     flexDirection: "row",
     alignItems: "center",
