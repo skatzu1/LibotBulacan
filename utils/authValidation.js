@@ -105,6 +105,31 @@ export const TERMS_ERROR = "Agree to the Terms and Privacy Policy to continue.";
 
 export const NETWORK_ERROR = "Couldn't reach the server. Check your connection and try again.";
 
+/* ── Google window ─────────────────────────────────────────────────────────
+   The Google sign-in window (a Chrome Custom Tab on Android, an auth sheet on
+   iOS) can close without signing in: the back button, its X, a swipe away.
+   expo-web-browser doesn't throw for that — it resolves with { type: "dismiss" }
+   on Android and "cancel" on iOS — so the result has to be checked. "locked"
+   means another auth window is still open. */
+export const GOOGLE_BUSY = "A Google window is still open. Close it, then try again.";
+
+export const googleWindowBusy = (result) => result?.type === "locked";
+export const googleWindowClosed = (result) => result?.type !== "success";
+
+/** What to say when Google sign-in or sign-up THROWS. `verb`: "sign in" | "sign up". */
+export function googleErrorMessage(err, verb = "sign in") {
+  const msg = String(err?.message || "");
+  // Android allows one window at a time, and throws if the last one never
+  // finished closing ("WebBrowser is already open…", "…invalid state…").
+  if (/already open|invalid state/i.test(msg)) return GOOGLE_BUSY;
+  if (err?.errors?.some((e) => e.code === "too_many_requests")) {
+    return "Too many attempts. Wait a moment and try again.";
+  }
+  // No Clerk response at all: offline, or the request timed out.
+  if (!err?.errors && /network|fetch|timed? ?out|connection/i.test(msg)) return NETWORK_ERROR;
+  return `Couldn't ${verb} with Google. Please try again.`;
+}
+
 /**
  * Sorts a Clerk error into the field it belongs to.
  *
