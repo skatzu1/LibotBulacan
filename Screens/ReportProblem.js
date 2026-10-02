@@ -25,6 +25,7 @@ import { showAlert } from "../components/AppAlert";
 import { useTheme, fonts, typography } from "../context/ThemeContext";
 import { ScreenHeader, GroupLabel, PrimaryButton, H_PAD } from "../components/ui";
 import { SUPPORT_EMAIL } from "../utils/legalLinks";
+import useKeyboardAwareScroll, { KEYBOARD_BEHAVIOR } from "../hooks/useKeyboardAwareScroll";
 
 const CATEGORIES = [
   { key: "bug",     label: "Something isn't working" },
@@ -47,6 +48,7 @@ function deviceDetails() {
 const ReportProblem = ({ navigation }) => {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
+  const kb = useKeyboardAwareScroll();
 
   const [category, setCategory] = useState("bug");
   const [message, setMessage] = useState("");
@@ -104,9 +106,12 @@ const ReportProblem = ({ navigation }) => {
   };
 
   return (
-    <KeyboardAvoidingView style={[styles.flex, { backgroundColor: colors.background }]} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+    <KeyboardAvoidingView style={[styles.flex, { backgroundColor: colors.background }]} behavior={KEYBOARD_BEHAVIOR}>
       <ScreenHeader title="Report a Problem" onBack={() => navigation.goBack()} />
       <ScrollView
+        ref={kb.ref}
+        onScroll={kb.onScroll}
+        scrollEventThrottle={16}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 40 }]}

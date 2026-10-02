@@ -19,6 +19,7 @@ import { useProfileImage } from "../context/ProfileImageContext";
 import { useTheme, fonts, typography } from "../context/ThemeContext";
 import { ScreenHeader, ListRow, LoadingState, Avatar, H_PAD, TAP } from "../components/ui";
 import { BASE_URL } from "../api";
+import { clerkPhoto } from "../utils/image";
 import Icon from "../components/Icon";
 
 // Was a hardcoded "https://libotbackend.onrender.com" — the only place in the
@@ -53,7 +54,7 @@ export default function ProfileScreen() {
         firstName:    clerkUser.firstName || "",
         lastName:     clerkUser.lastName  || "",
         fullName:     `${clerkUser.firstName || ""} ${clerkUser.lastName || ""}`.trim() || "User",
-        profilePhoto: clerkUser.imageUrl || clerkUser.profileImageUrl || null,
+        profilePhoto: clerkPhoto(clerkUser),
       });
     } else if (contextUser) {
       setUserInfo({

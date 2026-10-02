@@ -265,6 +265,9 @@ export default function Mission({ navigation, route }) {
   const [cameraOpen, setCameraOpen]     = useState(false);
   const [capturedImage, setCapturedImage] = useState(null);
   const [modelReady, setModelReady]     = useState(false);
+  // True while openCamera checks the user is at the spot, so the button says
+  // so instead of looking like it ignored the tap.
+  const [checkingSpot, setCheckingSpot] = useState(false);
   const [status, setStatus]             = useState('pending');
   const [attempts, setAttempts]         = useState(0);
   const [facing, setFacing]             = useState('back');
@@ -320,7 +323,14 @@ export default function Mission({ navigation, route }) {
     }
     // The photo only counts if it's taken at the spot (the server checks the
     // position sent with it), so say so now rather than after the photo.
-    const coords = await ensureAtSpotForPhoto(spot);
+    if (checkingSpot) return;
+    setCheckingSpot(true);
+    let coords;
+    try {
+      coords = await ensureAtSpotForPhoto(spot);
+    } finally {
+      setCheckingSpot(false);
+    }
     if (!coords) return;
     photoCoordsRef.current = coords;
 
@@ -758,12 +768,14 @@ export default function Mission({ navigation, route }) {
                 accessibilityRole="button"
                 style={[styles.primaryBtn, !modelReady && styles.disabledBtn]}
                 onPress={openCamera}
-                disabled={!modelReady}
+                disabled={!modelReady || checkingSpot}
                 activeOpacity={0.85}
               >
-                <Icon name="camera" size={16} color={C.onGold} style={{ marginRight: 8 }} />
+                {checkingSpot
+                  ? <ActivityIndicator size="small" color={C.onGold} style={{ marginRight: 8 }} />
+                  : <Icon name="camera" size={16} color={C.onGold} style={{ marginRight: 8 }} />}
                 <Text style={styles.primaryBtnText}>
-                  {modelReady ? 'Open Camera' : 'Loading scanner…'}
+                  {checkingSpot ? 'Checking your location…' : modelReady ? 'Open Camera' : 'Loading scanner…'}
                 </Text>
               </TouchableOpacity>
             </View>
@@ -803,9 +815,11 @@ export default function Mission({ navigation, route }) {
                 <Text style={styles.primaryBtnText}>Mark as Done</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                accessibilityRole="button" style={styles.outlineBtn} onPress={openCamera} activeOpacity={0.8}>
-                <Icon name="refresh-cw" size={14} color={C.brand} style={{ marginRight: 6 }} />
-                <Text style={styles.outlineBtnText}>Scan Again</Text>
+                accessibilityRole="button" style={styles.outlineBtn} onPress={openCamera} disabled={checkingSpot} activeOpacity={0.8}>
+                {checkingSpot
+                  ? <ActivityIndicator size="small" color={C.brand} style={{ marginRight: 6 }} />
+                  : <Icon name="refresh-cw" size={14} color={C.brand} style={{ marginRight: 6 }} />}
+                <Text style={styles.outlineBtnText}>{checkingSpot ? 'Checking your location…' : 'Scan Again'}</Text>
               </TouchableOpacity>
             </View>
           )}
@@ -825,9 +839,11 @@ export default function Mission({ navigation, route }) {
                 Make sure <Text style={{ fontFamily: fonts.sansBold }}>{config.product}</Text> is clearly visible and well-lit, then try again.
               </Text>
               <TouchableOpacity
-                accessibilityRole="button" style={styles.primaryBtn} onPress={openCamera} activeOpacity={0.85}>
-                <Icon name="camera" size={16} color={C.onGold} style={{ marginRight: 8 }} />
-                <Text style={styles.primaryBtnText}>Try Again</Text>
+                accessibilityRole="button" style={styles.primaryBtn} onPress={openCamera} disabled={checkingSpot} activeOpacity={0.85}>
+                {checkingSpot
+                  ? <ActivityIndicator size="small" color={C.onGold} style={{ marginRight: 8 }} />
+                  : <Icon name="camera" size={16} color={C.onGold} style={{ marginRight: 8 }} />}
+                <Text style={styles.primaryBtnText}>{checkingSpot ? 'Checking your location…' : 'Try Again'}</Text>
               </TouchableOpacity>
             </View>
           )}

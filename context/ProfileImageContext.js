@@ -47,6 +47,12 @@ export function ProfileImageProvider({ children }) {
       if (backendImage) {
         setProfileImageState(backendImage);
         await AsyncStorage.setItem(STORAGE_KEY, backendImage);
+      } else {
+        // No photo on the server (never set, or removed in Edit Profile —
+        // maybe on another phone): drop the cached one rather than keep
+        // showing it.
+        setProfileImageState(null);
+        await AsyncStorage.removeItem(STORAGE_KEY);
       }
     } catch (e) {
       console.log(`[ProfileImage] Fetch error (attempt ${attempt}):`, e.message);
@@ -84,6 +90,16 @@ export function ProfileImageProvider({ children }) {
     }
   }, [getToken, STORAGE_KEY]);
 
+  // "Remove photo" in Edit Profile. The server side (profileImage "" and the
+  // photo copied onto the user's reviews) is done by Edit Profile's save; this
+  // forgets it on the phone so every screen falls back to initials at once.
+  const clearProfileImage = useCallback(async () => {
+    setProfileImageState(null);
+    if (STORAGE_KEY) {
+      try { await AsyncStorage.removeItem(STORAGE_KEY); } catch (_) {}
+    }
+  }, [STORAGE_KEY]);
+
   useEffect(() => {
     if (!userId) return;
     setLoading(true);
@@ -107,7 +123,7 @@ export function ProfileImageProvider({ children }) {
 
   return (
     <ProfileImageContext.Provider
-      value={{ profileImage, setProfileImage, fetchProfileImage, loading, hydrated }}
+      value={{ profileImage, setProfileImage, clearProfileImage, fetchProfileImage, loading, hydrated }}
     >
       {children}
     </ProfileImageContext.Provider>

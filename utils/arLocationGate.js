@@ -126,16 +126,26 @@ const formatAway = (m) => (m >= 1000 ? `${(m / 1000).toFixed(1)} km` : `${Math.r
 /**
  * The phone's current position ({ latitude, longitude, accuracy }), or null
  * if location is off or unavailable. `ask` requests permission if needed.
+ * `maxAgeMs` accepts a fix the phone already has if it's that recent (the
+ * arrival watch keeps one while the app is open), which answers instantly;
+ * `timeoutMs` stops waiting for a fresh fix, which indoors can take a while.
  */
-export async function currentCoords({ ask = false } = {}) {
+export async function currentCoords({ ask = false, maxAgeMs = 0, timeoutMs = 0 } = {}) {
   try {
     let { status } = await Location.getForegroundPermissionsAsync();
     if (status !== "granted" && ask) {
       ({ status } = await Location.requestForegroundPermissionsAsync());
     }
     if (status !== "granted") return null;
-    const pos = await Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-    return pos.coords;
+    if (maxAgeMs) {
+      const last = await Location.getLastKnownPositionAsync({ maxAge: maxAgeMs, requiredAccuracy: 100 });
+      if (last) return last.coords;
+    }
+    const fresh = Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
+    const pos = timeoutMs
+      ? await Promise.race([fresh, new Promise((resolve) => setTimeout(() => resolve(null), timeoutMs))])
+      : await fresh;
+    return pos?.coords ?? null;
   } catch (_) {
     return null;
   }
@@ -150,11 +160,17 @@ export async function currentCoords({ ask = false } = {}) {
  */
 export async function ensureAtSpotForPhoto(spot) {
   const name = spot?.name || "this spot";
-  const coords = await currentCoords({ ask: true });
+  // A fix from the last 30 s answers at once. Waiting for a fresh one used to
+  // leave the button doing nothing for several seconds before "You're not
+  // at…" appeared, which read as the app ignoring the tap.
+  const coords = await currentCoords({ ask: true, maxAgeMs: 30000, timeoutMs: 12000 });
   if (!coords) {
+    const { status } = await Location.getForegroundPermissionsAsync().catch(() => ({}));
     showAlert(
-      "Location needed",
-      `Photo missions only count when the photo is taken at ${name}, so the app needs your location to check you're there. Turn on location access and try again.`,
+      status === "granted" ? "Couldn't find your location" : "Location needed",
+      status === "granted"
+        ? `Photo missions only count when the photo is taken at ${name}, and your phone couldn't get a GPS fix just now. Step outside or near a window and try again.`
+        : `Photo missions only count when the photo is taken at ${name}, so the app needs your location to check you're there. Turn on location access and try again.`,
       undefined,
       { tone: "warning", icon: "map-pin" }
     );

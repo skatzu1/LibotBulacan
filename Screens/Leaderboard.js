@@ -16,6 +16,7 @@ import { useProfileImage } from "../context/ProfileImageContext";
 import { useTheme, radius, shadow, fonts, typography, MAX_FONT_SCALE } from "../context/ThemeContext";
 import { Avatar, EmptyState, ErrorState, LoadingState, H_PAD, TAP } from "../components/ui";
 import { BASE_URL } from "../api";
+import { clerkPhoto } from "../utils/image";
 import Icon from "../components/Icon";
 
 // Was a hardcoded "https://libotbackend.onrender.com".
@@ -103,7 +104,7 @@ export default function Leaderboard() {
         if (idx >= 0) {
           users[idx] = {
             ...users[idx],
-            avatar: profileImage || clerkUser.imageUrl || clerkUser.profileImageUrl || users[idx].avatar,
+            avatar: profileImage || clerkPhoto(clerkUser) || users[idx].avatar,
             isMe: true,
           };
           AsyncStorage.setItem("userPoints", String(users[idx].points)).catch(() => {});
