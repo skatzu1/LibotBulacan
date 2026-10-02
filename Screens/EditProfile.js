@@ -10,7 +10,7 @@ import ImageCropPicker from "react-native-image-crop-picker";
 import { useProfileImage } from "../context/ProfileImageContext";
 import { useTheme, fonts, typography } from "../context/ThemeContext";
 import {
-  ScreenHeader, HeaderAction, FormField, GroupLabel, ListRow, LoadingState, Avatar, H_PAD,
+  ScreenHeader, HeaderAction, FormField, GroupLabel, LoadingState, Avatar, H_PAD,
 } from "../components/ui";
 import { BASE_URL } from "../api";
 import { cleanName, nameError } from "../utils/authValidation";
@@ -204,19 +204,6 @@ export default function EditProfile({ navigation }) {
     }
   };
 
-  const handleDeleteAccount = () => {
-    showAlert("Delete Account", "This is permanent and cannot be undone. All your data will be erased.", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Delete", style: "destructive",
-        onPress: async () => {
-          try { await clerkUser.delete(); }
-          catch (err) { showAlert("Error", err?.errors?.[0]?.message || "Could not delete account."); }
-        },
-      },
-    ]);
-  };
-
   const fullName = `${firstName} ${lastName}`.trim() || "User";
   const email    = clerkUser?.primaryEmailAddress?.emailAddress || "";
 
@@ -286,11 +273,6 @@ export default function EditProfile({ navigation }) {
               editable={false}
               hint="Your sign-in email can't be changed here."
             />
-          </View>
-
-          <View style={styles.section}>
-            <GroupLabel>Danger zone</GroupLabel>
-            <ListRow icon="trash-2" title="Delete Account" onPress={handleDeleteAccount} danger />
           </View>
         </ScrollView>
       </View>
