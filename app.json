@@ -3,7 +3,7 @@
     "name": "Libot",
     "slug": "libot",
     "jsEngine": "hermes",
-    "version": "1.0.0",
+    "version": "1.1.0",
     "scheme": "libot",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -141,6 +141,7 @@
       },
       "edgeToEdgeEnabled": true,
       "package": "com.skatzu15.libot",
+      "versionCode": 2,
       "intentFilters": [
         {
           "action": "VIEW",
