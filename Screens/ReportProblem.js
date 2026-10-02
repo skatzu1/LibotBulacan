@@ -17,7 +17,7 @@
 import React, { useMemo, useState } from "react";
 import {
   View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity,
-  KeyboardAvoidingView, Platform, Linking,
+  Platform, Linking,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Constants from "expo-constants";
@@ -25,7 +25,8 @@ import { showAlert } from "../components/AppAlert";
 import { useTheme, fonts, typography } from "../context/ThemeContext";
 import { ScreenHeader, GroupLabel, PrimaryButton, H_PAD } from "../components/ui";
 import { SUPPORT_EMAIL } from "../utils/legalLinks";
-import useKeyboardAwareScroll, { KEYBOARD_BEHAVIOR } from "../hooks/useKeyboardAwareScroll";
+import KeyboardAvoider from "../components/KeyboardAvoider";
+import useKeyboardAwareScroll from "../hooks/useKeyboardAwareScroll";
 
 const CATEGORIES = [
   { key: "bug",     label: "Something isn't working" },
@@ -106,7 +107,7 @@ const ReportProblem = ({ navigation }) => {
   };
 
   return (
-    <KeyboardAvoidingView style={[styles.flex, { backgroundColor: colors.background }]} behavior={KEYBOARD_BEHAVIOR}>
+    <KeyboardAvoider style={[styles.flex, { backgroundColor: colors.background }]}>
       <ScreenHeader title="Report a Problem" onBack={() => navigation.goBack()} />
       <ScrollView
         ref={kb.ref}
@@ -187,7 +188,7 @@ const ReportProblem = ({ navigation }) => {
           </View>
         )}
       </ScrollView>
-    </KeyboardAvoidingView>
+    </KeyboardAvoider>
   );
 };
 

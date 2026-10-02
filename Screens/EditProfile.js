@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
-  ActivityIndicator, KeyboardAvoidingView, Linking,
+  ActivityIndicator, Linking,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { showAlert, showToast } from "../components/AppAlert";
@@ -16,7 +16,8 @@ import { BASE_URL } from "../api";
 import { DELETE_ACCOUNT_URL } from "../utils/legalLinks";
 import { cleanName, nameError } from "../utils/authValidation";
 import Icon from "../components/Icon";
-import useKeyboardAwareScroll, { KEYBOARD_BEHAVIOR } from "../hooks/useKeyboardAwareScroll";
+import KeyboardAvoider from "../components/KeyboardAvoider";
+import useKeyboardAwareScroll from "../hooks/useKeyboardAwareScroll";
 import { clerkPhoto } from "../utils/image";
 
 // Single source of truth for the backend host — see api.js.
@@ -268,7 +269,7 @@ export default function EditProfile({ navigation }) {
   }
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1 }} behavior={KEYBOARD_BEHAVIOR}>
+    <KeyboardAvoider style={{ flex: 1 }}>
       <View style={[styles.container, { backgroundColor: colors.background }]}>
         {header}
 
@@ -332,7 +333,7 @@ export default function EditProfile({ navigation }) {
           </View>
         </ScrollView>
       </View>
-    </KeyboardAvoidingView>
+    </KeyboardAvoider>
   );
 }
 

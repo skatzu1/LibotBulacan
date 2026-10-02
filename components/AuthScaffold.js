@@ -1,13 +1,14 @@
 import React, { useMemo } from "react";
 import {
-  View, Text, StyleSheet, ScrollView, KeyboardAvoidingView,
+  View, Text, StyleSheet, ScrollView,
   TouchableOpacity, StatusBar, ImageBackground, useWindowDimensions,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme, typography, fonts, shadow, MAX_FONT_SCALE } from "../context/ThemeContext";
 import Icon from "./Icon";
 import Logo from "./Logo";
-import useKeyboardAwareScroll, { KEYBOARD_BEHAVIOR } from "../hooks/useKeyboardAwareScroll";
+import KeyboardAvoider from "./KeyboardAvoider";
+import useKeyboardAwareScroll from "../hooks/useKeyboardAwareScroll";
 
 /*
  * The shell every pre-login screen sits in (Login, Forgot Password, Register,
@@ -66,7 +67,7 @@ export default function AuthScaffold({
       <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.photoVeil }]} pointerEvents="none" />
       <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor="transparent" translucent />
 
-      <KeyboardAvoidingView style={s.flex} behavior={KEYBOARD_BEHAVIOR}>
+      <KeyboardAvoider style={s.flex}>
         <ScrollView
           ref={kb.ref}
           onScroll={kb.onScroll}
@@ -119,7 +120,7 @@ export default function AuthScaffold({
             <View style={s.body}>{children}</View>
           </View>
         </ScrollView>
-      </KeyboardAvoidingView>
+      </KeyboardAvoider>
 
       {footer}
     </ImageBackground>
