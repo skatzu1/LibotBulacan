@@ -40,7 +40,7 @@ access. Start this first; everything else can happen during the 14 days.
 | Target audience | **13 and over** (matches the privacy policy and terms). Do not include under-13 ages, or Play's Families policy applies. |
 | News app / Health / Financial features / Government app | No / none / none / **No**. Libot is not an official government app; avoid wording in the listing that suggests it is. |
 | Data safety | See the table below. |
-| Account deletion | There is **no** delete option in the app. Users request deletion by email, as the deletion link above explains. Google Play's policy expects a way to request deletion from inside the app as well, so this answer may be questioned in review. |
+| Account deletion | In the app: **Settings → Edit Profile → Request account deletion**, which opens the deletion link above. That page explains what is deleted and how to ask (by email). There is no button in the app that deletes the account itself. |
 | Sensitive permissions | None to declare. The build no longer requests background location. |
 
 ### 3. Data safety answers
@@ -96,9 +96,11 @@ review can take several days.
 - **Sign in with Apple is likely required.** The app offers Google sign-in, and
   App Store guideline 4.8 then expects an equivalent privacy-focused option.
   Clerk supports Apple sign-in; add it before submitting to Apple.
-- In-app account deletion: **removed on purpose**. Guideline 5.1.1(v) requires
-  it for apps with sign-up, so it has to come back before an iOS submission.
-  Location only "While Using": done.
+- In-app account deletion: **not done**. Edit Profile only opens the web page,
+  and deletion is requested by email. Guideline 5.1.1(v) expects apps with
+  sign-up to let people start deletion in the app, and Apple accepts email or
+  phone deletion flows only from highly regulated apps, so an iOS submission
+  needs a real deletion flow first. Location only "While Using": done.
 - App Privacy ("nutrition label"): same facts as the Data safety table.
 - Build with `npx eas-cli build -p ios --profile production`, test through
   TestFlight, then submit for review with the same test account.
