@@ -17,6 +17,7 @@ import {
 
 // ── Skeleton import ───────────────────────────────────────────────────────────
 import ListsSkeleton from "../components/ListsSkeleton";
+import usePullToRefresh from "../hooks/usePullToRefresh";
 
 // Spot.category is stored as an array (e.g. ["Festivals"]) per the Mongoose
 // schema. Some legacy docs might still have it as a plain string.
@@ -53,7 +54,8 @@ export default function Lists() {
     ? destinations.filter((item) => item.name?.toLowerCase().includes(q))
     : destinations;
 
-  const loading = allSpots.length === 0 && spotsStatus === "loading";
+  const { refreshing, refreshControl } = usePullToRefresh(reloadSpots);
+  const loading = allSpots.length === 0 && spotsStatus === "loading" && !refreshing;
   const failed  = allSpots.length === 0 && spotsStatus === "error";
 
   return (
@@ -75,6 +77,7 @@ export default function Lists() {
 
       {loading ? <ListsSkeleton cardCount={4} /> : (
       <ScrollView
+        refreshControl={refreshControl}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 40 }]}
         keyboardShouldPersistTaps="handled"

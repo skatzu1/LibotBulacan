@@ -6,12 +6,14 @@ import { useBookmark } from "../context/BookmarkContext";
 import { useTheme, fonts, TAB_BAR_CLEARANCE } from "../context/ThemeContext";
 import { ScreenHeader, SpotCard, EmptyState, PhotoBookmark, H_PAD } from "../components/ui";
 import ListsSkeleton from "../components/ListsSkeleton";
+import usePullToRefresh from "../hooks/usePullToRefresh";
 
 export default function Bookmark() {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
-  const { bookmarks, toggleBookmark, loading } = useBookmark();
+  const { bookmarks, toggleBookmark, loading, fetchBookmarks } = useBookmark();
   const { colors, isDark } = useTheme();
+  const { refreshing, refreshControl } = usePullToRefresh(fetchBookmarks);
 
   const bookmarkedSpots = useMemo(
     () =>
@@ -32,10 +34,11 @@ export default function Bookmark() {
 
       {/* Same skeleton as a category list — the loaded screen is the same
           stack of cards, so the two shouldn't load differently. */}
-      {loading && bookmarks.length === 0 ? (
+      {loading && bookmarks.length === 0 && !refreshing ? (
         <ListsSkeleton cardCount={3} />
       ) : (
         <ScrollView
+          refreshControl={refreshControl}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={[styles.scroll, { paddingBottom: TAB_BAR_CLEARANCE + insets.bottom }]}
         >
