@@ -31,7 +31,7 @@ https://developers.google.com/ar/devices). Add an iPhone when iOS is in scope.
 - [ ] Leaderboard, badges, previous trips, bookmarks all load.
 - [ ] Directions on the Track screen draw a route.
 - [ ] Settings → Privacy / Terms / Help open the web pages.
-- [ ] Settings → Edit Profile has no Delete Account option.
+- [ ] Settings → Edit Profile → Request account deletion opens libotbulacan.com/delete-account in the browser. There is no button that deletes the account in the app.
 
 **Network**
 - [ ] Airplane mode: the offline banner appears; Retry keeps it; reconnecting shows "Back online" and it disappears.
