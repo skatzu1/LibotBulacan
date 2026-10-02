@@ -6,6 +6,7 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import ImageCropPicker from "react-native-image-crop-picker";
+import * as Haptics from "expo-haptics";
 import { showAlert, showToast } from "../components/AppAlert";
 import { useUser } from "@clerk/clerk-expo";
 import { useIsFocused } from "@react-navigation/native";
@@ -127,6 +128,21 @@ const showSuspendedAlert = (result) => {
 
 // Reviews live at the foot of Overview rather than in a tab of their own: what
 // a place is and what people thought of it are read together.
+// A review longer than this folds behind "See more".
+const REVIEW_FOLD_LINES = 5;
+
+// The search / sort toolbar only earns its space once there's a list worth
+// searching, and the visitor-photo strip only once it isn't just repeating
+// the photos already shown in one or two review cards.
+const REVIEW_TOOLS_FROM = 4;
+const PHOTO_STRIP_FROM = 3;
+
+// Small taps of feedback, the same calls the rest of the app uses. Silent
+// where haptics aren't available.
+const tapFeel     = () => { Haptics.selectionAsync().catch(() => {}); };
+const successFeel = () => { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {}); };
+const warnFeel    = () => { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {}); };
+
 const TABS = [
   { key: "Overview",   label: "Overview",   icon: "book-open" },
   { key: "BucketList", label: "Bakit List", icon: "flag"      },
@@ -227,6 +243,8 @@ function ReviewCard({ review, spotId, clerkUser, profileImage, reactToReview, on
   // initials, not a random stranger's face.
   const avatarUri = isMe ? (profileImage || review.userImage || clerkUser?.imageUrl) : review.userImage;
   const [reacting, setReacting] = useState(false);
+  const [expanded, setExpanded] = useState(false);   // "See more" opened
+  const [foldable, setFoldable] = useState(false);   // text runs past the fold
 
   // Prefer a locally-patched userReaction (set right after a react call,
   // and correctly captures "null" meaning removed). Fall back to
@@ -239,6 +257,7 @@ function ReviewCard({ review, spotId, clerkUser, profileImage, reactToReview, on
     if (isMe || reacting) return;
     setReacting(true);
     try {
+      tapFeel();
       const result = await reactToReview(review._id, spotId, type);
       if (isMutedResult(result)) showMutedAlert(result);
     } catch (err) {
@@ -315,11 +334,10 @@ function ReviewCard({ review, spotId, clerkUser, profileImage, reactToReview, on
         </TouchableOpacity>
       </View>
 
-      <StarRating rating={review.rating} size={16} colors={colors} />
-
-      <Text style={[styles.reviewComment, { color: colors.textSecondary }]}>{review.comment}</Text>
-
+      {/* Stars, when, and whether they were really there — one line. */}
       <View style={styles.reviewMeta}>
+        <StarRating rating={review.rating} size={15} colors={colors} />
+        <View style={[styles.metaDot, { backgroundColor: colors.textMuted }]} />
         <Text style={[styles.reviewDate, { color: colors.textMuted }]}>{when}</Text>
         {review.verifiedVisit && (
           <>
@@ -329,6 +347,27 @@ function ReviewCard({ review, spotId, clerkUser, profileImage, reactToReview, on
           </>
         )}
       </View>
+
+      {/* Long reviews fold at 5 lines with "See more", like Facebook. The
+          toggle only appears once the text is measured as longer than that. */}
+      <Text
+        style={[styles.reviewComment, { color: colors.textSecondary }]}
+        numberOfLines={expanded ? undefined : REVIEW_FOLD_LINES}
+        onTextLayout={(e) => { if (!expanded && e.nativeEvent.lines.length > REVIEW_FOLD_LINES) setFoldable(true); }}
+      >
+        {review.comment}
+      </Text>
+      {foldable && (
+        <TouchableOpacity
+          onPress={() => setExpanded((v) => !v)}
+          hitSlop={8}
+          style={styles.seeMore}
+          accessibilityRole="button"
+          accessibilityState={{ expanded }}
+        >
+          <Text style={[styles.seeMoreText, { color: colors.textPrimary }]}>{expanded ? "See less" : "See more"}</Text>
+        </TouchableOpacity>
+      )}
 
       {review.photos?.length > 0 && (
         <View style={styles.reviewPhotos}>
@@ -349,6 +388,9 @@ function ReviewCard({ review, spotId, clerkUser, profileImage, reactToReview, on
         </View>
       )}
 
+      {/* On your own review the counts can't be pressed, so they only show
+          once someone has reacted. */}
+      {!(isMe && !review.likes && !review.dislikes) && (
       <View style={styles.reviewFooterRow}>
         <View style={styles.reactionsRow}>
           {reaction({ type: "like",    icon: "thumbs-up",   label: "Helpful",   count: review.likes || 0,    activeColor: colors.brand })}
@@ -365,6 +407,7 @@ function ReviewCard({ review, spotId, clerkUser, profileImage, reactToReview, on
           </TouchableOpacity>
         )}
       </View>
+      )}
     </View>
   );
 }
@@ -481,6 +524,10 @@ export default function InformationScreen({ route, navigation }) {
 
   const inputRef = useRef(null);
   const scrollRef = useRef(null);
+  // Where the review list starts (inside the body) and where the body starts
+  // (inside the scroll view), for paging back to the top of the list.
+  const reviewsTopY = useRef(0);
+  const bodyY = useRef(0);
   const { user: clerkUser } = useUser();
   const { isBookmarked, toggleBookmark } = useBookmark();
   const { getReviewsForSpot, addReview, reportReview, reactToReview, getAverageRating, getReviewCount, fetchReviews, deleteReview } = useReviews();
@@ -602,12 +649,25 @@ export default function InformationScreen({ route, navigation }) {
     ]);
   };
 
-  const chooseRating = (s) => { setNewRating(s); setRatingNudge(false); };
+  const chooseRating = (s) => { tapFeel(); setNewRating(s); setRatingNudge(false); };
 
   // Send with text but no stars: point at the stars instead of failing.
   const sendReview = () => {
-    if (newRating === 0) { setRatingNudge(true); return; }
+    if (newRating === 0) { warnFeel(); setRatingNudge(true); return; }
     handleSubmit();
+  };
+
+  // "Write the first review" (no reviews yet): jump to the box and open it.
+  const startReview = () => {
+    scrollRef.current?.scrollToEnd({ animated: true });
+    setTimeout(() => inputRef.current?.focus(), 250);
+  };
+
+  // A new page starts at the top of the list, not wherever the pager was.
+  const goToReviewPage = (n) => {
+    setReviewPageIndex(n);
+    // Less the sticky tab bar, so the first review isn't hidden under it.
+    scrollRef.current?.scrollTo({ y: Math.max(0, bodyY.current + reviewsTopY.current - 76), animated: true });
   };
 
   // Shrunk on the phone before upload: a 12 MP original is 4–6 MB, this is a
@@ -702,6 +762,7 @@ export default function InformationScreen({ route, navigation }) {
       reviewPhotos.forEach((p) => ImageCropPicker.cleanSingle(p.uri).catch(() => {}));
       setNewRating(0); setNewReview(""); setReviewPhotos([]); setRatingNudge(false);
       inputRef.current?.blur();
+      successFeel();
       showToast("Review posted. Thanks for sharing!", { type: "success" });
     } catch (err) {
       if (isSuspendedResult(err)) {
@@ -836,7 +897,7 @@ export default function InformationScreen({ route, navigation }) {
         </View>
 
         {/* [2] Body */}
-        <View style={styles.bodyPad}>
+        <View style={styles.bodyPad} onLayout={(e) => { bodyY.current = e.nativeEvent.layout.y; }}>
           <Text style={[styles.title, { color: colors.textPrimary }]} accessibilityRole="header">{spot.name}</Text>
 
           {activeTab === "Overview" && (
@@ -869,8 +930,29 @@ export default function InformationScreen({ route, navigation }) {
                 </Text>
               </View>
 
-              {/* Average on the left, the 5→1 breakdown on the right. A bar is
-                  also a filter: tap it to see only that rating. */}
+              {/* No reviews: an invitation instead of "–" and five empty bars;
+                  tapping it jumps to the review box below. Otherwise the
+                  average on the left and the 5→1 breakdown on the right — a
+                  bar is also a filter: tap it to see only that rating. */}
+              {reviewCount === 0 ? (
+                <TouchableOpacity
+                  onPress={startReview}
+                  activeOpacity={0.85}
+                  style={[styles.firstReview, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}
+                  accessibilityRole="button"
+                  accessibilityLabel="No reviews yet. Write the first review."
+                >
+                  <View style={[styles.firstReviewIcon, { backgroundColor: colors.brandLight }]}>
+                    <Icon name="star" size={22} color={colors.brand} />
+                  </View>
+                  <View style={styles.firstReviewText}>
+                    <Text style={[styles.firstReviewTitle, { color: colors.textPrimary }]}>No reviews yet</Text>
+                    <Text style={[styles.firstReviewSub, { color: colors.textSecondary }]}>
+                      Been here? Be the first to tell the next visitor what it was like.
+                    </Text>
+                  </View>
+                </TouchableOpacity>
+              ) : (
               <View style={[styles.ratingSummary, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
                 <View style={styles.ratingLeft}>
                   <Text style={[styles.ratingBig, { color: colors.textPrimary }]}>{reviewCount > 0 ? averageRating : "–"}</Text>
@@ -904,8 +986,9 @@ export default function InformationScreen({ route, navigation }) {
                   })}
                 </View>
               </View>
+              )}
 
-              {visitorPhotos.length > 0 && (
+              {visitorPhotos.length >= PHOTO_STRIP_FROM && (
                 <>
                   <Text style={[styles.photoStripLabel, { color: colors.textSecondary }]}>
                     Visitor photos ({visitorPhotos.length})
@@ -934,70 +1017,72 @@ export default function InformationScreen({ route, navigation }) {
                 </>
               )}
 
-              {reviews.length === 0 ? (
-                <EmptyState icon="message-square" text="No reviews yet. Be the first to share your experience." />
-              ) : (
+              {reviews.length > 0 && (
                 <>
-                  {/* Search + sort + "with photos", like the reference toolbar. */}
-                  <Text style={[styles.searchLabel, { color: colors.textSecondary }]}>Search for a keyword</Text>
-                  <SearchField
-                    value={reviewQuery}
-                    onChangeText={(v) => changeReviewFilter(setReviewQuery, v)}
-                    onClear={() => changeReviewFilter(setReviewQuery, "")}
-                    placeholder="Search a specific review…"
-                    style={styles.reviewSearch}
-                  />
-                  <View style={styles.reviewToolbar}>
-                    <TouchableOpacity
-                      onPress={() => setShowSortMenu((v) => !v)}
-                      style={[styles.toolChip, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}
-                      accessibilityRole="button"
-                      accessibilityState={{ expanded: showSortMenu }}
-                      accessibilityLabel={`Sort reviews, currently ${sortLabel}`}
-                      activeOpacity={0.8}
-                    >
-                      <Icon name="sliders" size={15} color={colors.textSecondary} />
-                      <Text style={[styles.toolChipText, { color: colors.textPrimary }]}>Sort: {sortLabel}</Text>
-                      <Icon name="chevron-down" size={14} color={colors.textSecondary} style={showSortMenu ? styles.chevronUp : undefined} />
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      onPress={() => changeReviewFilter(setOnlyWithPhotos, !onlyWithPhotos)}
-                      style={[
-                        styles.toolChip,
-                        onlyWithPhotos
-                          ? { backgroundColor: colors.brand, borderColor: colors.brand }
-                          : { backgroundColor: colors.card, borderColor: colors.cardBorder },
-                      ]}
-                      accessibilityRole="button"
-                      accessibilityState={{ selected: onlyWithPhotos }}
-                      accessibilityLabel="Only reviews with photos"
-                      activeOpacity={0.8}
-                    >
-                      <Icon name="image" size={15} color={onlyWithPhotos ? colors.onBrand : colors.textSecondary} />
-                      <Text style={[styles.toolChipText, { color: onlyWithPhotos ? colors.onBrand : colors.textPrimary }]}>With photos</Text>
-                    </TouchableOpacity>
-                  </View>
-
-                  {showSortMenu && (
-                    <View style={[styles.sortMenu, { backgroundColor: colors.card, borderColor: colors.cardBorder }, shadow.md]} accessibilityRole="menu">
-                      {REVIEW_SORTS.map((o) => {
-                        const on = o.key === reviewSort;
-                        return (
-                          <TouchableOpacity
-                            key={o.key}
-                            onPress={() => { changeReviewFilter(setReviewSort, o.key); setShowSortMenu(false); }}
-                            style={styles.sortOption}
-                            accessibilityRole="menuitem"
-                            accessibilityState={{ selected: on }}
-                          >
-                            <Text style={[styles.sortOptionText, { color: on ? colors.brand : colors.textPrimary, fontFamily: on ? fonts.sansBold : fonts.sans }]}>
-                              {o.label}
-                            </Text>
-                            {on && <Icon name="check" size={16} color={colors.brand} />}
-                          </TouchableOpacity>
-                        );
-                      })}
+                  {/* Search + sort + "with photos" — only once there are enough
+                      reviews to be worth searching. */}
+                  {reviews.length >= REVIEW_TOOLS_FROM && (
+                  <>
+                    <SearchField
+                      value={reviewQuery}
+                      onChangeText={(v) => changeReviewFilter(setReviewQuery, v)}
+                      onClear={() => changeReviewFilter(setReviewQuery, "")}
+                      placeholder="Search a specific review…"
+                      style={styles.reviewSearch}
+                    />
+                    <View style={styles.reviewToolbar}>
+                      <TouchableOpacity
+                        onPress={() => setShowSortMenu((v) => !v)}
+                        style={[styles.toolChip, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}
+                        accessibilityRole="button"
+                        accessibilityState={{ expanded: showSortMenu }}
+                        accessibilityLabel={`Sort reviews, currently ${sortLabel}`}
+                        activeOpacity={0.8}
+                      >
+                        <Icon name="sliders" size={15} color={colors.textSecondary} />
+                        <Text style={[styles.toolChipText, { color: colors.textPrimary }]}>Sort: {sortLabel}</Text>
+                        <Icon name="chevron-down" size={14} color={colors.textSecondary} style={showSortMenu ? styles.chevronUp : undefined} />
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        onPress={() => changeReviewFilter(setOnlyWithPhotos, !onlyWithPhotos)}
+                        style={[
+                          styles.toolChip,
+                          onlyWithPhotos
+                            ? { backgroundColor: colors.brand, borderColor: colors.brand }
+                            : { backgroundColor: colors.card, borderColor: colors.cardBorder },
+                        ]}
+                        accessibilityRole="button"
+                        accessibilityState={{ selected: onlyWithPhotos }}
+                        accessibilityLabel="Only reviews with photos"
+                        activeOpacity={0.8}
+                      >
+                        <Icon name="image" size={15} color={onlyWithPhotos ? colors.onBrand : colors.textSecondary} />
+                        <Text style={[styles.toolChipText, { color: onlyWithPhotos ? colors.onBrand : colors.textPrimary }]}>With photos</Text>
+                      </TouchableOpacity>
                     </View>
+
+                    {showSortMenu && (
+                      <View style={[styles.sortMenu, { backgroundColor: colors.card, borderColor: colors.cardBorder }, shadow.md]} accessibilityRole="menu">
+                        {REVIEW_SORTS.map((o) => {
+                          const on = o.key === reviewSort;
+                          return (
+                            <TouchableOpacity
+                              key={o.key}
+                              onPress={() => { changeReviewFilter(setReviewSort, o.key); setShowSortMenu(false); }}
+                              style={styles.sortOption}
+                              accessibilityRole="menuitem"
+                              accessibilityState={{ selected: on }}
+                            >
+                              <Text style={[styles.sortOptionText, { color: on ? colors.brand : colors.textPrimary, fontFamily: on ? fonts.sansBold : fonts.sans }]}>
+                                {o.label}
+                              </Text>
+                              {on && <Icon name="check" size={16} color={colors.brand} />}
+                            </TouchableOpacity>
+                          );
+                        })}
+                      </View>
+                    )}
+                  </>
                   )}
 
                   {(starFilter || onlyWithPhotos || reviewQuery.trim()) && (
@@ -1018,29 +1103,31 @@ export default function InformationScreen({ route, navigation }) {
                     </View>
                   )}
 
-                  {shownReviews.length === 0 ? (
-                    <EmptyState icon="search" text="No reviews match. Try another word, or clear the filters." />
-                  ) : (
-                    reviewPage.items.map((review) => (
-                      <ReviewCard
-                        key={review._id}
-                        review={review}
-                        spotId={spot._id}
-                        clerkUser={clerkUser}
-                        profileImage={profileImage}
-                        reactToReview={reactToReview}
-                        onReport={openReportModal}
-                        onDelete={confirmDeleteReview}
-                        onOpenPhoto={openPhotos}
-                        colors={colors}
-                      />
-                    ))
-                  )}
+                  <View onLayout={(e) => { reviewsTopY.current = e.nativeEvent.layout.y; }}>
+                    {shownReviews.length === 0 ? (
+                      <EmptyState icon="search" text="No reviews match. Try another word, or clear the filters." />
+                    ) : (
+                      reviewPage.items.map((review) => (
+                        <ReviewCard
+                          key={review._id}
+                          review={review}
+                          spotId={spot._id}
+                          clerkUser={clerkUser}
+                          profileImage={profileImage}
+                          reactToReview={reactToReview}
+                          onReport={openReportModal}
+                          onDelete={confirmDeleteReview}
+                          onOpenPhoto={openPhotos}
+                          colors={colors}
+                        />
+                      ))
+                    )}
+                  </View>
 
                   {reviewPage.pageCount > 1 && (
                     <View style={styles.pager} accessibilityRole="tablist" accessibilityLabel="Review pages">
                       <TouchableOpacity
-                        onPress={() => setReviewPageIndex(reviewPage.page - 1)}
+                        onPress={() => goToReviewPage(reviewPage.page - 1)}
                         disabled={reviewPage.page === 0}
                         style={[styles.pagerArrow, { backgroundColor: colors.backgroundSoft }, reviewPage.page === 0 && styles.pagerOff]}
                         accessibilityRole="button"
@@ -1055,7 +1142,7 @@ export default function InformationScreen({ route, navigation }) {
                           ) : (
                             <TouchableOpacity
                               key={n}
-                              onPress={() => setReviewPageIndex(n)}
+                              onPress={() => goToReviewPage(n)}
                               style={[styles.pagerNum, n === reviewPage.page && { backgroundColor: colors.brandLight }]}
                               accessibilityRole="tab"
                               accessibilityState={{ selected: n === reviewPage.page }}
@@ -1067,7 +1154,7 @@ export default function InformationScreen({ route, navigation }) {
                         ))}
                       </View>
                       <TouchableOpacity
-                        onPress={() => setReviewPageIndex(reviewPage.page + 1)}
+                        onPress={() => goToReviewPage(reviewPage.page + 1)}
                         disabled={reviewPage.page >= reviewPage.pageCount - 1}
                         style={[styles.pagerArrow, { backgroundColor: colors.backgroundSoft }, reviewPage.page >= reviewPage.pageCount - 1 && styles.pagerOff]}
                         accessibilityRole="button"
@@ -1464,7 +1551,7 @@ const styles = StyleSheet.create({
   ratingLeft:      { alignItems: "center", minWidth: 92 },
   ratingBig:       { ...typography.display, fontSize: 44, lineHeight: 50 },
   reviewCountText: { fontSize: 12.5, fontFamily: fonts.sansMedium, marginTop: 2, marginBottom: 6 },
-  starsRow:        { flexDirection: "row", gap: 3 },
+  starsRow:        { flexDirection: "row", gap: 2 },
   ratingBars:      { flex: 1, gap: 1 },
   barRow:          { flexDirection: "row", alignItems: "center", gap: 6, paddingHorizontal: 6, paddingVertical: 3, borderRadius: radius.sm, minHeight: 24 },
   barStars:        { width: 10, fontSize: 12, fontFamily: fonts.sansSemi, textAlign: "right" },
@@ -1480,7 +1567,6 @@ const styles = StyleSheet.create({
   stripPhoto:        { width: 112, height: 112, borderRadius: radius.md },
 
   // Search, sort and the "with photos" chip.
-  searchLabel:     { fontSize: 13, fontFamily: fonts.sansSemi, marginBottom: 8 },
   reviewSearch:    { marginBottom: 10 },
   reviewToolbar:   { flexDirection: "row", flexWrap: "wrap", gap: 8, marginBottom: 12 },
   toolChip:        { flexDirection: "row", alignItems: "center", gap: 7, borderWidth: 1, borderRadius: radius.pill, paddingHorizontal: 14, minHeight: 40 },
@@ -1494,12 +1580,20 @@ const styles = StyleSheet.create({
 
   // One review: flat card, name row with ⋮, stars, text, time · verified,
   // photos, then Helpful / Unhelpful and Report.
+  // No reviews yet: one quiet card that leads to the review box.
+  firstReview:     { flexDirection: "row", alignItems: "center", gap: 14, borderRadius: radius.card, borderWidth: 1, padding: 16, marginBottom: 6 },
+  firstReviewIcon: { width: 46, height: 46, borderRadius: 23, alignItems: "center", justifyContent: "center" },
+  firstReviewText: { flex: 1 },
+  firstReviewTitle:{ fontSize: 15, fontFamily: fonts.sansBold },
+  firstReviewSub:  { fontSize: 13, lineHeight: 18, fontFamily: fonts.sans, marginTop: 2 },
+  seeMore:         { alignSelf: "flex-start", marginTop: -4 },
+  seeMoreText:     { fontSize: 13.5, fontFamily: fonts.sansBold },
   reviewCard:      { borderRadius: radius.card, borderWidth: 1, padding: 16, marginBottom: 12, gap: 8 },
   reviewHead:      { flexDirection: "row", alignItems: "center", gap: 10 },
   reviewAuthor:    { flex: 1, fontSize: 14.5, fontFamily: fonts.sansBold },
   reviewMenu:      { width: 32, height: 32, alignItems: "flex-end", justifyContent: "center" },
   reviewComment:   { fontSize: 14, lineHeight: 21, fontFamily: fonts.sans },
-  reviewMeta:      { flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap" },
+  reviewMeta:      { flexDirection: "row", alignItems: "center", gap: 6, flexWrap: "wrap", marginTop: -2 },
   reviewDate:      { fontSize: 12.5, fontFamily: fonts.sansMedium },
   metaDot:         { width: 3, height: 3, borderRadius: 1.5, marginHorizontal: 2 },
   reviewVerified:  { fontSize: 12.5, fontFamily: fonts.sansMedium },
