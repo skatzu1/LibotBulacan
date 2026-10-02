@@ -199,7 +199,7 @@ export default function BadgeScreen() {
   };
 
   const shareMessage = (badge) =>
-    `I just earned the "${badge.name}" badge on Libot! Discover Bulacan's history!\n${badgeShareUrl(badge._id)}`;
+    `I just earned the "${badge.name}" badge on Libot Bulacan! Discover Bulacan's history!\n${badgeShareUrl(badge._id)}`;
 
   // The main way to share: the link alone. Messenger and other chat apps keep
   // only the picture OR only the text when given both, so a picture-with-link
@@ -394,7 +394,7 @@ export default function BadgeScreen() {
             />
           )}
           <Text style={[styles.shareCardName, { color: colors.textPrimary }]}>{selectedBadge?.name}</Text>
-          <Text style={[styles.shareCardSub, { color: colors.brand }]}>Libot · Bulacan Heritage Explorer</Text>
+          <Text style={[styles.shareCardSub, { color: colors.brand }]}>Libot Bulacan · Heritage Explorer</Text>
         </View>
       </View>
 

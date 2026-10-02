@@ -151,7 +151,7 @@ const Settings = ({ navigation }) => {
         <View style={styles.section}>
           <GroupLabel>Support & About</GroupLabel>
           <ListRow icon="help-circle" title="Help & Support"   onPress={() => openURL(HELP_URL)}    accessibilityLabel="Help and support" />
-          <ListRow icon="info"        title="About Libot"      onPress={() => openURL(ABOUT_URL)}   />
+          <ListRow icon="info"        title="About Libot Bulacan" onPress={() => openURL(ABOUT_URL)}   />
           <ListRow icon="file-text"   title="Terms of Service" onPress={() => openURL(TERMS_URL)}   />
           <ListRow icon="lock"        title="Privacy Policy"   onPress={() => openURL(PRIVACY_URL)} />
           {/* A screen, not a bare mailto: link. On a phone with no mail app

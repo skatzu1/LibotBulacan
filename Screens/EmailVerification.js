@@ -93,7 +93,7 @@ export default function EmailVerification({ navigation, route }) {
 
           if (result.status === "complete") {
             await setActiveSignUp({ session: result.createdSessionId });
-            showToast("Email verified. Welcome to Libot!", { type: "success" });
+            showToast("Email verified. Welcome to Libot Bulacan!", { type: "success" });
             setIsLoading(false);
             return;
           }
