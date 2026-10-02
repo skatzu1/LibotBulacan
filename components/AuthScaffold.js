@@ -169,12 +169,14 @@ export function useAuthStyles() {
   return useMemo(() => makeAuthStyles(colors, isDark), [colors, isDark]);
 }
 
+const FIELD_RADIUS = 30;
+
 const makeAuthStyles = (c, isDark) => StyleSheet.create({
   // Solid fill (not see-through), so a field's contrast never depends on the
   // photo: text 15.8:1 / 14.3:1, placeholder 5.1:1 / 5.0:1.
   field: {
     height: 60,
-    borderRadius: 30,
+    borderRadius: FIELD_RADIUS,
     paddingHorizontal: 26,
     fontFamily: fonts.sansMedium,
     fontSize: 14,
@@ -184,7 +186,10 @@ const makeAuthStyles = (c, isDark) => StyleSheet.create({
     borderWidth: 1,
     borderColor: c.inputBorder,
   },
-  fieldRow:  { justifyContent: "center" },
+  // Every field sits in one of these. Android paints its autofill highlight
+  // as a plain yellow RECTANGLE over the input, which showed square corners
+  // past the pill's round ends; clipping to the pill gives it the field's shape.
+  fieldRow:  { justifyContent: "center", borderRadius: FIELD_RADIUS, overflow: "hidden" },
   eyeBtn:    { position: "absolute", right: 20, height: 44, width: 44, alignItems: "center", justifyContent: "center" },
   label:     { fontFamily: fonts.sansSemi, fontSize: 12.5, letterSpacing: 1.3, color: c.textMuted, marginBottom: 8, marginLeft: 8 },
 
