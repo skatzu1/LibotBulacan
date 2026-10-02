@@ -2,6 +2,7 @@ import {
   cleanName, nameError, NAME_MAX,
   cleanEmail, isValidEmail, emailError,
   digitsOnly, dobError, MIN_AGE,
+  NETWORK_ERROR, GOOGLE_BUSY, googleWindowBusy, googleWindowClosed, googleErrorMessage,
 } from "../utils/authValidation";
 
 describe("names", () => {
@@ -78,5 +79,37 @@ describe("date of birth", () => {
     expect(dobError("10/02/2013", today)).toMatch(/at least 13/); // 13 tomorrow
     expect(dobError("06/15/2015", today)).toMatch(/at least 13/);
     expect(dobError("02/29/2004", today)).toBeNull();
+  });
+});
+
+// The results and messages below are the ones expo-web-browser 15 actually
+// produces (build/WebBrowser.js), not invented ones.
+describe("Google window", () => {
+  it("treats the back button / X / swipe as closed, not as success", () => {
+    expect(googleWindowClosed({ type: "dismiss" })).toBe(true); // Android back button
+    expect(googleWindowClosed({ type: "cancel" })).toBe(true);  // iOS sheet closed
+    expect(googleWindowClosed({ type: "success", url: "x://cb" })).toBe(false);
+  });
+
+  it("spots a window that is already open", () => {
+    expect(googleWindowBusy({ type: "locked" })).toBe(true);
+    expect(googleWindowBusy({ type: "dismiss" })).toBe(false);
+    expect(googleErrorMessage(new Error("WebBrowser is already open, only one can be open at a time"))).toBe(GOOGLE_BUSY);
+    expect(googleErrorMessage(new Error("The WebBrowser's auth session is in an invalid state with a redirect handler set when it should not be"))).toBe(GOOGLE_BUSY);
+  });
+
+  it("says offline when nothing reached Clerk", () => {
+    expect(googleErrorMessage(new TypeError("Network request failed"))).toBe(NETWORK_ERROR);
+  });
+
+  it("says rate limited for Clerk's throttle", () => {
+    expect(googleErrorMessage({ errors: [{ code: "too_many_requests" }] })).toMatch(/Too many attempts/);
+  });
+
+  it("falls back to a plain message naming the action", () => {
+    expect(googleErrorMessage(new Error("No session returned from Google OAuth"), "sign up"))
+      .toBe("Couldn't sign up with Google. Please try again.");
+    expect(googleErrorMessage({ errors: [{ code: "oauth_access_denied" }] }))
+      .toBe("Couldn't sign in with Google. Please try again.");
   });
 });

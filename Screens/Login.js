@@ -22,6 +22,7 @@ import {
   emailError as checkEmail, requiredPasswordError, newPasswordError, confirmPasswordError,
   codeError as checkCode, clerkErrorToField, NETWORK_ERROR,
   cleanEmail, digitsOnly, EMAIL_MAX,
+  GOOGLE_BUSY, googleWindowBusy, googleWindowClosed, googleErrorMessage,
 } from "../utils/authValidation";
 import Icon from "../components/Icon";
 
@@ -476,9 +477,9 @@ export default function Login({ navigation }) {
   // Clerk's OAuth steps run by hand here rather than through useOAuth's
   // startOAuthFlow(). When the chosen Google account has no Libot account,
   // that helper quietly converts the sign-in into a sign-up — so "Continue
-  // with Google" on THIS screen used to create accounts, skipping the terms
-  // checkbox and the backend registration the Register screen does. Here that
-  // case stops and the user is sent to sign up instead.
+  // with Google" on THIS screen used to create accounts nobody asked for,
+  // skipping the terms checkbox the Register screen requires. Here that case
+  // stops and the user is sent to sign up instead.
   const handleGoogleLogin = async () => {
     if (isGoogleLoading || !isLoaded) return;
     setAuthError("");
@@ -491,8 +492,17 @@ export default function Login({ navigation }) {
       if (!authUrl) throw new Error("No Google sign-in URL returned");
 
       const result = await WebBrowser.openAuthSessionAsync(authUrl.toString(), redirectUrl);
-      // Closed the browser or backed out of the account picker — not an error.
-      if (result?.type !== "success") return;
+      if (googleWindowBusy(result)) {
+        setAuthError(GOOGLE_BUSY);
+        return;
+      }
+      // Back button, the window's X, or a swipe away — the user's choice, so a
+      // note rather than an error. The half-started sign-in is simply dropped;
+      // the next tap starts a fresh one.
+      if (googleWindowClosed(result)) {
+        showToast("Google sign-in cancelled. You're still signed out.", { type: "info" });
+        return;
+      }
 
       const nonce = new URL(result.url).searchParams.get("rotating_token_nonce") || "";
       const done = await attempt.reload({ rotatingTokenNonce: nonce });
@@ -518,7 +528,8 @@ export default function Login({ navigation }) {
 
       throw new Error(`Google sign-in ended as "${done.status}"`);
     } catch (err) {
-      if (err.code === "user-cancelled" || err.code === "browser-closed") return;
+      // Closing the window doesn't land here (see above); anything that does
+      // is a real failure.
       if (__DEV__) {
         console.error("[google-oauth] failed:", {
           message: err?.message,
@@ -527,8 +538,9 @@ export default function Login({ navigation }) {
           clerk:   err?.errors,
         });
       }
+      captureError(err, { where: "Login.handleGoogleLogin" });
       // Same place as every other sign-in problem, not a popup.
-      setAuthError("Couldn't sign in with Google. Please try again.");
+      setAuthError(googleErrorMessage(err, "sign in"));
     } finally {
       setIsGoogleLoading(false);
     }

@@ -15,12 +15,14 @@ import CheckBox from "expo-checkbox";
 import { useSignUp, useOAuth } from "@clerk/clerk-expo";
 import * as WebBrowser from "expo-web-browser";
 import { authAPI } from "../api";
+import { captureError } from "../utils/crashReporter";
 import { useTheme, fonts, MAX_FONT_SCALE } from "../context/ThemeContext";
 import { TERMS_URL as TERMS_OF_SERVICE_URL, PRIVACY_URL as PRIVACY_POLICY_URL } from "../utils/legalLinks";
 import AuthScaffold, { useAuthStyles, FieldError, FormError } from "../components/AuthScaffold";
 import {
   nameError, emailError, dobError, clerkErrorToField, TERMS_ERROR,
   cleanName, cleanEmail, NAME_MAX, EMAIL_MAX,
+  GOOGLE_BUSY, googleWindowBusy, googleWindowClosed, googleErrorMessage,
 } from "../utils/authValidation";
 import Icon from "../components/Icon";
 
@@ -214,7 +216,19 @@ export default function Register({ navigation }) {
     if (!requireTerms()) return;
     setIsGoogleLoading(true);
     try {
-      const { createdSessionId } = await startOAuthFlow();
+      const { createdSessionId, authSessionResult } = await startOAuthFlow();
+      if (googleWindowBusy(authSessionResult)) {
+        setFormError(GOOGLE_BUSY);
+        return;
+      }
+      // Back button, the window's X, or a swipe away. startOAuthFlow returns
+      // an empty session for that rather than throwing, which used to surface
+      // as "Couldn't sign up with Google". Only checked when there IS a window
+      // result — without one, Clerk wasn't ready and it's a real failure.
+      if (authSessionResult && googleWindowClosed(authSessionResult)) {
+        showToast("Google sign-up cancelled. No account was created.", { type: "info" });
+        return;
+      }
       if (!createdSessionId) throw new Error("No session returned from Google OAuth");
       await setActive({ session: createdSessionId });
       const saveUserResult = await authAPI.register({ clerkSessionId: createdSessionId, isGoogle: true });
@@ -225,9 +239,11 @@ export default function Register({ navigation }) {
       showToast("Account created with Google!", { type: "success" });
       navigation.navigate("Home");
     } catch (err) {
-      if (err?.code === "user-cancelled" || err?.code === "browser-closed") return;
-      console.error("Google Sign Up Error:", err);
-      setFormError("Couldn't sign up with Google. Please try again.");
+      // Closing the window doesn't land here (see above); anything that does
+      // is a real failure.
+      if (__DEV__) console.error("Google Sign Up Error:", err);
+      captureError(err, { where: "Register.handleGoogleSignUp" });
+      setFormError(googleErrorMessage(err, "sign up"));
     } finally {
       setIsGoogleLoading(false);
     }
