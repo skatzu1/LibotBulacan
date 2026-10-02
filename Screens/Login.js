@@ -168,23 +168,25 @@ function ForgotPasswordModal({ visible, onClose, signIn }) {
         {step === "email" ? (
           <>
             <View>
-              <TextInput
-                style={[a.field, !!errors.email && a.fieldInvalid]}
-                placeholder="EMAIL"
-                placeholderTextColor={colors.placeholder}
-                autoCapitalize="none"
-                keyboardType="email-address"
-                autoComplete="email"
-                autoCorrect={false}
-                maxLength={EMAIL_MAX}
-                value={email}
-                onChangeText={edit("email", (v) => setEmail(cleanEmail(v)))}
-                onSubmitEditing={handleSendCode}
-                returnKeyType="send"
-                editable={!loading}
-                accessibilityLabel="Email address for password reset"
-                maxFontSizeMultiplier={MAX_FONT_SCALE}
-              />
+              <View style={a.fieldRow}>
+                <TextInput
+                  style={[a.field, !!errors.email && a.fieldInvalid]}
+                  placeholder="EMAIL"
+                  placeholderTextColor={colors.placeholder}
+                  autoCapitalize="none"
+                  keyboardType="email-address"
+                  autoComplete="email"
+                  autoCorrect={false}
+                  maxLength={EMAIL_MAX}
+                  value={email}
+                  onChangeText={edit("email", (v) => setEmail(cleanEmail(v)))}
+                  onSubmitEditing={handleSendCode}
+                  returnKeyType="send"
+                  editable={!loading}
+                  accessibilityLabel="Email address for password reset"
+                  maxFontSizeMultiplier={MAX_FONT_SCALE}
+                />
+              </View>
               <FieldError>{errors.email}</FieldError>
             </View>
 
@@ -202,21 +204,23 @@ function ForgotPasswordModal({ visible, onClose, signIn }) {
         ) : (
           <>
             <View>
-              <TextInput
-                ref={codeRef}
-                style={[a.field, { letterSpacing: 6, textAlign: "center" }, !!errors.code && a.fieldInvalid]}
-                placeholder="000000"
-                placeholderTextColor={colors.placeholder}
-                keyboardType="number-pad"
-                maxLength={6}
-                value={code}
-                onChangeText={edit("code", (v) => setCode(digitsOnly(v)))}
-                autoComplete="one-time-code"
-                textContentType="oneTimeCode"
-                editable={!loading}
-                accessibilityLabel="6-digit reset code"
-                maxFontSizeMultiplier={MAX_FONT_SCALE}
-              />
+              <View style={a.fieldRow}>
+                <TextInput
+                  ref={codeRef}
+                  style={[a.field, { letterSpacing: 6, textAlign: "center" }, !!errors.code && a.fieldInvalid]}
+                  placeholder="000000"
+                  placeholderTextColor={colors.placeholder}
+                  keyboardType="number-pad"
+                  maxLength={6}
+                  value={code}
+                  onChangeText={edit("code", (v) => setCode(digitsOnly(v)))}
+                  autoComplete="one-time-code"
+                  textContentType="oneTimeCode"
+                  editable={!loading}
+                  accessibilityLabel="6-digit reset code"
+                  maxFontSizeMultiplier={MAX_FONT_SCALE}
+                />
+              </View>
               <FieldError>{errors.code}</FieldError>
             </View>
 
@@ -528,26 +532,28 @@ export default function Login({ navigation }) {
 
         {/* Email */}
         <View>
-          <TextInput
-            ref={emailRef}
-            style={[a.field, !!errorFor("email") && a.fieldInvalid]}
-            placeholder="EMAIL"
-            placeholderTextColor={colors.placeholder}
-            autoCapitalize="none"
-            keyboardType="email-address"
-            autoComplete="email"
-            textContentType="emailAddress"
-            returnKeyType="next"
-            onSubmitEditing={() => passwordRef.current?.focus()}
-            autoCorrect={false}
-            maxLength={EMAIL_MAX}
-            value={email}
-            onChangeText={(v) => { setEmail(cleanEmail(v)); if (authError) setAuthError(""); }}
-            onBlur={() => touch("email")}
-            editable={!disabled}
-            accessibilityLabel="Email address"
-            maxFontSizeMultiplier={MAX_FONT_SCALE}
-          />
+          <View style={a.fieldRow}>
+            <TextInput
+              ref={emailRef}
+              style={[a.field, !!errorFor("email") && a.fieldInvalid]}
+              placeholder="EMAIL"
+              placeholderTextColor={colors.placeholder}
+              autoCapitalize="none"
+              keyboardType="email-address"
+              autoComplete="email"
+              textContentType="emailAddress"
+              returnKeyType="next"
+              onSubmitEditing={() => passwordRef.current?.focus()}
+              autoCorrect={false}
+              maxLength={EMAIL_MAX}
+              value={email}
+              onChangeText={(v) => { setEmail(cleanEmail(v)); if (authError) setAuthError(""); }}
+              onBlur={() => touch("email")}
+              editable={!disabled}
+              accessibilityLabel="Email address"
+              maxFontSizeMultiplier={MAX_FONT_SCALE}
+            />
+          </View>
           <FieldError>{errorFor("email")}</FieldError>
         </View>
 

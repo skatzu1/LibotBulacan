@@ -309,49 +309,53 @@ export default function Register({ navigation }) {
 
       {/* Full name */}
       <View>
-        <TextInput
-          ref={inputRefs.name}
-          style={field("name")}
-          placeholder="FULL NAME"
-          placeholderTextColor={colors.placeholder}
-          value={name}
-          onChangeText={edit("name", (v) => setName(cleanName(v)))}
-          onBlur={() => touch("name")}
-          maxLength={NAME_MAX}
-          autoCapitalize="words"
-          autoComplete="name"
-          textContentType="name"
-          returnKeyType="next"
-          onSubmitEditing={() => inputRefs.email.current?.focus()}
-          editable={!anyLoading}
-          accessibilityLabel="Full name"
-          maxFontSizeMultiplier={MAX_FONT_SCALE}
-        />
+        <View style={a.fieldRow}>
+          <TextInput
+            ref={inputRefs.name}
+            style={field("name")}
+            placeholder="FULL NAME"
+            placeholderTextColor={colors.placeholder}
+            value={name}
+            onChangeText={edit("name", (v) => setName(cleanName(v)))}
+            onBlur={() => touch("name")}
+            maxLength={NAME_MAX}
+            autoCapitalize="words"
+            autoComplete="name"
+            textContentType="name"
+            returnKeyType="next"
+            onSubmitEditing={() => inputRefs.email.current?.focus()}
+            editable={!anyLoading}
+            accessibilityLabel="Full name"
+            maxFontSizeMultiplier={MAX_FONT_SCALE}
+          />
+        </View>
         <FieldError>{errorFor("name")}</FieldError>
       </View>
 
       {/* Email */}
       <View>
-        <TextInput
-          ref={inputRefs.email}
-          style={field("email")}
-          placeholder="EMAIL"
-          placeholderTextColor={colors.placeholder}
-          value={email}
-          onChangeText={edit("email", (v) => setEmail(cleanEmail(v)))}
-          onBlur={() => touch("email")}
-          maxLength={EMAIL_MAX}
-          keyboardType="email-address"
-          autoCapitalize="none"
-          autoCorrect={false}
-          autoComplete="email"
-          textContentType="emailAddress"
-          returnKeyType="next"
-          onSubmitEditing={() => inputRefs.password.current?.focus()}
-          editable={!anyLoading}
-          accessibilityLabel="Email address"
-          maxFontSizeMultiplier={MAX_FONT_SCALE}
-        />
+        <View style={a.fieldRow}>
+          <TextInput
+            ref={inputRefs.email}
+            style={field("email")}
+            placeholder="EMAIL"
+            placeholderTextColor={colors.placeholder}
+            value={email}
+            onChangeText={edit("email", (v) => setEmail(cleanEmail(v)))}
+            onBlur={() => touch("email")}
+            maxLength={EMAIL_MAX}
+            keyboardType="email-address"
+            autoCapitalize="none"
+            autoCorrect={false}
+            autoComplete="email"
+            textContentType="emailAddress"
+            returnKeyType="next"
+            onSubmitEditing={() => inputRefs.password.current?.focus()}
+            editable={!anyLoading}
+            accessibilityLabel="Email address"
+            maxFontSizeMultiplier={MAX_FONT_SCALE}
+          />
+        </View>
         <FieldError>{errorFor("email")}</FieldError>
       </View>
 
@@ -392,20 +396,22 @@ export default function Register({ navigation }) {
       {/* Date of birth */}
       <View>
         <Text style={a.label}>DATE OF BIRTH</Text>
-        <TextInput
-          ref={inputRefs.dob}
-          style={field("dob")}
-          placeholder="MM/DD/YYYY"
-          placeholderTextColor={colors.placeholder}
-          value={dob}
-          onChangeText={handleDobChange}
-          onBlur={() => touch("dob")}
-          keyboardType="number-pad"
-          maxLength={10}
-          editable={!anyLoading}
-          accessibilityLabel="Date of birth, month slash day slash year"
-          maxFontSizeMultiplier={MAX_FONT_SCALE}
-        />
+        <View style={a.fieldRow}>
+          <TextInput
+            ref={inputRefs.dob}
+            style={field("dob")}
+            placeholder="MM/DD/YYYY"
+            placeholderTextColor={colors.placeholder}
+            value={dob}
+            onChangeText={handleDobChange}
+            onBlur={() => touch("dob")}
+            keyboardType="number-pad"
+            maxLength={10}
+            editable={!anyLoading}
+            accessibilityLabel="Date of birth, month slash day slash year"
+            maxFontSizeMultiplier={MAX_FONT_SCALE}
+          />
+        </View>
         <FieldError>{errorFor("dob")}</FieldError>
       </View>
 
