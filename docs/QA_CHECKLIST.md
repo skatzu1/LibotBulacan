@@ -31,7 +31,7 @@ https://developers.google.com/ar/devices). Add an iPhone when iOS is in scope.
 - [ ] Leaderboard, badges, previous trips, bookmarks all load.
 - [ ] Directions on the Track screen draw a route.
 - [ ] Settings → Privacy / Terms / Help open the web pages.
-- [ ] Settings → Edit Profile → Delete Account → Cancel (don't confirm on your real account; confirm on a throwaway account and check it can't sign in again).
+- [ ] Settings → Edit Profile has no Delete Account option.
 
 **Network**
 - [ ] Airplane mode: the offline banner appears; Retry keeps it; reconnecting shows "Back online" and it disappears.
