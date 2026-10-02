@@ -1,24 +1,20 @@
 // utils/legalLinks.js
 //
-// Single source of truth for the app's legal / support URLs. Previously these
-// were duplicated in two places that had drifted apart: Register.js had
-// literal unfinished placeholders ("REPLACE_WITH_YOUR_TOS_UUID"), and
-// Settings.js pointed at the backend API's own domain instead. Both are
-// consolidated here so there's exactly one place to update.
+// Single source of truth for the app's legal / support URLs. Settings, the
+// sign-up form and badge sharing all read from here.
 //
-// TODO: swap TERMS_URL / PRIVACY_URL for the real Termly-hosted policy pages
-// (Termly gives you a URL like
-// https://app.termly.io/policy-viewer/policy.html?policyUUID=<your-uuid>
-// once you publish the policy) once you have the actual policyUUID values —
-// the backend routes below are a placeholder, not a real destination, until
-// the Express app actually serves HTML at these paths.
-export const HELP_URL    = "https://libotbackend.onrender.com/help";
-export const ABOUT_URL   = "https://libotbackend.onrender.com/about";
-export const TERMS_URL   = "https://libotbackend.onrender.com/terms";
-export const PRIVACY_URL = "https://libotbackend.onrender.com/privacy";
-
-// The public download site (the LibotWeb repo). A shared badge links to its
-// badge page, which shows the badge and the download button:
-// libot-download-site/badge.html, served at /badge/<id> by its vercel.json.
+// The pages live on the website (the LibotWeb repo, libot-download-site/
+// privacy.html, terms.html, help.html). They used to be served by the
+// backend at libotbackend.onrender.com/...; those addresses now redirect
+// here, so builds made before the move still open the right page.
 export const SITE_URL = "https://libotbulacan.com";
+
+export const HELP_URL    = `${SITE_URL}/help`;
+export const ABOUT_URL   = SITE_URL;
+export const TERMS_URL   = `${SITE_URL}/terms`;
+export const PRIVACY_URL = `${SITE_URL}/privacy`;
+
+// A shared badge links to its badge page, which shows the badge and the
+// download button: libot-download-site/badge.html, served at /badge/<id> by
+// its vercel.json.
 export const badgeShareUrl = (badgeId) => `${SITE_URL}/badge/${badgeId}`;
