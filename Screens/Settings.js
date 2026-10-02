@@ -154,9 +154,9 @@ const Settings = ({ navigation }) => {
           <ListRow icon="info"        title="About Libot"      onPress={() => openURL(ABOUT_URL)}   />
           <ListRow icon="file-text"   title="Terms of Service" onPress={() => openURL(TERMS_URL)}   />
           <ListRow icon="lock"        title="Privacy Policy"   onPress={() => openURL(PRIVACY_URL)} />
-          {/* A form, not a mailto: link. On a phone with no mail app set up,
-              mailto: opened a blank page. See Screens/ReportProblem.js. */}
-          <ListRow icon="flag"        title="Report a Problem" subtitle="Goes straight to the developers" onPress={() => navigation.navigate("ReportProblem")} />
+          {/* A screen, not a bare mailto: link. On a phone with no mail app
+              set up, mailto: opened a blank page. See Screens/ReportProblem.js. */}
+          <ListRow icon="flag"        title="Report a Problem" subtitle="Email the developers" onPress={() => navigation.navigate("ReportProblem")} />
         </View>
 
         <View style={styles.section}>

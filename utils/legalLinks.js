@@ -17,9 +17,8 @@ export const PRIVACY_URL = `${SITE_URL}/privacy`;
 // this page explains how to ask (by email) and what is deleted.
 export const DELETE_ACCOUNT_URL = `${SITE_URL}/delete-account`;
 
-// Settings → Report a Problem posts here (LibotWeb api/report.js), which emails
-// the developers. The address is only shown when that fails.
-export const REPORT_URL = `${SITE_URL}/api/report`;
+// Settings → Report a Problem writes an email to this inbox (the developers',
+// not the admin panel). See Screens/ReportProblem.js.
 export const SUPPORT_EMAIL = "support@libotbulacan.com";
 
 // A shared badge links to its badge page, which shows the badge and the
