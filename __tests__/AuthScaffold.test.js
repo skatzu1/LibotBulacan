@@ -1,9 +1,9 @@
 import React from "react";
 import { ImageBackground, ScrollView, Text, StyleSheet } from "react-native";
-import { render } from "@testing-library/react-native";
+import { render, waitFor } from "@testing-library/react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import AuthScaffold from "../components/AuthScaffold";
+import AuthScaffold, { useAuthStyles } from "../components/AuthScaffold";
 import { ThemeProvider, lightColors, darkColors } from "../context/ThemeContext";
 
 jest.mock("@react-native-async-storage/async-storage", () =>
@@ -69,5 +69,18 @@ describe("AuthScaffold", () => {
     const content = StyleSheet.flatten(tree.UNSAFE_getByType(ScrollView).props.contentContainerStyle);
     expect(content.paddingBottom ?? 0).toBe(0);
     expect(content.flexGrow).toBe(1);
+  });
+
+  // Regression: Android paints its autofill highlight as a yellow rectangle
+  // over the input, so square corners showed past the pill's round ends. The
+  // row every field sits in clips it to the field's own shape.
+  it("clips each field's row to the pill", async () => {
+    let a;
+    const Probe = () => { a = useAuthStyles(); return null; };
+    render(<ThemeProvider><Probe /></ThemeProvider>);
+    await waitFor(() => expect(a).toBeDefined());
+    const row = StyleSheet.flatten(a.fieldRow);
+    expect(row.overflow).toBe("hidden");
+    expect(row.borderRadius).toBe(StyleSheet.flatten(a.field).borderRadius);
   });
 });
