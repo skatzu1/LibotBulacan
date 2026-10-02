@@ -54,7 +54,7 @@ export default function Leaderboard() {
   const podiumNameMax = { maxWidth: SW / 3 - 16 };
   const { user: clerkUser, isLoaded } = useUser();
   const { getToken }                  = useAuth();
-  const { profileImage }              = useProfileImage();
+  const { profileImage, loading: photoLoading } = useProfileImage();
   const { colors }                    = useTheme();
 
   const [allUsers, setAllUsers]     = useState([]);
@@ -102,11 +102,7 @@ export default function Leaderboard() {
       if (clerkUser?.id) {
         const idx = users.findIndex((u) => u.clerkUserId === clerkUser.id);
         if (idx >= 0) {
-          users[idx] = {
-            ...users[idx],
-            avatar: profileImage || clerkPhoto(clerkUser) || users[idx].avatar,
-            isMe: true,
-          };
+          users[idx] = { ...users[idx], isMe: true };
           AsyncStorage.setItem("userPoints", String(users[idx].points)).catch(() => {});
         }
       }
@@ -126,19 +122,24 @@ export default function Leaderboard() {
 
   useEffect(() => { if (!isLoaded) return; buildLeaderboard(); }, [isLoaded]);
   useEffect(() => {
-    if (!isLoaded) return;
-    setAllUsers((prev) => prev.map((u) => u.isMe ? { ...u, avatar: profileImage || u.avatar } : u));
-  }, [profileImage]);
-  useEffect(() => {
     const unsub = navigation.addListener("focus", () => { if (isLoaded) buildLeaderboard(); });
     return unsub;
   }, [navigation, isLoaded]);
+
+  // Your own photo is read here, at render, from the phone's copy — Edit
+  // Profile updates it the moment you save. It used to be baked into allUsers
+  // when the board loaded, and the focus listener's buildLeaderboard still held
+  // the photo from when it was registered, so a removed photo came back on
+  // every visit. The board's copy only stands in until the phone's has loaded.
+  const myPhoto  = profileImage || clerkPhoto(clerkUser);
+  const avatarOf = (user) =>
+    user.isMe ? myPhoto || (photoLoading ? user.avatar : null) : user.avatar;
 
   // Plain render helpers, not components: a component declared inside render is
   // a new type every render, so React remounted every avatar (and re-fetched
   // its image) on each update.
   const personAvatar = (user, size) => (
-    <Avatar uri={user.avatar} name={user.name} size={size} strong={user.isMe} />
+    <Avatar uri={avatarOf(user)} name={user.name} size={size} strong={user.isMe} />
   );
 
   // The hero's top bar. Loading, error and empty states render it too — the
@@ -305,6 +306,7 @@ export default function Leaderboard() {
           data={restUsers}
           keyExtractor={(user) => String(user.id)}
           renderItem={renderRow}
+          extraData={myPhoto}
           getItemLayout={(_, index) => ({ length: ROW_H, offset: ROW_H * index, index })}
           initialNumToRender={12}
           maxToRenderPerBatch={10}
