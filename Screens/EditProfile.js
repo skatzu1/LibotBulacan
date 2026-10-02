@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
-  ActivityIndicator, KeyboardAvoidingView, Platform,
+  ActivityIndicator, KeyboardAvoidingView, Platform, Linking,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { showAlert, showToast } from "../components/AppAlert";
@@ -10,9 +10,10 @@ import ImageCropPicker from "react-native-image-crop-picker";
 import { useProfileImage } from "../context/ProfileImageContext";
 import { useTheme, fonts, typography } from "../context/ThemeContext";
 import {
-  ScreenHeader, HeaderAction, FormField, GroupLabel, LoadingState, Avatar, H_PAD,
+  ScreenHeader, HeaderAction, FormField, GroupLabel, ListRow, LoadingState, Avatar, H_PAD,
 } from "../components/ui";
 import { BASE_URL } from "../api";
+import { DELETE_ACCOUNT_URL } from "../utils/legalLinks";
 import { cleanName, nameError } from "../utils/authValidation";
 import Icon from "../components/Icon";
 
@@ -204,6 +205,17 @@ export default function EditProfile({ navigation }) {
     }
   };
 
+  // There is no delete button: the app only opens the website's deletion page,
+  // which explains what is deleted and how to ask (by email). App stores look
+  // for a way to request deletion from inside the app; this is that way.
+  const handleRequestDeletion = async () => {
+    try {
+      await Linking.openURL(DELETE_ACCOUNT_URL);
+    } catch {
+      showAlert("Couldn't open the page", `Go to ${DELETE_ACCOUNT_URL} in your browser.`);
+    }
+  };
+
   const fullName = `${firstName} ${lastName}`.trim() || "User";
   const email    = clerkUser?.primaryEmailAddress?.emailAddress || "";
 
@@ -272,6 +284,18 @@ export default function EditProfile({ navigation }) {
               value={email}
               editable={false}
               hint="Your sign-in email can't be changed here."
+            />
+          </View>
+
+          <View style={styles.section}>
+            <GroupLabel>Your data</GroupLabel>
+            <ListRow
+              icon="user-x"
+              title="Request account deletion"
+              subtitle="Opens libotbulacan.com"
+              onPress={handleRequestDeletion}
+              right={<Icon name="arrow-up-right" size={18} color={colors.textMuted} />}
+              accessibilityLabel="Request account deletion. Opens a web page."
             />
           </View>
         </ScrollView>
