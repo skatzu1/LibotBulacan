@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Libot",
+    "name": "Libot Bulacan",
     "slug": "libot",
     "jsEngine": "hermes",
     "version": "1.1.0",
@@ -57,10 +57,10 @@
             ]
           },
           "ios": {
-            "cameraUsagePermission": "Libot uses the camera for AR experiences.",
-            "microphoneUsagePermission": "Libot uses your microphone for AR experiences.",
-            "photosPermission": "Libot would like to read photos for AR.",
-            "savephotosPermission": "Libot would like to save photos during AR."
+            "cameraUsagePermission": "Libot Bulacan uses the camera for AR experiences.",
+            "microphoneUsagePermission": "Libot Bulacan uses your microphone for AR experiences.",
+            "photosPermission": "Libot Bulacan would like to read photos for AR.",
+            "savephotosPermission": "Libot Bulacan would like to save photos during AR."
           }
         }
       ],
@@ -70,8 +70,8 @@
       [
         "expo-location",
         {
-          "locationAlwaysAndWhenInUsePermission": "Libot needs your location to provide navigation to tourist spots in Bulacan.",
-          "locationWhenInUsePermission": "Libot needs your location to show nearby tourist attractions.",
+          "locationAlwaysAndWhenInUsePermission": "Libot Bulacan needs your location to provide navigation to tourist spots in Bulacan.",
+          "locationWhenInUsePermission": "Libot Bulacan needs your location to show nearby tourist attractions.",
           "isIosBackgroundLocationEnabled": false,
           "isAndroidBackgroundLocationEnabled": true,
           "isAndroidForegroundServiceEnabled": true
@@ -80,7 +80,7 @@
       [
         "expo-image-picker",
         {
-          "cameraPermission": "Libot uses the camera to scan and verify products for missions.",
+          "cameraPermission": "Libot Bulacan uses the camera to scan and verify products for missions.",
           "microphonePermission": false
         }
       ],
@@ -105,10 +105,10 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.skatzu15.libot",
       "infoPlist": {
-        "NSCameraUsageDescription": "Libot uses the camera to show augmented reality tourism content and scan products for missions.",
-        "NSLocationWhenInUseUsageDescription": "Libot needs your location to show nearby tourist spots and provide navigation.",
-        "NSLocationAlwaysAndWhenInUseUsageDescription": "Libot needs your location to show nearby tourist spots and provide navigation.",
-        "NSPhotoLibraryUsageDescription": "Libot needs access to your photos for AR and mission scanning.",
+        "NSCameraUsageDescription": "Libot Bulacan uses the camera to show augmented reality tourism content and scan products for missions.",
+        "NSLocationWhenInUseUsageDescription": "Libot Bulacan needs your location to show nearby tourist spots and provide navigation.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Libot Bulacan needs your location to show nearby tourist spots and provide navigation.",
+        "NSPhotoLibraryUsageDescription": "Libot Bulacan needs access to your photos for AR and mission scanning.",
         "CFBundleURLTypes": [
           {
             "CFBundleURLSchemes": [
@@ -117,7 +117,7 @@
           }
         ],
         "NSPhotoLibraryAddUsageDescription": "Allow $(PRODUCT_NAME) to save photos",
-        "NSMicrophoneUsageDescription": "Libot uses your microphone for AR experiences.",
+        "NSMicrophoneUsageDescription": "Libot Bulacan uses your microphone for AR experiences.",
         "ITSAppUsesNonExemptEncryption": false
       }
     },

@@ -2,7 +2,7 @@ import React from "react";
 import { View, Text, StyleSheet } from "react-native";
 import SpotPicker from "../components/SpotPicker";
 import Icon from "../components/Icon";
-import { ensureAtSpotForAR } from "../utils/arLocationGate";
+import { ensureAtSpotForAR, spotHasAR } from "../utils/arLocationGate";
 import { useMissions } from "../context/MissionContext";
 import { useTheme, fonts } from "../context/ThemeContext";
 
@@ -41,6 +41,7 @@ export default function ARSpotSelect() {
       subtitle="Choose a landmark to view in augmented reality"
       onPick={handlePick}
       renderRight={renderDone}
+      filter={spotHasAR}
     />
   );
 }
