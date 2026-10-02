@@ -77,7 +77,7 @@ export const confirmPasswordError = (password, confirm) => {
 export const codeError = (code) =>
   /^\d{6}$/.test(String(code || "").trim()) ? null : "Enter the 6-digit code from your email.";
 
-// The Terms and Privacy Policy (LibotBackend legal/*.html) set 13 as the
+// The Terms and Privacy Policy (libotbulacan.com/terms and /privacy) set 13 as the
 // minimum age.
 export const MIN_AGE = 13;
 

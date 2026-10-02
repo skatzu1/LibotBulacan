@@ -6,8 +6,12 @@ it says so.
 
 Links you will paste repeatedly:
 
-- Privacy policy: `https://libotbackend.onrender.com/privacy`
-- Account deletion: `https://libotbackend.onrender.com/delete-account`
+- Privacy policy: `https://libotbulacan.com/privacy`
+- Account deletion: `https://libotbulacan.com/delete-account`
+- Terms: `https://libotbulacan.com/terms`
+
+(The old `libotbackend.onrender.com/...` addresses redirect to these, but
+give the stores the libotbulacan.com ones.)
 - Support email: `support@libotbulacan.com` (must be a real inbox you read)
 
 ## Google Play
@@ -65,7 +69,7 @@ answer, mark precise location as shared.
 Security practices: data is **encrypted in transit** (yes); users **can request
 deletion** (yes, with the deletion link).
 
-The privacy policy (backend `legal/privacy.html`, written 2026-10-02 for the
+The privacy policy (LibotWeb `libot-download-site/privacy.html`, written 2026-10-02 for the
 Philippine Data Privacy Act) describes exactly what the app does, so it and
 this table should agree. Never collect anything either of them leaves out;
 when a feature changes, update both.
