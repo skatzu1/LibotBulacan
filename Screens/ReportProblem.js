@@ -57,7 +57,7 @@ const ReportProblem = ({ navigation }) => {
 
   const compose = () => {
     const label = CATEGORIES.find((c) => c.key === category)?.label || "Something else";
-    const subject = `Libot problem: ${label}`;
+    const subject = `Libot Bulacan problem: ${label}`;
     const body = [
       message.trim(),
       "",
@@ -112,7 +112,7 @@ const ReportProblem = ({ navigation }) => {
         contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 40 }]}
       >
         <Text style={[typography.body, { color: colors.textSecondary }]}>
-          This goes to the Libot developers at {SUPPORT_EMAIL}. Wrong details about a spot,
+          This goes to the Libot Bulacan developers at {SUPPORT_EMAIL}. Wrong details about a spot,
           or a bad review? Use Report on the spot's page instead, so the admins can fix it.
         </Text>
 

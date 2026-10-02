@@ -14,7 +14,7 @@ export default function Logo({ size = 72, radius = size * 0.24, style }) {
       resizeMode="contain"
       accessible
       accessibilityRole="image"
-      accessibilityLabel="Libot"
+      accessibilityLabel="Libot Bulacan"
     />
   );
 }

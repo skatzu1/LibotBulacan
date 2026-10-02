@@ -42,6 +42,19 @@ export function getSpotCoords(spot) {
   return null;
 }
 
+// AR is for buildings: the models are pinned to a church or shrine that stands
+// at the spot. A festival is an event and a river has nothing to anchor to, so
+// spots filed under these categories get no AR View button and are left out of
+// the AR spot picker. Matched case-insensitively, like the backend's
+// aiModelKeyForSpot.
+const NO_AR_CATEGORIES = ["nature", "festivals"];
+
+export function spotHasAR(spot) {
+  const raw = spot?.category;
+  const categories = (Array.isArray(raw) ? raw : raw ? [raw] : []).map((c) => String(c).toLowerCase());
+  return !categories.some((c) => NO_AR_CATEGORIES.includes(c));
+}
+
 function confirm(title, message, confirmText = "Start anyway") {
   return new Promise((resolve) => {
     showAlert(

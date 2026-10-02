@@ -176,7 +176,7 @@ async function handleBackgroundArrival(coords) {
           content: {
             title: isFirstVisit ? "You arrived!" : "Welcome back!",
             body: isFirstVisit
-              ? `You've reached ${spot.name}! Open Libot to claim your badge.`
+              ? `You've reached ${spot.name}! Open Libot Bulacan to claim your badge.`
               : `You've arrived at ${spot.name}. Open Libot Bulacan to explore!`,
             data: { spotId, spotName: spot.name, isFirstVisit },
           },
@@ -260,10 +260,10 @@ async function requestAllLocationPermissions() {
   // makes more sense once the user knows why).
   if (current.status !== "granted" && current.canAskAgain) {
     const proceed = await confirmAsync(
-      "Libot uses your location",
+      "Libot Bulacan uses your location",
       BACKGROUND_ARRIVALS_ENABLED
         ? "To show spots near you, log the places you visit, and send arrival alerts. You'll pick a permission level on the next screen."
-        : "To show spots near you and recognise when you arrive at one while Libot is open. Libot doesn't use your location when the app is closed.",
+        : "To show spots near you and recognise when you arrive at one while Libot Bulacan is open. Libot Bulacan doesn't use your location when the app is closed.",
       { confirmText: "Continue", icon: "map-pin", tone: "info" },
     );
     if (!proceed) {
@@ -319,7 +319,7 @@ async function promptForAllTimeLocation() {
 
   const proceed = await confirmAsync(
     "Background location access needed",
-    `For a better experience, Libot needs access to your location in the background — even when the app is closed or not in use — so it can alert you when you arrive at a tourist spot and log your visit. On the next screen, choose "Allow all the time".`,
+    `For a better experience, Libot Bulacan needs access to your location in the background — even when the app is closed or not in use — so it can alert you when you arrive at a tourist spot and log your visit. On the next screen, choose "Allow all the time".`,
     { confirmText: "Continue", cancelText: "Not now", icon: "map-pin", tone: "info" },
   );
   if (!proceed) return false;
@@ -555,7 +555,7 @@ export function ArrivalProvider({ children }) {
                 distanceInterval:           20,
                 pausesUpdatesAutomatically: false,
                 foregroundService: {
-                  notificationTitle: "Libot is tracking your location",
+                  notificationTitle: "Libot Bulacan is tracking your location",
                   notificationBody:  "Detecting nearby tourist spots in Bulacan.",
                   notificationColor: "#0A6F78", // lightColors.brand
                 },
@@ -832,7 +832,7 @@ export function ArrivalProvider({ children }) {
       content: {
         title: isFirstVisit ? "You arrived!" : "Welcome back!",
         body: isFirstVisit
-          ? `You've reached ${spot.name}! Open Libot to claim your badge.`
+          ? `You've reached ${spot.name}! Open Libot Bulacan to claim your badge.`
           : `You've arrived at ${spot.name}. Open Libot Bulacan to explore!`,
         data: { spotId, spotName: spot.name, isFirstVisit },
       },

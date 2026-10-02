@@ -18,7 +18,7 @@ import { useProfileImage } from "../context/ProfileImageContext";
 import { splitByTier, ARRIVAL_POINTS, TIER_LABELS } from "../utils/missionTiers";
 import { useTheme, radius, shadow, fonts, typography, MAX_FONT_SCALE } from "../context/ThemeContext";
 import ModelViewer from "../utils/ModelViewer";
-import { ensureAtSpotForAR } from "../utils/arLocationGate";
+import { ensureAtSpotForAR, spotHasAR } from "../utils/arLocationGate";
 import InformationSkeleton from "../components/InformationSkeleton";
 import {
   PhotoScrim, Segmented, EmptyState, PrimaryButton, Avatar, SearchField, H_PAD, TAP,
@@ -626,6 +626,7 @@ export default function InformationScreen({ route, navigation }) {
   const totalCount       = majorTotal + minorTotal;
   const progressRatio    = totalCount > 0 ? completedCount / totalCount : 0;
   const arMission        = missions.find((m) => m.type === "ar");
+  const hasAR            = spotHasAR(spot);
 
   const cityText = spot.city || spot.address || "Bulacan, Philippines";
 
@@ -1369,8 +1370,9 @@ export default function InformationScreen({ route, navigation }) {
         </View>
       </ScrollView>
 
-      {/* Floating action card — Navigate + AR, on both tabs. Steps aside while
-          the review box has the keyboard, or it would sit right on top of it. */}
+      {/* Floating action card — Navigate + AR, on both tabs (Navigate alone for
+          Nature and Festivals spots, which have no AR). Steps aside while the
+          review box has the keyboard, or it would sit right on top of it. */}
       {!composerFocused && (
         <View style={[styles.actionCard, { backgroundColor: colors.card, borderColor: colors.cardBorder, bottom: Math.max(insets.bottom, 14) + 10 }, shadow.lg]}>
           <TouchableOpacity
@@ -1383,17 +1385,21 @@ export default function InformationScreen({ route, navigation }) {
             <Icon name="navigation" size={17} color={colors.brand} />
             <Text style={[styles.actionText, { color: colors.textPrimary }]}>Navigate</Text>
           </TouchableOpacity>
-          <View style={[styles.actionDivider, { backgroundColor: colors.divider }]} />
-          <TouchableOpacity
-            accessibilityRole="button"
-            accessibilityLabel={`Open ${spot.name} in AR`}
-            style={styles.actionItem}
-            onPress={handleLaunchAR}
-            activeOpacity={0.75}
-          >
-            <Icon name="aperture" size={17} color={colors.brand} />
-            <Text style={[styles.actionText, { color: colors.textPrimary }]}>AR View</Text>
-          </TouchableOpacity>
+          {hasAR && (
+            <>
+              <View style={[styles.actionDivider, { backgroundColor: colors.divider }]} />
+              <TouchableOpacity
+                accessibilityRole="button"
+                accessibilityLabel={`Open ${spot.name} in AR`}
+                style={styles.actionItem}
+                onPress={handleLaunchAR}
+                activeOpacity={0.75}
+              >
+                <Icon name="aperture" size={17} color={colors.brand} />
+                <Text style={[styles.actionText, { color: colors.textPrimary }]}>AR View</Text>
+              </TouchableOpacity>
+            </>
+          )}
         </View>
       )}
 

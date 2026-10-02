@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useMemo } from "react";
 import { View, Text, StyleSheet, StatusBar, FlatList } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -10,17 +10,20 @@ import ListsSkeleton from "./ListsSkeleton";
 /**
  * Shared "pick a spot" list screen used by the AR / Missions / Navigate flows.
  * Props: title, subtitle, onPick(spot) -> navigation action,
- *        renderRight(spot) -> optional node for the card's top-right corner.
+ *        renderRight(spot) -> optional node for the card's top-right corner,
+ *        filter(spot) -> optional; only spots it returns true for are listed.
  */
-export default function SpotPicker({ title, subtitle, onPick, renderRight }) {
+export default function SpotPicker({ title, subtitle, onPick, renderRight, filter }) {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
-  const { allSpots: spots, spotsStatus, reloadSpots } = useArrival();
+  const { allSpots, spotsStatus, reloadSpots } = useArrival();
   const { colors, isDark } = useTheme();
+  const spots = useMemo(() => (filter ? allSpots.filter(filter) : allSpots), [allSpots, filter]);
   // Empty spots used to mean "spinner forever" — including when the request
-  // had failed and nothing was ever going to arrive.
-  const loading = spots.length === 0 && spotsStatus === "loading";
-  const failed  = spots.length === 0 && spotsStatus === "error";
+  // had failed and nothing was ever going to arrive. (Checked on the full
+  // list: a filter that matches nothing is "no spots", not "still loading".)
+  const loading = allSpots.length === 0 && spotsStatus === "loading";
+  const failed  = allSpots.length === 0 && spotsStatus === "error";
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.background }]}>
