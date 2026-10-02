@@ -9,9 +9,10 @@ import {
   Image,
   Modal,
 } from "react-native";
-import { showToast } from "../components/AppAlert";
+import { showToast, showAlert } from "../components/AppAlert";
 import { useState, useEffect, useRef } from "react";
-import { useSignIn, useOAuth } from "@clerk/clerk-expo";
+import { useSignIn } from "@clerk/clerk-expo";
+import * as AuthSession from "expo-auth-session";
 import * as WebBrowser from "expo-web-browser";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { captureError } from "../utils/crashReporter";
@@ -308,7 +309,6 @@ export default function Login({ navigation }) {
   const a = useAuthStyles();
   const { colors } = useTheme();
   const { isLoaded, signIn, setActive } = useSignIn();
-  const { startOAuthFlow } = useOAuth({ strategy: "oauth_google" });
 
   const [email, setEmail]                     = useState("");
   const [password, setPassword]               = useState("");
@@ -473,14 +473,50 @@ export default function Login({ navigation }) {
   };
 
   // ── Google login ──
+  // Clerk's OAuth steps run by hand here rather than through useOAuth's
+  // startOAuthFlow(). When the chosen Google account has no Libot account,
+  // that helper quietly converts the sign-in into a sign-up — so "Continue
+  // with Google" on THIS screen used to create accounts, skipping the terms
+  // checkbox and the backend registration the Register screen does. Here that
+  // case stops and the user is sent to sign up instead.
   const handleGoogleLogin = async () => {
     if (isGoogleLoading || !isLoaded) return;
     setAuthError("");
     setIsGoogleLoading(true);
     try {
-      const { createdSessionId } = await startOAuthFlow();
-      if (!createdSessionId) throw new Error("No session returned from Google OAuth");
-      await setActive({ session: createdSessionId });
+      // Same callback path useOAuth uses, so the redirect Clerk allows is unchanged.
+      const redirectUrl = AuthSession.makeRedirectUri({ path: "oauth-native-callback" });
+      const attempt = await signIn.create({ strategy: "oauth_google", redirectUrl });
+      const authUrl = attempt.firstFactorVerification.externalVerificationRedirectURL;
+      if (!authUrl) throw new Error("No Google sign-in URL returned");
+
+      const result = await WebBrowser.openAuthSessionAsync(authUrl.toString(), redirectUrl);
+      // Closed the browser or backed out of the account picker — not an error.
+      if (result?.type !== "success") return;
+
+      const nonce = new URL(result.url).searchParams.get("rotating_token_nonce") || "";
+      const done = await attempt.reload({ rotatingTokenNonce: nonce });
+
+      if (done.status === "complete") {
+        await setActive({ session: done.createdSessionId });
+        return;
+      }
+
+      // Google said yes, but no Libot account uses that Google account.
+      if (done.firstFactorVerification?.status === "transferable") {
+        showAlert(
+          "No account found",
+          "This Google account isn't registered with Libot Bulacan yet. Sign up to create your account first.",
+          [
+            { text: "Cancel", style: "cancel" },
+            { text: "Sign up", onPress: () => navigation.navigate("Register") },
+          ],
+          { tone: "info", icon: "user" }
+        );
+        return;
+      }
+
+      throw new Error(`Google sign-in ended as "${done.status}"`);
     } catch (err) {
       if (err.code === "user-cancelled" || err.code === "browser-closed") return;
       if (__DEV__) {
