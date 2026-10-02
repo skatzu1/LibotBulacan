@@ -15,8 +15,6 @@ import { ScreenHeader, ListRow, GroupLabel, Segmented, H_PAD } from "../componen
 import * as Notifications from "expo-notifications";
 import { HELP_URL, ABOUT_URL, TERMS_URL, PRIVACY_URL } from "../utils/legalLinks";
 
-const SUPPORT_EMAIL = "support@libotbulacan.com";
-
 const openURL = async (url) => {
   try {
     if (await Linking.canOpenURL(url)) return await Linking.openURL(url);
@@ -97,18 +95,6 @@ const Settings = ({ navigation }) => {
     ]);
   };
 
-  // This used to open a popup whose only real choice was "Send Email". It now
-  // goes straight to the mail app, and says where to write if there isn't one.
-  const handleReportProblem = async () => {
-    const url = `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent("Problem report")}` +
-      `&body=${encodeURIComponent("Describe the issue here...")}`;
-    try {
-      await Linking.openURL(url);
-    } catch {
-      showAlert("No email app found", `Email us at ${SUPPORT_EMAIL} and we'll take a look.`);
-    }
-  };
-
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <ScreenHeader
@@ -168,7 +154,9 @@ const Settings = ({ navigation }) => {
           <ListRow icon="info"        title="About Libot"      onPress={() => openURL(ABOUT_URL)}   />
           <ListRow icon="file-text"   title="Terms of Service" onPress={() => openURL(TERMS_URL)}   />
           <ListRow icon="lock"        title="Privacy Policy"   onPress={() => openURL(PRIVACY_URL)} />
-          <ListRow icon="flag"        title="Report a Problem" subtitle={SUPPORT_EMAIL} onPress={handleReportProblem} />
+          {/* A form, not a mailto: link. On a phone with no mail app set up,
+              mailto: opened a blank page. See Screens/ReportProblem.js. */}
+          <ListRow icon="flag"        title="Report a Problem" subtitle="Goes straight to the developers" onPress={() => navigation.navigate("ReportProblem")} />
         </View>
 
         <View style={styles.section}>

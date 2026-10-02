@@ -65,6 +65,7 @@ import ProfileScreen      from './Screens/Profilescreen';
 import BannedScreen       from './Screens/BannedScreen';
 import SuspendedNotice    from './Screens/SuspendedNotice';
 import LoginSecurity       from './Screens/LoginSecurity';
+import ReportProblem      from './Screens/ReportProblem';
 
 // Clerk publishable keys are public by design — they ship inside the JS bundle
 // either way, so they live here rather than in EAS secrets.
@@ -255,6 +256,7 @@ function AppNavigator() {
                             <Stack.Screen name="Bookmark"          component={Bookmark} />
                             <Stack.Screen name="ar"                component={ARScreen} />
                             <Stack.Screen name="Settings"          component={Settings} />
+                            <Stack.Screen name="ReportProblem"     component={ReportProblem} />
                             <Stack.Screen name="EditProfile"       component={EditProfile} />
                             <Stack.Screen name="Lists"             component={Lists} />
                             <Stack.Screen name="Mission"           component={Mission} />
