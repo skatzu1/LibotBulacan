@@ -388,9 +388,28 @@ export default function Login({ navigation }) {
       }
 
       if (signInResult.status === "needs_second_factor") {
-        // The password was right — not a failed attempt. The app has no MFA
-        // screen, so say so rather than calling it a wrong password.
+        // The password was right — not a failed attempt. The Clerk instance has
+        // no MFA turned on; this is its new-device check (Client Trust), which
+        // emails a code the first time a device signs in with a password.
         await clearLock(email);
+        const emailFactor = signInResult.supportedSecondFactors?.find(
+          (f) => f.strategy === "email_code"
+        );
+        if (emailFactor) {
+          try {
+            await signIn.prepareSecondFactor({
+              strategy: "email_code",
+              emailAddressId: emailFactor.emailAddressId,
+            });
+          } catch (sendErr) {
+            setAuthError(sendErr?.errors ? "Couldn't send a verification code. Please try again." : NETWORK_ERROR);
+            return;
+          }
+          navigation.navigate("EmailVerification", { email: email.trim(), fromLogin: true, secondFactor: true });
+          showToast("Check your email for a verification code.", { type: "info" });
+          return;
+        }
+        // An authenticator app or backup code — the app has no screen for those.
         setAuthError("This account uses two-step verification, which isn't supported in the app yet.");
         return;
       }
