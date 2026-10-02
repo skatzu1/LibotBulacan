@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
-  ActivityIndicator, KeyboardAvoidingView, Platform, Linking,
+  ActivityIndicator, KeyboardAvoidingView, Linking,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { showAlert, showToast } from "../components/AppAlert";
@@ -16,6 +16,8 @@ import { BASE_URL } from "../api";
 import { DELETE_ACCOUNT_URL } from "../utils/legalLinks";
 import { cleanName, nameError } from "../utils/authValidation";
 import Icon from "../components/Icon";
+import useKeyboardAwareScroll, { KEYBOARD_BEHAVIOR } from "../hooks/useKeyboardAwareScroll";
+import { clerkPhoto } from "../utils/image";
 
 // Single source of truth for the backend host — see api.js.
 // The avatar is shown through <Avatar>, whose avatarImage() already crops to a
@@ -46,9 +48,10 @@ async function uploadImageToCloudinary(localUri, token) {
 export default function EditProfile({ navigation }) {
   const { user: clerkUser, isLoaded } = useUser();
   const { getToken } = useAuth();
-  const { profileImage, setProfileImage } = useProfileImage();
+  const { profileImage, setProfileImage, clearProfileImage } = useProfileImage();
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
+  const kb = useKeyboardAwareScroll();
   // Set just before leaving after a successful save, so the unsaved-changes
   // guard below doesn't fire on the way out.
   const leavingRef = useRef(false);
@@ -57,6 +60,8 @@ export default function EditProfile({ navigation }) {
   const [lastName, setLastName]             = useState("");
   const [avatar, setAvatar]                 = useState(null);
   const [newLocalAvatar, setNewLocalAvatar] = useState(null);
+  // "Remove photo" was chosen; applied on Save like any other change.
+  const [removeAvatar, setRemoveAvatar]     = useState(false);
   const [saving, setSaving]                 = useState(false);
   const [pickingImage, setPickingImage]     = useState(false);
 
@@ -73,19 +78,19 @@ export default function EditProfile({ navigation }) {
     setLastName(ln);
     setOriginalFirstName(fn);
     setOriginalLastName(ln);
-    setAvatar(profileImage || clerkUser.imageUrl || null);
+    setAvatar(profileImage || clerkPhoto(clerkUser));
   }, [isLoaded, clerkUser]);
 
   useEffect(() => {
-    if (profileImage) setAvatar(profileImage);
-  }, [profileImage]);
+    if (profileImage && !removeAvatar && !newLocalAvatar) setAvatar(profileImage);
+  }, [profileImage]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const hasChanges = useMemo(() => {
     const nameChanged   = firstName.trim() !== originalFirstName.trim() ||
                           lastName.trim()  !== originalLastName.trim();
-    const avatarChanged = !!newLocalAvatar;
+    const avatarChanged = !!newLocalAvatar || removeAvatar;
     return nameChanged || avatarChanged;
-  }, [firstName, lastName, originalFirstName, originalLastName, newLocalAvatar]);
+  }, [firstName, lastName, originalFirstName, originalLastName, newLocalAvatar, removeAvatar]);
 
   useEffect(() => {
     const unsubscribe = navigation.addListener("beforeRemove", (e) => {
@@ -103,12 +108,23 @@ export default function EditProfile({ navigation }) {
     return unsubscribe;
   }, [navigation, hasChanges]);
 
+  // With a photo showing, the sheet also offers to remove it: the profile then
+  // shows initials everywhere, including on the user's reviews.
   const handlePickAvatar = () => {
-    showAlert("Change Photo", "Choose a source", [
+    showAlert(avatar ? "Profile Photo" : "Add Photo", avatar ? undefined : "Choose a source", [
       { text: "Cancel", style: "cancel" },
       { text: "Camera",  onPress: () => launchPicker("camera")  },
       { text: "Gallery", onPress: () => launchPicker("gallery") },
+      ...(avatar ? [{ text: "Remove photo", style: "destructive", onPress: chooseRemoveAvatar }] : []),
     ]);
+  };
+
+  const chooseRemoveAvatar = () => {
+    if (newLocalAvatar) ImageCropPicker.cleanSingle(newLocalAvatar).catch(() => {});
+    setNewLocalAvatar(null);
+    setAvatar(null);
+    // Nothing to remove if the only photo was one picked just now.
+    setRemoveAvatar(!!(profileImage || clerkPhoto(clerkUser)));
   };
 
   const cropperOptions = {
@@ -132,6 +148,7 @@ export default function EditProfile({ navigation }) {
       if (result?.path) {
         setAvatar(result.path);
         setNewLocalAvatar(result.path);
+        setRemoveAvatar(false);
       }
     } catch (err) {
       if (err?.code !== "E_PICKER_CANCELLED") {
@@ -168,7 +185,17 @@ export default function EditProfile({ navigation }) {
 
       await clerkUser.update({ firstName: firstName.trim(), lastName: lastName.trim() });
 
-      const imageToSave = finalImageUrl || profileImage || clerkUser.imageUrl || null;
+      // Removing has to clear Clerk's copy too (for a Google sign-in that's the
+      // Google photo): the server falls back to it wherever ours is empty.
+      if (removeAvatar && clerkUser.hasImage) {
+        await clerkUser.setProfileImage({ file: null });
+      }
+
+      // "" tells the server the photo was removed; it then also blanks the
+      // copy saved on each of this user's reviews.
+      const imageToSave = removeAvatar
+        ? ""
+        : finalImageUrl || profileImage || clerkPhoto(clerkUser);
       const dbRes = await fetch(`${BASE_URL}/api/users/me`, {
         method: "PATCH",
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
@@ -181,6 +208,7 @@ export default function EditProfile({ navigation }) {
       if (!dbRes.ok) throw new Error("Your name was saved, but the profile didn't sync. Try again.");
 
       if (finalImageUrl) await setProfileImage(finalImageUrl);
+      if (removeAvatar) await clearProfileImage();
 
       await clerkUser.reload();
 
@@ -188,6 +216,7 @@ export default function EditProfile({ navigation }) {
         ImageCropPicker.cleanSingle(newLocalAvatar).catch(() => {});
       }
       setNewLocalAvatar(null);
+      setRemoveAvatar(false);
 
       // The saved values are the new baseline. Without this the name still
       // differed from the ORIGINAL one, so tapping OK on "Success" was met with
@@ -239,11 +268,14 @@ export default function EditProfile({ navigation }) {
   }
 
   return (
-    <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === "ios" ? "padding" : undefined}>
+    <KeyboardAvoidingView style={{ flex: 1 }} behavior={KEYBOARD_BEHAVIOR}>
       <View style={[styles.container, { backgroundColor: colors.background }]}>
         {header}
 
         <ScrollView
+          ref={kb.ref}
+          onScroll={kb.onScroll}
+          scrollEventThrottle={16}
           showsVerticalScrollIndicator={false}
           contentContainerStyle={[styles.scrollContent, { paddingBottom: insets.bottom + 40 }]}
           keyboardShouldPersistTaps="handled"
@@ -254,7 +286,7 @@ export default function EditProfile({ navigation }) {
               disabled={pickingImage}
               activeOpacity={0.8}
               accessibilityRole="button"
-              accessibilityLabel="Change profile photo"
+              accessibilityLabel={avatar ? "Change or remove profile photo" : "Add a profile photo"}
             >
               <Avatar uri={avatar} name={fullName} size={100} strong />
               <View style={[styles.avatarBadge, { backgroundColor: colors.brandDark, borderColor: colors.background }]}>
@@ -265,7 +297,7 @@ export default function EditProfile({ navigation }) {
               </View>
             </TouchableOpacity>
             <Text style={[styles.fullNameLabel, { color: colors.textPrimary }]}>{fullName}</Text>
-            <Text style={[styles.avatarHint, { color: colors.textMuted }]}>Tap the photo to change it</Text>
+            <Text style={[styles.avatarHint, { color: colors.textMuted }]}>{avatar ? "Tap the photo to change or remove it" : "Tap to add a photo"}</Text>
             {isGoogleUser && (
               <View style={[styles.googleBadge, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
                 <Icon name="globe" size={12} color={colors.brand} />

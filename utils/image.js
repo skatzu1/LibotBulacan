@@ -69,6 +69,12 @@ export function cdn(url, { width, height, crop = "limit", gravity } = {}) {
 export const spotImage = (url, width, height) =>
   cdn(url, { width, height, crop: "fill", gravity: "auto" });
 
+/** The user's Clerk photo, or null when they have none. Clerk's imageUrl
+ *  (and its old alias profileImageUrl) is never empty: without a photo it is
+ *  a generated placeholder, which hid the app's own initials avatar and came
+ *  back the moment a user removed their photo. hasImage tells the two apart. */
+export const clerkPhoto = (user) => (user?.hasImage ? user.imageUrl : null);
+
 /** Square avatar. Face gravity keeps the person centred when cropping. */
 export const avatarImage = (url, size) =>
   cdn(url, { width: size, height: size, crop: "fill", gravity: "face" });

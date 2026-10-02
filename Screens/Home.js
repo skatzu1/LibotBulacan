@@ -35,7 +35,7 @@ import {
 } from "../components/ui";
 import Logo from "../components/Logo";
 import { BASE_URL } from "../api";
-import { spotImage } from "../utils/image";
+import { spotImage, clerkPhoto } from "../utils/image";
 
 import Bookmark      from "./Bookmark";
 import Leaderboard   from "./Leaderboard";
@@ -60,6 +60,16 @@ const QUICK_ACTIONS = [
   { key: "navigate", label: "Navigate", icon: "navigation", route: "TrackSpotSelect" },
   { key: "trips",    label: "My Trips", icon: "map",         route: "PreviousTrips" },
 ];
+
+// The Featured carousel only claims a drag once it has moved 12px sideways,
+// and lets go of one that moves 10px up or down first. Its pan gesture used to
+// take vertical drags too, so scrolling the page with a thumb on the big photo
+// did nothing — you had to scroll from the strip beside it. Module-level so
+// the carousel (which rebuilds its gesture when this changes) gets the same
+// function every render.
+const carouselPanSideways = (gesture) => {
+  gesture.activeOffsetX([-12, 12]).failOffsetY([-10, 10]);
+};
 
 const greetingFor = (d = new Date()) => {
   const hr = d.getHours();
@@ -170,10 +180,7 @@ function HomeTab() {
   if (loading) return <HomeSkeleton />;
 
   const profilePhoto =
-    profileImage ??
-    clerkUser?.imageUrl ??
-    clerkUser?.profileImageUrl ??
-    null;
+    profileImage || clerkPhoto(clerkUser);
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
@@ -404,6 +411,7 @@ function HomeContent({ profilePhoto, navigation }) {
                     autoPlayInterval={7000}
                     scrollAnimationDuration={900}
                     onScrollBegin={() => setAutoPlay(false)}
+                    onConfigurePanGesture={carouselPanSideways}
                     onProgressChange={(_, abs) =>
                       setActiveIndex(Math.round(abs) % sliderData.length)
                     }

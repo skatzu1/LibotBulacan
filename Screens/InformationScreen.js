@@ -23,7 +23,7 @@ import InformationSkeleton from "../components/InformationSkeleton";
 import {
   PhotoScrim, Segmented, EmptyState, PrimaryButton, Avatar, SearchField, H_PAD, TAP,
 } from "../components/ui";
-import { spotImage, cdn } from "../utils/image";
+import { spotImage, cdn, clerkPhoto } from "../utils/image";
 import {
   REVIEW_SORTS, ratingBreakdown, filterAndSortReviews, pageOf, pageNumbers, timeAgo,
 } from "../utils/reviewList";
@@ -42,6 +42,10 @@ const MISSION_CONFIG = {
   // user must physically visit (see Screens/LocationMission.js).
   location: { icon: "map-pin",    label: "Nearby Eats" },
 };
+
+// Spot facts up to this many characters fit beside their label ("Malolos",
+// "₱50", "0917 123 4567"); longer ones go on their own line under it.
+const FACT_INLINE_MAX = 22;
 
 const REPORT_REASONS = [
   { key:"spam",               label:"Spam" },
@@ -241,7 +245,7 @@ function ReviewCard({ review, spotId, clerkUser, profileImage, reactToReview, on
   const isMe = clerkUser?.id === review.clerkUserId;
   // No more pravatar.cc fallback — a reviewer without a photo gets their
   // initials, not a random stranger's face.
-  const avatarUri = isMe ? (profileImage || review.userImage || clerkUser?.imageUrl) : review.userImage;
+  const avatarUri = isMe ? (profileImage || review.userImage || clerkPhoto(clerkUser)) : review.userImage;
   const [reacting, setReacting] = useState(false);
   const [expanded, setExpanded] = useState(false);   // "See more" opened
   const [foldable, setFoldable] = useState(false);   // text runs past the fold
@@ -909,18 +913,34 @@ export default function InformationScreen({ route, navigation }) {
               </Text>
 
               <View style={[styles.infoCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
-                {facts.map((row, i) => (
-                  <React.Fragment key={row.label}>
-                    <View style={styles.infoRow} accessible accessibilityLabel={`${row.label}: ${row.value}`}>
-                      <View style={[styles.infoIcon, { backgroundColor: colors.brandLight }]}>
-                        <Icon name={row.icon} size={14} color={colors.brand} />
+                {facts.map((row, i) => {
+                  // A short value sits on the right of its label. A long one
+                  // ("9:00 a.m. to 4:00 p.m., Tuesday to Sunday…") gets its own
+                  // full-width line under the label, all of it: squeezed into
+                  // the right column at two lines it was cut off mid-word.
+                  const long = String(row.value).length > FACT_INLINE_MAX;
+                  return (
+                    <React.Fragment key={row.label}>
+                      <View style={[styles.infoRow, long && styles.infoRowLong]} accessible accessibilityLabel={`${row.label}: ${row.value}`}>
+                        <View style={[styles.infoIcon, { backgroundColor: colors.brandLight }]}>
+                          <Icon name={row.icon} size={14} color={colors.brand} />
+                        </View>
+                        {long ? (
+                          <View style={styles.infoStack}>
+                            <Text style={[styles.infoLabel, styles.infoLabelStacked, { color: colors.textMuted }]}>{row.label}</Text>
+                            <Text style={[styles.infoValue, styles.infoValueStacked, { color: colors.textPrimary }]}>{row.value}</Text>
+                          </View>
+                        ) : (
+                          <>
+                            <Text style={[styles.infoLabel, { color: colors.textMuted }]}>{row.label}</Text>
+                            <Text style={[styles.infoValue, { color: colors.textPrimary }]}>{row.value}</Text>
+                          </>
+                        )}
                       </View>
-                      <Text style={[styles.infoLabel, { color: colors.textMuted }]}>{row.label}</Text>
-                      <Text style={[styles.infoValue, { color: colors.textPrimary }]} numberOfLines={2}>{row.value}</Text>
-                    </View>
-                    {i < facts.length - 1 && <View style={[styles.infoDivider, { backgroundColor: colors.cardBorder }]} />}
-                  </React.Fragment>
-                ))}
+                      {i < facts.length - 1 && <View style={[styles.infoDivider, { backgroundColor: colors.cardBorder }]} />}
+                    </React.Fragment>
+                  );
+                })}
               </View>
 
               {/* ── Ratings & Reviews ── */}
@@ -1221,7 +1241,7 @@ export default function InformationScreen({ route, navigation }) {
 
                 <View style={styles.fbRow}>
                   <Avatar
-                    uri={profileImage || clerkUser?.imageUrl}
+                    uri={profileImage || clerkPhoto(clerkUser)}
                     name={clerkUser?.fullName || clerkUser?.firstName}
                     size={36}
                     style={styles.fbAvatar}
@@ -1506,6 +1526,10 @@ const styles = StyleSheet.create({
   infoIcon:        { width: 30, height: 30, borderRadius: 15, justifyContent: "center", alignItems: "center" },
   infoLabel:       { fontSize: 12.5, fontFamily: fonts.sansSemi, width: 100 },
   infoValue:       { fontSize: 13.5, fontFamily: fonts.sansSemi, flex: 1, textAlign: "right" },
+  infoRowLong:     { alignItems: "flex-start" },
+  infoStack:       { flex: 1, gap: 3, paddingTop: 1 },
+  infoLabelStacked: { width: undefined },
+  infoValueStacked: { flex: 0, textAlign: "left", lineHeight: 19 },
   infoDivider:     { height: 1 },
 
   progressCard:    { borderRadius: radius.card, borderWidth: 1, padding: 16, marginBottom: 20, marginTop: 2 },
