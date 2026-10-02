@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import {
   View, Text, Image, TouchableOpacity, StyleSheet,
   ScrollView, TextInput,
@@ -21,6 +21,8 @@ import ModelViewer from "../utils/ModelViewer";
 import { ensureAtSpotForAR, spotHasAR } from "../utils/arLocationGate";
 import InformationSkeleton from "../components/InformationSkeleton";
 import KeyboardAvoider from "../components/KeyboardAvoider";
+import usePullToRefresh from "../hooks/usePullToRefresh";
+import api from "../api";
 import {
   PhotoScrim, Segmented, EmptyState, PrimaryButton, Avatar, SearchField, H_PAD, TAP,
 } from "../components/ui";
@@ -494,7 +496,14 @@ function MissionRow({ mission, isDone, cityText, onPress, colors }) {
 }
 
 export default function InformationScreen({ route, navigation }) {
-  const spot = route?.params?.spot;
+  const paramSpot = route?.params?.spot;
+  // A pull to refresh re-reads the spot; its fields go over the copy the
+  // screen was opened with.
+  const [freshSpot, setFreshSpot] = useState(null);
+  const spot = useMemo(
+    () => (paramSpot && freshSpot?._id === paramSpot._id ? { ...paramSpot, ...freshSpot } : paramSpot),
+    [paramSpot, freshSpot]
+  );
   const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
 
@@ -535,7 +544,7 @@ export default function InformationScreen({ route, navigation }) {
   const { user: clerkUser } = useUser();
   const { isBookmarked, toggleBookmark } = useBookmark();
   const { getReviewsForSpot, addReview, reportReview, reactToReview, getAverageRating, getReviewCount, fetchReviews, deleteReview } = useReviews();
-  const { fetchMissions, getMissionsForSpot, completedMissions } = useMissions();
+  const { fetchMissions, refetchMissions, getMissionsForSpot, completedMissions } = useMissions();
   const { hasVisited, refresh: refreshPoints } = usePoints();
   const { profileImage } = useProfileImage();
   const isFocused = useIsFocused();
@@ -567,6 +576,24 @@ export default function InformationScreen({ route, navigation }) {
       Promise.all([fetchReviews(spot._id), fetchMissions(spot._id)]).finally(() => setScreenReady(true));
     }
   }, [spot?._id]);
+
+  // Pull to refresh: the spot itself (an admin may have edited it), its
+  // reviews and missions, and the visit log behind "Arrive at the spot". Off
+  // while the 3D model shows: dragging down on the model turns it, and at the
+  // top of the page the pull would take that drag instead.
+  const reloadSpotPage = useCallback(async () => {
+    const id = paramSpot?._id;
+    if (!id) return;
+    await Promise.allSettled([
+      api.get(`/api/spots/${id}`).then((res) => {
+        if (res.data?.success && res.data.spot) setFreshSpot(res.data.spot);
+      }),
+      fetchReviews(id),
+      refetchMissions(id),
+      refreshPoints(),
+    ]);
+  }, [paramSpot?._id, fetchReviews, refetchMissions, refreshPoints]);
+  const { refreshControl } = usePullToRefresh(reloadSpotPage, { enabled: !(show3D && spot?.modelUrl) });
 
   const header = (right) => (
     <View style={[styles.header, { backgroundColor: colors.background, paddingTop: Math.max(insets.top, 12) + 6, borderBottomColor: colors.divider }]}>
@@ -868,6 +895,7 @@ export default function InformationScreen({ route, navigation }) {
 
       <ScrollView
         ref={scrollRef}
+        refreshControl={refreshControl}
         style={styles.scrollView}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"

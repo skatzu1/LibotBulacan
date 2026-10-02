@@ -59,29 +59,22 @@ export const MissionProvider = ({ children }) => {
     [missionsBySpot]
   );
 
+  // Pull to refresh on the spot page. The current list stays on screen until
+  // the new one arrives, and stays if the request fails; it used to be
+  // cleared first, so a refresh on a bad signal emptied the missions.
   const refetchMissions = useCallback(async (spotId) => {
     if (!spotId) return;
-    fetchedSpots.current.delete(spotId);
-    setMissionsBySpot((prev) => {
-      const next = { ...prev };
-      delete next[spotId];
-      return next;
-    });
-    fetchedSpots.current.add(spotId);
-
     try {
       const res = await fetch(
         `${BASE_URL}/api/missions/${spotId}`
       );
       const data = await res.json();
       if (data.success) {
+        fetchedSpots.current.add(spotId);
         setMissionsBySpot((prev) => ({ ...prev, [spotId]: data.missions }));
-      } else {
-        fetchedSpots.current.delete(spotId);
       }
     } catch (err) {
       console.error("Error refetching missions:", err);
-      fetchedSpots.current.delete(spotId);
     }
   }, []);
 
