@@ -20,7 +20,9 @@ export default function EmailVerification({ navigation, route }) {
   const a = useAuthStyles();
   const { colors } = useTheme();
 
-  const { email, fromLogin } = route.params || {};
+  // secondFactor: the password was right but Clerk wants an emailed code
+  // because this device is new to it (see Login's needs_second_factor).
+  const { email, fromLogin, secondFactor } = route.params || {};
   const { isLoaded: signUpLoaded, signUp, setActive: setActiveSignUp } = useSignUp();
   const { isLoaded: signInLoaded, signIn, setActive: setActiveSignIn } = useSignIn();
 
@@ -108,10 +110,10 @@ export default function EmailVerification({ navigation, route }) {
       // Try signIn verification (for login flow)
       if (signIn && signInLoaded && fromLogin) {
         try {
-          const result = await signIn.attemptFirstFactor({
-            strategy: "email_code",
-            code: verificationCode,
-          });
+          const attempt = { strategy: "email_code", code: verificationCode };
+          const result = secondFactor
+            ? await signIn.attemptSecondFactor(attempt)
+            : await signIn.attemptFirstFactor(attempt);
 
           if (result.status === "complete") {
             await setActiveSignIn({ session: result.createdSessionId });
@@ -156,14 +158,14 @@ export default function EmailVerification({ navigation, route }) {
       }
 
       if (signIn && signInLoaded && fromLogin) {
-        const emailFactor = signIn.supportedFirstFactors?.find(
+        const factors = secondFactor ? signIn.supportedSecondFactors : signIn.supportedFirstFactors;
+        const emailFactor = factors?.find(
           (factor) => factor.strategy === "email_code"
         );
         if (emailFactor) {
-          await signIn.prepareFirstFactor({
-            strategy: "email_code",
-            emailAddressId: emailFactor.emailAddressId,
-          });
+          const prepare = { strategy: "email_code", emailAddressId: emailFactor.emailAddressId };
+          if (secondFactor) await signIn.prepareSecondFactor(prepare);
+          else await signIn.prepareFirstFactor(prepare);
           showToast("New code sent to your email.", { type: "success" });
           resetCode();
         }
@@ -182,8 +184,12 @@ export default function EmailVerification({ navigation, route }) {
     // Same photo-and-panel surface as Login and Register, in the app colours.
     <AuthScaffold
       onBack={busy ? undefined : () => navigation.goBack()}
-      title="Verify Your Email"
-      subtitle={`We've sent a 6-digit code to ${email}`}
+      title={secondFactor ? "Confirm It's You" : "Verify Your Email"}
+      subtitle={
+        secondFactor
+          ? `You're signing in on a new device. We've sent a 6-digit code to ${email}`
+          : `We've sent a 6-digit code to ${email}`
+      }
     >
       <Text style={[styles.hint, { color: colors.textMuted }]} maxFontSizeMultiplier={MAX_FONT_SCALE}>
         Please check your inbox and spam folder
