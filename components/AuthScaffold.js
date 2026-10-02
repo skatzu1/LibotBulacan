@@ -1,12 +1,13 @@
 import React, { useMemo } from "react";
 import {
-  View, Text, StyleSheet, ScrollView, KeyboardAvoidingView, Platform,
+  View, Text, StyleSheet, ScrollView, KeyboardAvoidingView,
   TouchableOpacity, StatusBar, ImageBackground, useWindowDimensions,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme, typography, fonts, shadow, MAX_FONT_SCALE } from "../context/ThemeContext";
 import Icon from "./Icon";
 import Logo from "./Logo";
+import useKeyboardAwareScroll, { KEYBOARD_BEHAVIOR } from "../hooks/useKeyboardAwareScroll";
 
 /*
  * The shell every pre-login screen sits in (Login, Forgot Password, Register,
@@ -56,6 +57,7 @@ export default function AuthScaffold({
 }) {
   const insets = useSafeAreaInsets();
   const { colors, isDark } = useTheme();
+  const kb = useKeyboardAwareScroll();
 
   return (
     <ImageBackground source={background} resizeMode="cover" style={[s.screen, { backgroundColor: colors.background }]}>
@@ -64,11 +66,11 @@ export default function AuthScaffold({
       <View style={[StyleSheet.absoluteFill, { backgroundColor: colors.photoVeil }]} pointerEvents="none" />
       <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor="transparent" translucent />
 
-      <KeyboardAvoidingView
-        style={s.flex}
-        behavior={Platform.OS === "ios" ? "padding" : undefined}
-      >
+      <KeyboardAvoidingView style={s.flex} behavior={KEYBOARD_BEHAVIOR}>
         <ScrollView
+          ref={kb.ref}
+          onScroll={kb.onScroll}
+          scrollEventThrottle={16}
           contentContainerStyle={s.scrollContent}
           keyboardShouldPersistTaps="handled"
           showsVerticalScrollIndicator={false}
