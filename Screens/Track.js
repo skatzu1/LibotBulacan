@@ -13,7 +13,9 @@ import {
 } from "react-native";
 import { WebView } from "react-native-webview";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as Location from "expo-location";
+import { showToast } from "../components/AppAlert";
 import { useArrival } from "../context/ArrivalContext";
 import { useTheme, radius, shadow, fonts } from "../context/ThemeContext";
 import { BULACAN_BOUNDARY, BULACAN_BBOX } from "../utils/bulacanBoundary";
@@ -36,6 +38,9 @@ function fmtDuration(s) {
 
 const { width, height } = Dimensions.get("window");
 // Single source of truth for the backend host — see api.js.
+
+// The show/hide terminals choice, remembered on the phone ("0" = hidden).
+const SHOW_TERMINALS_KEY = "map.showTerminals";
 
 // Public-transport terminals across Bulacan: buses, jeepneys, modern
 // jeepneys (e-jeepneys) and UV Express, on the province's main service roads —
@@ -808,6 +813,39 @@ export default function Track({ route, navigation }) {
   const locationSubscription  = useRef(null);
   const isMounted             = useRef(true);
 
+  /* ── Show / hide terminals ── */
+  // Shown by default. Toggling adds or removes the map's terminal layer in
+  // place — rebuilding the map HTML would reload it and drop the route.
+  const [showTerminals, setShowTerminals] = useState(true);
+  const showTerminalsRef = useRef(true);
+
+  const applyTerminalVisibility = useCallback(() => {
+    if (!webViewReady.current) return;
+    webViewRef.current?.injectJavaScript(`
+      (function() {
+        try { window.setTerminalsVisible(${showTerminalsRef.current}); } catch(e) {}
+      })(); true;
+    `);
+  }, []);
+
+  useEffect(() => {
+    AsyncStorage.getItem(SHOW_TERMINALS_KEY)
+      .then((v) => { if (v === "0" && isMounted.current) setShowTerminals(false); })
+      .catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    showTerminalsRef.current = showTerminals;
+    applyTerminalVisibility();
+  }, [showTerminals, applyTerminalVisibility]);
+
+  const toggleTerminals = () => {
+    const next = !showTerminals;
+    setShowTerminals(next);
+    AsyncStorage.setItem(SHOW_TERMINALS_KEY, next ? "1" : "0").catch(() => {});
+    showToast(next ? "Showing terminals" : "Terminals hidden", { type: "info" });
+  };
+
   useEffect(() => {
     if (spotData) setActiveSpot(spotData);
   }, [spotData]);
@@ -1040,6 +1078,8 @@ export default function Track({ route, navigation }) {
     const terminalsJson = JSON.stringify(
       TERMINALS.map(({ id, name, lat, lng }) => ({ id, name, lat, lng }))
     );
+    // showTerminalsRef (not state) seeds the first paint on purpose: a toggle
+    // must not rebuild this HTML. Later changes go through setTerminalsVisible.
 
     const boundaryJson = JSON.stringify(BULACAN_BOUNDARY);
     const bbox = BULACAN_BBOX;
@@ -1129,6 +1169,7 @@ export default function Track({ route, navigation }) {
         const DEST_LNG   = ${destLng};
         const SPOT_NAME  = '${spotName}';
         const TERMINALS  = ${terminalsJson};
+        const SHOW_TERMINALS = ${showTerminalsRef.current};
         const BULACAN_RING = ${boundaryJson}; // [ [lat,lng], ... ] — closed
 
         const bulacanBounds = L.latLngBounds(
@@ -1282,9 +1323,13 @@ window.updateSpotProximity = function(active) {
           iconAnchor: [15, 15],
         });
 
+        // Terminal pins and their proximity rings live in one layer, so the
+        // show/hide terminals button can take them all off the map at once.
+        window.terminalLayer = L.layerGroup();
+
         TERMINALS.forEach(function(t) {
           const marker = L.marker([t.lat, t.lng], { icon: terminalIcon })
-            .addTo(window.map);
+            .addTo(window.terminalLayer);
           marker.bindTooltip(t.name, {
             permanent: false,
             direction: 'top',
@@ -1311,7 +1356,7 @@ window.updateSpotProximity = function(active) {
             opacity: 0,
             weight: 2,
             interactive: false,
-          }).addTo(window.map);
+          }).addTo(window.terminalLayer);
 
           // Animated div overlay (CSS pulse)
           var pulseIcon = L.divIcon({
@@ -1339,13 +1384,29 @@ window.updateSpotProximity = function(active) {
             icon: pulseIcon,
             interactive: false,
             zIndexOffset: -100,
-          }).addTo(window.map);
+          }).addTo(window.terminalLayer);
 
           window.proximityMarkers[t.id] = { fillCircle, pulseMarker };
         });
 
+        if (SHOW_TERMINALS) window.terminalLayer.addTo(window.map);
+
+        // Called from React Native when the user flips the terminals button.
+        // A re-added pulse marker gets a fresh (hidden) element, so the last
+        // proximity result is replayed onto it.
+        window._nearbyIds = [];
+        window.setTerminalsVisible = function(on) {
+          if (on) {
+            window.terminalLayer.addTo(window.map);
+            window.updateProximity(window._nearbyIds);
+          } else {
+            window.terminalLayer.remove();
+          }
+        };
+
         // Called from React Native on every location update
         window.updateProximity = function(nearbyIds) {
+          window._nearbyIds = nearbyIds;
           Object.keys(window.proximityMarkers).forEach(function(id) {
             var entry  = window.proximityMarkers[id];
             var active = nearbyIds.indexOf(id) !== -1;
@@ -1502,6 +1563,8 @@ window.updateSpotProximity = function(active) {
         onLoadStart={() => { webViewReady.current = false; }}
         onLoadEnd={() => {
           webViewReady.current = true;
+          // The saved choice may have loaded after the map HTML was built.
+          applyTerminalVisibility();
           if (userLocation) {
             updateMarkerRef.current?.(userLocation);
           }
@@ -1552,25 +1615,51 @@ window.updateSpotProximity = function(active) {
           <View />
         )}
 
-        <TouchableOpacity
-          accessibilityRole="button"
-          accessibilityLabel={followMode ? "Stop following my location" : "Centre the map on my location"}
-          accessibilityState={{ selected: followMode }}
-          style={[
-            styles.circleBtn,
-            styles.fab,
-            { backgroundColor: followMode ? colors.brand : colors.background },
-            shadow.lg,
-          ]}
-          onPress={handleCenterOnMe}
-          activeOpacity={0.85}
-        >
-          <Icon
-            name="navigation"
-            size={21}
-            color={followMode ? colors.onBrand : colors.brand}
-          />
-        </TouchableOpacity>
+        <View style={styles.fabColumn} pointerEvents="box-none">
+          {/* Show / hide terminals — a filled bus when they're on the map,
+              a struck-through one when they're hidden. */}
+          <TouchableOpacity
+            accessibilityRole="switch"
+            accessibilityLabel="Show terminals"
+            accessibilityState={{ checked: showTerminals }}
+            style={[styles.circleBtn, { backgroundColor: colors.background }, shadow.md]}
+            onPress={toggleTerminals}
+            activeOpacity={0.85}
+          >
+            <Icon
+              name="truck"
+              size={20}
+              color={showTerminals ? colors.brand : colors.textMuted}
+              weight={showTerminals ? "fill" : "regular"}
+            />
+            {!showTerminals && (
+              <View
+                pointerEvents="none"
+                style={[styles.toggleSlash, { backgroundColor: colors.textMuted, borderColor: colors.background }]}
+              />
+            )}
+          </TouchableOpacity>
+
+          <TouchableOpacity
+            accessibilityRole="button"
+            accessibilityLabel={followMode ? "Stop following my location" : "Centre the map on my location"}
+            accessibilityState={{ selected: followMode }}
+            style={[
+              styles.circleBtn,
+              styles.fab,
+              { backgroundColor: followMode ? colors.brand : colors.background },
+              shadow.lg,
+            ]}
+            onPress={handleCenterOnMe}
+            activeOpacity={0.85}
+          >
+            <Icon
+              name="navigation"
+              size={21}
+              color={followMode ? colors.onBrand : colors.brand}
+            />
+          </TouchableOpacity>
+        </View>
       </View>
 
       {/* Terminal Place Sheet */}
@@ -1747,6 +1836,20 @@ const styles = StyleSheet.create({
     width: 52,
     height: 52,
     borderRadius: 26,
+  },
+  fabColumn: {
+    alignItems: "center",
+    gap: 12,
+  },
+  // The strike across the bus when terminals are hidden; the border in the
+  // button colour cuts it cleanly out of the icon underneath.
+  toggleSlash: {
+    position: "absolute",
+    width: 6,
+    height: 30,
+    borderRadius: 3,
+    borderWidth: 2,
+    transform: [{ rotate: "45deg" }],
   },
   etaCard: {
     flexDirection: "row",
