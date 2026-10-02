@@ -506,8 +506,7 @@ export default function InformationScreen({ route, navigation }) {
   const [newRating,        setNewRating]        = useState(0);
   const [newReview,        setNewReview]        = useState("");
   // The Facebook-style review box at the end of the reviews: focused while
-  // the user is typing (it opens up, and the floating Navigate / AR card
-  // steps aside so it doesn't cover the box).
+  // the user is typing (it opens up).
   const [composerFocused,  setComposerFocused]  = useState(false);
   const [ratingNudge,      setRatingNudge]      = useState(false); // tried to send with no stars
   // The review list's search / sort / filters / page (see utils/reviewList).
@@ -911,6 +910,30 @@ export default function InformationScreen({ route, navigation }) {
         {/* [2] Body */}
         <View style={styles.bodyPad} onLayout={(e) => { bodyY.current = e.nativeEvent.layout.y; }}>
           <Text style={[styles.title, { color: colors.textPrimary }]} accessibilityRole="header">{spot.name}</Text>
+
+          {/* What you came here to do, right under the name, on both tabs —
+              like Directions on a map app's place page. It used to float over
+              the bottom of the screen and sat on top of the reviews. Navigate
+              alone for Nature and Festivals spots, which have no AR. */}
+          <View style={styles.actionRow}>
+            <PrimaryButton
+              title="Navigate"
+              icon="navigation"
+              onPress={() => navigation.navigate("Track", { spot })}
+              accessibilityLabel={`Navigate to ${spot.name}`}
+              style={styles.actionBtn}
+            />
+            {hasAR && (
+              <PrimaryButton
+                variant="secondary"
+                title="AR View"
+                icon="aperture"
+                onPress={handleLaunchAR}
+                accessibilityLabel={`Open ${spot.name} in AR`}
+                style={styles.actionBtn}
+              />
+            )}
+          </View>
 
           {activeTab === "Overview" && (
             <>
@@ -1392,43 +1415,9 @@ export default function InformationScreen({ route, navigation }) {
               </>
           )}
 
-          {/* Clears the floating Navigate / AR card. */}
-          <View style={{ height: 108 }} />
+          <View style={{ height: insets.bottom + 28 }} />
         </View>
       </ScrollView>
-
-      {/* Floating action card — Navigate + AR, on both tabs (Navigate alone for
-          Nature and Festivals spots, which have no AR). Steps aside while the
-          review box has the keyboard, or it would sit right on top of it. */}
-      {!composerFocused && (
-        <View style={[styles.actionCard, { backgroundColor: colors.card, borderColor: colors.cardBorder, bottom: Math.max(insets.bottom, 14) + 10 }, shadow.lg]}>
-          <TouchableOpacity
-            accessibilityRole="button"
-            accessibilityLabel={`Navigate to ${spot.name}`}
-            style={styles.actionItem}
-            onPress={() => navigation.navigate("Track", { spot })}
-            activeOpacity={0.75}
-          >
-            <Icon name="navigation" size={17} color={colors.brand} />
-            <Text style={[styles.actionText, { color: colors.textPrimary }]}>Navigate</Text>
-          </TouchableOpacity>
-          {hasAR && (
-            <>
-              <View style={[styles.actionDivider, { backgroundColor: colors.divider }]} />
-              <TouchableOpacity
-                accessibilityRole="button"
-                accessibilityLabel={`Open ${spot.name} in AR`}
-                style={styles.actionItem}
-                onPress={handleLaunchAR}
-                activeOpacity={0.75}
-              >
-                <Icon name="aperture" size={17} color={colors.brand} />
-                <Text style={[styles.actionText, { color: colors.textPrimary }]}>AR View</Text>
-              </TouchableOpacity>
-            </>
-          )}
-        </View>
-      )}
 
       <PhotoViewer viewer={viewer} onClose={() => setViewer(null)} />
 
@@ -1524,6 +1513,8 @@ const styles = StyleSheet.create({
   // The place name is the screen's display moment — it gets the serif, like
   // the Profile name and the badge names.
   title:           { ...typography.display, marginBottom: 14 },
+  actionRow:       { flexDirection: "row", gap: 10, marginBottom: 22 },
+  actionBtn:       { flex: 1, minHeight: 48, paddingHorizontal: 12 },
 
   sectionHeading:  { ...typography.h3, fontSize: 17, lineHeight: 22, marginBottom: 10, marginTop: 6 },
   descriptionText: { ...typography.body, marginBottom: 18 },
@@ -1679,10 +1670,6 @@ const styles = StyleSheet.create({
   viewerClose:     { width: TAP, height: TAP, alignItems: "center", justifyContent: "center" },
 
 
-  actionCard:      { position: "absolute", alignSelf: "center", flexDirection: "row", alignItems: "center", borderRadius: 999, borderWidth: 1, paddingHorizontal: 6, paddingVertical: 4 },
-  actionItem:      { flexDirection: "row", alignItems: "center", gap: 8, minHeight: TAP, paddingHorizontal: 22 },
-  actionText:      { fontFamily: fonts.sansBold, fontSize: 13.5, letterSpacing: -0.2 },
-  actionDivider:   { width: 1, alignSelf: "stretch", marginVertical: 8 },
 
   modalOverlay:    { flex: 1, justifyContent: "flex-end" },
   modalContent:    { borderTopLeftRadius: radius.xl, borderTopRightRadius: radius.xl, paddingHorizontal: H_PAD, paddingTop: 10, maxHeight: "88%" },
