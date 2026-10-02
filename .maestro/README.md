@@ -25,7 +25,6 @@ Run a single flow with `maestro test .maestro/03-offline.yaml -e …`.
 | `02-browse-spot.yaml` | Search for a spot and open its page |
 | `03-offline.yaml` | Airplane mode shows the offline banner; reconnecting shows "Back online" |
 | `04-location-foreground-only.yaml` | The app never asks for "Allow all the time" location |
-| `05-delete-account-reachable.yaml` | Settings → Edit Profile → Delete Account is reachable (does **not** delete) |
 
 If a flow fails because a label changed, update the text in the YAML to match
 the screen. `appId` must match `android.package` in app.json.
