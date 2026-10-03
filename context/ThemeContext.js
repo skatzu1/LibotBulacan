@@ -25,6 +25,11 @@ const STORAGE_KEY = "libot_theme_pref";   // "light" | "dark" | "system"
 //                 1.5:1 on white and can never be text).
 //   onBrand     — text/icon colour that sits on a `brand` (teal) fill.
 //
+// The admin panel (libot-admin-1/src/index.css) and the website
+// (LibotWeb/libot-download-site/styles.css) carry the same values as CSS
+// variables, light and dark, so the three read as one product. Change a
+// colour here and change it there too.
+//
 // Every foreground/background pair used in the app is verified at >= 4.5:1
 // (WCAG AA body text). Do not lighten a text token without re-checking it
 // against `background`, `card` AND `brandLight`.
@@ -105,14 +110,16 @@ export const darkColors = {
   card:             "#172C2F",
   cardBorder:       "#2A4443",
 
-  // Text (light — for dark cards and the near-black bg)
-  textPrimary:      "#EAF6F7",
-  textSecondary:    "#A6BEC0",
-  textMuted:        "#87A1A3",   // bumped: #7C9698 was 4.35 on brandLight
+  // Text (light — for dark cards and the near-black bg). The admin panel and
+  // the website use these exact values too; muted is the lightest of the
+  // three it used to be, so it holds 4.5:1 on every surface in all three.
+  textPrimary:      "#EDF4F4",
+  textSecondary:    "#B4C7C8",
+  textMuted:        "#97AEAF",
   textInverse:      "#FFFFFF",
 
   // Brand cyan — for icons, small accents and fills (NOT headings).
-  brand:            "#4FD0DC",
+  brand:            "#56D6E2",
   // Heading / high-emphasis text colour — near-neutral light in dark mode.
   brandDark:        "#E8F4F5",
   brandLight:       "#123236",
@@ -131,8 +138,8 @@ export const darkColors = {
 
   // Tab bar
   tabBar:           "#172C2F",
-  tabActive:        "#4FD0DC",
-  tabInactive:      "#87A1A3",
+  tabActive:        "#56D6E2",
+  tabInactive:      "#97AEAF",
 
   // Hero header
   heroHeader:       "#172C2F",
@@ -141,18 +148,18 @@ export const darkColors = {
   // Inputs
   inputBg:          "#122629",
   inputBorder:      "#2A4443",
-  inputBorderFocus: "#4FD0DC",
+  inputBorderFocus: "#56D6E2",
   placeholder:      "#7C9698",
 
   // Misc
   divider:          "#233C3C",
-  danger:           "#E97A7A",
+  danger:           "#F58E8E",
   dangerBg:         "#2C1414",
-  warning:          "#E7B45C",
+  warning:          "#F0C264",
   warningBg:        "#2E2412",
   star:             "#F0C93C",
   starEmpty:        "#2A4443",
-  success:          "#57C795",
+  success:          "#5FD69A",
   successBg:        "#123024",
   overlay:          "rgba(0,0,0,0.6)",
 
