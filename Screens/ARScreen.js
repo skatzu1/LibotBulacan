@@ -18,7 +18,9 @@ import {
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import Geolocation from "@react-native-community/geolocation";
 import * as Haptics from "expo-haptics";
+import { useIsFocused } from "@react-navigation/native";
 import { useMissions } from "../context/MissionContext";
+import { usePreferredFrameRate } from "../modules/frame-rate";
 import {
   ViroARScene,
   ViroARSceneNavigator,
@@ -879,14 +881,20 @@ const ModelOnPlane = ({ spot, anchorLabel, onModelClick, onModelError, onPlacedC
   // any offset would push it off the real spot — it renders at the origin.
   const content = (offsetZ) => (
     <>
-      <ViroAmbientLight color="#fff8f5" intensity={300} />
+      {/* Intensities make up for HDR being off (see ViroARSceneNavigator):
+          Viro's tone curve lifted shadows and softened highlights, so this
+          is more ambient and less spot than the 300 / 1000 it used to be —
+          the same look on the model's yellow, white and cyan within ≈5/255.
+          No castsShadow: nothing in the scene receives a shadow, but casting
+          one still rendered a shadow map every frame. */}
+      <ViroAmbientLight color="#fff8f5" intensity={378} />
       <ViroSpotLight
         innerAngle={5}
         outerAngle={90}
         direction={[0, -1, -0.2]}
         position={[0, 3, 1]}
         color="#fff8f5"
-        castsShadow
+        intensity={780}
       />
       <Viro3DObject
         source={{ uri: spot.AR3DModelURL }}
@@ -1471,6 +1479,12 @@ const popup = StyleSheet.create({
 export default function ARScreen({ route, navigation }) {
   const { spot } = route.params;
   const { completeMission, completedMissions, fetchMissions, getMissionsForSpot } = useMissions();
+
+  // The camera only delivers ~30 frames a second, but the HUD's looping
+  // animations (radar sweep, ground reticle) redraw the whole window at the
+  // display's rate — up to 144 Hz. 60 keeps them smooth.
+  const isFocused = useIsFocused();
+  usePreferredFrameRate(60, isFocused);
 
   // The spot's AR mission is what completion is saved against. Launching from
   // the spot page passes its id; launching from the AR picker on Home does
@@ -2241,6 +2255,18 @@ export default function ARScreen({ route, navigation }) {
       >
       <ViroARSceneNavigator
         initialScene={{ scene: ARScene }}
+        // Viro turns all of these on by default, at full-screen size, 30
+        // times a second, on top of the camera and ARCore — the AR screen's
+        // heat. HDR rendered every frame into 16-bit float buffers, copied
+        // depth and ran a tone-mapping pass (the lights in ModelOnPlane make
+        // up its look); bloom added two more float attachments; shadows were
+        // a shadow map nothing received; and 4× multisampling only ever
+        // applied to the tone-mapping pass, not the model, so it smoothed
+        // nothing.
+        hdrEnabled={false}
+        bloomEnabled={false}
+        shadowsEnabled={false}
+        multisamplingEnabled={false}
         // ARCore's default is FIXED focus, set near the hyperfocal distance for
         // tracking far surfaces, so anything within a couple of metres (a
         // plaque, a statue, the ground the model stands on) is soft. `autofocus`
