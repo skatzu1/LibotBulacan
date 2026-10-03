@@ -7,6 +7,7 @@ import {
 
 import Icon from "../components/Icon";
 import { useTheme, lightColors, darkColors, fonts } from "../context/ThemeContext";
+import { usePreferredFrameRate } from "../modules/frame-rate";
 import { fetchModelBounds, fitBounds } from "./modelFit";
 import {
   Viro3DSceneNavigator,
@@ -53,6 +54,16 @@ const CAMERA_HEIGHT = -VIEW_DISTANCE * Math.tan((CAMERA_PITCH * Math.PI) / 180);
 // fits them all: facade turned 35° to the right.
 const DEFAULT_ROT_X = 0;
 const DEFAULT_ROT_Y = 35;
+
+// Viro draws a frame on every display refresh, moving or not; this phone class
+// refreshes at up to 144 Hz. 60 is smooth for a turning model.
+const FRAME_RATE = 60;
+
+// Ambient light. Viro's HDR pipeline is off (see the navigator below), and its
+// tone curve used to lift shadows and mid-tones; this much more ambient gives
+// back the same look (≈6/255 RMS against the old tone-mapped output, fitted
+// over the four lights and typical facade colours).
+const AMBIENT = 408;
 
 // The backdrop is the theme's card colour, so the viewer sits in the hero card
 // the way the photo does instead of as a white box in dark mode.
@@ -122,7 +133,7 @@ const ModelScene = ({ sceneNavigator }) => {
       <ViroDirectionalLight color="#ffffff" direction={[-0.5, -0.8, -0.5]} intensity={700} />
       <ViroDirectionalLight color="#e8eeff" direction={[1, -0.3, -0.5]}   intensity={400} />
       <ViroDirectionalLight color="#ffffff" direction={[0, 0.5, 1]}       intensity={350} />
-      <ViroAmbientLight     color="#ffffff" intensity={300} />
+      <ViroAmbientLight     color="#ffffff" intensity={AMBIENT} />
 
       {showModel && (
         <Viro3DObject
@@ -217,6 +228,8 @@ export default function ModelViewer({
     cancelAnimationFrame(applyFrame.current);
     clearTimeout(resumeTimer.current);
   }, []);
+
+  usePreferredFrameRate(FRAME_RATE, !!url && !error);
 
   // Pushing a transform to Viro is the expensive part: each prop makes it walk
   // every node in the scene with a native call per node, on the UI thread —
@@ -376,8 +389,17 @@ export default function ModelViewer({
 
   return (
     <View style={[styles.wrapper, surface, style]}>
+      {/* Viro turns all of these on by default; this scene uses none of them,
+          and they cost every frame. HDR renders into 16-bit float buffers,
+          copies depth and runs a full-screen tone-mapping pass (AMBIENT
+          makes up its look); bloom adds two more float attachments; no light
+          here casts shadows. Multisampling stays on: with HDR off it now
+          actually smooths the model's edges. */}
       <Viro3DSceneNavigator
         key={attempt}
+        hdrEnabled={false}
+        bloomEnabled={false}
+        shadowsEnabled={false}
         initialScene={{ scene: ModelScene }}
         viroAppProps={{
           modelUrl: url, fit, sceneReady, objectRef, isDark, baseRotX, baseRotY,
