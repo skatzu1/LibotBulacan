@@ -1,5 +1,5 @@
 import "react-native-gesture-handler";
-import React, { useEffect, useState, useCallback, useMemo } from "react";
+import React, { useEffect, useState, useCallback, useMemo, useRef } from "react";
 import {
   View,
   Text,
@@ -34,6 +34,7 @@ import {
   useGrid, H_PAD, TAP,
 } from "../components/ui";
 import Logo from "../components/Logo";
+import HomeTour, { tourTarget } from "../components/HomeTour";
 import { BASE_URL } from "../api";
 import { spotImage, clerkPhoto } from "../utils/image";
 
@@ -97,6 +98,8 @@ function CustomTabBar({ state, descriptors, navigation }) {
       pointerEvents="box-none"
     >
       <View
+        ref={tourTarget("tabs")}
+        collapsable={false}
         style={[
           styles.tabBar,
           { backgroundColor: colors.tabBar, borderColor: colors.cardBorder, width: Math.min(width - 32, 440) },
@@ -155,16 +158,22 @@ function CustomTabBar({ state, descriptors, navigation }) {
 /*                            BOTTOM TABS NAV                                 */
 /* -------------------------------------------------------------------------- */
 export default function HomeBottomTabs() {
+  // The tour overlay sits over the tabs AND the tab bar, so it lives out here
+  // rather than inside the Home tab. Targets are measured against this view.
+  const rootRef = useRef(null);
   return (
-    <BottomTab.Navigator
-      tabBar={(props) => <CustomTabBar {...props} />}
-      screenOptions={{ headerShown: false }}
-    >
-      <BottomTab.Screen name="HomeScreen"  component={HomeTab}     options={{ tabBarLabel: "Home",    tabBarIcon: ({ color, size }) => <Icon name="home"     size={size} color={color} /> }} />
-      <BottomTab.Screen name="Categories"  component={Categories}  options={{ tabBarLabel: "Explore", tabBarIcon: ({ color, size }) => <Icon name="grid"     size={size} color={color} /> }} />
-      <BottomTab.Screen name="Bookmark"    component={Bookmark}    options={{ tabBarLabel: "Saved",   tabBarIcon: ({ color, size }) => <Icon name="bookmark" size={size} color={color} /> }} />
-      <BottomTab.Screen name="Leaderboard" component={Leaderboard} options={{ tabBarLabel: "Ranking", tabBarIcon: ({ color, size }) => <Icon name="award"    size={size} color={color} /> }} />
-    </BottomTab.Navigator>
+    <View ref={rootRef} collapsable={false} style={{ flex: 1 }}>
+      <BottomTab.Navigator
+        tabBar={(props) => <CustomTabBar {...props} />}
+        screenOptions={{ headerShown: false }}
+      >
+        <BottomTab.Screen name="HomeScreen"  component={HomeTab}     options={{ tabBarLabel: "Home",    tabBarIcon: ({ color, size }) => <Icon name="home"     size={size} color={color} /> }} />
+        <BottomTab.Screen name="Categories"  component={Categories}  options={{ tabBarLabel: "Explore", tabBarIcon: ({ color, size }) => <Icon name="grid"     size={size} color={color} /> }} />
+        <BottomTab.Screen name="Bookmark"    component={Bookmark}    options={{ tabBarLabel: "Saved",   tabBarIcon: ({ color, size }) => <Icon name="bookmark" size={size} color={color} /> }} />
+        <BottomTab.Screen name="Leaderboard" component={Leaderboard} options={{ tabBarLabel: "Ranking", tabBarIcon: ({ color, size }) => <Icon name="award"    size={size} color={color} /> }} />
+      </BottomTab.Navigator>
+      <HomeTour rootRef={rootRef} />
+    </View>
   );
 }
 
@@ -302,11 +311,14 @@ function HomeContent({ profilePhoto, navigation }) {
           accessibilityRole="button"
           accessibilityLabel="Go to your profile"
         >
-          <Avatar uri={profilePhoto} name={clerkUser?.fullName || firstName} size={36} strong />
+          <View ref={tourTarget("avatar")} collapsable={false}>
+            <Avatar uri={profilePhoto} name={clerkUser?.fullName || firstName} size={36} strong />
+          </View>
         </TouchableOpacity>
       </View>
 
       <ScrollView
+        ref={tourTarget("scroll")}
         style={[h.scroll, { backgroundColor: colors.background }]}
         showsVerticalScrollIndicator={false}
         contentContainerStyle={{ paddingBottom: TAB_BAR_CLEARANCE + insets.bottom }}
@@ -336,6 +348,8 @@ function HomeContent({ profilePhoto, navigation }) {
               {firstName}
             </Text>
             <View
+              ref={tourTarget("points")}
+              collapsable={false}
               style={[h.pointsPill, { backgroundColor: colors.brandLight }]}
               accessibilityLabel={`${userPoints ?? 0} points`}
             >
@@ -380,24 +394,28 @@ function HomeContent({ profilePhoto, navigation }) {
           </View>
         ) : (
           <>
-            {/* ─── Quick actions ─── */}
+            {/* ─── Quick actions ───
+                The plain View is what the tour measures: an Animated.View is
+                still sliding in when it looks. */}
             <Wrap {...anim(2)} style={h.quickRow}>
-              {QUICK_ACTIONS.map((a) => (
-                <IconTile
-                  key={a.key}
-                  icon={a.icon}
-                  label={a.label}
-                  style={{ width: (width - H_PAD * 2 - 30) / 4 }}
-                  onPress={() => navigation.navigate(a.route)}
-                />
-              ))}
+              <View ref={tourTarget("quick")} collapsable={false} style={h.quickInner}>
+                {QUICK_ACTIONS.map((a) => (
+                  <IconTile
+                    key={a.key}
+                    icon={a.icon}
+                    label={a.label}
+                    style={{ width: (width - H_PAD * 2 - 30) / 4 }}
+                    onPress={() => navigation.navigate(a.route)}
+                  />
+                ))}
+              </View>
             </Wrap>
 
             {/* ─── Featured carousel ─── */}
             <Wrap {...anim(3)}>
               <SectionTitle>Featured</SectionTitle>
 
-              <View style={[h.heroWrap, { height: HERO_H }]}>
+              <View ref={tourTarget("featured")} collapsable={false} style={[h.heroWrap, { height: HERO_H }]}>
                 {sliderData.length === 0 ? (
                   <Skeleton width={width - H_PAD * 2} height={HERO_H} radius={radius.card} />
                 ) : (
@@ -593,11 +611,10 @@ const h = StyleSheet.create({
 
   // ── Quick actions ──
   quickRow: {
-    flexDirection: "row",
-    justifyContent: "space-between",
     paddingHorizontal: H_PAD,
     marginTop: 24,
   },
+  quickInner: { flexDirection: "row", justifyContent: "space-between" },
 
   // ── Sections ──
   sectionBody:  { paddingHorizontal: H_PAD },

@@ -14,6 +14,7 @@ import { useTheme } from "../context/ThemeContext";
 import { ScreenHeader, ListRow, GroupLabel, Segmented, H_PAD } from "../components/ui";
 import * as Notifications from "expo-notifications";
 import { HELP_URL, ABOUT_URL, TERMS_URL, PRIVACY_URL } from "../utils/legalLinks";
+import { requestHomeTour } from "../components/HomeTour";
 
 const openURL = async (url) => {
   try {
@@ -150,6 +151,16 @@ const Settings = ({ navigation }) => {
 
         <View style={styles.section}>
           <GroupLabel>Support & About</GroupLabel>
+          {/* Back to Home, where the first-run tour plays again. */}
+          <ListRow
+            icon="compass"
+            title="Show the app tour"
+            subtitle="A quick look around Home"
+            onPress={() => {
+              navigation.navigate("Home", { screen: "HomeScreen" });
+              requestHomeTour();
+            }}
+          />
           <ListRow icon="help-circle" title="Help & Support"   onPress={() => openURL(HELP_URL)}    accessibilityLabel="Help and support" />
           <ListRow icon="info"        title="About Libot Bulacan" onPress={() => openURL(ABOUT_URL)}   />
           <ListRow icon="file-text"   title="Terms of Service" onPress={() => openURL(TERMS_URL)}   />
