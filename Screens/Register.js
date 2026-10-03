@@ -153,6 +153,9 @@ export default function Register({ navigation }) {
   // Cleared as soon as that field is edited.
   const [serverErrors, setServerErrors] = useState({});
   const [termsError, setTermsError]     = useState("");
+  // The Terms box sits below the fold, so a Google tap without it ticked
+  // also says so under the Google button — otherwise the tap looked dead.
+  const [googleTermsError, setGoogleTermsError] = useState("");
   const [formError, setFormError]       = useState("");
 
   const inputRefs = { name: useRef(null), email: useRef(null), password: useRef(null), dob: useRef(null) };
@@ -213,7 +216,10 @@ export default function Register({ navigation }) {
   const handleGoogleSignUp = async () => {
     if (isGoogleLoading || !isLoaded) return;
     setFormError("");
-    if (!requireTerms()) return;
+    if (!requireTerms()) {
+      setGoogleTermsError("Tick the box to agree to the Terms and Privacy Policy below first.");
+      return;
+    }
     setIsGoogleLoading(true);
     try {
       const { createdSessionId, authSessionResult } = await startOAuthFlow();
@@ -315,6 +321,7 @@ export default function Register({ navigation }) {
           </>
         )}
       </TouchableOpacity>
+      <FieldError style={styles.googleErrorRow}>{googleTermsError}</FieldError>
 
       {/* Divider */}
       <View style={a.dividerRow}>
@@ -436,7 +443,7 @@ export default function Register({ navigation }) {
         <View style={styles.termsRow}>
           <CheckBox
             value={agreeToTerms}
-            onValueChange={(v) => { setAgreeToTerms(v); if (v) setTermsError(""); }}
+            onValueChange={(v) => { setAgreeToTerms(v); if (v) { setTermsError(""); setGoogleTermsError(""); } }}
             color={termsError ? colors.danger : agreeToTerms ? colors.brand : colors.textMuted}
             style={styles.checkbox}
             accessibilityLabel="Agree to the Terms and Conditions"
@@ -500,6 +507,8 @@ const styles = StyleSheet.create({
   termsText: { flex: 1, fontFamily: fonts.sansSemi, fontSize: 14, lineHeight: 20 },
   termsLink: { fontFamily: fonts.sansBold, textDecorationLine: "underline" },
   termsErrorRow: { marginLeft: 6 },
+  // The body's 16px gap already spaces it from the button.
+  googleErrorRow: { marginTop: -8 },
 
   signupSpace: { marginTop: 4 },
 });
