@@ -673,7 +673,8 @@ export default function InformationScreen({ route, navigation }) {
   const facts = [
     { icon: "clock",   label: "Visiting hours", value: spot.visitingHours },
     { icon: "tag",     label: "Entrance fee",   value: spot.entranceFee },
-    { icon: "map-pin", label: "Location",       value: cityText },
+    // Always under its label, like long visiting hours, however short.
+    { icon: "map-pin", label: "Location",       value: cityText, stacked: true },
     { icon: "phone",   label: "Contact",        value: spot.contact },
   ].filter((row) => !!row.value);
 
@@ -976,7 +977,8 @@ export default function InformationScreen({ route, navigation }) {
                   // ("9:00 a.m. to 4:00 p.m., Tuesday to Sunday…") gets its own
                   // full-width line under the label, all of it: squeezed into
                   // the right column at two lines it was cut off mid-word.
-                  const long = String(row.value).length > FACT_INLINE_MAX;
+                  // A row marked `stacked` (Location) always goes underneath.
+                  const long = row.stacked || String(row.value).length > FACT_INLINE_MAX;
                   return (
                     <React.Fragment key={row.label}>
                       <View style={[styles.infoRow, long && styles.infoRowLong]} accessible accessibilityLabel={`${row.label}: ${row.value}`}>
