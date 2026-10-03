@@ -84,6 +84,7 @@ export const lightColors = {
   divider:          "#EAE3D6",
   danger:           "#B3352C",   //  6.07 on card
   dangerBg:         "#FBEDEB",
+  onDanger:         "#FFFFFF",   //  6.07 on a danger fill (destructive buttons)
   warning:          "#8A5610",   //  5.79 on page
   warningBg:        "#FBF0DD",
   star:             "#E8B31E",   // decorative FILL only, never text
@@ -155,6 +156,9 @@ export const darkColors = {
   divider:          "#233C3C",
   danger:           "#F58E8E",
   dangerBg:         "#2C1414",
+  // Dark text on the light dark-mode red, as the admin panel does: white on
+  // it is only 2.4:1.
+  onDanger:         "#2A0E0E",   //  7.83 on danger
   warning:          "#F0C264",
   warningBg:        "#2E2412",
   star:             "#F0C93C",
