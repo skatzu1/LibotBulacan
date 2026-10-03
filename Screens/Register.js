@@ -19,7 +19,7 @@ import { useTheme, fonts, MAX_FONT_SCALE } from "../context/ThemeContext";
 import { TERMS_URL as TERMS_OF_SERVICE_URL, PRIVACY_URL as PRIVACY_POLICY_URL } from "../utils/legalLinks";
 import AuthScaffold, { useAuthStyles, FieldError, FormError } from "../components/AuthScaffold";
 import {
-  nameError, emailError, dobError, clerkErrorToField,
+  nameError, emailError, dobError, confirmPasswordError, clerkErrorToField,
   cleanName, cleanEmail, NAME_MAX, EMAIL_MAX,
   GOOGLE_BUSY, googleWindowBusy, googleWindowClosed, googleErrorMessage,
 } from "../utils/authValidation";
@@ -138,17 +138,18 @@ function TermsNotice({ action }) {
 // Rules and wording are shared with the other auth screens
 // (utils/authValidation). The password additionally has to reach "Good"
 // on the strength meter below, i.e. meet 3 of the 4 rules.
-function validateRegister({ name, email, password, dob }) {
+function validateRegister({ name, email, password, confirm, dob }) {
   const e = {};
   const n = nameError(name);   if (n) e.name = n;
   const m = emailError(email); if (m) e.email = m;
   if (!password) e.password = "Enter a password.";
   else if (getStrength(password).level < 2) e.password = "Too weak. Meet at least 3 of the rules below.";
+  const c = confirmPasswordError(password, confirm); if (c) e.confirm = c;
   const d = dobError(dob);     if (d) e.dob = d;
   return e;
 }
 
-const FIELD_ORDER = ["name", "email", "password", "dob"];
+const FIELD_ORDER = ["name", "email", "password", "confirm", "dob"];
 
 // ── Main Component ────────────────────────────────────────────────
 export default function Register({ navigation }) {
@@ -161,7 +162,9 @@ export default function Register({ navigation }) {
   const [email, setEmail]                 = useState("");
   const [password, setPassword]           = useState("");
   const [passwordVisible, setPasswordVisible] = useState(false);
-  const [dob, setDob]                  = useState("");
+  const [confirm, setConfirm]             = useState("");
+  const [confirmVisible, setConfirmVisible] = useState(false);
+  const [dob, setDob]               = useState("");
   const [isLoading, setIsLoading]         = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
 
@@ -174,11 +177,13 @@ export default function Register({ navigation }) {
   const [serverErrors, setServerErrors] = useState({});
   const [formError, setFormError]       = useState("");
 
-  const inputRefs = { name: useRef(null), email: useRef(null), password: useRef(null), dob: useRef(null) };
+  const inputRefs = {
+    name: useRef(null), email: useRef(null), password: useRef(null), confirm: useRef(null), dob: useRef(null),
+  };
 
   const clientErrors = useMemo(
-    () => validateRegister({ name, email, password, dob }),
-    [name, email, password, dob]
+    () => validateRegister({ name, email, password, confirm, dob }),
+    [name, email, password, confirm, dob]
   );
   const errorFor = (field) => serverErrors[field] || (touched[field] ? clientErrors[field] : null);
 
@@ -264,7 +269,7 @@ export default function Register({ navigation }) {
   // ── Email signup ──
   const handleRegister = async () => {
     setFormError("");
-    setTouched({ name: true, email: true, password: true, dob: true });
+    setTouched({ name: true, email: true, password: true, confirm: true, dob: true });
 
     const firstBad = FIELD_ORDER.find((f) => clientErrors[f] || serverErrors[f]);
     if (firstBad) {
@@ -401,7 +406,7 @@ export default function Register({ navigation }) {
             autoComplete="new-password"
             textContentType="newPassword"
             returnKeyType="next"
-            onSubmitEditing={() => inputRefs.dob.current?.focus()}
+            onSubmitEditing={() => inputRefs.confirm.current?.focus()}
             editable={!anyLoading}
             accessibilityLabel="Password"
             maxFontSizeMultiplier={MAX_FONT_SCALE}
@@ -418,6 +423,39 @@ export default function Register({ navigation }) {
         </View>
         <FieldError>{errorFor("password")}</FieldError>
         <PasswordStrengthPanel password={password} />
+      </View>
+
+      {/* Confirm password — catches a typo before it becomes the password. */}
+      <View>
+        <View style={a.fieldRow}>
+          <TextInput
+            ref={inputRefs.confirm}
+            style={[...field("confirm"), { paddingRight: 60 }]}
+            placeholder="CONFIRM PASSWORD"
+            placeholderTextColor={colors.placeholder}
+            secureTextEntry={!confirmVisible}
+            value={confirm}
+            onChangeText={edit("confirm", setConfirm)}
+            onBlur={() => touch("confirm")}
+            autoComplete="new-password"
+            textContentType="newPassword"
+            returnKeyType="next"
+            onSubmitEditing={() => inputRefs.dob.current?.focus()}
+            editable={!anyLoading}
+            accessibilityLabel="Confirm password"
+            maxFontSizeMultiplier={MAX_FONT_SCALE}
+          />
+          <TouchableOpacity
+            onPress={() => setConfirmVisible((v) => !v)}
+            style={a.eyeBtn}
+            hitSlop={8}
+            accessibilityRole="button"
+            accessibilityLabel={confirmVisible ? "Hide password" : "Show password"}
+          >
+            <Icon name={confirmVisible ? "eye-off" : "eye"} size={20} color={colors.textMuted} />
+          </TouchableOpacity>
+        </View>
+        <FieldError>{errorFor("confirm")}</FieldError>
       </View>
 
       {/* Date of birth */}
