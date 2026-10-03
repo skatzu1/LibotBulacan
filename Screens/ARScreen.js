@@ -15,7 +15,6 @@ import {
   Easing,
   Linking,
 } from "react-native";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import Geolocation from "@react-native-community/geolocation";
 import * as Haptics from "expo-haptics";
 import { useIsFocused } from "@react-navigation/native";
@@ -675,12 +674,10 @@ const makeFocusSt = (TOKEN) => StyleSheet.create({
 // ─────────────────────────────────────────────
 // HOW-IT-WORKS GUIDE
 // ─────────────────────────────────────────────
-// Shown automatically the first time anyone opens an AR mission, and re-openable
-// any time from the "?" button. Without this, a first-time user landed on a
-// live camera feed with no idea that the job is to walk somewhere, look
-// around, and tap something.
-const AR_GUIDE_SEEN_KEY = "arGuideSeen_v1";
-
+// Shown automatically every time an AR mission opens, and re-openable any time
+// from "How this works". Without this, a first-time user landed on a live
+// camera feed with no idea that the job is to walk somewhere, look around, and
+// tap something.
 const HowItWorks = ({ visible, onClose }) => {
   const { TOKEN, guideSt } = useAr();
   // These are the same three steps the card at the bottom of the screen walks
@@ -1718,21 +1715,11 @@ export default function ARScreen({ route, navigation }) {
     return () => { cancelled = true; };
   }, []);
 
-  // First-run guide. Opens automatically the first time (per install), and is
-  // re-openable from the "?" button afterwards.
-  const [guideVisible, setGuideVisible] = useState(false);
-  useEffect(() => {
-    let cancelled = false;
-    AsyncStorage.getItem(AR_GUIDE_SEEN_KEY)
-      .then((seen) => { if (!cancelled && !seen) setGuideVisible(true); })
-      .catch(() => {}); // storage unavailable — just skip the guide
-    return () => { cancelled = true; };
-  }, []);
-
-  const dismissGuide = () => {
-    setGuideVisible(false);
-    AsyncStorage.setItem(AR_GUIDE_SEEN_KEY, "1").catch(() => {});
-  };
+  // The guide opens every time the AR activity does (the adviser asked for it
+  // to always pop up — it used to show only on the first visit per install),
+  // and is re-openable from "How this works".
+  const [guideVisible, setGuideVisible] = useState(true);
+  const dismissGuide = () => setGuideVisible(false);
 
   const tappedIndicesRef = useRef(new Set());
   const [tappedIndices, setTappedIndices] = useState(new Set());
@@ -1913,6 +1900,37 @@ export default function ARScreen({ route, navigation }) {
   // where the phone is — and waits for a first GPS fix to have one to send.
   const allFound = totalAnchors > 0 && tappedIndices.size >= totalAnchors;
   const hasFix = !!userLocation;
+
+  // "Are you sure?" before leaving — the top-bar arrow, Android's back button
+  // and the back gesture all come through here. Leaving mid-trail loses what
+  // this run has found (completion is saved only once all are found), so the
+  // prompt says how far they got. No prompt where there's nothing to lose:
+  // the no-model / no-ARCore screens, a location error, or a finished trail.
+  const exitRef = useRef({});
+  exitRef.current = {
+    ask: !!spot.AR3DModelURL && arSupport !== "unsupported" && !allFound && !(locationError && !userLocation),
+    found: tappedIndices.size,
+    total: totalAnchors,
+  };
+  useEffect(() => {
+    const unsubscribe = navigation.addListener("beforeRemove", (e) => {
+      const { ask, found, total } = exitRef.current;
+      if (!ask) return;
+      e.preventDefault();
+      showAlert(
+        "Leave the AR activity?",
+        found > 0
+          ? `You've found ${found} of ${total}. If you leave now, you'll start from the first one next time.`
+          : "You can come back to it any time from the spot's page.",
+        [
+          { text: "Stay", style: "cancel" },
+          { text: "Leave", style: "destructive", onPress: () => navigation.dispatch(e.data.action) },
+        ],
+        { tone: "warning", icon: "log-out" }
+      );
+    });
+    return unsubscribe;
+  }, [navigation]);
   useEffect(() => {
     if (!allFound || !arMissionId || alreadyDone || !hasFix || missionJustCompletedRef.current) return;
 

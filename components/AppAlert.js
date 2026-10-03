@@ -126,7 +126,7 @@ function AlertCard({ data, colors, onClose }) {
 
   const btnStyle = (b, i) => {
     if (b.style === "destructive") {
-      return { bg: colors.danger, fg: colors.textInverse, border: "transparent" };
+      return { bg: colors.danger, fg: colors.onDanger, border: "transparent" };
     }
     if (b.style === "cancel") {
       return { bg: "transparent", fg: colors.textSecondary, border: colors.cardBorder };
