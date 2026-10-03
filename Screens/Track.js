@@ -1071,9 +1071,14 @@ export default function Track({ route, navigation }) {
     const surfaceText   = colors.textPrimary;
     const surfaceSub    = colors.textSecondary;
     const surfaceBorder = colors.cardBorder;
-    const tileUrl = isDark
-      ? "https://{s}.basemap.cartocdn.com/rastertiles/dark_all/{z}/{x}/{y}{r}.png"
-      : "https://{s}.basemap.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png";
+    // The route's outline: white on the light map, the page colour on the
+    // dark one, where a white halo glared.
+    const routeCasing = isDark ? colors.background : "#FFFFFF";
+    // Terminal chips are a card on the map, so they follow the theme too.
+    const chipBg = colors.card;
+    // OpenStreetMap's tile policy asks for visible credit. Every corner has a
+    // floating control over it, so it sits top-right, just under the top bar.
+    const attributionTop = insets.top + 10 + 46 + 8;
 
     const terminalsJson = JSON.stringify(
       TERMINALS.map(({ id, name, lat, lng }) => ({ id, name, lat, lng }))
@@ -1095,19 +1100,35 @@ export default function Track({ route, navigation }) {
         integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
       <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.css"
         integrity="sha384-n6BdBD4Ahcb9IGZDgjgv0hV2a/y2WOCf1n0kEMZDpZySy/Hv1QMAtLIrC3y9oIZD" crossorigin="" />
+      <!-- The app's UI face for popups, tooltips and the loading line, as on
+           the Nearby Eats map. media=print + onload keeps it from blocking
+           the map; offline it falls back to the system font. -->
+      <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@600;700&display=swap"
+        media="print" onload="this.media='all'" />
       <style>
         * { margin:0; padding:0; box-sizing:border-box; }
         html,body { background:${mapBg}; }
         #map { width:100%; height:100vh; background:${mapBg}; }
-        .leaflet-control-attribution { display:none; }
-        .leaflet-container { font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; background:${mapBg}; }
+        .leaflet-container { font-family:'Schibsted Grotesk',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; background:${mapBg}; }
+        ${isDark
+          // OSM only publishes a light style. Invert + hue-rotate turns it
+          // into a dark map while keeping water blue and parks green; only the
+          // tile pane is filtered, so the pins, route and rings keep their
+          // real colours. Same filter as components/MissionMap.js.
+          ? ".leaflet-tile-pane { filter:invert(1) hue-rotate(180deg) brightness(0.92) contrast(0.88) saturate(0.7); }"
+          : ""}
+        .leaflet-top.leaflet-right { top:${attributionTop}px; }
+        .leaflet-control-attribution {
+          background:${hexToRgba(surfaceBg)(0.78)} !important; color:${surfaceSub};
+          font-size:9.5px; line-height:1.4; padding:1px 7px; border-radius:8px 0 0 8px;
+        }
         #loading-overlay {
           position:fixed; top:0; left:0; right:0; bottom:0;
           background:${mapBg};
           display:flex; flex-direction:column;
           align-items:center; justify-content:center;
           z-index:9999;
-          font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+          font-family:'Schibsted Grotesk',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
           color:${surfaceSub}; font-size:13.5px; font-weight:600; gap:14px;
           letter-spacing:0.2px;
           transition:opacity 0.35s ease;
@@ -1138,7 +1159,8 @@ export default function Track({ route, navigation }) {
           box-shadow:0 10px 30px rgba(11,46,49,0.18);
         }
         .leaflet-popup-content { font-weight:600; color:${surfaceText}; margin:11px 14px; }
-        .leaflet-popup-tip { box-shadow:none; }
+        /* Leaflet's tip is white by default — a white nub under a dark popup. */
+        .leaflet-popup-tip { background:${surfaceBg}; box-shadow:none; }
         /* Route line — rounded joins for a smooth modern stroke */
         .leaflet-routing-container { display:none; }
         path.leaflet-interactive { stroke-linecap:round; stroke-linejoin:round; }
@@ -1186,23 +1208,22 @@ export default function Track({ route, navigation }) {
         window.map = L.map('map', {
           maxBounds: panBounds,
           maxBoundsViscosity: 0.9,
-          minZoom: 9, maxZoom: 19, zoomControl: false,
+          minZoom: 9, maxZoom: 19, zoomControl: false, attributionControl: false,
         }).fitBounds(bulacanBounds);
 
-        // Modern, low-clutter basemap (CARTO Voyager in light mode, CARTO Dark
-        // Matter in dark mode) with a plain-OSM fallback.
-        var baseTiles = L.tileLayer(
-          '${tileUrl}',
-          { subdomains: 'abcd', maxZoom: 20, detectRetina: true }
-        );
-        baseTiles.on('tileerror', function () {
-          if (window._fellBackTiles) return;
-          window._fellBackTiles = true;
-          L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-            maxZoom: 19,
-          }).addTo(window.map);
-        });
-        baseTiles.addTo(window.map);
+        // OpenStreetMap's own tiles, darkened by the CSS filter above in dark
+        // mode. This used to ask CARTO for Voyager / Dark Matter tiles at a
+        // misspelled host that never resolved, so every tile failed over to
+        // OSM — always the light map, even in dark mode. CARTO's real host
+        // now needs an API key (keyless requests get "API KEY REQUIRED"
+        // images with a 200, which no error fallback would catch).
+        // No detectRetina: OSM has no @2x tiles, so it would only 4x the
+        // requests.
+        L.control.attribution({ position: 'topright', prefix: false })
+          .addAttribution('\\u00A9 OpenStreetMap contributors')
+          .addTo(window.map);
+        L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 })
+          .addTo(window.map);
 
         // Fade the loading overlay out once (idempotent).
         function hideOverlay() {
@@ -1303,15 +1324,15 @@ window.updateSpotProximity = function(active) {
 
         // ── Terminal markers — clean white chip with a bus glyph ──
         var busIconHtml = [
-          '<div style="width:30px;height:30px;border-radius:50%;background:#fff;',
+          '<div style="width:30px;height:30px;border-radius:50%;background:${chipBg};',
             'border:2px solid ${termColor};box-shadow:0 4px 10px rgba(11,46,49,0.22);',
             'display:flex;align-items:center;justify-content:center;">',
             '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">',
               '<path d="M4 7a3 3 0 0 1 3-3h10a3 3 0 0 1 3 3v8a2 2 0 0 1-1 1.7V18a1 1 0 0 1-2 0v-1H7v1a1 1 0 0 1-2 0v-1.3A2 2 0 0 1 4 15V7z"',
               ' fill="${destColor}"/>',
-              '<rect x="6" y="7" width="12" height="4" rx="1" fill="#fff"/>',
-              '<circle cx="8" cy="14" r="1.3" fill="#fff"/>',
-              '<circle cx="16" cy="14" r="1.3" fill="#fff"/>',
+              '<rect x="6" y="7" width="12" height="4" rx="1" fill="${chipBg}"/>',
+              '<circle cx="8" cy="14" r="1.3" fill="${chipBg}"/>',
+              '<circle cx="16" cy="14" r="1.3" fill="${chipBg}"/>',
             '</svg>',
           '</div>',
         ].join('');
@@ -1448,7 +1469,7 @@ window.updateSpotProximity = function(active) {
             waypoints: [L.latLng(lat, lng), L.latLng(DEST_LAT, DEST_LNG)],
             router: L.Routing.osrmv1({ serviceUrl:'https://router.project-osrm.org/route/v1' }),
             lineOptions: { styles:[
-              { color:'#FFFFFF', weight:10, opacity:0.95 },
+              { color:'${routeCasing}', weight:10, opacity:0.95 },
               { color:'${destColor}', weight:5.5, opacity:1 },
             ] },
             createMarker: () => null,
@@ -1508,7 +1529,7 @@ window.updateSpotProximity = function(active) {
         };
       </script>
     </body></html>`;
-  }, [spotData, colors, isDark]);
+  }, [spotData, colors, isDark, insets.top]);
 
   if (loading || !spotData) {
     return (
