@@ -11,7 +11,6 @@ import {
 } from "react-native";
 import { showAlert, showToast } from "../components/AppAlert";
 import { useState, useEffect, useRef, useMemo } from "react";
-import CheckBox from "expo-checkbox";
 import { useSignUp, useOAuth } from "@clerk/clerk-expo";
 import * as WebBrowser from "expo-web-browser";
 import { authAPI } from "../api";
@@ -20,7 +19,7 @@ import { useTheme, fonts, MAX_FONT_SCALE } from "../context/ThemeContext";
 import { TERMS_URL as TERMS_OF_SERVICE_URL, PRIVACY_URL as PRIVACY_POLICY_URL } from "../utils/legalLinks";
 import AuthScaffold, { useAuthStyles, FieldError, FormError } from "../components/AuthScaffold";
 import {
-  nameError, emailError, dobError, clerkErrorToField, TERMS_ERROR,
+  nameError, emailError, dobError, clerkErrorToField,
   cleanName, cleanEmail, NAME_MAX, EMAIL_MAX,
   GOOGLE_BUSY, googleWindowBusy, googleWindowClosed, googleErrorMessage,
 } from "../utils/authValidation";
@@ -113,6 +112,28 @@ function PasswordStrengthPanel({ password }) {
   );
 }
 
+// ── Terms notice ──────────────────────────────────────────────────
+// Sits right under each sign-up button: pressing the button is the
+// agreement, as on most sign-up screens. This replaced a checkbox at the
+// bottom of the form that the Google button at the top silently waited on.
+function TermsNotice({ action }) {
+  const { colors } = useTheme();
+  const link = [styles.noticeLink, { color: colors.brand }];
+  return (
+    <Text style={[styles.notice, { color: colors.textSecondary }]} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+      By {action}, you agree to the{" "}
+      <Text style={link} onPress={() => openLink(TERMS_OF_SERVICE_URL)} accessibilityRole="link">
+        Terms and Conditions
+      </Text>
+      {" "}and{" "}
+      <Text style={link} onPress={() => openLink(PRIVACY_POLICY_URL)} accessibilityRole="link">
+        Privacy Policy
+      </Text>
+      .
+    </Text>
+  );
+}
+
 // ── Validation ────────────────────────────────────────────────────
 // Rules and wording are shared with the other auth screens
 // (utils/authValidation). The password additionally has to reach "Good"
@@ -140,8 +161,7 @@ export default function Register({ navigation }) {
   const [email, setEmail]                 = useState("");
   const [password, setPassword]           = useState("");
   const [passwordVisible, setPasswordVisible] = useState(false);
-  const [agreeToTerms, setAgreeToTerms]   = useState(false);
-  const [dob, setDob]                     = useState("");
+  const [dob, setDob]                  = useState("");
   const [isLoading, setIsLoading]         = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
 
@@ -152,10 +172,6 @@ export default function Register({ navigation }) {
   // Errors the server gave back for a field (e.g. "email already exists").
   // Cleared as soon as that field is edited.
   const [serverErrors, setServerErrors] = useState({});
-  const [termsError, setTermsError]     = useState("");
-  // The Terms box sits below the fold, so a Google tap without it ticked
-  // also says so under the Google button — otherwise the tap looked dead.
-  const [googleTermsError, setGoogleTermsError] = useState("");
   const [formError, setFormError]       = useState("");
 
   const inputRefs = { name: useRef(null), email: useRef(null), password: useRef(null), dob: useRef(null) };
@@ -195,12 +211,6 @@ export default function Register({ navigation }) {
     edit("dob", setDob)(formatted);
   };
 
-  const requireTerms = () => {
-    if (agreeToTerms) return true;
-    setTermsError(TERMS_ERROR);
-    return false;
-  };
-
   // Puts a Clerk error under the field it's about, or in the form-level box.
   const showServerError = (err) => {
     const { field, message } = clerkErrorToField(err);
@@ -216,10 +226,6 @@ export default function Register({ navigation }) {
   const handleGoogleSignUp = async () => {
     if (isGoogleLoading || !isLoaded) return;
     setFormError("");
-    if (!requireTerms()) {
-      setGoogleTermsError("Tick the box to agree to the Terms and Privacy Policy below first.");
-      return;
-    }
     setIsGoogleLoading(true);
     try {
       const { createdSessionId, authSessionResult } = await startOAuthFlow();
@@ -261,13 +267,11 @@ export default function Register({ navigation }) {
     setTouched({ name: true, email: true, password: true, dob: true });
 
     const firstBad = FIELD_ORDER.find((f) => clientErrors[f] || serverErrors[f]);
-    const termsOk = requireTerms();
     if (firstBad) {
       // Straight to the first thing that needs fixing.
       inputRefs[firstBad].current?.focus();
       return;
     }
-    if (!termsOk) return;
     if (!isLoaded) return setFormError("Still getting ready. Try again in a moment.");
 
     setIsLoading(true);
@@ -321,7 +325,7 @@ export default function Register({ navigation }) {
           </>
         )}
       </TouchableOpacity>
-      <FieldError style={styles.googleErrorRow}>{googleTermsError}</FieldError>
+      <TermsNotice action="continuing with Google" />
 
       {/* Divider */}
       <View style={a.dividerRow}>
@@ -438,30 +442,6 @@ export default function Register({ navigation }) {
         <FieldError>{errorFor("dob")}</FieldError>
       </View>
 
-      {/* Terms */}
-      <View>
-        <View style={styles.termsRow}>
-          <CheckBox
-            value={agreeToTerms}
-            onValueChange={(v) => { setAgreeToTerms(v); if (v) { setTermsError(""); setGoogleTermsError(""); } }}
-            color={termsError ? colors.danger : agreeToTerms ? colors.brand : colors.textMuted}
-            style={styles.checkbox}
-            accessibilityLabel="Agree to the Terms and Conditions"
-          />
-          <Text style={[styles.termsText, { color: colors.textPrimary }]} maxFontSizeMultiplier={MAX_FONT_SCALE}>
-            Agree to the{" "}
-            <Text style={[styles.termsLink, { color: colors.brand }]} onPress={() => openLink(TERMS_OF_SERVICE_URL)}>
-              Terms and Conditions
-            </Text>
-            {" "}and{" "}
-            <Text style={[styles.termsLink, { color: colors.brand }]} onPress={() => openLink(PRIVACY_POLICY_URL)}>
-              Privacy Policy
-            </Text>
-          </Text>
-        </View>
-        <FieldError style={styles.termsErrorRow}>{termsError}</FieldError>
-      </View>
-
       <FormError>{formError}</FormError>
 
       {/* The same yellow primary button as every other screen. */}
@@ -475,6 +455,7 @@ export default function Register({ navigation }) {
       >
         {isLoading ? <ActivityIndicator color={colors.onAccent} /> : <Text style={a.ctaText}>Sign up</Text>}
       </TouchableOpacity>
+      <TermsNotice action="signing up" />
 
       <View style={a.linkRow}>
         <Text style={a.linkMuted}>Already Registered? </Text>
@@ -502,13 +483,10 @@ const styles = StyleSheet.create({
   criteriaRow:   { flexDirection: "row", alignItems: "center", gap: 7 },
   criteriaText:  { fontFamily: fonts.sansMedium, fontSize: 12.5 },
 
-  termsRow:  { flexDirection: "row", alignItems: "flex-start", gap: 11, paddingHorizontal: 6, marginTop: 4 },
-  checkbox:  { width: 20, height: 20, borderRadius: 5, marginTop: 1 },
-  termsText: { flex: 1, fontFamily: fonts.sansSemi, fontSize: 14, lineHeight: 20 },
-  termsLink: { fontFamily: fonts.sansBold, textDecorationLine: "underline" },
-  termsErrorRow: { marginLeft: 6 },
-  // The body's 16px gap already spaces it from the button.
-  googleErrorRow: { marginTop: -8 },
+  // Tucked closer to its button than the body's 16px gap, so it reads as
+  // that button's fine print.
+  notice:     { fontFamily: fonts.sans, fontSize: 13, lineHeight: 19, textAlign: "center", marginTop: -6, paddingHorizontal: 8 },
+  noticeLink: { fontFamily: fonts.sansSemi, textDecorationLine: "underline" },
 
   signupSpace: { marginTop: 4 },
 });

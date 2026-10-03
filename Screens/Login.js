@@ -478,7 +478,7 @@ export default function Login({ navigation }) {
   // startOAuthFlow(). When the chosen Google account has no Libot account,
   // that helper quietly converts the sign-in into a sign-up — so "Continue
   // with Google" on THIS screen used to create accounts nobody asked for,
-  // skipping the terms checkbox the Register screen requires. Here that case
+  // skipping the sign-up screen and its terms notice. Here that case
   // stops and the user is sent to sign up instead.
   const handleGoogleLogin = async () => {
     if (isGoogleLoading || !isLoaded) return;

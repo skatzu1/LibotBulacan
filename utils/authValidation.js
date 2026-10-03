@@ -101,8 +101,6 @@ export const dobError = (dob, today = new Date()) => {
   return null;
 };
 
-export const TERMS_ERROR = "Agree to the Terms and Privacy Policy to continue.";
-
 export const NETWORK_ERROR = "Couldn't reach the server. Check your connection and try again.";
 
 /* ── Google window ─────────────────────────────────────────────────────────
