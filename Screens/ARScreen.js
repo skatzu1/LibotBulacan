@@ -45,39 +45,77 @@ import { createValueStore, GEO_HEADING_POLL_MS } from "../utils/headingSource";
 // any future screen that wants to surface the reason.
 import { evaluateGeospatial, anchorAtLocation, releaseAnchor, ensureGeospatialEnabled, readGeoHeading } from "../utils/geospatial";
 import { resolveTrail, triviaForModel } from "../utils/arTrail";
-import { fonts } from "../context/ThemeContext";
+import { fonts, useTheme } from "../context/ThemeContext";
 import Icon from "../components/Icon";
 import { showAlert } from "../components/AppAlert";
 
 // ─────────────────────────────────────────────
 // DESIGN TOKENS
 // ─────────────────────────────────────────────
-// The AR HUD always sits on top of a live camera feed, so it stays dark-panel /
-// light-text in every app theme. Only the accent hues follow the brand:
-// yellow (`cta`/`gold`) for actions & progress, cyan (`info`) for direction.
-const TOKEN = {
-  bg:           "#0E1C1E",
-  surface:      "rgba(16,32,34,0.90)",
-  surfaceHigh:  "rgba(24,48,50,0.95)",
-  surfaceMid:   "rgba(34,60,60,0.88)",
-  border:       "rgba(120,204,208,0.18)",
-  borderAccent: "rgba(120,204,208,0.42)",
-  textPrimary:  "#EAF6F7",
-  textSecond:   "#A6BEC0",
-  textMuted:    "#7C9698",
-  gold:         "#F2CE1B",
-  goldLight:    "#F6DF5C",
-  goldDim:      "rgba(242,206,27,0.16)",
-  success:      "#57C795",
-  successDim:   "rgba(87,199,149,0.18)",
-  warn:         "#E7B45C",
-  danger:       "#E97A7A",
-  dangerDim:    "rgba(233,122,122,0.18)",
-  info:         "#4FD0DC",
-  infoLight:    "#8BE4EC",
-  cta:          "#F2CE1B",
-  ctaLight:     "#F6DF5C",
-  ctaText:      "#2C2810",
+// "#rrggbb" + alpha → rgba(). The theme's colours are plain hex.
+const withAlpha = (hex, alpha) => {
+  const n = parseInt(hex.slice(1), 16);
+  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${alpha})`;
+};
+
+// The HUD follows the app's light/dark setting like every other screen (the
+// thesis panel asked for it; it used to be dark in every theme). Text and
+// status colours are the app's own theme tokens. What's specific to AR is how
+// the panels sit on a live camera feed: they're nearly opaque, so contrast
+// never depends on what the camera is looking at — dark teal glass in dark
+// mode, cream and white in light mode.
+//
+// Yellow has two jobs. `gold` / `cta` are FILLS and marks drawn over the
+// camera (buttons, the encounter ring, focus brackets) and stay the brand
+// yellow in both themes. `goldLight` is yellow used as TEXT or an icon on a
+// panel: a pale yellow on dark, the readable amber (`accentDark`) on light,
+// since raw yellow is 1.5:1 on cream. Cyan works the same way through
+// `info` / `infoLight`.
+const arTokens = (c, isDark) => ({
+  bg:           c.background,
+  surface:      isDark ? "rgba(16,32,34,0.90)" : "rgba(251,248,242,0.97)",
+  surfaceHigh:  isDark ? "rgba(24,48,50,0.95)" : "rgba(255,255,255,0.97)",
+  sheet:        isDark ? "#12262A" : c.card,          // the trivia bottom sheet
+  border:       isDark ? "rgba(120,204,208,0.18)" : "rgba(10,111,120,0.16)",
+  borderAccent: isDark ? "rgba(120,204,208,0.42)" : "rgba(10,111,120,0.32)",
+  textPrimary:  c.textPrimary,
+  textSecond:   c.textSecondary,
+  textMuted:    c.textMuted,
+  gold:         c.accent,
+  goldLight:    isDark ? "#F6DF5C" : c.accentDark,
+  goldDim:      isDark ? "rgba(242,206,27,0.16)" : c.accentSoft,
+  success:      c.success,
+  // Light mode uses the app's solid badge fills: a see-through tint let a dark
+  // camera frame pull green text on it under 4.5:1.
+  successDim:   isDark ? withAlpha(c.success, 0.18) : c.successBg,
+  warn:         c.warning,
+  danger:       c.danger,
+  dangerDim:    isDark ? withAlpha(c.danger, 0.18) : c.dangerBg,
+  // The location-error card. Nearly opaque like every other panel — it used
+  // to be the 18% tint above, so its text sat almost straight on the camera.
+  errorSurface: isDark ? "rgba(44,20,20,0.94)" : c.dangerBg,
+  info:         c.brand,
+  infoLight:    isDark ? "#8BE4EC" : c.brand,
+  infoFaint:    withAlpha(c.brand, 0.10),
+  infoDim:      withAlpha(c.brand, 0.16),
+  infoDash:     withAlpha(c.brand, 0.35),
+  cta:          c.accent,
+  ctaText:      c.onAccent,
+
+  // Radar dial and the small chips that sit straight on the camera.
+  radarFace:    isDark ? "rgba(8,26,28,0.72)" : "rgba(251,248,242,0.88)",
+  radarGrid:    withAlpha(c.brand, isDark ? 0.16 : 0.20),
+  radarSweep:   withAlpha(c.brand, 0.45),
+  // The copy calls this "the white dot", so it's white in both themes; light
+  // mode rings it in dark so it holds on the cream dial.
+  youDot:       isDark ? c.textPrimary : "#FFFFFF",
+  youRing:      isDark ? "rgba(8,26,28,0.9)" : c.textPrimary,
+  chipBg:       isDark ? "rgba(6,18,20,0.72)" : "rgba(251,248,242,0.85)",
+  // Backgrounds the camera while there's still walking to do: dimmed in dark
+  // mode, washed out toward the page in light mode. Either way, "not yet".
+  travelScrim:  isDark ? "rgba(6,18,20,0.62)" : "rgba(251,248,242,0.60)",
+  statusBar:    isDark ? "light-content" : "dark-content",
+
   radiusSm:     8,
   radiusMd:     14,
   radiusLg:     20,
@@ -85,7 +123,29 @@ const TOKEN = {
   spaceSm:      8,
   spaceMd:      16,
   spaceLg:      24,
-};
+});
+
+// Every component on this screen reads its colours and styles from here, so
+// the whole HUD switches together when the theme does. The style sheets are
+// built per theme, once, next to the components that use them (makeFlashSt,
+// makeRadar, …) and memoised on the theme.
+function useAr() {
+  const { colors, isDark } = useTheme();
+  return useMemo(() => {
+    const TOKEN = arTokens(colors, isDark);
+    return {
+      TOKEN,
+      flashSt: makeFlashSt(TOKEN),
+      radar:   makeRadar(TOKEN),
+      focusSt: makeFocusSt(TOKEN),
+      guideSt: makeGuideSt(TOKEN),
+      popup:   makePopup(TOKEN),
+      step:    makeStep(TOKEN),
+      hud:     makeHud(TOKEN),
+      main:    makeMain(TOKEN),
+    };
+  }, [colors, isDark]);
+}
 
 // ─────────────────────────────────────────────
 // CONSTANTS
@@ -227,6 +287,7 @@ const buzz = {
 // while a banner drops in, then both clear themselves so the camera view is
 // unobstructed again. `trigger` is a counter — bumping it replays the effect.
 const EncounterFlash = ({ trigger, label }) => {
+  const { TOKEN, flashSt } = useAr();
   const ring   = useRef(new Animated.Value(0)).current;
   const banner = useRef(new Animated.Value(0)).current;
   const [visible, setVisible] = useState(false);
@@ -325,8 +386,8 @@ function formatDistance(m, accuracy) {
   return { value: String(Math.round(m)), unit: "m", approx: false };
 }
 
-const flashSt = StyleSheet.create({
-  overlay: { ...StyleSheet.absoluteFillObject, alignItems: "center", justifyContent: "center" },
+const makeFlashSt = (TOKEN) => StyleSheet.create({
+  overlay:{ ...StyleSheet.absoluteFillObject, alignItems: "center", justifyContent: "center" },
   ring: {
     position:    "absolute",
     borderWidth: 3,
@@ -374,6 +435,7 @@ const RADAR_R  = RADAR_PX / 2 - 12;         // usable radius, leaving an edge ma
 // ground" the moment you cross in. An in-range styling branch here would be
 // unreachable code pretending to be a feature.
 const RadarMap = ({ distance, bearing, heading, modelRadius, label }) => {
+  const { TOKEN, radar } = useAr();
   const sweep = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -429,7 +491,7 @@ const RadarMap = ({ distance, bearing, heading, modelRadius, label }) => {
               left: RADAR_PX / 2 + blipX - ringPx,
               top:  RADAR_PX / 2 + blipY - ringPx,
               borderColor: TOKEN.info,
-              backgroundColor: "rgba(79,208,220,0.10)",
+              backgroundColor: TOKEN.infoFaint,
             },
           ]}
         />
@@ -473,23 +535,23 @@ const LiveRadar = ({ label, geoStore, ...props }) => {
   return <RadarMap {...props} heading={heading} label={`${label}${note}`} />;
 };
 
-const radar = StyleSheet.create({
+const makeRadar = (TOKEN) => StyleSheet.create({
   wrap: { alignItems: "center", gap: 8 },
   face: {
     width: RADAR_PX, height: RADAR_PX, borderRadius: RADAR_PX / 2,
-    backgroundColor: "rgba(8,26,28,0.72)",
+    backgroundColor: TOKEN.radarFace,
     borderWidth: 1, borderColor: TOKEN.borderAccent,
     alignItems: "center", justifyContent: "center",
     overflow: "hidden",
   },
   grid: {
     position: "absolute",
-    borderWidth: 1, borderColor: "rgba(120,204,208,0.16)",
+    borderWidth: 1, borderColor: TOKEN.radarGrid,
   },
   sweep: { position: "absolute", width: RADAR_PX, height: RADAR_PX, alignItems: "center" },
   sweepArm: {
     width: 1.5, height: RADAR_PX / 2,
-    backgroundColor: "rgba(79,208,220,0.45)",
+    backgroundColor: TOKEN.radarSweep,
   },
   radiusRing: { position: "absolute", borderWidth: 1.5 },
   blip: {
@@ -498,8 +560,8 @@ const radar = StyleSheet.create({
   },
   you: {
     width: 9, height: 9, borderRadius: 4.5,
-    backgroundColor: TOKEN.textPrimary,
-    borderWidth: 2, borderColor: "rgba(8,26,28,0.9)",
+    backgroundColor: TOKEN.youDot,
+    borderWidth: 2, borderColor: TOKEN.youRing,
   },
   label: { color: TOKEN.textSecond, fontSize: 13, fontFamily: fonts.sansSemi },
 });
@@ -518,6 +580,7 @@ const radar = StyleSheet.create({
 // whole flow — ARCore needs a horizontal surface before it can place anything —
 // so it gets a target on screen rather than only a sentence.
 const GroundReticle = () => {
+  const { TOKEN, step } = useAr();
   const pulse = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -555,6 +618,7 @@ const GroundReticle = () => {
 // because that's what ARCore's autofocus actually meters — a ring under the
 // finger would promise a "focus here" that ARCore can't do.
 const FocusRing = ({ pulse }) => {
+  const { focusSt } = useAr();
   const anim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
@@ -592,7 +656,7 @@ const FocusRing = ({ pulse }) => {
 };
 
 const FOCUS_BOX = 88;
-const focusSt = StyleSheet.create({
+const makeFocusSt = (TOKEN) => StyleSheet.create({
   wrap:   { ...StyleSheet.absoluteFillObject, alignItems: "center", justifyContent: "center" },
   box:    { width: FOCUS_BOX, height: FOCUS_BOX },
   corner: { position: "absolute", width: 22, height: 22, borderColor: TOKEN.gold },
@@ -603,7 +667,7 @@ const focusSt = StyleSheet.create({
   label: {
     marginTop: 10,
     color: TOKEN.textPrimary, fontFamily: fonts.sansBold, fontSize: 12, letterSpacing: 0.4,
-    backgroundColor: "rgba(6,18,20,0.55)", paddingHorizontal: 10, paddingVertical: 4,
+    backgroundColor: TOKEN.chipBg, paddingHorizontal: 10, paddingVertical: 4,
     borderRadius: 10, overflow: "hidden",
   },
 });
@@ -618,6 +682,7 @@ const focusSt = StyleSheet.create({
 const AR_GUIDE_SEEN_KEY = "arGuideSeen_v1";
 
 const HowItWorks = ({ visible, onClose }) => {
+  const { TOKEN, guideSt } = useAr();
   // These are the same three steps the card at the bottom of the screen walks
   // through, in the same order and the same words. The guide teaches them once;
   // the card then says which one you're on. They must not drift apart.
@@ -635,14 +700,14 @@ const HowItWorks = ({ visible, onClose }) => {
       <View style={guideSt.backdrop}>
         <View style={guideSt.card}>
           <View style={guideSt.header}>
-            <Icon name="compass" size={18} color={TOKEN.gold} />
+            <Icon name="compass" size={18} color={TOKEN.goldLight} />
             <Text style={guideSt.title}>How the AR activity works</Text>
           </View>
 
           {steps.map((s, i) => (
             <View key={s.title} style={guideSt.step}>
               <View style={guideSt.stepIcon}>
-                <Icon name={s.icon} size={15} color={TOKEN.gold} />
+                <Icon name={s.icon} size={15} color={TOKEN.goldLight} />
               </View>
               <View style={{ flex: 1 }}>
                 <Text style={guideSt.stepTitle}>{i + 1}. {s.title}</Text>
@@ -666,7 +731,7 @@ const HowItWorks = ({ visible, onClose }) => {
   );
 };
 
-const guideSt = StyleSheet.create({
+const makeGuideSt = (TOKEN) => StyleSheet.create({
   backdrop: {
     flex: 1, backgroundColor: "rgba(0,0,0,0.72)",
     alignItems: "center", justifyContent: "center", padding: 26,
@@ -1211,8 +1276,10 @@ const ARScene = ({ sceneNavigator }) => {
   );
 };
 
+// Drawn in the 3D scene itself, over the camera, so it's the same pale yellow
+// in both themes — it never sits on one of the HUD's panels.
 const arStyles = {
-  tapHint: { fontFamily: fonts.sansMedium, fontSize: 10, color: TOKEN.goldLight, textAlign: "center", textAlignVertical: "center" },
+  tapHint: { fontFamily: fonts.sansMedium, fontSize: 10, color: "#F6DF5C", textAlign: "center", textAlignVertical: "center" },
   // `tapHintDone` is gone with the `tapped` prop — an explored model is
   // removed from the scene, so there is nothing left to label "Explored".
   // `scanning` and `outOfRange` are gone with their floating ViroTexts. Both
@@ -1234,6 +1301,7 @@ const TriviaPopup = ({
   missionJustCompleted,
   alreadyDone,
 }) => {
+  const { TOKEN, popup } = useAr();
   const slideAnim = useRef(new Animated.Value(100)).current;
   const fadeAnim  = useRef(new Animated.Value(0)).current;
   const [modalMounted, setModalMounted] = useState(false);
@@ -1296,7 +1364,7 @@ const TriviaPopup = ({
 
         {activeAnchor?.label ? (
           <View style={popup.anchorBadge}>
-            <Icon name="map-pin" size={10} color={TOKEN.cta} style={{ marginRight: 5 }} />
+            <Icon name="map-pin" size={10} color={TOKEN.goldLight} style={{ marginRight: 5 }} />
             <Text style={popup.anchorBadgeText}>{activeAnchor.label}</Text>
           </View>
         ) : null}
@@ -1341,12 +1409,12 @@ const TriviaPopup = ({
   );
 };
 
-const popup = StyleSheet.create({
+const makePopup = (TOKEN) => StyleSheet.create({
   scrim: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.60)" },
   card: {
     position:             "absolute",
     bottom: 0, left: 0, right: 0,
-    backgroundColor:      "#12262A",
+    backgroundColor:      TOKEN.sheet,
     borderTopLeftRadius:  TOKEN.radiusXl,
     borderTopRightRadius: TOKEN.radiusXl,
     paddingHorizontal:    TOKEN.spaceLg,
@@ -1478,6 +1546,7 @@ const popup = StyleSheet.create({
 // ─────────────────────────────────────────────
 export default function ARScreen({ route, navigation }) {
   const { spot } = route.params;
+  const { TOKEN, step, hud, main } = useAr();
   const { completeMission, completedMissions, fetchMissions, getMissionsForSpot } = useMissions();
 
   // The camera only delivers ~30 frames a second, but the HUD's looping
@@ -2140,7 +2209,7 @@ export default function ARScreen({ route, navigation }) {
         // said so — it just said "look around", which people did at eye level.
         ) : stepIndex === 1 ? (
           <View style={step.body}>
-            <View style={[step.iconWrap, { backgroundColor: "rgba(79,208,220,0.16)" }]}>
+            <View style={[step.iconWrap, { backgroundColor: TOKEN.infoDim }]}>
               <Icon name="chevrons-down" size={22} color={TOKEN.info} />
             </View>
             <Text style={step.title}>Point your phone at the ground</Text>
@@ -2155,7 +2224,7 @@ export default function ARScreen({ route, navigation }) {
         ) : (
           <View style={step.body}>
             <View style={[step.iconWrap, { backgroundColor: TOKEN.goldDim }]}>
-              <Icon name="aperture" size={22} color={TOKEN.gold} />
+              <Icon name="aperture" size={22} color={TOKEN.goldLight} />
             </View>
             <Text style={step.title}>Look around for the object</Text>
             {/* NOT "it is on screen now".
@@ -2187,7 +2256,7 @@ export default function ARScreen({ route, navigation }) {
   if (!spot.AR3DModelURL) {
     return (
       <View style={[main.root, main.unsupportedRoot]}>
-        <StatusBar barStyle="light-content" backgroundColor={TOKEN.bg} />
+        <StatusBar barStyle={TOKEN.statusBar} backgroundColor={TOKEN.bg} />
         <View style={main.unsupportedCard}>
           <View style={main.unsupportedIcon}>
             <Icon name="box" size={26} color={TOKEN.warn} />
@@ -2216,7 +2285,7 @@ export default function ARScreen({ route, navigation }) {
   if (arSupport === "unsupported") {
     return (
       <View style={[main.root, main.unsupportedRoot]}>
-        <StatusBar barStyle="light-content" backgroundColor={TOKEN.bg} />
+        <StatusBar barStyle={TOKEN.statusBar} backgroundColor={TOKEN.bg} />
         <View style={main.unsupportedCard}>
           <View style={main.unsupportedIcon}>
             <Icon name="camera-off" size={26} color={TOKEN.warn} />
@@ -2242,7 +2311,7 @@ export default function ARScreen({ route, navigation }) {
 
   return (
     <View style={main.root}>
-      <StatusBar barStyle="light-content" backgroundColor="transparent" translucent />
+      <StatusBar barStyle={TOKEN.statusBar} backgroundColor="transparent" translucent />
 
       {/* Watches taps on the camera view (see onArTouchStart). The HUD and
           buttons are siblings drawn on top, so their taps never land here. */}
@@ -2379,7 +2448,7 @@ export default function ARScreen({ route, navigation }) {
 // Deliberately roomy. This card is read at arm's length, outdoors, in sunlight,
 // by someone who is walking — so the instruction is set large and centred with
 // nothing competing beside it.
-const step = StyleSheet.create({
+const makeStep = (TOKEN) => StyleSheet.create({
   header:      { flexDirection: "row", alignItems: "center", gap: 8 },
   spotName:    { flex: 1, color: TOKEN.textPrimary, fontSize: 13.5, fontFamily: fonts.sansBold },
   count:       { color: TOKEN.textSecond, fontSize: 12.5, fontFamily: fonts.sansSemi },
@@ -2427,7 +2496,7 @@ const step = StyleSheet.create({
   },
   reticleStatic: {
     width: 150, height: 150, borderRadius: 75,
-    borderWidth: 1.5, borderColor: "rgba(79,208,220,0.35)",
+    borderWidth: 1.5, borderColor: TOKEN.infoDash,
     borderStyle: "dashed",
   },
   reticleArrowWrap: { position: "absolute" },
@@ -2436,7 +2505,7 @@ const step = StyleSheet.create({
 // ─────────────────────────────────────────────
 // HUD STYLES
 // ─────────────────────────────────────────────
-const hud = StyleSheet.create({
+const makeHud = (TOKEN) => StyleSheet.create({
   container: {
     position:        "absolute",
     bottom:          Platform.OS === "ios" ? 52 : 40,
@@ -2453,7 +2522,7 @@ const hud = StyleSheet.create({
     shadowRadius:    12,
     elevation:       12,
   },
-  errorContainer:  { borderColor: TOKEN.danger, backgroundColor: TOKEN.dangerDim },
+  errorContainer:  { borderColor: TOKEN.danger, backgroundColor: TOKEN.errorSurface },
   errorRow:        { flexDirection: "row", alignItems: "flex-start", gap: 10 },
   errorIconWrap:   {
     width:           30,
@@ -2490,12 +2559,12 @@ const hud = StyleSheet.create({
 // ─────────────────────────────────────────────
 // MAIN STYLES
 // ─────────────────────────────────────────────
-const main = StyleSheet.create({
+const makeMain = (TOKEN) => StyleSheet.create({
   root: { flex: 1, backgroundColor: TOKEN.bg },
   // Not opaque — the camera stays visible so the phone doesn't feel broken,
   // just clearly backgrounded while walking is the job.
   arView:      { flex: 1 },
-  travelScrim: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(6,18,20,0.62)" },
+  travelScrim: { ...StyleSheet.absoluteFillObject, backgroundColor: TOKEN.travelScrim },
   topBar: {
     position:       "absolute",
     top:            Platform.OS === "ios" ? 54 : 36,
