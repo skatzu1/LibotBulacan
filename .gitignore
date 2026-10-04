@@ -46,3 +46,10 @@ yarn-error.*
 .env.development.local
 .env.test.local
 .env.production.local
+
+# JetBrains / Android Studio project settings (personal, per machine)
+.idea/
+
+# Claude Code session work: database backups (users' personal data), diagrams,
+# scratch files. Not app source, and this repo is public.
+Claude outputs/
