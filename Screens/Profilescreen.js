@@ -14,7 +14,6 @@ import {
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { useUser, useAuth } from "@clerk/clerk-expo";
-import { useAuth as useAppAuth } from "../context/AuthContext";
 import { useProfileImage } from "../context/ProfileImageContext";
 import { useTheme, fonts, typography } from "../context/ThemeContext";
 import { ScreenHeader, ListRow, LoadingState, Avatar, H_PAD, TAP } from "../components/ui";
@@ -30,9 +29,8 @@ export default function ProfileScreen() {
   const navigation                    = useNavigation();
   const { user: clerkUser, isLoaded } = useUser();
   const { getToken }                  = useAuth();
-  const { user: contextUser }         = useAppAuth();
   const { profileImage }              = useProfileImage();
-  const { colors, isDark }            = useTheme();
+  const { colors }                    = useTheme();
   const { width: winWidth, height: winHeight } = useWindowDimensions();
   const modalSize                     = winWidth * 0.82;
 
@@ -56,16 +54,8 @@ export default function ProfileScreen() {
         fullName:     `${clerkUser.firstName || ""} ${clerkUser.lastName || ""}`.trim() || "User",
         profilePhoto: clerkPhoto(clerkUser),
       });
-    } else if (contextUser) {
-      setUserInfo({
-        email:        contextUser.email     || "",
-        firstName:    contextUser.firstName || "",
-        lastName:     contextUser.lastName  || "",
-        fullName:     contextUser.name || contextUser.fullName || "User",
-        profilePhoto: contextUser.profilePhoto || null,
-      });
     }
-  }, [clerkUser, isLoaded, contextUser]);
+  }, [clerkUser, isLoaded]);
 
   const loadStats = useCallback(async () => {
     try {

@@ -9,38 +9,21 @@ import { readStarted } from './utils/serverActivity';
 const PRODUCTION_API_URL = 'https://libotbackend.onrender.com';
 export const BASE_URL = (process.env.EXPO_PUBLIC_API_URL || PRODUCTION_API_URL).replace(/\/+$/, '');
 
+// Only the endpoints the helpers below use. Screens and contexts build their
+// URLs from BASE_URL directly; the ~20 entries here that nothing read were
+// removed on 2026-10-04.
 export const API_ENDPOINTS = {
   spots:        `${BASE_URL}/api/spots`,
-  spotById:     (id)  => `${BASE_URL}/api/spots/${id}`,
-  topVisited:   `${BASE_URL}/api/spots/top/visited`,
-  spotCategory: (cat) => `${BASE_URL}/api/spots/category/${cat}`,
   categories:   `${BASE_URL}/api/categories`,
-  reviews:      (spotId)    => `${BASE_URL}/api/reviews/${spotId}`,
-  addReview:    `${BASE_URL}/api/reviews`,
-  deleteReview: (reviewId)  => `${BASE_URL}/api/reviews/${reviewId}`,
-  missions:     (spotId)    => `${BASE_URL}/api/missions/${spotId}`,
-  verify:       (missionId) => `${BASE_URL}/api/verify/${missionId}`,
-  bookmarks:    `${BASE_URL}/api/bookmarks`,
-  bookmarkById: (spotId) => `${BASE_URL}/api/bookmarks/${spotId}`,
-  users:        `${BASE_URL}/api/users`,
-  userMe:       `${BASE_URL}/api/users/me`,
-  userPoints:   `${BASE_URL}/api/users/points`,
-  userBadges:   `${BASE_URL}/api/users/badges`,
-  visitLogs:    `${BASE_URL}/api/visitlogs`,
   spotVisit:    (spotId) => `${BASE_URL}/api/spots/${spotId}/visit`,
   appeals:      `${BASE_URL}/api/appeals/me`,
   moderationStatus: `${BASE_URL}/api/reviews/user/moderation-status`,
-  reports:      `${BASE_URL}/api/reports`,
-  uploadProfile:`${BASE_URL}/api/upload/profile`,
-  // No users/claimed-spots or /api/leaderboard here: neither route exists.
-  // The leaderboard is GET /api/users; claimed spots are /api/users/visitedSpots.
   auth: {
     // login and check-user were removed server-side (2026-09-28): /login was an
     // unauthenticated NoSQL-injection surface with no caller, /check-user was an
-    // unauthenticated account-existence oracle. register now only accepts a
-    // verified Clerk session.
+    // unauthenticated account-existence oracle; /verify (a pre-Clerk app
+    // token) went on 2026-10-04. register only accepts a verified Clerk session.
     register:    `${BASE_URL}/api/auth/register`,
-    verify:      `${BASE_URL}/api/auth/verify`,
     // Says only whether an address is a temp-mail one — nothing about
     // whether it has an account.
     checkEmail:  `${BASE_URL}/api/auth/check-email`,
@@ -108,15 +91,6 @@ export const authAPI = {
     }
   },
 
-  verifyToken: async () => {
-    try {
-      const response = await api.get(API_ENDPOINTS.auth.verify);
-      return response.data;
-    } catch (error) {
-      throw error.response?.data || { message: 'Network error' };
-    }
-  },
-
   // Is this a temp-mail address? Asked before a sign-up starts. Never throws:
   // offline, slow or erroring, it answers "no" and the sign-up goes ahead —
   // Clerk's emailed code still has to be read from a real inbox.
@@ -133,36 +107,9 @@ export const authAPI = {
   // "is this email registered?" oracle and nothing in the app called it.
 };
 
-// ─── Users API ────────────────────────────────────────────────────────────────
-export const fetchUsers = async () => {
-  try {
-    const response = await api.get(API_ENDPOINTS.users);
-    return response.data;
-  } catch (error) {
-    throw error.response?.data || { message: 'Network error' };
-  }
-};
-
-// ─── Spots API ────────────────────────────────────────────────────────────────
-export const spotAPI = {
-  getAllSpots: async () => {
-    try {
-      const response = await api.get(API_ENDPOINTS.spots);
-      return response.data.spots;
-    } catch (error) {
-      throw error.response?.data || { message: 'Network error' };
-    }
-  },
-
-  getSpotsByCategory: async (category) => {
-    try {
-      const response = await api.get(API_ENDPOINTS.spotCategory(category));
-      return response.data.spots;
-    } catch (error) {
-      throw error.response?.data || { message: 'Network error' };
-    }
-  },
-};
+// fetchUsers() and spotAPI (getAllSpots, getSpotsByCategory) were removed on
+// 2026-10-04: nothing called them. The spot list comes from ArrivalContext and
+// the leaderboard from Screens/Leaderboard.js.
 
 // ─── Categories API ───────────────────────────────────────────────────────────
 // The four categories used to be a hardcoded array in Screens/Categories.js,
