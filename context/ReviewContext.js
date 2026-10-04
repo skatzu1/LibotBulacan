@@ -14,10 +14,13 @@ export const ReviewProvider = ({ children }) => {
   const { isLoaded, isSignedIn, getToken } = useAuth();
 
   const [reviewsBySpot,     setReviewsBySpot]     = useState({});
-  const [loading,           setLoading]           = useState(false);
   const [error,             setError]             = useState(null);
   const [moderationStatus,  setModerationStatus]  = useState(null);
 
+  // No review prefetch any more. Sign-in used to fetch the spot list and then
+  // every spot's whole review list, one after another (24 requests), only so
+  // Home could show star ratings. The spot list carries ratingAvg/ratingCount
+  // now (see getAverageRating), and a spot's page loads its own reviews.
   useEffect(() => {
     // Wait for Clerk to finish restoring/validating the session before
     // hitting authenticated endpoints. This is a defensive guard on top of
@@ -25,26 +28,6 @@ export const ReviewProvider = ({ children }) => {
     // effect never fires a request while isSignedIn is still unresolved,
     // regardless of what else changes upstream in the future.
     if (!isLoaded || !isSignedIn) return;
-
-    const prefetchAllReviews = async () => {
-      try {
-        setLoading(true);
-        const res = await api.get("/api/spots");
-        const data = res.data;
-        if (data.success && data.spots) {
-          // Fetch reviews sequentially to avoid server rate limits
-          for (const spot of data.spots) {
-            if (spot._id) await fetchReviews(spot._id);
-          }
-        }
-      } catch (err) {
-        console.error("Error prefetching reviews:", err);
-        setError(err.message);
-      } finally {
-        setLoading(false);
-      }
-    };
-    prefetchAllReviews();
     fetchModerationStatus();
   }, [isLoaded, isSignedIn]);
 
@@ -216,13 +199,20 @@ export const ReviewProvider = ({ children }) => {
   }, []);
 
   const getReviewsForSpot = useCallback((spotId) => reviewsBySpot[spotId] || [], [reviewsBySpot]);
-  const getAverageRating  = useCallback((spotId) => {
-    const reviews = reviewsBySpot[spotId] || [];
+  // From the spot's reviews once they are loaded (its page loads them, and so
+  // does posting or deleting one), so a new review counts at once; before that,
+  // from `listed` — the spot's ratingAvg / ratingCount in the spot list.
+  const getAverageRating  = useCallback((spotId, listed = 0) => {
+    const reviews = reviewsBySpot[spotId];
+    if (!reviews) return Number(listed || 0).toFixed(1);
     if (!reviews.length) return "0.0";
     const sum = reviews.reduce((acc, r) => acc + r.rating, 0);
     return (sum / reviews.length).toFixed(1);
   }, [reviewsBySpot]);
-  const getReviewCount    = useCallback((spotId) => (reviewsBySpot[spotId] || []).length, [reviewsBySpot]);
+  const getReviewCount    = useCallback(
+    (spotId, listed = 0) => (reviewsBySpot[spotId] ? reviewsBySpot[spotId].length : listed || 0),
+    [reviewsBySpot]
+  );
 
   const deleteReview = useCallback(async (reviewId, spotId) => {
     try {
@@ -244,7 +234,7 @@ export const ReviewProvider = ({ children }) => {
 
   return (
     <ReviewContext.Provider value={{
-      reviewsBySpot, loading, error, moderationStatus,
+      reviewsBySpot, error, moderationStatus,
       fetchReviews, addReview, reportReview, reactToReview, fetchModerationStatus,
       getReviewsForSpot, getAverageRating, getReviewCount, deleteReview,
     }}>
