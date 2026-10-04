@@ -1,4 +1,4 @@
-import { ratingBreakdown, filterAndSortReviews, pageOf, pageNumbers, timeAgo } from "../utils/reviewList";
+import { averageRating, ratingBreakdown, filterAndSortReviews, pageOf, pageNumbers, timeAgo } from "../utils/reviewList";
 
 const day = 86400 * 1000;
 const NOW = new Date("2026-10-02T12:00:00Z").getTime();
@@ -10,6 +10,25 @@ const reviews = [
   { _id: "c", rating: 5, comment: "Must visit",       userName: "Cara", createdAt: at(3),  likes: 0, dislikes: 0 },
   { _id: "d", rating: 4, comment: "Nice museum",      userName: "Dan",  createdAt: at(40), likes: 1, dislikes: 3 },
 ];
+
+describe("averageRating", () => {
+  it("counts each reviewer once, by their newest review", () => {
+    // u1 posted three 5-star reviews, then changed their mind to 1 star.
+    const list = [
+      { clerkUserId: "u1", rating: 1, createdAt: at(1) },
+      { clerkUserId: "u1", rating: 5, createdAt: at(5) },
+      { clerkUserId: "u1", rating: 5, createdAt: at(9) },
+      { clerkUserId: "u2", rating: 4, createdAt: at(3) },
+    ];
+    expect(averageRating(list)).toBe("2.5"); // (1 + 4) / 2, as the server's ratingAvg
+  });
+  it("is the plain average when everyone reviewed once", () => {
+    expect(averageRating(reviews.map((r, i) => ({ ...r, clerkUserId: `u${i}` })))).toBe("4.0");
+  });
+  it("is 0.0 with no reviews", () => {
+    expect(averageRating([])).toBe("0.0");
+  });
+});
 
 describe("ratingBreakdown", () => {
   it("counts each star level, as a share of all reviews", () => {

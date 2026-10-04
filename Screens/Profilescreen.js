@@ -18,7 +18,7 @@ import { useProfileImage } from "../context/ProfileImageContext";
 import { useTheme, fonts, typography } from "../context/ThemeContext";
 import { ScreenHeader, ListRow, LoadingState, Avatar, H_PAD, TAP } from "../components/ui";
 import { BASE_URL } from "../api";
-import { clerkPhoto } from "../utils/image";
+import { clerkPhoto, avatarImage } from "../utils/image";
 import Icon from "../components/Icon";
 
 // Was a hardcoded "https://libotbackend.onrender.com" — the only place in the
@@ -263,7 +263,7 @@ export default function ProfileScreen() {
                   ]}
                 >
                   <Image
-                    source={{ uri: displayPhoto }}
+                    source={{ uri: avatarImage(displayPhoto, modalSize) }}
                     style={{ width: modalSize, height: modalSize }}
                     resizeMode="cover"
                   />
