@@ -1686,8 +1686,12 @@ window.updateSpotProximity = function(active) {
       {/* Terminal Place Sheet */}
       {selectedTerminal && (
         <>
+          {/* Tap-outside-to-close for sighted users. Hidden from screen
+              readers, which otherwise found an unnamed full-screen "button";
+              the sheet's own Close button does the same job. */}
           <TouchableOpacity
-            accessibilityRole="button"
+            accessible={false}
+            importantForAccessibility="no"
             style={[styles.scrim, { backgroundColor: colors.overlay }]}
             activeOpacity={1}
             onPress={hideSheet}
