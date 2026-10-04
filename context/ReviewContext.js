@@ -134,11 +134,15 @@ export const ReviewProvider = ({ children }) => {
       // to show a "time remaining" countdown, not just the message string).
       let status = null;
       if (err.response?.status === 403) status = await fetchModerationStatus();
+      // One review per spot (409): the list this screen has must be out of
+      // date, so reload it — your review shows and the review box gives way.
+      const alreadyReviewed = err.response?.status === 409;
+      if (alreadyReviewed) await fetchReviews(spotId);
       // Exclude status.success — it reflects whether *this status fetch*
       // succeeded, not whether the review post did (which is always false
       // here); spreading it as-is would silently flip the result to "success".
       const { success: _statusSuccess, ...statusFields } = status || {};
-      return { success: false, message, ...statusFields };
+      return { success: false, message, alreadyReviewed, ...statusFields };
     }
   }, [postReview, fetchReviews, fetchModerationStatus]);
 

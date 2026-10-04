@@ -648,6 +648,9 @@ export default function InformationScreen({ route, navigation }) {
   const shownReviews     = filterAndSortReviews(reviews, { query: reviewQuery, sort: reviewSort, stars: starFilter, withPhotos: onlyWithPhotos });
   const reviewPage       = pageOf(shownReviews, reviewPageIndex);
   const sortLabel        = (REVIEW_SORTS.find((o) => o.key === reviewSort) || REVIEW_SORTS[0]).label;
+  // One review per spot (the server refuses a second): once you've written
+  // yours, a note takes the review box's place.
+  const hasMyReview      = !!clerkUser?.id && reviews.some((r) => r.clerkUserId === clerkUser.id);
   // The review box opens up while in use or holding a draft.
   const composerOpen     = composerFocused || !!newReview || newRating > 0 || reviewPhotos.length > 0;
   const missions         = getMissionsForSpot(spot._id);
@@ -791,6 +794,13 @@ export default function InformationScreen({ route, navigation }) {
       if (isMutedResult(result)) {
         inputRef.current?.blur();
         showMutedAlert(result);
+        return;
+      }
+      // One review per spot. The reloaded list now shows theirs; the draft is
+      // kept, so it's still there if they delete the old review to post this.
+      if (result?.alreadyReviewed) {
+        inputRef.current?.blur();
+        showAlert("You've already reviewed this spot", "To change your review, delete it from its ⋮ menu, then write a new one.");
         return;
       }
       // Any other failure leaves the box as it is, so the text isn't lost.
@@ -1249,9 +1259,28 @@ export default function InformationScreen({ route, navigation }) {
                 </>
               )}
 
+              {/* Already reviewed: one review per spot, so a note instead of
+                  the box. Deleting the review brings the box back. */}
+              {hasMyReview && (
+                <View style={[styles.fbComposer, styles.fbDone, { borderTopColor: colors.divider }]}>
+                  <Avatar
+                    uri={profileImage || clerkPhoto(clerkUser)}
+                    name={clerkUser?.fullName || clerkUser?.firstName}
+                    size={36}
+                  />
+                  <View style={styles.fbDoneText}>
+                    <Text style={[styles.fbDoneTitle, { color: colors.textPrimary }]}>You've reviewed this spot</Text>
+                    <Text style={[styles.fbDoneSub, { color: colors.textSecondary }]}>
+                      One review per spot. To change yours, delete it from its ⋮ menu, then write a new one.
+                    </Text>
+                  </View>
+                </View>
+              )}
+
               {/* Write a review, Facebook-comment style: your avatar and a
                   rounded box with a camera icon. It opens up (stars, photo
                   thumbnails, send) once you tap in or start. */}
+              {!hasMyReview && (
               <View style={[styles.fbComposer, { borderTopColor: colors.divider }]}>
                 {composerOpen && (
                   <View style={styles.fbRateRow}>
@@ -1364,6 +1393,7 @@ export default function InformationScreen({ route, navigation }) {
                   </Text>
                 )}
               </View>
+              )}
             </>
           )}
 
@@ -1691,6 +1721,11 @@ const styles = StyleSheet.create({
   fbIconOff:       { opacity: 0.4 },
   fbCount:         { fontSize: 11.5, fontFamily: fonts.sansMedium, textAlign: "right" },
   fbNote:          { fontSize: 12, fontFamily: fonts.sansMedium, paddingLeft: 46 },
+  // In its place once you've reviewed the spot.
+  fbDone:          { flexDirection: "row", alignItems: "center", gap: 10 },
+  fbDoneText:      { flex: 1 },
+  fbDoneTitle:     { fontSize: 14, fontFamily: fonts.sansSemi },
+  fbDoneSub:       { fontSize: 12.5, lineHeight: 18, fontFamily: fonts.sans, marginTop: 2 },
 
   // Full-screen photo viewer (black in both themes).
   viewer:          { flex: 1, backgroundColor: "#000000" },
