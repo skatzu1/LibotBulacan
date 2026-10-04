@@ -19,7 +19,7 @@ import { useTheme, fonts, MAX_FONT_SCALE } from "../context/ThemeContext";
 import { TERMS_URL as TERMS_OF_SERVICE_URL, PRIVACY_URL as PRIVACY_POLICY_URL } from "../utils/legalLinks";
 import AuthScaffold, { useAuthStyles, FieldError, FormError } from "../components/AuthScaffold";
 import {
-  nameError, emailError, dobError, confirmPasswordError, clerkErrorToField,
+  nameError, emailError, dobError, confirmPasswordError, clerkErrorToField, DISPOSABLE_EMAIL_ERROR,
   cleanName, cleanEmail, NAME_MAX, EMAIL_MAX,
   GOOGLE_BUSY, googleWindowBusy, googleWindowClosed, googleErrorMessage,
 } from "../utils/authValidation";
@@ -281,6 +281,14 @@ export default function Register({ navigation }) {
 
     setIsLoading(true);
     try {
+      // Temp-mail inboxes vanish within the hour, so they can't hold an
+      // account; turned away here, before Clerk sends them a code.
+      if (await authAPI.isDisposableEmail(email.trim())) {
+        setServerErrors((prev) => ({ ...prev, email: DISPOSABLE_EMAIL_ERROR }));
+        inputRefs.email.current?.focus();
+        return;
+      }
+
       const [firstName, ...lastNameParts] = name.trim().split(/\s+/);
       const lastName = lastNameParts.join(" ") || "";
       const signUpResult = await signUp.create({ emailAddress: email.trim(), password, firstName, lastName });
