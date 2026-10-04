@@ -638,7 +638,10 @@ export default function Mission({ navigation, route }) {
 
             <View style={styles.cameraBottomBar}>
               <TouchableOpacity
-                accessibilityRole="button" style={styles.captureButton} onPress={takePhoto} activeOpacity={0.8}>
+                accessibilityRole="button"
+                accessibilityLabel="Take the photo"
+                accessibilityHint="Checks it against this mission"
+                style={styles.captureButton} onPress={takePhoto} activeOpacity={0.8}>
                 <View style={styles.captureInner} />
               </TouchableOpacity>
             </View>
