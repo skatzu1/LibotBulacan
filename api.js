@@ -25,14 +25,14 @@ export const API_ENDPOINTS = {
   userMe:       `${BASE_URL}/api/users/me`,
   userPoints:   `${BASE_URL}/api/users/points`,
   userBadges:   `${BASE_URL}/api/users/badges`,
-  userClaims:   `${BASE_URL}/api/users/claimed-spots`,
   visitLogs:    `${BASE_URL}/api/visitlogs`,
   spotVisit:    (spotId) => `${BASE_URL}/api/spots/${spotId}/visit`,
   appeals:      `${BASE_URL}/api/appeals/me`,
   moderationStatus: `${BASE_URL}/api/reviews/user/moderation-status`,
   reports:      `${BASE_URL}/api/reports`,
   uploadProfile:`${BASE_URL}/api/upload/profile`,
-  leaderboard:  `${BASE_URL}/api/leaderboard`,
+  // No users/claimed-spots or /api/leaderboard here: neither route exists.
+  // The leaderboard is GET /api/users; claimed spots are /api/users/visitedSpots.
   auth: {
     // login and check-user were removed server-side (2026-09-28): /login was an
     // unauthenticated NoSQL-injection surface with no caller, /check-user was an
