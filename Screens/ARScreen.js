@@ -37,9 +37,10 @@ import {
 import { GpsSmoother, isBetterFix, MAX_USABLE_ACCURACY_M } from "../utils/gpsFilter";
 import useCompassHeading from "../hooks/useCompassHeading";
 import { resolveTrail, triviaForModel } from "../utils/arTrail";
-import { fonts, useTheme } from "../context/ThemeContext";
+import { fonts, typography, radius, shadow, useTheme } from "../context/ThemeContext";
 import Icon from "../components/Icon";
 import { showAlert } from "../components/AppAlert";
+import { PrimaryButton, EmptyState, ScreenHeader, H_PAD } from "../components/ui";
 
 // ─────────────────────────────────────────────
 // DESIGN TOKENS
@@ -107,15 +108,26 @@ const arTokens = (c, isDark) => ({
   // mode, washed out toward the page in light mode. Either way, "not yet".
   travelScrim:  isDark ? "rgba(6,18,20,0.62)" : "rgba(251,248,242,0.60)",
   statusBar:    isDark ? "light-content" : "dark-content",
+  // Behind the trivia sheet and the guide: the same dim as every other
+  // dialog in the app.
+  scrim:        c.overlay,
 
-  radiusSm:     8,
-  radiusMd:     14,
-  radiusLg:     20,
-  radiusXl:     28,
+  // The app's own corner radii (ThemeContext `radius`), so a card here has
+  // the same corners as a card on any other screen.
+  radiusSm:     radius.sm,
+  radiusMd:     radius.md,
+  radiusLg:     radius.card,
+  radiusXl:     radius.xl,
   spaceSm:      8,
   spaceMd:      16,
   spaceLg:      24,
 });
+
+// Shadows for the panels floating on the camera. iOS gets the app's soft
+// shadow; Android gets none, because an elevation shadow under a see-through
+// panel shows through it as a hard grey square (the same bug the tab bar had,
+// see Home.js CustomTabBar).
+const floatShadow = Platform.OS === "ios" ? shadow.md : { elevation: 0 };
 
 // Every component on this screen reads its colours and styles from here, so
 // the whole HUD switches together when the theme does. The style sheets are
@@ -333,9 +345,9 @@ const EncounterFlash = ({ trigger, label }) => {
           },
         ]}
       >
-        <Icon name="zap" size={15} color={TOKEN.ctaText} />
+        <Icon name="zap" size={16} color={TOKEN.ctaText} weight="fill" />
         <Text style={flashSt.bannerText} numberOfLines={1}>
-          {label ? `${label.toUpperCase()} FOUND!` : "OBJECT FOUND!"}
+          {label ? `${label} found!` : "Object found!"}
         </Text>
       </Animated.View>
     </View>
@@ -397,15 +409,11 @@ const makeFlashSt = (TOKEN) => StyleSheet.create({
     backgroundColor: TOKEN.cta,
     paddingHorizontal: 20,
     paddingVertical:   11,
-    borderRadius:      TOKEN.radiusXl,
-    shadowColor:   TOKEN.gold,
-    shadowOffset:  { width: 0, height: 0 },
-    shadowOpacity: 0.7,
-    shadowRadius:  18,
-    elevation:     16,
+    borderRadius:      radius.pill,
+    ...shadow.md,
   },
   bannerText: {
-    color: TOKEN.ctaText, fontSize: 14, fontFamily: fonts.sansBold, letterSpacing: 0.8,
+    ...typography.title, fontFamily: fonts.sansBold, color: TOKEN.ctaText,
   },
 });
 
@@ -654,9 +662,9 @@ const makeFocusSt = (TOKEN) => StyleSheet.create({
   br:     { bottom: 0, right: 0, borderBottomWidth: 2.5, borderRightWidth: 2.5, borderBottomRightRadius: 6 },
   label: {
     marginTop: 10,
-    color: TOKEN.textPrimary, fontFamily: fonts.sansBold, fontSize: 12, letterSpacing: 0.4,
+    ...typography.label, color: TOKEN.textPrimary,
     backgroundColor: TOKEN.chipBg, paddingHorizontal: 10, paddingVertical: 4,
-    borderRadius: 10, overflow: "hidden",
+    borderRadius: radius.pill, overflow: "hidden",
   },
 });
 
@@ -702,15 +710,12 @@ const HowItWorks = ({ visible, onClose }) => {
             </View>
           ))}
 
-          <TouchableOpacity
-            style={guideSt.cta}
+          <PrimaryButton
+            title="Got it"
             onPress={onClose}
-            activeOpacity={0.85}
-            accessibilityRole="button"
             accessibilityLabel="Close the how it works guide"
-          >
-            <Text style={guideSt.ctaText}>Got it</Text>
-          </TouchableOpacity>
+            style={guideSt.cta}
+          />
         </View>
       </View>
     </Modal>
@@ -719,31 +724,29 @@ const HowItWorks = ({ visible, onClose }) => {
 
 const makeGuideSt = (TOKEN) => StyleSheet.create({
   backdrop: {
-    flex: 1, backgroundColor: "rgba(0,0,0,0.72)",
-    alignItems: "center", justifyContent: "center", padding: 26,
+    flex: 1, backgroundColor: TOKEN.scrim,
+    alignItems: "center", justifyContent: "center", padding: H_PAD,
   },
+  // Opaque, like the app's other dialogs (components/AppAlert.js).
   card: {
     width: "100%", maxWidth: 380,
-    backgroundColor: TOKEN.surfaceHigh,
+    backgroundColor: TOKEN.sheet,
     borderRadius: TOKEN.radiusLg,
-    borderWidth: 1, borderColor: TOKEN.borderAccent,
+    borderWidth: 1, borderColor: TOKEN.border,
     padding: 22, gap: 16,
+    ...shadow.lg,
   },
-  header: { flexDirection: "row", alignItems: "center", gap: 9 },
-  title:  { color: TOKEN.textPrimary, fontSize: 17, fontFamily: fonts.sansBold, letterSpacing: -0.2 },
+  header: { flexDirection: "row", alignItems: "center", gap: 10 },
+  title:  { ...typography.h2, fontSize: 22, lineHeight: 28, color: TOKEN.textPrimary, flex: 1 },
   step:   { flexDirection: "row", gap: 12, alignItems: "flex-start" },
   stepIcon: {
     width: 34, height: 34, borderRadius: 17,
     backgroundColor: TOKEN.goldDim,
     alignItems: "center", justifyContent: "center",
   },
-  stepTitle: { color: TOKEN.textPrimary, fontSize: 14, fontFamily: fonts.sansBold, marginBottom: 3 },
-  stepBody:  { color: TOKEN.textSecond, fontSize: 12.5, lineHeight: 18 },
-  cta: {
-    backgroundColor: TOKEN.cta, borderRadius: TOKEN.radiusXl,
-    paddingVertical: 13, alignItems: "center", marginTop: 2,
-  },
-  ctaText: { color: TOKEN.ctaText, fontSize: 14, fontFamily: fonts.sansBold, letterSpacing: 0.6 },
+  stepTitle: { ...typography.title, color: TOKEN.textPrimary, marginBottom: 3 },
+  stepBody:  { ...typography.body, fontSize: 13.5, lineHeight: 20, color: TOKEN.textSecond },
+  cta:       { marginTop: 2 },
 });
 
 // ─────────────────────────────────────────────
@@ -1181,8 +1184,8 @@ const TriviaPopup = ({
 
         <View style={popup.header}>
           <View style={popup.categoryBadge}>
-            <Icon name="book-open" size={10} color={TOKEN.goldLight} style={{ marginRight: 5 }} />
-            <Text style={popup.categoryText}>DID YOU KNOW?</Text>
+            <Icon name="book-open" size={13} color={TOKEN.goldLight} style={{ marginRight: 6 }} />
+            <Text style={popup.categoryText}>Did you know?</Text>
           </View>
           <TouchableOpacity
             accessibilityRole="button"
@@ -1199,7 +1202,7 @@ const TriviaPopup = ({
 
         {activeAnchor?.label ? (
           <View style={popup.anchorBadge}>
-            <Icon name="map-pin" size={10} color={TOKEN.goldLight} style={{ marginRight: 5 }} />
+            <Icon name="map-pin" size={12} color={TOKEN.infoLight} style={{ marginRight: 5 }} />
             <Text style={popup.anchorBadgeText}>{activeAnchor.label}</Text>
           </View>
         ) : null}
@@ -1234,34 +1237,26 @@ const TriviaPopup = ({
           </ScrollView>
         </View>
 
-        <TouchableOpacity
-          accessibilityRole="button" style={popup.doneBtn} onPress={onClose} activeOpacity={0.85}>
-          <Icon name="arrow-left" size={15} color={TOKEN.ctaText} style={{ marginRight: 8 }} />
-          <Text style={popup.doneBtnText}>Return to AR View</Text>
-        </TouchableOpacity>
+        <PrimaryButton title="Return to AR View" onPress={onClose} />
       </Animated.View>
     </Modal>
   );
 };
 
 const makePopup = (TOKEN) => StyleSheet.create({
-  scrim: { ...StyleSheet.absoluteFillObject, backgroundColor: "rgba(0,0,0,0.60)" },
+  scrim: { ...StyleSheet.absoluteFillObject, backgroundColor: TOKEN.scrim },
   card: {
     position:             "absolute",
     bottom: 0, left: 0, right: 0,
     backgroundColor:      TOKEN.sheet,
     borderTopLeftRadius:  TOKEN.radiusXl,
     borderTopRightRadius: TOKEN.radiusXl,
-    paddingHorizontal:    TOKEN.spaceLg,
+    paddingHorizontal:    H_PAD,
     paddingTop:           12,
     paddingBottom:        Platform.OS === "ios" ? 42 : 32,
     borderTopWidth: 1, borderLeftWidth: 1, borderRightWidth: 1,
-    borderColor:          TOKEN.borderAccent,
-    shadowColor:          "#000",
-    shadowOffset:         { width: 0, height: -8 },
-    shadowOpacity:        0.55,
-    shadowRadius:         20,
-    elevation:            24,
+    borderColor:          TOKEN.border,
+    ...shadow.lg,
   },
   dragHandle: {
     alignSelf:       "center",
@@ -1272,67 +1267,62 @@ const makePopup = (TOKEN) => StyleSheet.create({
     marginBottom:    18,
   },
   header:        { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 },
+  // A pill, like the app's other chips. It used to be 9pt tracked capitals.
   categoryBadge: {
     flexDirection:     "row",
     alignItems:        "center",
     backgroundColor:   TOKEN.goldDim,
-    borderRadius:      TOKEN.radiusSm,
-    paddingHorizontal: 10,
-    paddingVertical:   5,
-    borderWidth:       1,
-    borderColor:       TOKEN.border,
+    borderRadius:      radius.pill,
+    paddingHorizontal: 12,
+    paddingVertical:   6,
   },
-  categoryText:    { color: TOKEN.goldLight, fontSize: 9, fontFamily: fonts.sansBold, letterSpacing: 1.5 },
+  categoryText:    { ...typography.label, fontFamily: fonts.sansBold, color: TOKEN.goldLight },
   closeBtn: {
-    width:           32,
-    height:          32,
-    borderRadius:    16,
+    width:           36,
+    height:          36,
+    borderRadius:    18,
     backgroundColor: TOKEN.surfaceHigh,
     alignItems:      "center",
     justifyContent:  "center",
     borderWidth:     1,
     borderColor:     TOKEN.border,
   },
-  spotTitle:   { color: TOKEN.textPrimary, fontSize: 22, fontFamily: fonts.sansBold, letterSpacing: 0.2, lineHeight: 30, marginBottom: 8 },
+  // The spot's name in the display serif, as on its own page and in every
+  // other sheet title in the app.
+  spotTitle:   { ...typography.h2, color: TOKEN.textPrimary, marginBottom: 8 },
   anchorBadge: {
     flexDirection:     "row",
     alignItems:        "center",
-    backgroundColor:   TOKEN.surfaceHigh,
-    borderRadius:      TOKEN.radiusSm,
+    backgroundColor:   TOKEN.infoDim,
+    borderRadius:      radius.pill,
     paddingHorizontal: 10,
     paddingVertical:   5,
     alignSelf:         "flex-start",
     marginBottom:      10,
-    borderWidth:       1,
-    borderColor:       TOKEN.border,
   },
-  anchorBadgeText: { color: TOKEN.infoLight, fontSize: 11, fontFamily: fonts.sansSemi },
+  anchorBadgeText: { ...typography.label, color: TOKEN.infoLight },
   missionCompleteBanner: {
     flexDirection:     "row",
     alignItems:        "center",
     backgroundColor:   TOKEN.successDim,
-    borderRadius:      TOKEN.radiusSm,
+    borderRadius:      TOKEN.radiusMd,
     paddingHorizontal: 12,
-    paddingVertical:   8,
+    paddingVertical:   10,
     alignSelf:         "stretch",
     marginBottom:      12,
-    borderWidth:       1,
-    borderColor:       TOKEN.successDim,
   },
-  missionCompleteText: { color: TOKEN.success, fontSize: 12, fontFamily: fonts.sansBold, letterSpacing: 0.3 },
+  missionCompleteText: { ...typography.label, fontSize: 13, fontFamily: fonts.sansBold, color: TOKEN.success, flex: 1 },
   missionProgressBanner: {
     flexDirection:     "row",
     alignItems:        "center",
     backgroundColor:   TOKEN.goldDim,
-    borderRadius:      TOKEN.radiusSm,
+    borderRadius:      TOKEN.radiusMd,
     paddingHorizontal: 12,
-    paddingVertical:   8,
+    paddingVertical:   10,
     alignSelf:         "stretch",
     marginBottom:      12,
-    borderWidth:       1,
-    borderColor:       TOKEN.border,
   },
-  missionProgressText: { color: TOKEN.goldLight, fontSize: 12, fontFamily: fonts.sansSemi, letterSpacing: 0.2, flex: 1 },
+  missionProgressText: { ...typography.label, fontSize: 13, color: TOKEN.goldLight, flex: 1 },
   divider:    { height: 1, backgroundColor: TOKEN.border, marginBottom: 16 },
   triviaBox: {
     flexDirection:   "row",
@@ -1341,7 +1331,7 @@ const makePopup = (TOKEN) => StyleSheet.create({
     padding:         TOKEN.spaceMd,
     marginBottom:    16,
     minHeight:       88,
-    maxHeight:       160,
+    maxHeight:       170,
     gap:             12,
     borderWidth:     1,
     borderColor:     TOKEN.border,
@@ -1351,29 +1341,13 @@ const makePopup = (TOKEN) => StyleSheet.create({
     height:          28,
     borderRadius:    14,
     backgroundColor: TOKEN.goldDim,
-    borderWidth:     1,
-    borderColor:     TOKEN.border,
     alignItems:      "center",
     justifyContent:  "center",
     flexShrink:      0,
     marginTop:       1,
   },
-  triviaIndexText: { color: TOKEN.goldLight, fontSize: 12, fontFamily: fonts.sansBold },
-  triviaText:      { color: TOKEN.textPrimary, fontSize: 14, lineHeight: 22, flex: 1, flexShrink: 1, opacity: 0.92 },
-  doneBtn: {
-    flexDirection:   "row",
-    alignItems:      "center",
-    justifyContent:  "center",
-    backgroundColor: TOKEN.cta,
-    borderRadius:    24,
-    paddingVertical: 14,
-    shadowColor:     "#000",
-    shadowOffset:    { width: 0, height: 3 },
-    shadowOpacity:   0.25,
-    shadowRadius:    6,
-    elevation:       6,
-  },
-  doneBtnText: { color: TOKEN.ctaText, fontSize: 14, fontFamily: fonts.sansBold, letterSpacing: 0.3 },
+  triviaIndexText: { fontSize: 12.5, fontFamily: fonts.sansBold, color: TOKEN.goldLight },
+  triviaText:      { ...typography.body, fontSize: 15, lineHeight: 23, color: TOKEN.textPrimary, flex: 1, flexShrink: 1 },
 });
 
 // ─────────────────────────────────────────────
@@ -1883,26 +1857,20 @@ export default function ARScreen({ route, navigation }) {
 
           <View style={hud.errorActions}>
             {isPermission && (
-              <TouchableOpacity
-                style={hud.errorBtn}
+              <PrimaryButton
+                title="Open Settings"
+                icon="settings"
                 onPress={() => Linking.openSettings().catch(() => {})}
-                activeOpacity={0.85}
-                accessibilityRole="button"
                 accessibilityLabel="Open app settings to allow location access"
-              >
-                <Icon name="settings" size={12} color={TOKEN.ctaText} style={{ marginRight: 6 }} />
-                <Text style={hud.errorBtnText}>Open Settings</Text>
-              </TouchableOpacity>
+                style={hud.compactBtn}
+              />
             )}
-            <TouchableOpacity
-              style={hud.errorBtnGhost}
+            <PrimaryButton
+              title="Go back"
+              variant="secondary"
               onPress={() => navigation.goBack()}
-              activeOpacity={0.85}
-              accessibilityRole="button"
-              accessibilityLabel="Go back"
-            >
-              <Text style={hud.errorBtnGhostText}>Go back</Text>
-            </TouchableOpacity>
+              style={hud.compactBtn}
+            />
           </View>
         </Animated.View>
       );
@@ -1992,16 +1960,13 @@ export default function ARScreen({ route, navigation }) {
               You've explored everything at {spot.name}.
               {alreadyDone ? " It's saved to your progress — you can walk the trail again any time." : ""}
             </Text>
-            <TouchableOpacity
-              style={step.replayBtn}
+            <PrimaryButton
+              title="Explore again"
+              icon="refresh-cw"
               onPress={restartTrail}
-              activeOpacity={0.85}
-              accessibilityRole="button"
               accessibilityLabel="Explore this spot again"
-            >
-              <Icon name="refresh-cw" size={13} color={TOKEN.ctaText} style={{ marginRight: 6 }} />
-              <Text style={step.replayBtnText}>Explore again</Text>
-            </TouchableOpacity>
+              style={step.replayBtn}
+            />
           </View>
 
         // ── Step 1: walk there ──────────────────────────────────────────
@@ -2091,60 +2056,47 @@ export default function ARScreen({ route, navigation }) {
   // and in a dev build it surfaces as a load error with no explanation. Most
   // spots are in this state today, because the AR mission is auto-created for
   // every spot while the .glb has to be uploaded by hand afterwards.
-  if (!spot.AR3DModelURL) {
-    return (
-      <View style={[main.root, main.unsupportedRoot]}>
-        <StatusBar barStyle={TOKEN.statusBar} backgroundColor={TOKEN.bg} />
-        <View style={main.unsupportedCard}>
-          <View style={main.unsupportedIcon}>
-            <Icon name="box" size={26} color={TOKEN.warn} />
-          </View>
-          <Text style={main.unsupportedTitle}>No 3D model here yet</Text>
-          <Text style={main.unsupportedBody}>
-            {spot.name} doesn't have its AR model set up yet, so there's nothing to
-            find here for now. The other missions at this spot still work.
-          </Text>
-          <TouchableOpacity
-            style={main.unsupportedBtn}
-            onPress={() => navigation.goBack()}
-            activeOpacity={0.85}
-            accessibilityRole="button"
-            accessibilityLabel="Go back to the spot"
-          >
-            <Text style={main.unsupportedBtnText}>Back to {spot.name}</Text>
-          </TouchableOpacity>
-        </View>
+  // No camera on these two, so they're ordinary app screens: the shared
+  // header, empty state and button, exactly as any other screen shows a
+  // "nothing here" message.
+  const renderNoAR = ({ icon, title, text }) => (
+    <View style={main.root}>
+      <StatusBar barStyle={TOKEN.statusBar} backgroundColor={TOKEN.bg} />
+      <ScreenHeader title="AR View" onBack={() => navigation.goBack()} />
+      <View style={main.noArBody}>
+        <EmptyState
+          icon={icon}
+          title={title}
+          text={text}
+          action={
+            <PrimaryButton
+              title={`Back to ${spot.name}`}
+              onPress={() => navigation.goBack()}
+              accessibilityLabel="Go back to the spot"
+              style={main.noArBtn}
+            />
+          }
+        />
       </View>
-    );
+    </View>
+  );
+
+  if (!spot.AR3DModelURL) {
+    return renderNoAR({
+      icon: "box",
+      title: "No 3D model here yet",
+      text: `${spot.name} doesn't have its AR model set up yet, so there's nothing to find here for now. The other missions at this spot still work.`,
+    });
   }
 
   // Device can't do AR — say so plainly instead of mounting the navigator and
   // leaving the user on a black screen wondering what broke.
   if (arSupport === "unsupported") {
-    return (
-      <View style={[main.root, main.unsupportedRoot]}>
-        <StatusBar barStyle={TOKEN.statusBar} backgroundColor={TOKEN.bg} />
-        <View style={main.unsupportedCard}>
-          <View style={main.unsupportedIcon}>
-            <Icon name="camera-off" size={26} color={TOKEN.warn} />
-          </View>
-          <Text style={main.unsupportedTitle}>AR isn't available on this phone</Text>
-          <Text style={main.unsupportedBody}>
-            This mission needs ARCore, which this device doesn't support. You can still
-            visit {spot.name} and complete the other missions there.
-          </Text>
-          <TouchableOpacity
-            style={main.unsupportedBtn}
-            onPress={() => navigation.goBack()}
-            activeOpacity={0.85}
-            accessibilityRole="button"
-            accessibilityLabel="Go back to the spot"
-          >
-            <Text style={main.unsupportedBtnText}>Back to {spot.name}</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-    );
+    return renderNoAR({
+      icon: "camera-off",
+      title: "AR isn't available on this phone",
+      text: `This mission needs ARCore, which this device doesn't support. You can still visit ${spot.name} and complete the other missions there.`,
+    });
   }
 
   return (
@@ -2219,7 +2171,7 @@ export default function ARScreen({ route, navigation }) {
           accessibilityRole="button"
           accessibilityLabel="Leave AR activity"
         >
-          <Icon name="arrow-left" size={18} color={TOKEN.textPrimary} />
+          <Icon name="chevron-left" size={22} color={TOKEN.textPrimary} />
         </TouchableOpacity>
         {/* "AR ACTIVITY" in tracked capitals was branding, not information —
             the user already knows they opened AR, and the spot's name is on
@@ -2280,36 +2232,27 @@ export default function ARScreen({ route, navigation }) {
 // nothing competing beside it.
 const makeStep = (TOKEN) => StyleSheet.create({
   header:      { flexDirection: "row", alignItems: "center", gap: 8 },
-  spotName:    { flex: 1, color: TOKEN.textPrimary, fontSize: 13.5, fontFamily: fonts.sansBold },
-  count:       { color: TOKEN.textSecond, fontSize: 12.5, fontFamily: fonts.sansSemi },
+  spotName:    { ...typography.title, fontSize: 14.5, fontFamily: fonts.sansBold, flex: 1, color: TOKEN.textPrimary },
+  count:       { ...typography.label, fontSize: 12.5, color: TOKEN.textSecond },
   doneChip: {
     flexDirection: "row", alignItems: "center", gap: 4,
     backgroundColor: TOKEN.successDim,
-    borderRadius: 10, paddingHorizontal: 8, paddingVertical: 3,
+    borderRadius: radius.pill, paddingHorizontal: 9, paddingVertical: 3,
   },
-  doneChipText: { color: TOKEN.success, fontSize: 11, fontFamily: fonts.sansBold },
-  replayBtn: {
-    flexDirection: "row", alignItems: "center",
-    backgroundColor: TOKEN.cta, borderRadius: TOKEN.radiusXl,
-    paddingHorizontal: 16, paddingVertical: 9, marginTop: 6,
-  },
-  replayBtnText: { color: TOKEN.ctaText, fontSize: 12.5, fontFamily: fonts.sansBold },
+  doneChipText: { ...typography.caption, fontFamily: fonts.sansBold, color: TOKEN.success },
+  // The app's yellow button (components/ui.js PrimaryButton), sized down a
+  // little to sit inside the card.
+  replayBtn: { minHeight: 46, alignSelf: "center", marginTop: 6 },
   // Plain words where three unlabeled bars used to be.
-  stepLine:    { color: TOKEN.textMuted, fontSize: 11.5, fontFamily: fonts.sansBold, letterSpacing: 0.4, textAlign: "center" },
+  stepLine:    { ...typography.caption, fontFamily: fonts.sansSemi, color: TOKEN.textMuted, textAlign: "center" },
 
   body:     { alignItems: "center", gap: 6, paddingTop: 6, paddingBottom: 2 },
   iconWrap: {
     width: 46, height: 46, borderRadius: 23,
     alignItems: "center", justifyContent: "center", marginBottom: 2,
   },
-  title: {
-    color: TOKEN.textPrimary, fontSize: 17, fontFamily: fonts.sansBold,
-    textAlign: "center", letterSpacing: -0.3,
-  },
-  sub: {
-    color: TOKEN.textSecond, fontSize: 13, lineHeight: 18, textAlign: "center",
-    paddingHorizontal: 4,
-  },
+  title: { ...typography.h3, fontSize: 18, lineHeight: 23, color: TOKEN.textPrimary, textAlign: "center" },
+  sub:   { ...typography.body, fontSize: 13.5, lineHeight: 20, color: TOKEN.textSecond, textAlign: "center", paddingHorizontal: 4 },
 
 
   // Ground-scanning target, lower-centre so it sits where the floor is when
@@ -2346,11 +2289,7 @@ const makeHud = (TOKEN) => StyleSheet.create({
     borderWidth:     1,
     borderColor:     TOKEN.borderAccent,
     gap:             8,
-    shadowColor:     "#000",
-    shadowOffset:    { width: 0, height: 4 },
-    shadowOpacity:   0.45,
-    shadowRadius:    12,
-    elevation:       12,
+    ...floatShadow,
   },
   errorContainer:  { borderColor: TOKEN.danger, backgroundColor: TOKEN.errorSurface },
   errorRow:        { flexDirection: "row", alignItems: "flex-start", gap: 10 },
@@ -2362,28 +2301,14 @@ const makeHud = (TOKEN) => StyleSheet.create({
     alignItems:      "center",
     justifyContent:  "center",
   },
-  errorTitle:   { color: TOKEN.textPrimary, fontSize: 13, fontFamily: fonts.sansBold, marginBottom: 3 },
-  errorMsg:     { color: TOKEN.textSecond,  fontSize: 12, lineHeight: 17 },
-  errorActions: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 2 },
-  errorBtn: {
-    flexDirection: "row", alignItems: "center",
-    backgroundColor: TOKEN.cta,
-    borderRadius: TOKEN.radiusXl,
-    paddingHorizontal: 14, paddingVertical: 9,
-  },
-  errorBtnText: { color: TOKEN.ctaText, fontSize: 12, fontFamily: fonts.sansBold },
-  errorBtnGhost: {
-    borderRadius: TOKEN.radiusXl,
-    paddingHorizontal: 14, paddingVertical: 9,
-    borderWidth: 1, borderColor: TOKEN.border,
-  },
-  errorBtnGhostText: { color: TOKEN.textSecond, fontSize: 12, fontFamily: fonts.sansBold },
+  errorTitle:   { ...typography.title, fontFamily: fonts.sansBold, color: TOKEN.textPrimary, marginBottom: 3 },
+  errorMsg:     { ...typography.body, fontSize: 13.5, lineHeight: 20, color: TOKEN.textSecond },
+  errorActions: { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 4 },
+  // The app's buttons (PrimaryButton, primary and secondary), side by side.
+  compactBtn:   { flex: 1, minHeight: 46, paddingHorizontal: 12 },
   loadingRow:   { flexDirection: "row", alignItems: "center" },
-  loadingText:  { color: TOKEN.textSecond, fontSize: 13 },
-  loadingHint:  { color: TOKEN.textMuted, fontSize: 11, marginTop: 2, lineHeight: 15 },
-  // Collected-progress pips (replaced the two "x / y" stat badges)
-  // In-zone call to action — replaces the small grey "point camera…" line
-  // with the one instruction that matters, styled as the primary action.
+  loadingText:  { ...typography.bodyStrong, color: TOKEN.textSecond },
+  loadingHint:  { ...typography.caption, fontFamily: fonts.sans, color: TOKEN.textMuted, marginTop: 2 },
 });
 
 // ─────────────────────────────────────────────
@@ -2404,6 +2329,7 @@ const makeMain = (TOKEN) => StyleSheet.create({
     justifyContent: "space-between",
     zIndex:         100,
   },
+  // The round back button the spot page has (InformationScreen CircleBtn).
   iconBtn: {
     width:           40,
     height:          40,
@@ -2413,42 +2339,21 @@ const makeMain = (TOKEN) => StyleSheet.create({
     justifyContent:  "center",
     borderWidth:     1,
     borderColor:     TOKEN.borderAccent,
-    shadowColor:     "#000",
-    shadowOffset:    { width: 0, height: 2 },
-    shadowOpacity:   0.35,
-    shadowRadius:    6,
-    elevation:       8,
+    ...floatShadow,
   },
   topRight: { flexDirection: "row", alignItems: "center", gap: 8 },
 
-  // ── "This device can't do AR" fallback ──
-  unsupportedRoot: { backgroundColor: TOKEN.bg, alignItems: "center", justifyContent: "center", padding: 26 },
-  unsupportedCard: {
-    width: "100%", maxWidth: 360, alignItems: "center", gap: 14,
-    backgroundColor: TOKEN.surfaceHigh,
-    borderRadius: TOKEN.radiusLg,
-    borderWidth: 1, borderColor: TOKEN.border,
-    padding: 26,
-  },
-  unsupportedIcon: {
-    width: 58, height: 58, borderRadius: 29,
-    backgroundColor: TOKEN.goldDim,
-    alignItems: "center", justifyContent: "center",
-  },
-  unsupportedTitle: { color: TOKEN.textPrimary, fontSize: 17, fontFamily: fonts.sansBold, textAlign: "center" },
-  unsupportedBody:  { color: TOKEN.textSecond, fontSize: 13, lineHeight: 19, textAlign: "center" },
-  unsupportedBtn: {
-    backgroundColor: TOKEN.cta, borderRadius: TOKEN.radiusXl,
-    paddingVertical: 12, paddingHorizontal: 22, marginTop: 4,
-  },
-  unsupportedBtnText: { color: TOKEN.ctaText, fontSize: 13.5, fontFamily: fonts.sansBold },
+  // ── No model / no AR on this phone ──
+  noArBody: { flex: 1, justifyContent: "center", paddingHorizontal: H_PAD, paddingBottom: 60 },
+  noArBtn:  { alignSelf: "stretch", marginTop: 8 },
   // A labelled button, not a bare "?" glyph — the one control on this
   // screen a first-time user most needs to find is the explanation.
   helpBtn: {
     flexDirection: "row", alignItems: "center", gap: 6,
     backgroundColor: TOKEN.surface,
-    borderRadius: 20, paddingHorizontal: 12, paddingVertical: 8,
+    borderRadius: radius.pill, paddingHorizontal: 14, minHeight: 40,
     borderWidth: 1, borderColor: TOKEN.borderAccent,
+    ...floatShadow,
   },
-  helpBtnText: { color: TOKEN.textPrimary, fontSize: 12, fontFamily: fonts.sansBold },
+  helpBtnText: { ...typography.label, fontSize: 13, color: TOKEN.textPrimary },
 });
