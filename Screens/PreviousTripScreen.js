@@ -134,7 +134,9 @@ export default function PreviousTripsScreen() {
 
           <View style={styles.infoRow}>
             <Icon name="map-pin" size={13} color={colors.brand} />
-            <Text style={[styles.infoText, { color: colors.textSecondary }]} numberOfLines={1}>{spot.location}</Text>
+            {/* The spot's city. This used to show `location`, a field that was
+                empty on every spot (and is now gone), so only the pin showed. */}
+            <Text style={[styles.infoText, { color: colors.textSecondary }]} numberOfLines={1}>{spot.city}</Text>
           </View>
 
           <View style={[styles.divider, { backgroundColor: colors.divider }]} />

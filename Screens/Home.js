@@ -239,15 +239,15 @@ function HomeContent({ profilePhoto, navigation }) {
   const handleSpotPress = (spot) => navigation.navigate("InformationScreen", { spot });
 
   const sliderData = useMemo(() => allSpots.slice(0, 8).map(
-    ({ _id, image, name, description, location, city, rating, modelUrl, visitCount }, i) => ({
+    ({ _id, image, name, description, city, rating, modelUrl, visitCount }, i) => ({
       id:          _id || String(i),
       image,
       title:       name,
-      location:    city || location || "Philippines",
+      location:    city || "Philippines",
       description: description || "",
       rating:      getAverageRating(_id) || 0,
       visitCount:  visitCount ?? 0,
-      spot:        { _id, image, name, description, location, city, rating, modelUrl },
+      spot:        { _id, image, name, description, city, rating, modelUrl },
     })
   ), [allSpots, getAverageRating]);
 
@@ -260,7 +260,7 @@ function HomeContent({ profilePhoto, navigation }) {
   const results = useMemo(() => {
     if (q.length === 0) return [];
     return allSpots.filter((s) =>
-      [s.name, s.city, s.location, s.address, s.description]
+      [s.name, s.city, s.description]
         .filter(Boolean)
         .some((f) => String(f).toLowerCase().includes(q))
     );
