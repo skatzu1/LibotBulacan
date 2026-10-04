@@ -134,7 +134,7 @@ export function SpotCard({
 }) {
   const { colors } = useTheme();
   const name = spot?.name || spot?.title || "Unknown spot";
-  const loc  = spot?.city || spot?.location || spot?.address || "";
+  const loc  = spot?.city || "";
   const img  = spot?.image;
   const cardH = height ?? (wide ? 185 : 150);
 
