@@ -11,6 +11,25 @@ export const REVIEW_SORTS = [
 
 export const REVIEWS_PER_PAGE = 5;
 
+/**
+ * A spot's star rating, "4.3": each reviewer counted once, by their newest
+ * review — the same rule as the server's ratingAvg (LibotBackend
+ * utils/ratings.js), so the figure doesn't change when the spot's page loads
+ * its reviews. A traveler may review a spot many times; without this, one
+ * person's ten 5-star reviews outweighed nine other people. "0.0" with none.
+ */
+export function averageRating(reviews = []) {
+  const latest = new Map();
+  for (const r of reviews) {
+    const key = r.clerkUserId ?? r._id;
+    const prev = latest.get(key);
+    if (!prev || time(r) > time(prev)) latest.set(key, r);
+  }
+  if (!latest.size) return "0.0";
+  const sum = [...latest.values()].reduce((acc, r) => acc + r.rating, 0);
+  return (Math.round((sum / latest.size) * 10) / 10).toFixed(1);
+}
+
 /** [{ stars: 5, count, percent }, …, { stars: 1, … }]; percents of all reviews. */
 export function ratingBreakdown(reviews = []) {
   const total = reviews.length;

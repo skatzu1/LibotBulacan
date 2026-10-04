@@ -52,7 +52,15 @@ jest.mock("expo-location", () => ({
 const SPOT = { _id: "spot1", name: "Barasoain", coordinates: { lat: 14.8456, lng: 120.8121 } };
 const north = (m) => SPOT.coordinates.lat + m / 111_320;
 
-const body = (url) => (String(url).endsWith("/api/spots") ? { success: true, spots: [SPOT] } : { success: true, spotIds: [] });
+// What POST /api/arrivals answers; a test can swap it (e.g. for "too far").
+let arrivalAnswer;
+const FIRST_ARRIVAL = { success: true, recorded: true, firstVisit: true, pointsEarned: 10, points: 10, visitCount: 1, badge: null };
+const body = (url) => {
+  const u = String(url);
+  if (u.endsWith("/api/spots")) return { success: true, spots: [SPOT] };
+  if (u.endsWith("/api/arrivals")) return arrivalAnswer;
+  return { success: true, spotIds: [] };
+};
 // `offline` makes every reward call fail the way fetch does with no signal.
 let offline = false;
 global.fetch = jest.fn(async (url) => {
@@ -82,6 +90,7 @@ const AsyncStorage = require("@react-native-async-storage/async-storage");
 beforeEach(async () => {
   mockWatches.length = 0;
   offline = false;
+  arrivalAnswer = FIRST_ARRIVAL;
   await AsyncStorage.clear();
   jest.spyOn(console, "log").mockImplementation(() => {});
   jest.spyOn(console, "warn").mockImplementation(() => {});
@@ -125,12 +134,19 @@ it("adapts GPS effort to the distance from the nearest spot, and still detects a
   expect(live()[0].options).toMatchObject({ accuracy: 4, timeInterval: 3000, distanceInterval: 5 });
   expect(mockWatches.filter((w) => w.removed)).toHaveLength(2); // old watches were stopped
 
-  // Arrival: one precise fix inside the radius logs the visit with the server.
+  // Arrival: one precise fix inside the radius sends one request, with the
+  // position the server checks.
   global.fetch.mockClear();
   await feed(10, 6);
   for (let i = 0; i < 4; i++) await act(async () => {});
-  const calls = global.fetch.mock.calls.map(([u]) => String(u));
-  expect(calls.some((u) => u.endsWith("/api/spots/spot1/visit"))).toBe(true);
+  const calls = global.fetch.mock.calls.filter(([u]) => String(u).endsWith("/api/arrivals"));
+  expect(calls).toHaveLength(1);
+  const sent = JSON.parse(calls[0][1].body);
+  expect(sent).toEqual({ spotId: "spot1", lat: north(10), lng: SPOT.coordinates.lng });
+  // None of the old one-reward-per-call routes.
+  const old = global.fetch.mock.calls.map(([u]) => new URL(String(u)).pathname)
+    .filter((p) => ["/api/users/points", "/api/users/badges", "/api/visitlogs"].includes(p) || p.endsWith("/visit"));
+  expect(old).toEqual([]);
 });
 
 it("keeps a visit made with no signal and delivers it once the connection is back", async () => {
@@ -142,7 +158,10 @@ it("keeps a visit made with no signal and delivers it once the connection is bac
   await feed(10, 6);
   await settle();
   const pendingKey = "pendingRewards_user_test";
-  expect(JSON.parse(await AsyncStorage.getItem(pendingKey))).toEqual(["spot1"]);
+  // Saved with where the phone was then — that is what the server checks.
+  expect(JSON.parse(await AsyncStorage.getItem(pendingKey))).toEqual([
+    { spotId: "spot1", lat: north(10), lng: SPOT.coordinates.lng },
+  ]);
 
   // Signal returns; the next location fix after the retry interval replays it.
   offline = false;
@@ -152,11 +171,45 @@ it("keeps a visit made with no signal and delivers it once the connection is bac
   await feed(12, 6);
   await settle(10);
 
+  const replays = global.fetch.mock.calls.filter(([u]) => String(u).endsWith("/api/arrivals"));
+  expect(replays.length).toBeGreaterThanOrEqual(1);
+  expect(JSON.parse(replays[0][1].body).lat).toBe(north(10)); // the saved position, not the current one
+  expect(JSON.parse(await AsyncStorage.getItem(pendingKey))).toEqual([]);
+});
+
+it("replays a visit queued by an older build (a bare spotId) through the old routes", async () => {
+  await AsyncStorage.setItem("pendingRewards_user_test", JSON.stringify(["spot1"]));
+  await mount();
+  await settle(10);
   const paths = global.fetch.mock.calls.map(([u]) => new URL(String(u)).pathname);
   expect(paths).toEqual(expect.arrayContaining([
     "/api/spots/spot1/visit", "/api/users/points", "/api/visitlogs", "/api/users/badges",
   ]));
-  expect(JSON.parse(await AsyncStorage.getItem(pendingKey))).toEqual([]);
+  expect(JSON.parse(await AsyncStorage.getItem("pendingRewards_user_test"))).toEqual([]);
+});
+
+it("an arrival the server places too far away pays nothing and says nothing", async () => {
+  const Notifications = require("expo-notifications");
+  arrivalAnswer = { success: true, recorded: false, tooFar: true, distance: 400, radiusMeters: 120 };
+  await mount();
+  await feed(20_000, 60);
+  Notifications.scheduleNotificationAsync.mockClear();
+  await feed(10, 6);
+  await settle();
+  expect(Notifications.scheduleNotificationAsync).not.toHaveBeenCalled();
+  expect(JSON.parse(await AsyncStorage.getItem("pendingRewards_user_test"))).toEqual([]);
+  expect(JSON.parse(await AsyncStorage.getItem("claimedSpotIds_user_test") ?? "[]")).toEqual([]);
+});
+
+it("an arrival while the app is closed is queued for the server, with its position", async () => {
+  const TaskManager = require("expo-task-manager");
+  const task = TaskManager.defineTask.mock.calls[0][1];
+  await AsyncStorage.setItem("currentUserId", "user_test");
+  await AsyncStorage.setItem("allSpots", JSON.stringify([SPOT]));
+  await task({ data: { locations: [{ coords: { latitude: north(15), longitude: SPOT.coordinates.lng } }] } });
+  expect(JSON.parse(await AsyncStorage.getItem("pendingRewards_user_test"))).toEqual([
+    { spotId: "spot1", lat: north(15), lng: SPOT.coordinates.lng },
+  ]);
 });
 
 it("a visit that reaches the server is not queued", async () => {

@@ -9,6 +9,7 @@ import Icon from "../components/Icon";
 import { useTheme, lightColors, darkColors, fonts } from "../context/ThemeContext";
 import { usePreferredFrameRate } from "../modules/frame-rate";
 import { fetchModelBounds, fitBounds } from "./modelFit";
+import { useCachedModel } from "./modelCache";
 import {
   Viro3DSceneNavigator,
   ViroScene,
@@ -109,7 +110,9 @@ const ModelScene = ({ sceneNavigator }) => {
     onModelReady,
     onModelError,
   } = sceneNavigator.viroAppProps;
-  const showModel = sceneReady && !!fit;
+  // modelUrl is null while the model downloads into the phone's cache (see
+  // utils/modelCache.js); given the URL meanwhile, Viro would fetch it too.
+  const showModel = sceneReady && !!fit && !!modelUrl;
   const { scale, position } = showModel ? placement(fit, 1) : {};
 
   return (
@@ -168,6 +171,9 @@ export default function ModelViewer({
   baseRotY = DEFAULT_ROT_Y,
 }) {
   const { colors, isDark } = useTheme();
+  // The local copy of the model once it's downloaded, so reopening a spot
+  // doesn't download it again.
+  const model = useCachedModel(url);
   const [fit, setFit]         = useState(null);   // null until the model's bounds are read
   const [loaded, setLoaded]   = useState(false);
   const [error, setError]     = useState(false);
@@ -327,6 +333,7 @@ export default function ModelViewer({
   };
 
   const onModelError = () => {
+    if (model.onLocalError()) return; // the cached copy failed; Viro now loads the URL
     stopMotion();
     setError(true);
   };
@@ -402,7 +409,7 @@ export default function ModelViewer({
         shadowsEnabled={false}
         initialScene={{ scene: ModelScene }}
         viroAppProps={{
-          modelUrl: url, fit, sceneReady, objectRef, isDark, baseRotX, baseRotY,
+          modelUrl: model.uri, fit, sceneReady, objectRef, isDark, baseRotX, baseRotY,
           onSceneReady: () => setSceneReady(true), onModelReady, onModelError,
         }}
         style={StyleSheet.absoluteFill}

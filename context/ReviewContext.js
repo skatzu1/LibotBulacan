@@ -1,6 +1,7 @@
 import React, { createContext, useState, useContext, useCallback, useEffect } from "react";
 import { useAuth } from "@clerk/clerk-expo";
 import api, { BASE_URL } from "../api";
+import { averageRating } from "../utils/reviewList";
 
 // The server's limit (LibotBackend utils/reviewPhotos.js).
 export const MAX_REVIEW_PHOTOS = 4;
@@ -202,12 +203,11 @@ export const ReviewProvider = ({ children }) => {
   // From the spot's reviews once they are loaded (its page loads them, and so
   // does posting or deleting one), so a new review counts at once; before that,
   // from `listed` — the spot's ratingAvg / ratingCount in the spot list.
+  // Each reviewer counts once either way (utils/reviewList.js averageRating).
   const getAverageRating  = useCallback((spotId, listed = 0) => {
     const reviews = reviewsBySpot[spotId];
     if (!reviews) return Number(listed || 0).toFixed(1);
-    if (!reviews.length) return "0.0";
-    const sum = reviews.reduce((acc, r) => acc + r.rating, 0);
-    return (sum / reviews.length).toFixed(1);
+    return averageRating(reviews);
   }, [reviewsBySpot]);
   const getReviewCount    = useCallback(
     (spotId, listed = 0) => (reviewsBySpot[spotId] ? reviewsBySpot[spotId].length : listed || 0),

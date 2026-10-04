@@ -388,7 +388,7 @@ export default function BadgeScreen() {
         <View ref={shareCardRef} style={styles.shareCard} collapsable={false}>
           {selectedBadge?.image && (
             <Image
-              source={{ uri: selectedBadge.image }}
+              source={{ uri: badgeImage(selectedBadge.image, 200) }}
               style={styles.shareCardImage}
               resizeMode="contain"
             />
@@ -493,7 +493,7 @@ export default function BadgeScreen() {
               <View style={styles.modalIconInner}>
                 {selectedBadge?.image ? (
                   <Image
-                    source={{ uri: selectedBadge.image }}
+                    source={{ uri: badgeImage(selectedBadge.image, 110) }}
                     style={[styles.modalBadgeImage, !selectedBadge?.claimed && styles.badgeImageLocked]}
                     resizeMode="contain"
                   />

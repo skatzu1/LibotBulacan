@@ -135,8 +135,10 @@ export default function PreviousTripsScreen() {
           <View style={styles.infoRow}>
             <Icon name="map-pin" size={13} color={colors.brand} />
             {/* The spot's city. This used to show `location`, a field that was
-                empty on every spot (and is now gone), so only the pin showed. */}
-            <Text style={[styles.infoText, { color: colors.textSecondary }]} numberOfLines={1}>{spot.city}</Text>
+                empty on every spot (and is now gone), so only the pin showed.
+                The visit log only began carrying `city` on 2026-10-04, so
+                fall back to the full spot list. */}
+            <Text style={[styles.infoText, { color: colors.textSecondary }]} numberOfLines={1}>{spot.city || fullSpot.city}</Text>
           </View>
 
           <View style={[styles.divider, { backgroundColor: colors.divider }]} />
