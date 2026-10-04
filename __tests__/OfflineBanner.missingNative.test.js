@@ -34,3 +34,24 @@ it("renders nothing, instead of crashing the app, when NetInfo's native module i
   expect(warn).toHaveBeenCalledWith(expect.stringContaining("NetInfo native module missing"), expect.anything());
   warn.mockRestore();
 });
+
+it("still explains a slow server without NetInfo", async () => {
+  jest.useFakeTimers();
+  const OfflineBanner = require("../components/OfflineBanner").default;
+  const { readStarted } = require("../utils/serverActivity");
+  const metrics = { frame: { x: 0, y: 0, width: 390, height: 844 }, insets: { top: 0, left: 0, right: 0, bottom: 0 } };
+  const screen = render(
+    <SafeAreaProvider initialMetrics={metrics}>
+      <ThemeProvider>
+        <OfflineBanner />
+      </ThemeProvider>
+    </SafeAreaProvider>,
+  );
+  await act(async () => {});
+  let ended;
+  act(() => { ended = readStarted(); });
+  act(() => jest.advanceTimersByTime(4100));
+  expect(screen.getByText(/Waking up the server/)).toBeTruthy();
+  act(() => ended());
+  jest.useRealTimers();
+});

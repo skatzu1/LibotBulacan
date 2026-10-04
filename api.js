@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { readStarted } from './utils/serverActivity';
 
 // ─── Single source of truth for the backend URL ───────────────────────────────
 // EXPO_PUBLIC_API_URL lets a build profile point at a different server (a
@@ -80,6 +81,17 @@ api.interceptors.request.use(async (config) => {
   }
   return config;
 });
+
+// Reads through this instance count toward the "waking up the server" notice
+// too (utils/serverActivity.js); plain fetch calls are counted in App.js.
+api.interceptors.request.use((config) => {
+  if ((config.method || "get").toLowerCase() === "get") config.readEnded = readStarted();
+  return config;
+});
+api.interceptors.response.use(
+  (res) => { res.config?.readEnded?.(); return res; },
+  (err) => { err?.config?.readEnded?.(); return Promise.reject(err); },
+);
 
 export const setupClerkInterceptor = (getToken) => {
   tokenGetterRef.current = getToken;

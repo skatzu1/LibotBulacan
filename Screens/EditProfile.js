@@ -32,11 +32,16 @@ async function uploadImageToCloudinary(localUri, token) {
     type: "image/jpeg",
     name: "profile.jpg",
   });
+  // A photo on mobile data can take longer than the app-wide 60 s fetch limit
+  // (utils/fetchTimeout.js); same allowance as review photos.
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 120_000);
   const res = await fetch(`${BASE_URL}/api/upload/profile`, {
     method: "POST",
     headers: { Authorization: `Bearer ${token}` },
     body: formData,
-  });
+    signal: controller.signal,
+  }).finally(() => clearTimeout(timer));
   if (!res.ok) {
     const errText = await res.text();
     throw new Error(`Image upload failed: ${errText}`);
