@@ -17,7 +17,7 @@ import { AuthProvider }         from './context/AuthContext';
 import { BookmarkProvider }     from './context/BookmarkContext';
 import { ArrivalProvider }      from './context/ArrivalContext';
 import { tokenCache }           from './utils/tokenCache';
-import { setupClerkInterceptor, appealAPI, moderationAPI } from './api';
+import { setupClerkInterceptor, appealAPI, moderationAPI, BASE_URL } from './api';
 import { ProfileImageProvider } from "./context/ProfileImageContext";
 import { navigationRef }        from './navigation/navigationRef';
 import { MissionProvider }      from "./context/MissionContext";
@@ -26,6 +26,8 @@ import { ThemeProvider, useTheme, lightColors, darkColors } from "./context/Them
 import OfflineBanner            from "./components/OfflineBanner";
 import ErrorBoundary            from "./utils/ErrorBoundary";
 import { initCrashReporting }   from "./utils/crashReporter";
+import { installFetchTimeout }  from "./utils/fetchTimeout";
+import { trackBackendRead }     from "./utils/serverActivity";
 
 // Fonts. Every weight is a separate family because React Native does not
 // synthesize weights for custom fonts — see the note in ThemeContext.
@@ -203,6 +205,13 @@ function AppNavigator() {
 
     checkStatus(false);
 
+    // Don't hold the whole app on that first check. On a sleeping server it
+    // can take a minute, behind a bare spinner. After 5 s the app opens; if the
+    // account is banned, BannedScreen takes over when the answer arrives (the
+    // first check sets banInfo whenever it lands). A failed check already let
+    // the user through — this only stops a slow one from blocking.
+    const gate = setTimeout(() => { if (!cancelled) setIsCheckingBan(false); }, 5000);
+
     // Catch a ban that happens while the app is already open and in use —
     // the one-shot check above only runs at sign-in, so without this a
     // banned-mid-session user would see nothing until they force-quit and
@@ -214,6 +223,7 @@ function AppNavigator() {
 
     return () => {
       cancelled = true;
+      clearTimeout(gate);
       clearInterval(interval);
       appStateSub.remove();
     };
@@ -304,6 +314,12 @@ function AppNavigator() {
     </PointsProvider>
   );
 }
+
+// Every fetch() gets a time limit, so a dead connection ends in an error and a
+// retry instead of a spinner that never stops, and reads from the backend are
+// tracked so a slow one can be explained (OfflineBanner). Before React mounts,
+// so the first request is covered too. See utils/fetchTimeout.js.
+installFetchTimeout(undefined, { onRequest: trackBackendRead(BASE_URL) });
 
 // Initialised at module scope, before React mounts — a crash in the first
 // render is exactly the one you most need reported.

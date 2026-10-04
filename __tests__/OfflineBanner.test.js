@@ -4,6 +4,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import NetInfo from "@react-native-community/netinfo";
 import { ThemeProvider } from "../context/ThemeContext";
 import OfflineBanner from "../components/OfflineBanner";
+import { readStarted } from "../utils/serverActivity";
 
 jest.mock("@react-native-async-storage/async-storage", () =>
   require("@react-native-async-storage/async-storage/jest/async-storage-mock"),
@@ -52,6 +53,32 @@ describe("OfflineBanner", () => {
     expect(screen.getByText(/You're offline/)).toBeTruthy();
     await act(async () => { fireEvent.press(screen.getByLabelText("Check the connection again")); });
     expect(NetInfo.refresh).toHaveBeenCalled();
+  });
+
+  it("explains a slow server once a read has waited 4 s, and goes when it answers", async () => {
+    await renderBanner();
+    act(() => mockEmit({ isConnected: true, isInternetReachable: true }));
+    let ended;
+    act(() => { ended = readStarted(); });
+    act(() => jest.advanceTimersByTime(3900));
+    expect(screen.queryByText(/Waking up the server/)).toBeNull(); // a normal wait says nothing
+    act(() => jest.advanceTimersByTime(200));
+    expect(screen.getByText(/Waking up the server/)).toBeTruthy();
+
+    act(() => ended());
+    act(() => jest.advanceTimersByTime(500));
+    expect(screen.queryByText(/Waking up the server/)).toBeNull();
+  });
+
+  it("says offline, not slow, when both are true", async () => {
+    await renderBanner();
+    let ended;
+    act(() => { ended = readStarted(); });
+    act(() => mockEmit({ isConnected: false, isInternetReachable: false }));
+    act(() => jest.advanceTimersByTime(5000));
+    expect(screen.getByText(/You're offline/)).toBeTruthy();
+    expect(screen.queryByText(/Waking up the server/)).toBeNull();
+    act(() => ended());
   });
 
   it("confirms when the connection comes back, then gets out of the way", async () => {
