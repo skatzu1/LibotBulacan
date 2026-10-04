@@ -27,6 +27,8 @@ describe("backend URL", () => {
     const { API_ENDPOINTS, authAPI } = loadApi(undefined);
     expect(API_ENDPOINTS.auth.login).toBeUndefined();
     expect(API_ENDPOINTS.auth.checkUser).toBeUndefined();
+    expect(API_ENDPOINTS.auth.verify).toBeUndefined();
     expect(authAPI.login).toBeUndefined();
+    expect(authAPI.verifyToken).toBeUndefined();
   });
 });
