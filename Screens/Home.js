@@ -301,16 +301,10 @@ function HomeContent({ profilePhoto, navigation }) {
           hardcoded 52, which over-padded small devices and under-padded ones
           with large insets — and disagreed with ScreenHeader everywhere else. */}
       <View style={[h.header, { backgroundColor: colors.background, paddingTop: Math.max(insets.top, 12) + 6 }]}>
-        {/* The logo opens Settings (account, appearance, support). */}
-        <TouchableOpacity
-          onPress={() => navigation.navigate("Settings")}
-          hitSlop={8}
-          activeOpacity={0.7}
-          accessibilityRole="button"
-          accessibilityLabel="Libot Bulacan. Open settings"
-        >
+        {/* The logo is only a mark. Settings lives on the Profile screen. */}
+        <View accessible accessibilityRole="image" accessibilityLabel="Libot Bulacan">
           <Logo size={32} />
-        </TouchableOpacity>
+        </View>
 
         {/* No search icon here: the search field sits right under the
             greeting, so the icon only duplicated it. */}
