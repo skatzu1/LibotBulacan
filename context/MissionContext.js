@@ -37,22 +37,22 @@ export const MissionProvider = ({ children }) => {
     }
   }, []);
 
+  // Every spot's missions in one request, once signed in. This used to fetch
+  // the spot list and then each spot's missions one after another — 24
+  // requests on every launch, the sign-in screen included. A spot fetched on
+  // its own meanwhile (its page, pull to refresh) is newer, so it is kept.
   useEffect(() => {
-    const prefetchAllMissions = async () => {
-      try {
-        const res = await fetch(`${BASE_URL}/api/spots`);
-        const data = await res.json();
-        if (data.success && data.spots) {
-          for (const spot of data.spots) {
-            if (spot._id) await fetchMissions(spot._id);
-          }
-        }
-      } catch (err) {
-        console.error("Error prefetching missions:", err);
-      }
-    };
-    prefetchAllMissions();
-  }, [fetchMissions]);
+    if (!isLoaded || !isSignedIn) return;
+    let cancelled = false;
+    api.get("/api/missions")
+      .then(({ data }) => {
+        if (cancelled || !data?.success || !data.missionsBySpot) return;
+        Object.keys(data.missionsBySpot).forEach((id) => fetchedSpots.current.add(id));
+        setMissionsBySpot((prev) => ({ ...data.missionsBySpot, ...prev }));
+      })
+      .catch((err) => console.warn("Could not load missions:", err?.message));
+    return () => { cancelled = true; };
+  }, [isLoaded, isSignedIn]);
 
   const getMissionsForSpot = useCallback(
     (spotId) => missionsBySpot[spotId] || [],
