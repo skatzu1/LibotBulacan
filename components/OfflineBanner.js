@@ -2,15 +2,19 @@ import React, { useEffect, useRef, useState } from "react";
 import { Animated, Pressable, StyleSheet, Text, View } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useTheme, MAX_FONT_SCALE } from "../context/ThemeContext";
+import { oldestReadSince, subscribe } from "../utils/serverActivity";
 import Icon from "./Icon";
 
 // Libot needs the network for almost everything — spots, missions, reviews,
 // points — and without this every screen failed on its own terms (spinners
 // that never end, "Failed to load"). One banner across the top says what is
 // actually wrong and offers a retry, then briefly confirms when the connection
-// comes back.
+// comes back. It also says when the server is just slow to answer: the free
+// server sleeps when idle, and the first request after that takes 30–60 s.
 
 const BACK_ONLINE_MS = 2200;
+// How long a read may wait before the banner explains why.
+const WAKING_AFTER_MS = 4000;
 
 // NetInfo is a native module. A binary built before it was added — an older
 // dev client, or a store build receiving a JS-only OTA update — doesn't contain
@@ -31,12 +35,30 @@ try {
 const isOffline = (state) =>
   state.isConnected === false || state.isInternetReachable === false;
 
-export default function OfflineBanner() {
-  if (!NetInfo) return null;
-  return <Banner />;
+// True while a read from the backend has been waiting longer than `afterMs`.
+function useServerWaking(afterMs) {
+  const [waking, setWaking] = useState(false);
+  useEffect(() => {
+    let timer;
+    const check = () => {
+      clearTimeout(timer);
+      const since = oldestReadSince();
+      if (since === null) return setWaking(false);
+      const left = since + afterMs - Date.now();
+      if (left <= 0) return setWaking(true);
+      setWaking(false);
+      timer = setTimeout(check, left);
+    };
+    const unsubscribe = subscribe(check);
+    check();
+    return () => { clearTimeout(timer); unsubscribe(); };
+  }, [afterMs]);
+  return waking;
 }
 
-function Banner() {
+// Without NetInfo's native side the offline part is off, but the slow-server
+// notice still works.
+export default function OfflineBanner() {
   const { colors, fonts } = useTheme();
   const insets = useSafeAreaInsets();
   const [offline, setOffline] = useState(false);
@@ -44,8 +66,10 @@ function Banner() {
   const [checking, setChecking] = useState(false);
   const wasOffline = useRef(false);
   const slide = useRef(new Animated.Value(0)).current;
+  const waking = useServerWaking(WAKING_AFTER_MS);
 
   useEffect(() => {
+    if (!NetInfo) return undefined;
     let hideTimer;
     const unsubscribe = NetInfo.addEventListener((state) => {
       const nowOffline = isOffline(state);
@@ -64,7 +88,9 @@ function Banner() {
     };
   }, []);
 
-  const visible = offline || backOnline;
+  // Offline says more than "slow", so it wins; so does the brief "Back online".
+  const showWaking = waking && !offline && !backOnline;
+  const visible = offline || backOnline || showWaking;
   // Stays true until the slide-out finishes, then the banner unmounts, so a
   // hidden "Back online" is never left off-screen for a screen reader to find.
   const [mounted, setMounted] = useState(false);
@@ -102,7 +128,7 @@ function Banner() {
       accessibilityLiveRegion="polite"
     >
       <View style={[styles.bar, { backgroundColor: background }]}>
-        <Icon name={offline ? "wifi-off" : "check"} size={18} color={colors.onBrand} />
+        <Icon name={offline ? "wifi-off" : showWaking ? "clock" : "check"} size={18} color={colors.onBrand} />
         <Text
           style={[styles.text, { color: colors.onBrand, fontFamily: fonts.sansMedium }]}
           maxFontSizeMultiplier={MAX_FONT_SCALE}
@@ -110,7 +136,9 @@ function Banner() {
         >
           {offline
             ? "You're offline. Spots, missions and reviews need a connection."
-            : "Back online"}
+            : showWaking
+              ? "Waking up the server. The first load can take up to a minute."
+              : "Back online"}
         </Text>
         {offline && (
           <Pressable

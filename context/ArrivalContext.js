@@ -639,7 +639,23 @@ export function ArrivalProvider({ children }) {
     const now = Date.now();
     if (now - spotsFetchedAt.current < SPOTS_CACHE_TTL_MS && allSpotsRef.current.length > 0) return;
 
-    if (allSpotsRef.current.length === 0) setSpotsStatus("loading");
+    // Nothing on screen yet: show the spots saved last time straight away and
+    // refresh them below. The saved copy used to be read only after the
+    // request failed — on a sleeping server, up to a minute of skeletons first.
+    if (allSpotsRef.current.length === 0) {
+      let saved = null;
+      try {
+        const raw = await AsyncStorage.getItem(ALL_SPOTS_KEY);
+        if (raw) saved = JSON.parse(raw);
+      } catch (_) {}
+      if (Array.isArray(saved) && saved.length > 0 && allSpotsRef.current.length === 0) {
+        allSpotsRef.current = saved;
+        setAllSpots(saved);
+        setSpotsStatus("ready");
+      } else {
+        setSpotsStatus("loading");
+      }
+    }
     try {
       const res  = await fetch(`${BASE_URL}/api/spots`);
       const data = await safeJson(res);
@@ -655,19 +671,9 @@ export function ArrivalProvider({ children }) {
         throw new Error(`Unexpected /api/spots response (${res.status})`);
       }
     } catch (e) {
-      console.warn("[Arrival] Could not fetch spots, using cache:", e.message);
-      let cached = null;
-      try {
-        const raw = await AsyncStorage.getItem(ALL_SPOTS_KEY);
-        if (raw) cached = JSON.parse(raw);
-      } catch (_) {}
-      if (Array.isArray(cached) && cached.length > 0) {
-        allSpotsRef.current = cached;
-        setAllSpots(cached);
-        setSpotsStatus("ready");
-      } else if (allSpotsRef.current.length === 0) {
-        setSpotsStatus("error");
-      }
+      // The saved spots (if any) are already showing; keep them.
+      console.warn("[Arrival] Could not fetch spots:", e.message);
+      if (allSpotsRef.current.length === 0) setSpotsStatus("error");
     }
   }, []);
 
