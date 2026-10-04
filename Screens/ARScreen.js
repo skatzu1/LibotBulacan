@@ -26,7 +26,6 @@ import {
   ViroARPlane,
   Viro3DObject,
   ViroBox,
-  ViroNode,
   ViroText,
   ViroAmbientLight,
   ViroSpotLight,
@@ -37,12 +36,6 @@ import {
 } from "@reactvision/react-viro";
 import { GpsSmoother, isBetterFix, MAX_USABLE_ACCURACY_M } from "../utils/gpsFilter";
 import useCompassHeading from "../hooks/useCompassHeading";
-import { createValueStore, GEO_HEADING_POLL_MS } from "../utils/headingSource";
-// `explainReason` is exported by the module but deliberately not used here:
-// the absence of precise placement needs no explanation to the user, since
-// plane placement is the normal experience. It's there for debugging and for
-// any future screen that wants to surface the reason.
-import { evaluateGeospatial, anchorAtLocation, releaseAnchor, ensureGeospatialEnabled, readGeoHeading } from "../utils/geospatial";
 import { resolveTrail, triviaForModel } from "../utils/arTrail";
 import { fonts, useTheme } from "../context/ThemeContext";
 import Icon from "../components/Icon";
@@ -194,6 +187,9 @@ const MODEL_SCALE = 0.08;
 // the bottom third of the model is buried under the plane it stands on.
 const MODEL_BASE_OFFSET_Y = 4.525 * MODEL_SCALE;   // 0.362 m
 const MODEL_HEIGHT_M = (8.593 + 4.525) * MODEL_SCALE; // 1.05 m
+// How far the model stands from its floor anchor, in metres. The anchor is
+// whatever patch of floor ARCore found first, usually right underfoot.
+const MODEL_OFFSET_Z = -1.4;
 const { width: SCREEN_W, height: SCREEN_H } = Dimensions.get("window");
 
 // ── Taps on the camera view ──────────────────────────────────────────────
@@ -521,16 +517,9 @@ const RadarMap = ({ distance, bearing, heading, modelRadius, label }) => {
 // every reading re-rendered the whole screen — AR scene, HUD and all — to
 // rotate this one widget. Owning it here also means the sensors only run while
 // the radar is on screen (the "walk there" step), not for the whole session.
-//
-// `geoStore` carries ARCore Geospatial's heading from the AR scene. When it's
-// available and accurate the radar uses it instead of the compass (see
-// hooks/useCompassHeading.js) and says so, so the user knows the arrow can be
-// trusted near buildings and cars.
-const LiveRadar = ({ label, geoStore, ...props }) => {
-  const { heading, needsCalibration, precise } = useCompassHeading(geoStore);
-  const note = precise
-    ? " · Precise direction"
-    : needsCalibration ? " · Compass unsure: move your phone in a figure 8" : "";
+const LiveRadar = ({ label, ...props }) => {
+  const { heading, needsCalibration } = useCompassHeading();
+  const note = needsCalibration ? " · Compass unsure: move your phone in a figure 8" : "";
   return <RadarMap {...props} heading={heading} label={`${label}${note}`} />;
 };
 
@@ -863,14 +852,12 @@ function computeAnchorProximities(spot, userLat, userLon, accuracyMeters) {
 // ─────────────────────────────────────────────
 // AR SCENE
 // ─────────────────────────────────────────────
-// `geoPosition`, when set, is a world position resolved from a real latitude
-// and longitude by ARCore Geospatial. When it's null the component falls back
-// to the original behaviour: find a floor plane and stand the model on it.
+// Stands the model on the first floor plane ARCore finds.
 // There is no `tapped` prop any more. A model that has been explored is
 // removed from the scene outright and cannot come back until the user leaves
 // AR and re-enters, so "this one is already done" is not a state this
 // component can ever be in.
-const ModelOnPlane = ({ spot, anchorLabel, onModelClick, onModelError, onPlacedChange, tapBridge, geoPosition = null }) => {
+const ModelOnPlane = ({ spot, anchorLabel, onModelClick, onModelError, onPlacedChange, tapBridge }) => {
   // The model only renders once ARCore finds a HORIZONTAL surface — i.e. once
   // the camera has actually seen the ground. That's the step users get stuck
   // on, and nothing was reporting it outward: the HUD said "TAP THE OBJECT" as
@@ -907,11 +894,10 @@ const ModelOnPlane = ({ spot, anchorLabel, onModelClick, onModelError, onPlacedC
 
   // The nodes exist before a plane is found, just not on screen — so the
   // screen-level tap test only runs once the model is really standing somewhere.
-  const onScreen = !!geoPosition || placed;
   useEffect(() => {
-    tapBridge.placed = onScreen;
+    tapBridge.placed = placed;
     return () => { tapBridge.placed = false; };
-  }, [tapBridge, onScreen]);
+  }, [tapBridge, placed]);
 
   // Viro only reports CLICKED when it sees BOTH the press and the release land
   // on this node. On Android a quick first tap usually didn't qualify — the
@@ -933,15 +919,9 @@ const ModelOnPlane = ({ spot, anchorLabel, onModelClick, onModelError, onPlacedC
     }
   };
 
-  // The model, its lights, its tap target and its label. Identical whether it
-  // hangs off a detected floor plane or a real-world geospatial anchor, so it
-  // lives in one place and both placements render it.
-  //
-  // `offsetZ` differs between the two: on a plane the anchor is the patch of
-  // floor the camera found, so the model is stood 1.4 m clear of it to be
-  // lookable. A geospatial anchor is already AT the landmark's coordinates, so
-  // any offset would push it off the real spot — it renders at the origin.
-  const content = (offsetZ) => (
+  // The model, its lights, its tap target and its label, all stood
+  // MODEL_OFFSET_Z clear of the floor anchor.
+  const content = (
     <>
       {/* Intensities make up for HDR being off (see ViroARSceneNavigator):
           Viro's tone curve lifted shadows and softened highlights, so this
@@ -977,7 +957,7 @@ const ModelOnPlane = ({ spot, anchorLabel, onModelClick, onModelError, onPlacedC
         // third of it in the floor. MODEL_BASE_OFFSET_Y lifts it to rest ON
         // the surface.
         scale={[0.08, 0.08, 0.08]}
-        position={[0, MODEL_BASE_OFFSET_Y, offsetZ]}
+        position={[0, MODEL_BASE_OFFSET_Y, MODEL_OFFSET_Z]}
         rotation={[0, 0, 0]}
         animation={{
           name:     animationName,
@@ -1014,7 +994,7 @@ const ModelOnPlane = ({ spot, anchorLabel, onModelClick, onModelError, onPlacedC
       <ViroBox
         // Also the shape ARScreen's own tap test projects onto the screen.
         ref={(node) => { tapBridge.hitNode = node; }}
-        position={[0, MODEL_HEIGHT_M / 2, offsetZ]}
+        position={[0, MODEL_HEIGHT_M / 2, MODEL_OFFSET_Z]}
         scale={[1.0, MODEL_HEIGHT_M + 0.3, 0.9]}
         opacity={0.01}
         materials={["hitTarget"]}
@@ -1023,19 +1003,12 @@ const ModelOnPlane = ({ spot, anchorLabel, onModelClick, onModelError, onPlacedC
       {/* Sits just above the model's head rather than through its middle. */}
       <ViroText
         text={`Tap to explore\n${anchorLabel}`}
-        position={[0, MODEL_HEIGHT_M + 0.25, offsetZ]}
+        position={[0, MODEL_HEIGHT_M + 0.25, MODEL_OFFSET_Z]}
         scale={[0.32, 0.32, 0.32]}
         style={arStyles.tapHint}
       />
     </>
   );
-
-  // Geospatial placement: ARCore resolved the landmark's real latitude and
-  // longitude, so the model is rendered at that world position and stays put
-  // as the user walks around it. No plane detection involved.
-  if (geoPosition) {
-    return <ViroNode position={geoPosition}>{content(0)}</ViroNode>;
-  }
 
   // Automatic placement: the object appears as soon as ARCore finds a floor,
   // with no tap required. The geofence is what gates it — ARScene renders an
@@ -1060,13 +1033,13 @@ const ModelOnPlane = ({ spot, anchorLabel, onModelClick, onModelError, onPlacedC
       {/* Stood 1.4 m clear of the anchor. The anchor is an arbitrary patch of
           detected floor rather than a point the user chose, so placing the
           model on it directly put the object under their nose. */}
-      {content(-1.4)}
+      {content}
     </ViroARPlane>
   );
 };
 
 const ARScene = ({ sceneNavigator }) => {
-  const { spot, activeAnchors, focusAnchor, onModelClick, onTrackingChange, onModelError, onPlacedChange, onGeoStatus, onGeoHeading, tapBridge } =
+  const { spot, focusAnchor, onModelClick, onTrackingChange, onModelError, onPlacedChange, tapBridge } =
     sceneNavigator.viroAppProps;
 
   // Lets ARScreen ask "was that tap on the model?" — it sees the touch, but
@@ -1081,20 +1054,6 @@ const ARScene = ({ sceneNavigator }) => {
     tapBridge.hitTest = hitTest;
     return () => { if (tapBridge.hitTest === hitTest) tapBridge.hitTest = null; };
   }, [tapBridge, sceneNavigator]);
-
-  // ── ARCore Geospatial ────────────────────────────────────────────────────
-  // Where VPS has coverage, the model is anchored to the landmark's actual
-  // latitude/longitude instead of to a floor plane, so it stays where the
-  // landmark really is as the user walks around it.
-  //
-  // This is strictly an upgrade path: every failure — old device, no API key,
-  // no VPS coverage here, Earth not yet tracking, pose too coarse — leaves
-  // geoAnchors empty and the plane-based placement runs exactly as before.
-  // Bulacan's VPS coverage is unknown and patchy outside the main highways, so
-  // the fallback is expected to be the common case, not an edge case.
-  const [geoAnchors, setGeoAnchors] = useState({});   // anchor.index -> position
-  const geoTriedRef = useRef(false);
-  const geoIdsRef   = useRef([]);
 
   // Nothing may be added to the scene until ARCore reports real tracking.
   // Mounting children earlier makes Viro call nativeCreateAnchoredNode against
@@ -1111,126 +1070,6 @@ const ARScene = ({ sceneNavigator }) => {
     // (too dark, phone held still, camera pointed at a blank wall).
     onTrackingChange?.(ok);
   };
-
-  // Try geospatial once ARCore is tracking and we know which anchors are in
-  // range. Earth tracking needs a few seconds and some camera movement to
-  // converge, so a "not tracking yet" result is retried rather than treated as
-  // a refusal — but only for a bounded number of attempts.
-  useEffect(() => {
-    if (!tracking || !activeAnchors?.length || geoTriedRef.current) return;
-
-    // Claim the guard BEFORE any await.
-    //
-    // It used to be set only after the async work finished, and the effect's
-    // deps include `activeAnchors` (a fresh array from .filter() on every
-    // render) and a callback recreated each render — so the effect re-ran
-    // constantly and a dozen evaluations were all in flight before the first
-    // one could set the flag. On the device that showed up as
-    // "Geospatial mode applied: enabled" twenty times inside 0.4 seconds,
-    // each one re-configuring the ARCore session while the others were still
-    // resolving. One attempt, claimed synchronously.
-    geoTriedRef.current = true;
-
-    let cancelled = false;
-    let attempts = 0;
-    let timer = null;
-
-    const attempt = async () => {
-      if (cancelled) return;
-      attempts += 1;
-
-      const first = activeAnchors[0];
-      const verdict = await evaluateGeospatial(sceneNavigator, first.lat, first.lng);
-      if (cancelled) return;
-
-      if (!verdict.usable) {
-        // VPS coverage here is confirmed, so the expectation is that this
-        // succeeds — it just needs time. Earth tracking converges only once
-        // ARCore has seen enough of the surroundings, and a poor initial pose
-        // tightens as it does, so both of those are retried for a real window
-        // (15 attempts x 2s = 30s) rather than the token few tries that were
-        // appropriate when coverage itself was in doubt.
-        const retryable = verdict.reason === "earth-not-tracking"
-          || verdict.reason === "low-accuracy"
-          || verdict.reason === "no-pose";
-
-        if (retryable && attempts < 15) {
-          timer = setTimeout(attempt, 2000);
-          return;
-        }
-        onGeoStatus?.({ active: false, reason: verdict.reason, accuracy: verdict.accuracy });
-        return;
-      }
-
-      // Resolve one terrain anchor per in-range model.
-      const resolved = {};
-      const ids = [];
-      for (const a of activeAnchors) {
-        const anchor = await anchorAtLocation(sceneNavigator, a.lat, a.lng, 0);
-        if (cancelled) return;
-        if (anchor) {
-          resolved[a.index] = anchor.position;
-          ids.push(anchor.anchorId);
-        }
-      }
-
-      geoIdsRef.current = ids;
-      setGeoAnchors(resolved);
-      onGeoStatus?.({
-        active: Object.keys(resolved).length > 0,
-        reason: Object.keys(resolved).length ? "ok" : "anchor-failed",
-        accuracy: verdict.accuracy,
-      });
-    };
-
-    attempt();
-    return () => {
-      cancelled = true;
-      if (timer) clearTimeout(timer);
-    };
-  }, [tracking, activeAnchors, sceneNavigator, onGeoStatus]);
-
-  // Release anchors when the scene goes away, so a re-entry starts clean
-  // rather than accumulating them in the ARCore session.
-  useEffect(() => () => {
-    geoIdsRef.current.forEach((id) => releaseAnchor(sceneNavigator, id));
-    geoIdsRef.current = [];
-  }, [sceneNavigator]);
-
-  // ── ARCore heading for the radar ─────────────────────────────────────────
-  // While the user is still walking to the next model (no anchor in range —
-  // the radar step), read ARCore Geospatial's camera heading a few times a
-  // second and hand it to the radar through onGeoHeading. Geospatial mode is
-  // switched on here, earlier than placement needs it, so Earth tracking has
-  // usually converged by the time the user arrives. Where there's no VPS
-  // coverage the readings are simply null and the radar keeps the compass.
-  // Only module calls happen here — nothing is added to the scene — so this
-  // is safe once ARCore reports tracking.
-  const hasActiveAnchors = (activeAnchors?.length ?? 0) > 0;
-  useEffect(() => {
-    if (!tracking || hasActiveAnchors || !onGeoHeading) return undefined;
-    let cancelled = false;
-    let timer = null;
-
-    (async () => {
-      const on = await ensureGeospatialEnabled(sceneNavigator);
-      if (!on || cancelled) return;
-      const tick = async () => {
-        if (cancelled) return;
-        const reading = await readGeoHeading(sceneNavigator);
-        if (cancelled) return;
-        onGeoHeading(reading);
-        timer = setTimeout(tick, GEO_HEADING_POLL_MS);
-      };
-      tick();
-    })();
-
-    return () => {
-      cancelled = true;
-      if (timer) clearTimeout(timer);
-      onGeoHeading(null);
-    };
-  }, [tracking, hasActiveAnchors, sceneNavigator, onGeoHeading]);
 
   if (!tracking) {
     return <ViroARScene ref={sceneRef} onTrackingUpdated={handleTracking} />;
@@ -1267,7 +1106,6 @@ const ARScene = ({ sceneNavigator }) => {
         onModelError={onModelError}
         onPlacedChange={onPlacedChange}
         tapBridge={tapBridge}
-        geoPosition={geoAnchors[focusAnchor.index] || null}
       />
     </ViroARScene>
   );
@@ -1610,25 +1448,10 @@ export default function ARScreen({ route, navigation }) {
   // lie — see the note in ModelOnPlane.
   const [modelPlaced, setModelPlaced] = useState(false);
 
-  // Whether the model is pinned to the landmark's real coordinates (ARCore
-  // Geospatial) or stood on a detected floor plane. Logged rather than shown:
-  // the old crosshair badge was an unlabeled icon that meant nothing to a
-  // user, and this is developer diagnostics.
-  const geoStatusRef = useRef(null);
-  const setGeoStatus = (s) => {
-    geoStatusRef.current = s;
-    console.log("[Geospatial] placement:", s?.active ? `active (±${s.accuracy?.toFixed?.(1)} m)` : `off — ${s?.reason}`);
-  };
-
-  // ARCore Geospatial heading, written by the AR scene and read only by the
-  // radar. A store rather than state, so these updates never re-render this
-  // (very large) component — see utils/headingSource.js.
-  const geoHeadingStore = useMemo(() => createValueStore(null), []);
-
   // ── Taps on the camera view: open the model, or refocus ─────────────────
-  // A plain mutable object shared with the Viro scene (like geoHeadingStore,
-  // it never triggers a render). The scene fills in `hitTest`, `hitNode`,
-  // `tapModel` and `placed`; this screen reads them.
+  // A plain mutable object shared with the Viro scene; it never triggers a
+  // render. The scene fills in `hitTest`, `hitNode`, `tapModel` and `placed`;
+  // this screen reads them.
   const tapBridge = useMemo(() => ({
     hitTest: null, hitNode: null, tapModel: null, placed: false, lastModelTapAt: 0,
   }), []);
@@ -1647,8 +1470,8 @@ export default function ARScreen({ route, navigation }) {
   // only re-hunts when it decides the scene changed. Dropping to FIXED for a
   // moment moves the lens, and restoring AUTO makes it run a fresh focus pass
   // right now. The session config is rebuilt from all of Viro's settings on
-  // each change (VROARSessionARCore::updateARCoreConfig), so Geospatial and
-  // plane finding stay as they were.
+  // each change (VROARSessionARCore::updateARCoreConfig), so plane finding
+  // stays as it was.
   const refocus = () => {
     const now = Date.now();
     if (now - refocusRef.current.at < REFOCUS_GAP_MS) return;
@@ -1957,8 +1780,6 @@ export default function ARScreen({ route, navigation }) {
     });
   }, [allFound, arMissionId, alreadyDone, hasFix, completeMission, spot?.name]);
 
-  const activeAnchors = anchorProximities.filter((a) => a.isInRange);
-
   // ── The one object the whole screen agrees on ─────────────────────────
   //
   // The models at a spot are a numbered trail, walked in the order the
@@ -2189,7 +2010,6 @@ export default function ARScreen({ route, navigation }) {
             {targetPending ? (
               <>
                 <LiveRadar
-                  geoStore={geoHeadingStore}
                   distance={targetPending.distance}
                   bearing={bearingDegrees(
                     userLocation.latitude, userLocation.longitude,
@@ -2363,19 +2183,11 @@ export default function ARScreen({ route, navigation }) {
         autofocus={autofocusOn}
         viroAppProps={{
           spot,
-          // `activeAnchors` is still every in-range anchor, because the
-          // geospatial pass resolves terrain anchors for all of them up front —
-          // the trail should not stall for a network round trip each time the
-          // next object's turn comes around. `focusAnchor` is the only one that
-          // gets rendered.
-          activeAnchors,
           focusAnchor,
           onModelClick:     handleModelClick,
           onTrackingChange: setArTracking,
           onModelError:     () => setModelFailed(true),
           onPlacedChange:   setModelPlaced,
-          onGeoStatus:      setGeoStatus,
-          onGeoHeading:     geoHeadingStore.set,
           tapBridge,
         }}
         style={{ flex: 1 }}

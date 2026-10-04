@@ -98,7 +98,6 @@
         }
       ],
       "react-native-vision-camera",
-      "./plugins/withArCoreApiKey",
       "@sentry/react-native"
     ],
     "ios": {
