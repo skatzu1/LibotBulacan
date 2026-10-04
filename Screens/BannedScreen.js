@@ -141,7 +141,7 @@ const s = StyleSheet.create({
   appealBox:   { width: '100%', marginBottom: spacing.xl },
   input:       {
     borderWidth: 1.5, borderRadius: radius.md, padding: spacing.md,
-    fontSize: 14, minHeight: 130,
+    fontSize: 14, fontFamily: fonts.sans, minHeight: 130,
   },
   btn:         { marginTop: spacing.md },
   signOut:     { marginTop: spacing.sm, padding: spacing.lg, width: '100%', alignItems: 'center' },

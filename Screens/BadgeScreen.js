@@ -811,12 +811,14 @@ const styles = StyleSheet.create({
   modalSpotText: { fontSize: 12, fontFamily: fonts.sansBold },
   modalDescription: {
     fontSize: 13,
+    fontFamily: fonts.sans,
     textAlign: "center",
     lineHeight: 20,
     marginBottom: 10,
   },
   modalDescriptionFallback: {
     fontSize: 13,
+    fontFamily: fonts.sans,
     textAlign: "center",
     lineHeight: 20,
     fontStyle: "italic",

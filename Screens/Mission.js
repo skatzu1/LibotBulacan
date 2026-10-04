@@ -21,7 +21,7 @@ import { useAuth } from '@clerk/clerk-expo';
 import { loadModel, runPrediction } from '../utils/missionAI';
 import { ensureAtSpotForPhoto, currentCoords } from '../utils/arLocationGate';
 import * as Haptics from "expo-haptics";
-import { useTheme, fonts } from '../context/ThemeContext';
+import { useTheme, fonts, typography } from '../context/ThemeContext';
 import { useMissions } from '../context/MissionContext';
 import Icon from "../components/Icon";
 
@@ -180,7 +180,7 @@ const makeStepStyles = (COLORS) => StyleSheet.create({
   numText:   { fontSize: 11, fontFamily: fonts.sansBold, color: COLORS.brandDeep },
   connector: { width: 1.5, flex: 1, backgroundColor: COLORS.border, marginTop: 4 },
   content:   { flexDirection: 'row', alignItems: 'flex-start', flex: 1, paddingTop: 3 },
-  text:      { fontSize: 13.5, color: COLORS.inkSub, flex: 1, lineHeight: 20 },
+  text:      { fontSize: 13.5, fontFamily: fonts.sans, color: COLORS.inkSub, flex: 1, lineHeight: 20 },
 });
 
 // ─── Confidence Meter ───────────────────────────────────────────────────────────
@@ -874,11 +874,13 @@ const makeStyles = (COLORS) => StyleSheet.create({
     backgroundColor: COLORS.surface, alignItems: 'center', justifyContent: 'center',
     borderWidth: 1, borderColor: COLORS.border,
   },
-  headerTitle: { fontSize: 15, fontFamily: fonts.sansSemi, color: COLORS.inkSub },
+  // The same title as every other screen's header (components/ui.js ScreenHeader).
+  headerTitle: { ...typography.h3, color: COLORS.ink },
 
   greetingBlock: { width: '100%', marginBottom: 18, marginTop: 4 },
+  // Display serif, like Home's greeting: big headings are Newsreader app-wide.
   greetingHello: {
-    fontSize: 26, fontFamily: fonts.sansBold, color: COLORS.ink, letterSpacing: -0.3,
+    ...typography.h1, fontSize: 28, lineHeight: 34, color: COLORS.ink,
     marginBottom: 4,
   },
   greetingSub: { fontSize: 15, color: COLORS.brand, fontFamily: fonts.sansSemi },
@@ -901,7 +903,7 @@ const makeStyles = (COLORS) => StyleSheet.create({
   ticketTitle: { fontSize: 17, fontFamily: fonts.sansBold, color: COLORS.ink },
   attemptsBadge: { alignItems: 'center', paddingLeft: 8 },
   attemptsNum:   { fontSize: 20, fontFamily: fonts.sansBold, color: COLORS.brand },
-  attemptsLabel: { fontSize: 10, color: COLORS.inkMuted },
+  attemptsLabel: { fontSize: 10, fontFamily: fonts.sansSemi, color: COLORS.inkMuted },
 
   ticketDividerRow: { position: 'relative', marginVertical: 16 },
   ticketDividerLine: {
@@ -914,7 +916,7 @@ const makeStyles = (COLORS) => StyleSheet.create({
   ticketNotchLeft:  { left: -32 },
   ticketNotchRight: { right: -32 },
 
-  ticketBrief: { fontSize: 14.5, color: COLORS.inkSub, lineHeight: 21 },
+  ticketBrief: { fontSize: 14.5, fontFamily: fonts.sans, color: COLORS.inkSub, lineHeight: 21 },
   ticketBriefStrong: { color: COLORS.ink, fontFamily: fonts.sansBold },
 
   spotRow: {
@@ -926,7 +928,7 @@ const makeStyles = (COLORS) => StyleSheet.create({
     flexDirection: 'row', alignItems: 'center',
     alignSelf: 'flex-start', marginBottom: 10, gap: 8,
   },
-  loadingText: { fontSize: 13, color: COLORS.inkMuted },
+  loadingText: { fontSize: 13, fontFamily: fonts.sansMedium, color: COLORS.inkMuted },
 
   card: {
     backgroundColor: COLORS.surface, borderRadius: 22,
@@ -942,7 +944,7 @@ const makeStyles = (COLORS) => StyleSheet.create({
     flexDirection: 'row', alignItems: 'flex-start',
     backgroundColor: COLORS.brandTint, borderRadius: 14, padding: 14, marginTop: 4,
   },
-  hintText: { fontSize: 12.5, color: COLORS.brandDeep, lineHeight: 18, flex: 1 },
+  hintText: { fontSize: 12.5, fontFamily: fonts.sans, color: COLORS.brandDeep, lineHeight: 18, flex: 1 },
 
   statusInner:    { alignItems: 'center', width: '100%' },
   statusIconCircle: {
@@ -951,11 +953,11 @@ const makeStyles = (COLORS) => StyleSheet.create({
     alignItems: 'center', justifyContent: 'center', marginBottom: 16,
   },
   statusTitle: {
-    fontSize: 20, fontFamily: fonts.sansBold, color: COLORS.ink,
+    ...typography.h2, fontSize: 22, lineHeight: 28, color: COLORS.ink,
     marginBottom: 8, textAlign: 'center',
   },
   statusDesc: {
-    fontSize: 13.5, color: COLORS.inkSub, textAlign: 'center',
+    fontSize: 13.5, fontFamily: fonts.sans, color: COLORS.inkSub, textAlign: 'center',
     marginBottom: 24, lineHeight: 21, maxWidth: 260,
   },
 
@@ -974,7 +976,7 @@ const makeStyles = (COLORS) => StyleSheet.create({
   statusBannerText: { fontSize: 15, fontFamily: fonts.sansBold },
 
   failedTip: {
-    fontSize: 13, color: COLORS.inkSub,
+    fontSize: 13, fontFamily: fonts.sans, color: COLORS.inkSub,
     textAlign: 'center', marginBottom: 20, lineHeight: 20,
   },
 
@@ -1002,7 +1004,7 @@ const makeStyles = (COLORS) => StyleSheet.create({
   cameraContainer: { flex: 1, backgroundColor: '#000' },
   camera:          { flex: 1 },
   noCamera:        { alignItems: 'center', justifyContent: 'center', gap: 10 },
-  noCameraText:    { color: 'rgba(255,255,255,0.7)', fontSize: 14 },
+  noCameraText:    { color: 'rgba(255,255,255,0.7)', fontSize: 14, fontFamily: fonts.sansMedium },
 
   cameraTopBar: {
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
@@ -1050,7 +1052,7 @@ const makeStyles = (COLORS) => StyleSheet.create({
     paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20,
     maxWidth: '80%',
   },
-  scanHint: { color: 'rgba(255,255,255,0.9)', fontSize: 12.5 },
+  scanHint: { color: 'rgba(255,255,255,0.9)', fontSize: 12.5, fontFamily: fonts.sansMedium },
 
   zoomTrackWrap: {
     position: 'absolute', right: 16, top: '30%',

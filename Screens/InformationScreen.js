@@ -1671,7 +1671,7 @@ const styles = StyleSheet.create({
   pagerNumbers:    { flexDirection: "row", alignItems: "center", gap: 4 },
   pagerNum:        { minWidth: 38, height: 38, borderRadius: 19, alignItems: "center", justifyContent: "center", paddingHorizontal: 6 },
   pagerNumText:    { fontSize: 14, fontFamily: fonts.sansSemi },
-  pagerGap:        { fontSize: 14, paddingHorizontal: 4 },
+  pagerGap:        { fontSize: 14, fontFamily: fonts.sansSemi, paddingHorizontal: 4 },
 
   // The Facebook-style review box at the end of the reviews.
   fbComposer:      { borderTopWidth: 1, marginTop: 14, paddingTop: 14, gap: 10 },
@@ -1709,7 +1709,7 @@ const styles = StyleSheet.create({
   modalTitle:      { ...typography.h2, fontSize: 22, lineHeight: 28 },
   modalClose:      { width: TAP, height: TAP, alignItems: "flex-end", justifyContent: "center" },
   modalLabel:      { fontSize: 14, fontFamily: fonts.sansBold, marginBottom: 10, marginTop: 14 },
-  reportSubtitle:  { fontSize: 13.5, marginBottom: 4 },
+  reportSubtitle:  { fontSize: 13.5, fontFamily: fonts.sans, marginBottom: 4 },
   reasonList:      { gap: 8, marginBottom: 4 },
   reasonOption:    { flexDirection: "row", alignItems: "center", borderRadius: radius.md, paddingVertical: 13, paddingHorizontal: 14, borderWidth: 1.5, gap: 12 },
   reasonRadio:     { width: 20, height: 20, borderRadius: 10, borderWidth: 2, alignItems: "center", justifyContent: "center" },

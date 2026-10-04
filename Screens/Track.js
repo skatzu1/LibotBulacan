@@ -1954,6 +1954,7 @@ const styles = StyleSheet.create({
   },
   sheetType: {
     fontSize: 13,
+    fontFamily: fonts.sansMedium,
     marginTop: 2,
   },
   sheetClose: {
@@ -1983,6 +1984,7 @@ const styles = StyleSheet.create({
   },
   sheetRowText: {
     fontSize: 14,
+    fontFamily: fonts.sans,
     flex: 1,
     lineHeight: 20,
   },
