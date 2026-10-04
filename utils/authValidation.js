@@ -101,7 +101,10 @@ export const dobError = (dob, today = new Date()) => {
   return null;
 };
 
-export const NETWORK_ERROR = "Couldn't reach the server. Check your connection and try again.";
+export const DISPOSABLE_EMAIL_ERROR =
+  "Temporary email addresses can't be used. Use an inbox you'll keep, like Gmail or Yahoo.";
+
+export const NETWORK_ERROR ="Couldn't reach the server. Check your connection and try again.";
 
 /* ── Google window ─────────────────────────────────────────────────────────
    The Google sign-in window (a Chrome Custom Tab on Android, an auth sheet on

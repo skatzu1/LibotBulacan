@@ -40,6 +40,9 @@ export const API_ENDPOINTS = {
     // verified Clerk session.
     register:    `${BASE_URL}/api/auth/register`,
     verify:      `${BASE_URL}/api/auth/verify`,
+    // Says only whether an address is a temp-mail one — nothing about
+    // whether it has an account.
+    checkEmail:  `${BASE_URL}/api/auth/check-email`,
   },
 };
 
@@ -99,6 +102,18 @@ export const authAPI = {
       return response.data;
     } catch (error) {
       throw error.response?.data || { message: 'Network error' };
+    }
+  },
+
+  // Is this a temp-mail address? Asked before a sign-up starts. Never throws:
+  // offline, slow or erroring, it answers "no" and the sign-up goes ahead —
+  // Clerk's emailed code still has to be read from a real inbox.
+  isDisposableEmail: async (email) => {
+    try {
+      const response = await api.post(API_ENDPOINTS.auth.checkEmail, { email }, { timeout: 5000 });
+      return response.data?.disposable === true;
+    } catch {
+      return false;
     }
   },
 
