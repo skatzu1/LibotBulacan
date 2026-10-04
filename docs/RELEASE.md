@@ -11,15 +11,7 @@ own runbook in the LibotBackend repo (`docs/RUNBOOK.md`).
 2. **Regenerate the local Android project** before running it from your
    computer, because `android/` still has the old package:
    `npx expo prebuild --clean`, then `npx expo run:android`.
-3. **ARCore key restriction.** If the ARCore API key in Google Cloud is
-   restricted to Android apps (Google Cloud Console → APIs & Services →
-   Credentials → the key → Application restrictions), add
-   `com.skatzu15.libot` with the SHA-1 fingerprint of:
-   - the EAS signing key: `npx eas-cli credentials -p android` shows it;
-   - the Play App Signing key, after the first upload: Play Console → Test and
-     release → Setup → App signing.
-   Remove the `.beta` entry once nothing uses it.
-4. **Clerk native app settings.** If Clerk Dashboard → *Native applications*
+3. **Clerk native app settings.** If Clerk Dashboard → *Native applications*
    lists an Android app, change its package name to `com.skatzu15.libot`.
    (Google sign-in itself goes through the browser and does not depend on the
    package name.)
@@ -67,7 +59,6 @@ last good group, then `npx eas-cli update:republish --group <group-id>`.
 
 | Variable | Where | Purpose |
 |---|---|---|
-| `ARCORE_API_KEY` | EAS secret (already set) | ARCore Geospatial. |
 | `EXPO_PUBLIC_SENTRY_DSN` | EAS environment variable for `preview` and `production` | Turns on crash reporting. Unset = off. |
 | `EXPO_PUBLIC_API_URL` | `eas.json` build profile `env` | Backend URL. Unset = production. Point `preview` at a staging backend once one exists. |
 | `EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY` | optional | Overrides the built-in Clerk key (see App.js). |
