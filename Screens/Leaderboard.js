@@ -41,6 +41,24 @@ const ROW_H = 66;
 
 const fmtPts = (n) => (n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n));
 
+// The board shows the top 50; anyone below that still sees their own rank in
+// the bar at the bottom (the server sends it as `me`). It used to download
+// every registered user on each visit to this tab.
+const BOARD_SIZE = 50;
+
+const toEntry = (u) => ({
+  id:          u._id,
+  clerkUserId: u.clerkUserId,
+  name:
+    u.name && u.name !== "User"
+      ? u.name
+      : `${u.firstName || ""} ${u.lastName || ""}`.trim() ||
+        u.email?.split("@")[0] || "User",
+  points: typeof u.points === "number" ? u.points : 0,
+  avatar: u.profileImage || null,
+  isMe:   false,
+});
+
 export default function Leaderboard() {
   const navigation                    = useNavigation();
   const insets                        = useSafeAreaInsets();
@@ -58,6 +76,9 @@ export default function Leaderboard() {
   const { colors }                    = useTheme();
 
   const [allUsers, setAllUsers]     = useState([]);
+  // You, when you're below the top BOARD_SIZE: your entry plus `rank`.
+  const [meBelow, setMeBelow]       = useState(null);
+  const [total, setTotal]           = useState(0);
   const [loading, setLoading]       = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError]           = useState(null);
@@ -76,7 +97,7 @@ export default function Leaderboard() {
 
     try {
       const token = await getToken();
-      const res   = await fetch(`${BASE_URL}/api/users`, {
+      const res   = await fetch(`${BASE_URL}/api/users?limit=${BOARD_SIZE}`, {
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
       });
       const ct = res.headers.get("content-type") ?? "";
@@ -86,29 +107,24 @@ export default function Leaderboard() {
       const list = Array.isArray(data) ? data : Array.isArray(data.users) ? data.users : null;
       if (!list) { setError("Unexpected response."); return; }
 
-      let users = list.map((u) => ({
-        id:          u._id,
-        clerkUserId: u.clerkUserId,
-        name:
-          u.name && u.name !== "User"
-            ? u.name
-            : `${u.firstName || ""} ${u.lastName || ""}`.trim() ||
-              u.email?.split("@")[0] || "User",
-        points: typeof u.points === "number" ? u.points : 0,
-        avatar: u.profileImage || null,
-        isMe:   false,
-      }));
+      let users = list.map(toEntry);
+      let below = null;
 
       if (clerkUser?.id) {
         const idx = users.findIndex((u) => u.clerkUserId === clerkUser.id);
         if (idx >= 0) {
           users[idx] = { ...users[idx], isMe: true };
-          AsyncStorage.setItem("userPoints", String(users[idx].points)).catch(() => {});
+        } else if (data.me) {
+          below = { ...toEntry(data.me), isMe: true, rank: data.me.rank };
         }
+        const mine = idx >= 0 ? users[idx] : below;
+        if (mine) AsyncStorage.setItem("userPoints", String(mine.points)).catch(() => {});
       }
 
       users.sort((a, b) => b.points - a.points || a.name.localeCompare(b.name));
       setAllUsers(users);
+      setMeBelow(below);
+      setTotal(typeof data.total === "number" ? data.total : users.length);
       hasLoaded.current = true;
     } catch (e) {
       console.warn("Leaderboard error:", e);
@@ -235,7 +251,8 @@ export default function Leaderboard() {
   const podiumRanks  = [2, 1, 3];
 
   const myIndex = allUsers.findIndex((u) => u.isMe);
-  const myRank  = myIndex >= 0 ? myIndex + 1 : null;
+  const myEntry = myIndex >= 0 ? allUsers[myIndex] : meBelow;
+  const myRank  = myIndex >= 0 ? myIndex + 1 : meBelow?.rank ?? null;
   const showMyRankBar = myRank != null && myRank > 3;
 
   return (
@@ -293,12 +310,12 @@ export default function Leaderboard() {
       {/* ─── Sheet ─── */}
       <View style={[styles.card, { backgroundColor: colors.background }]}>
         <View style={styles.sheetHeaderRow}>
-          <Text style={[styles.sheetTitle, { color: colors.brandDark }]}>All rankings</Text>
-          <Text style={[styles.sheetCount, { color: colors.textMuted }]}>{allUsers.length} explorers</Text>
+          <Text style={[styles.sheetTitle, { color: colors.brandDark }]}>Rankings</Text>
+          <Text style={[styles.sheetCount, { color: colors.textMuted }]}>{total || allUsers.length} explorers</Text>
         </View>
 
-        {/* FlatList, not ScrollView + .map — this list is EVERY registered user,
-            so it grows with the product. A .map rendered all of them (plus an
+        {/* FlatList, not ScrollView + .map — this list is the top BOARD_SIZE
+            explorers (it was every registered user). A .map rendered all of them (plus an
             <Avatar> image each) on every render. `getItemLayout` is safe to give
             because every row is a fixed ROW_H, and it lets the list jump
             straight to an offset without measuring. */}
@@ -343,14 +360,14 @@ export default function Leaderboard() {
               <Text style={[styles.myRankCoinText, { color: colors.onBrand }]}>{myRank}</Text>
             </View>
             <View style={styles.rowAvatarWrap}>
-              {personAvatar(allUsers[myIndex], 36)}
+              {personAvatar(myEntry, 36)}
             </View>
             <Text style={[styles.myRankName, { color: colors.onBrand }]} numberOfLines={1}>
               You
             </Text>
             <View style={styles.rowPtsWrap}>
               <Icon name="star" size={13} color={colors.onBrand} />
-              <Text style={[styles.myRankPts, { color: colors.onBrand }]}>{fmtPts(allUsers[myIndex].points)}</Text>
+              <Text style={[styles.myRankPts, { color: colors.onBrand }]}>{fmtPts(myEntry.points)}</Text>
             </View>
           </View>
         )}

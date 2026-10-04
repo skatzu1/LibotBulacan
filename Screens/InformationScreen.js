@@ -638,8 +638,9 @@ export default function InformationScreen({ route, navigation }) {
 
   const spotIsBookmarked = isBookmarked(spot._id || spot.id);
   const reviews          = getReviewsForSpot(spot._id);
-  const averageRating    = getAverageRating(spot._id) || "0.0";
-  const reviewCount      = getReviewCount(spot._id);
+  // The spot list's figures until this page's own fetch of the reviews lands.
+  const averageRating    = getAverageRating(spot._id, spot.ratingAvg) || "0.0";
+  const reviewCount      = getReviewCount(spot._id, spot.ratingCount);
   // Every photo travelers attached to their reviews, newest review first,
   // each labelled with who took it.
   const visitorPhotos    = reviews.flatMap((r) => (r.photos || []).map((p) => ({ ...p, caption: r.userName || "Anonymous" })));

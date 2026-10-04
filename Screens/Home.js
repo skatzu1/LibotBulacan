@@ -239,13 +239,13 @@ function HomeContent({ profilePhoto, navigation }) {
   const handleSpotPress = (spot) => navigation.navigate("InformationScreen", { spot });
 
   const sliderData = useMemo(() => allSpots.slice(0, 8).map(
-    ({ _id, image, name, description, city, rating, modelUrl, visitCount }, i) => ({
+    ({ _id, image, name, description, city, rating, modelUrl, visitCount, ratingAvg }, i) => ({
       id:          _id || String(i),
       image,
       title:       name,
       location:    city || "Philippines",
       description: description || "",
-      rating:      getAverageRating(_id) || 0,
+      rating:      getAverageRating(_id, ratingAvg) || 0,
       visitCount:  visitCount ?? 0,
       spot:        { _id, image, name, description, city, rating, modelUrl },
     })
@@ -532,7 +532,7 @@ function HomeContent({ profilePhoto, navigation }) {
                         rank={i + 1}
                         wide={i === 0}
                         height={i === 0 ? 200 : 150}
-                        rating={getAverageRating(spot._id) || 0}
+                        rating={getAverageRating(spot._id, spot.ratingAvg) || 0}
                         visits={spot.visitCount ?? 0}
                         style={[h.gridCell, i !== 0 && { width: cardW }]}
                         onPress={() => handleSpotPress(spot)}
