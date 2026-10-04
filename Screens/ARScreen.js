@@ -41,6 +41,7 @@ import { fonts, typography, radius, shadow, useTheme } from "../context/ThemeCon
 import Icon from "../components/Icon";
 import { showAlert } from "../components/AppAlert";
 import { PrimaryButton, EmptyState, ScreenHeader, H_PAD } from "../components/ui";
+import { useCachedModel } from "../utils/modelCache";
 
 // ─────────────────────────────────────────────
 // DESIGN TOKENS
@@ -860,7 +861,7 @@ function computeAnchorProximities(spot, userLat, userLon, accuracyMeters) {
 // removed from the scene outright and cannot come back until the user leaves
 // AR and re-enters, so "this one is already done" is not a state this
 // component can ever be in.
-const ModelOnPlane = ({ spot, anchorLabel, onModelClick, onModelError, onPlacedChange, tapBridge }) => {
+const ModelOnPlane = ({ spot, modelUri, anchorLabel, onModelClick, onModelError, onPlacedChange, tapBridge }) => {
   // The model only renders once ARCore finds a HORIZONTAL surface — i.e. once
   // the camera has actually seen the ground. That's the step users get stuck
   // on, and nothing was reporting it outward: the HUD said "TAP THE OBJECT" as
@@ -942,7 +943,8 @@ const ModelOnPlane = ({ spot, anchorLabel, onModelClick, onModelError, onPlacedC
         intensity={780}
       />
       <Viro3DObject
-        source={{ uri: spot.AR3DModelURL }}
+        // The phone's saved copy of spot.AR3DModelURL (utils/modelCache.js).
+        source={{ uri: modelUri }}
         type="GLB"
         // Dimensions measured by walking the asset's node hierarchy and
         // applying every transform — NOT by reading the raw accessor bounds,
@@ -1042,7 +1044,7 @@ const ModelOnPlane = ({ spot, anchorLabel, onModelClick, onModelError, onPlacedC
 };
 
 const ARScene = ({ sceneNavigator }) => {
-  const { spot, focusAnchor, onModelClick, onTrackingChange, onModelError, onPlacedChange, tapBridge } =
+  const { spot, modelUri, focusAnchor, onModelClick, onTrackingChange, onModelError, onPlacedChange, tapBridge } =
     sceneNavigator.viroAppProps;
 
   // Lets ARScreen ask "was that tap on the model?" — it sees the touch, but
@@ -1095,7 +1097,11 @@ const ARScene = ({ sceneNavigator }) => {
   // app: a bare world-positioned node needs an ARCore anchor that may never
   // arrive (poor light, blank wall, session still starting). The HUD says the
   // same thing in plain React Native views that cannot crash.
-  if (!focusAnchor) {
+  //
+  // Also empty while the model is still downloading into the phone's cache
+  // (modelUri null — see utils/modelCache.js): handed the URL meanwhile,
+  // Viro would download the same file a second time.
+  if (!focusAnchor || !modelUri) {
     return <ViroARScene ref={sceneRef} onTrackingUpdated={handleTracking} />;
   }
 
@@ -1104,6 +1110,7 @@ const ARScene = ({ sceneNavigator }) => {
       <ModelOnPlane
         key={focusAnchor.index}
         spot={spot}
+        modelUri={modelUri}
         anchorLabel={focusAnchor.label}
         onModelClick={() => onModelClick(focusAnchor)}
         onModelError={onModelError}
@@ -1416,6 +1423,12 @@ export default function ARScreen({ route, navigation }) {
   // Set when Viro fails to load the .glb. Distinguishes "the model is broken"
   // from "the model hasn't appeared yet", which look the same through a camera.
   const [modelFailed, setModelFailed] = useState(false);
+
+  // The model, downloaded once and kept on the phone (utils/modelCache.js).
+  // Starts as soon as the screen opens, so it's usually ready by the time
+  // the traveler reaches the object. A saved copy Viro can't read is dropped
+  // for the URL before the model counts as failed.
+  const arModel = useCachedModel(spot.AR3DModelURL);
 
   // True once ARCore has found a horizontal surface and the model is actually
   // on screen. This is the difference between "tap it" being true and being a
@@ -2135,10 +2148,11 @@ export default function ARScreen({ route, navigation }) {
         autofocus={autofocusOn}
         viroAppProps={{
           spot,
+          modelUri:         arModel.uri,
           focusAnchor,
           onModelClick:     handleModelClick,
           onTrackingChange: setArTracking,
-          onModelError:     () => setModelFailed(true),
+          onModelError:     () => { if (!arModel.onLocalError()) setModelFailed(true); },
           onPlacedChange:   setModelPlaced,
           tapBridge,
         }}

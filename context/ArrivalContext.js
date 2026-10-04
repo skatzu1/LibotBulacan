@@ -31,12 +31,10 @@ import { useTheme, fonts } from "./ThemeContext";
 import { BASE_URL } from "../api";
 import { badgeImage } from "../utils/image";
 import { evaluateFix, watchTierFor } from "../utils/arrivalEngine";
-import { ARRIVAL_POINTS } from "../utils/missionTiers";
 import { usePoints } from "./PointsContext";
 
 // Single source of truth for the backend host — see api.js.
 const ARRIVAL_RADIUS_METERS    = 50;
-const POINTS_PER_VISIT         = ARRIVAL_POINTS;   // display only; the server awards it
 const ACTIVE_SPOT_KEY          = "activeSpot";
 const ALL_SPOTS_KEY            = "allSpots";
 const SPOTS_CACHE_TTL_MS       = 5 * 60 * 1000;
@@ -85,8 +83,11 @@ async function updatePendingRewards(userId, change) {
   const next = change(await readPendingRewards(userId));
   try { await AsyncStorage.setItem(`${PENDING_REWARDS_KEY_PREFIX}${userId}`, JSON.stringify(next)); } catch {}
 }
-const addPendingReward    = (userId, spotId) => updatePendingRewards(userId, (l) => (l.includes(spotId) ? l : [...l, spotId]));
-const removePendingReward = (userId, spotId) => updatePendingRewards(userId, (l) => l.filter((id) => id !== spotId));
+// An entry is { spotId, lat, lng }: the arrival with where the phone was, which
+// POST /api/arrivals checks. Builds up to 1.1.1 queued bare spotIds.
+const pendingSpotId       = (entry) => (typeof entry === "string" ? entry : entry?.spotId);
+const addPendingReward    = (userId, entry) => updatePendingRewards(userId, (l) => (l.some((e) => pendingSpotId(e) === entry.spotId) ? l : [...l, entry]));
+const removePendingReward = (userId, spotId) => updatePendingRewards(userId, (l) => l.filter((e) => pendingSpotId(e) !== spotId));
 
 // ─────────────────────────────────────────────
 // Helpers
@@ -166,9 +167,14 @@ async function handleBackgroundArrival(coords) {
       const wasInside  = insideSet.has(spotId);
 
       if (isInside && !wasInside) {
-        // Just entered the radius — notify.
+        // Just entered the radius — notify, and queue the arrival with this
+        // position; the app delivers it to POST /api/arrivals the next time
+        // it's opened (flushPendingRewards). Without this the badge the
+        // notification promises never came: the app found the spot already
+        // marked "inside" and treated it as no arrival at all.
         insideSet.add(spotId);
         changed = true;
+        await addPendingReward(currentUserId, { spotId, lat: coords.latitude, lng: coords.longitude });
 
         const isFirstVisit = !claimed.includes(spotId);
 
@@ -713,6 +719,26 @@ export function ArrivalProvider({ children }) {
     });
   }, [isSignedIn]);
 
+  // The popups' timers, cleared when the provider goes away (signing out), so
+  // none of them fires into an unmounted tree.
+  // (An animation can finish after that and ask for a new one: refused.)
+  const timersRef = useRef(new Set());
+  const unmountedRef = useRef(false);
+  const later = useCallback((fn, ms) => {
+    if (unmountedRef.current) return;
+    const id = setTimeout(() => { timersRef.current.delete(id); fn(); }, ms);
+    timersRef.current.add(id);
+  }, []);
+  useEffect(() => {
+    const timers = timersRef.current;
+    unmountedRef.current = false;
+    return () => {
+      unmountedRef.current = true;
+      timers.forEach(clearTimeout);
+      timers.clear();
+    };
+  }, []);
+
   // ─────────────────────────────────────────
   // Points popup
   // ─────────────────────────────────────────
@@ -728,7 +754,7 @@ export function ArrivalProvider({ children }) {
       Animated.spring(pointsTranslateY, { toValue: 0, useNativeDriver: true, tension: 80, friction: 8 }),
       Animated.spring(pointsScale,      { toValue: 1, useNativeDriver: true, tension: 80, friction: 8 }),
     ]).start(() => {
-      setTimeout(() => {
+      later(() => {
         Animated.parallel([
           Animated.timing(pointsOpacity,    { toValue: 0,    duration: 350, useNativeDriver: true }),
           Animated.timing(pointsTranslateY, { toValue: -30,  duration: 350, useNativeDriver: true }),
@@ -736,7 +762,7 @@ export function ArrivalProvider({ children }) {
         ]).start(() => setShowPointsPopup(false));
       }, 2600);
     });
-  }, [pointsOpacity, pointsTranslateY, pointsScale]);
+  }, [pointsOpacity, pointsTranslateY, pointsScale, later]);
 
   // ─────────────────────────────────────────
   // Badge banner
@@ -751,87 +777,86 @@ export function ArrivalProvider({ children }) {
       Animated.spring(badgeTranslateY, { toValue: 0, useNativeDriver: true, tension: 70, friction: 10 }),
       Animated.timing(badgeOpacity,    { toValue: 1, duration: 300, useNativeDriver: true }),
     ]).start(() => {
-      setTimeout(() => {
+      later(() => {
         Animated.parallel([
           Animated.timing(badgeTranslateY, { toValue: -200, duration: 350, useNativeDriver: true }),
           Animated.timing(badgeOpacity,    { toValue: 0,    duration: 350, useNativeDriver: true }),
         ]).start(() => { setShowBadgeBanner(false); setEarnedBadge(null); });
       }, 5000);
     });
-  }, [badgeTranslateY, badgeOpacity]);
+  }, [badgeTranslateY, badgeOpacity, later]);
 
   // ─────────────────────────────────────────
   // Award rewards (foreground)
   // Called only when checkArrival detects a fresh outside->inside
   // transition, so no extra dedupe guard is needed in here.
+  //
+  // One request, POST /api/arrivals, with where the phone was: the server
+  // checks it's at the spot, then counts the visit, pays the first-visit
+  // points, logs the visit and gives the badge, each once. This used to be
+  // four requests that only sent the spotId — the server had to take the
+  // app's word for the arrival, and so did anyone calling the API by hand.
   // ─────────────────────────────────────────
-  const awardRewards = useCallback(async (spot) => {
+
+  // Resolves the server's answer, or null when there wasn't a usable one (a
+  // server error) and the arrival should stay queued. Throws when the request
+  // can't get out at all (no signal), like fetch.
+  const postArrival = useCallback(async ({ spotId, lat, lng }) => {
+    const token = await getToken();
+    if (!token) return null;
+    const res = await fetch(`${BASE_URL}/api/arrivals`, {
+      method:  "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body:    JSON.stringify({ spotId, lat, lng }),
+    });
+    if (res.status >= 500) return null;
+    return (await safeJson(res)) ?? {};
+  }, [getToken]);
+
+  const awardRewards = useCallback(async (spot, fix) => {
     const spotId = String(spot._id ?? "").trim();
     if (!spotId) return;
 
     console.log("[Arrival] Arrived at:", spot.name, "| spotId:", spotId);
 
-    // ── Determine first vs return visit ───────────────────────────────────
-    // Cache is the fast path. Backend is the source of truth —
-    // the cache is synced from backend on every sign-in so they stay in sync.
-    const cacheKey     = `claimedSpotIds_${currentUserIdRef.current}`;
-    const cachedRaw    = await AsyncStorage.getItem(cacheKey);
-    const cachedIds    = cachedRaw ? JSON.parse(cachedRaw) : [];
-    const isFirstVisit = !cachedIds.includes(spotId);
+    const userId    = currentUserIdRef.current;
+    const cacheKey  = `claimedSpotIds_${userId}`;
+    const cachedRaw = await AsyncStorage.getItem(cacheKey);
+    const cachedIds = cachedRaw ? JSON.parse(cachedRaw) : [];
 
+    // Kept until the server has answered — crash- and signal-safe; see
+    // PENDING_REWARDS. Saved with the position, which is what the server checks.
+    const arrival = { spotId, lat: fix.latitude, lng: fix.longitude };
+    await addPendingReward(userId, arrival);
+
+    let result = null;
+    try { result = await postArrival(arrival); }
+    catch (e) { console.warn("[Arrival] Offline — saved for later:", e?.message); }
+    if (result) await removePendingReward(userId, spotId);
+
+    // The server refused it: the position it got isn't at the spot (a GPS
+    // jump, or the spot's pin moved). Nothing was paid, so say nothing.
+    if (result && !result.recorded) {
+      console.log("[Arrival] Not recorded:", result.tooFar ? `${result.distance} m away` : result.message ?? "no pin");
+      return;
+    }
+
+    // First visit or return: the server's answer, or offline, the saved copy
+    // of it (synced from GET /api/users/visitedSpots at sign-in).
+    const isFirstVisit = result ? !!result.firstVisit : !cachedIds.includes(spotId);
     console.log("[Arrival] isFirstVisit:", isFirstVisit, "| spotId:", spotId);
-
-    // Write cache immediately on first visit — crash-safe guard
-    const userId = currentUserIdRef.current;
-    if (isFirstVisit) {
+    if (!cachedIds.includes(spotId)) {
       await AsyncStorage.setItem(cacheKey, JSON.stringify([...cachedIds, spotId]));
-      // Kept until the server has the points and the badge; see PENDING_REWARDS.
-      await addPendingReward(userId, spotId);
     }
 
-    // ── Visit count (every visit) ──────────────────────────────────────────
-    try {
-      const token    = await getToken();
-      const visitRes = await fetch(`${BASE_URL}/api/spots/${spotId}/visit`, {
-        method:  "PATCH",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-      });
-      const visitData = await safeJson(visitRes);
-      console.log("[Visit]", visitData?.alreadyVisited ? "Already visited": `visitCount -> ${visitData?.visitCount}`);
-    } catch (e) { console.warn("[Visit] Failed:", e); }
-
-    // ── Points (first visit only) ──────────────────────────────────────────
-    let pointsJustEarned = false;
-    let pointsReachedServer = false;
-    if (isFirstVisit) {
-      try {
-        const token = await getToken();
-        const res   = await fetch(`${BASE_URL}/api/users/points`, {
-          method:  "PATCH",
-          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-          body:    JSON.stringify({ spotId }),
-        });
-        pointsReachedServer = res.status < 500;
-        const data = await safeJson(res);
-        if (res.ok && data?.success && !data.alreadyAwarded) {
-          pointsJustEarned = true;
-          await AsyncStorage.setItem("userPoints", String(data.points));
-          triggerPointsPopup(POINTS_PER_VISIT, data.points);
-        }
-      } catch (e) { console.warn("[Points] Error:", e); }
-    }
-
-    // ── Visit log (every visit) ────────────────────────────────────────────
-    try {
-      const token = await getToken();
-      await fetch(`${BASE_URL}/api/visitlogs`, {
-        method:  "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body:    JSON.stringify({ spotId }),
-      });
-      console.log("[VisitLog] Logged visit for:", spot.name);
+    const pointsJustEarned = (result?.pointsEarned ?? 0) > 0;
+    if (result) {
+      if (pointsJustEarned) {
+        await AsyncStorage.setItem("userPoints", String(result.points));
+        triggerPointsPopup(result.pointsEarned, result.points);
+      }
       refreshPointsRef.current?.();
-    } catch (e) { console.warn("[VisitLog] Failed:", e); }
+    }
 
     // ── Notification (every fresh arrival) ─────────────────────────────────
     await Notifications.scheduleNotificationAsync({
@@ -845,45 +870,21 @@ export function ArrivalProvider({ children }) {
       trigger: null,
     });
 
-    if (!isFirstVisit) {
-      console.log("[Badge] Return visit — no points, no badge");
-      return;
+    // ── Badge (first visit only; the server gives it once) ─────────────────
+    const badge = result?.badge;
+    if (badge?.claimed && !badge.alreadyOwned) {
+      console.log("[Badge] Claimed:", badge.claimed.name);
+      later(() => triggerBadgeBanner(badge.claimed), pointsJustEarned ? 1500 : 0);
     }
-
-    // ── Badge (first visit only) ───────────────────────────────────────────
-    try {
-      const token = await getToken();
-      const res   = await fetch(`${BASE_URL}/api/users/badges`, {
-        method:  "PATCH",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body:    JSON.stringify({ spotId }),
-      });
-      // Points and badge both answered: nothing left to replay for this spot.
-      if (pointsReachedServer && res.status < 500) await removePendingReward(userId, spotId);
-      const data = await safeJson(res);
-
-      if (!data?.success) {
-        console.log("[Badge] No badge configured for this spot:", data?.message);
-        return;
-      }
-
-      if (data.alreadyOwned) {
-        console.log("[Badge] Already owned — no banner");
-        return;
-      }
-
-      console.log("[Badge] Claimed:", data.claimed?.name);
-      setTimeout(() => triggerBadgeBanner(data.claimed), pointsJustEarned ? 1500 : 0);
-
-    } catch (e) { console.error("[Badge] Error:", e); }
-  }, [getToken, triggerPointsPopup, triggerBadgeBanner]);
+  }, [postArrival, triggerPointsPopup, triggerBadgeBanner, later]);
 
   // ─────────────────────────────────────────
-  // Replay rewards that were earned offline
-  // Same four calls, same order as a live arrival. Each spot leaves the list
-  // only once every call got an answer from the server; a network failure
-  // keeps it for the next attempt. Runs quietly — the points show up the next
-  // time the profile or leaderboard refreshes.
+  // Replay arrivals that never reached the server
+  // Each leaves the list once the server has answered; no signal keeps it
+  // for the next attempt. Runs quietly — the points show up in the profile.
+  // Arrivals queued by builds up to 1.1.1 are bare spotIds with no position;
+  // those go through the old one-reward-per-call routes, which the server
+  // keeps for those builds (and which simply answer 404 once removed).
   // ─────────────────────────────────────────
   const flushingRef = useRef(false);
   const flushPendingRewards = useCallback(async () => {
@@ -891,38 +892,44 @@ export function ArrivalProvider({ children }) {
     if (!userId || flushingRef.current) return;
     flushingRef.current = true;
     lastFlushAtRef.current = Date.now();
+    let delivered = 0;
     try {
       const pending = await readPendingRewards(userId);
-      for (const spotId of pending) {
+      for (const entry of pending) {
         try {
           const token = await getToken();
           if (!token) return;
-          const call = async (method, path, body) => {
-            const res = await fetch(`${BASE_URL}${path}`, {
-              method,
-              headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-              ...(body ? { body: JSON.stringify(body) } : {}),
-            });
-            return res.status < 500;
-          };
-          const answered = [
-            await call("PATCH", `/api/spots/${spotId}/visit`),
-            await call("PATCH", "/api/users/points", { spotId }),
-            await call("POST",  "/api/visitlogs", { spotId }),
-            await call("PATCH", "/api/users/badges", { spotId }),
-          ];
-          if (answered.every(Boolean)) {
-            await removePendingReward(userId, spotId);
-            console.log("[Rewards] Delivered offline visit:", spotId);
+          if (typeof entry === "string") {
+            const call = async (method, path, body) => {
+              const res = await fetch(`${BASE_URL}${path}`, {
+                method,
+                headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+                ...(body ? { body: JSON.stringify(body) } : {}),
+              });
+              return res.status < 500;
+            };
+            const answered = [
+              await call("PATCH", `/api/spots/${entry}/visit`),
+              await call("PATCH", "/api/users/points", { spotId: entry }),
+              await call("POST",  "/api/visitlogs", { spotId: entry }),
+              await call("PATCH", "/api/users/badges", { spotId: entry }),
+            ];
+            if (!answered.every(Boolean)) continue;
+          } else if (!(await postArrival(entry))) {
+            continue;
           }
+          await removePendingReward(userId, pendingSpotId(entry));
+          delivered++;
+          console.log("[Rewards] Delivered offline visit:", pendingSpotId(entry));
         } catch {
           return; // still offline — try again later
         }
       }
     } finally {
       flushingRef.current = false;
+      if (delivered) refreshPointsRef.current?.();
     }
-  }, [getToken]);
+  }, [getToken, postArrival]);
   useEffect(() => { flushPendingRef.current = flushPendingRewards; }, [flushPendingRewards]);
 
   // …and whenever the app comes back to the foreground.
@@ -959,7 +966,7 @@ export function ArrivalProvider({ children }) {
     const state = { inside: insideSpotsRef.current, pending: arrivalPendingRef.current };
     const { entered, left, nearestM } = evaluateFix(state, fix, targets);
 
-    for (const id of entered) awardRewards(byId.get(id));
+    for (const id of entered) awardRewards(byId.get(id), fix);
     for (const id of left) console.log("[Arrival] Left:", byId.get(id)?.name);
     if (entered.length || left.length) persistInsideSpots();
     return nearestM;
