@@ -5,9 +5,9 @@
 // label. The screen names it in text instead.)
 //
 // Same stack as the Track screen — Leaflet in a WebView — but deliberately
-// WITHOUT Track's OSRM route line. The eateries sit a short walk from their
-// spot (Emotea is 83 m from Barasoain), and the public OSRM demo server only
-// routes cars, so it would send a walker round one-way streets.
+// WITHOUT Track's route line. The eateries sit a short walk from their
+// spot (Emotea is 83 m from Barasoain), and the route line follows car
+// rules, so it would send a walker round one-way streets.
 // A dotted straight line to the pin is the honest shape at this scale, and it
 // is the same straight-line distance the server checks on completion.
 import React, { useCallback, useEffect, useMemo, useRef } from "react";

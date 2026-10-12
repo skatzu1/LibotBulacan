@@ -771,6 +771,9 @@ export default function Track({ route, navigation }) {
   const [followMode, setFollowMode]       = useState(false);
   const [selectedTerminal, setSelectedTerminal] = useState(null);
   const [routeInfo, setRouteInfo]         = useState(null); // { distance, time }
+  // Said instead of the distance when no road route can be drawn (e.g. the
+  // traveler is outside Bulacan, beyond the roads the server knows).
+  const [routeNote, setRouteNote]         = useState(null);
 
   // Bottom sheet animation
   const sheetAnim = useRef(new Animated.Value(0)).current;
@@ -901,6 +904,55 @@ export default function Track({ route, navigation }) {
   const followModeRef = useRef(followMode);
   useEffect(() => { followModeRef.current = followMode; }, [followMode]);
 
+  /* ── Route line ── */
+  // Directions come from the backend's own road router (GET /api/route,
+  // which searches Bulacan's road network itself). The line used to come
+  // from the public OSRM demo server, an outside API with no uptime promise.
+  // Fetched at most every 15 s, and again only once the traveler has moved
+  // ~45 m; the last line is kept so a map reload can redraw it at once.
+  const routeReq = useRef({ at: 0, pt: null, busy: false });
+  const lastRoute = useRef(null);
+
+  const drawRouteOnMap = useCallback((coordinates) => {
+    webViewRef.current?.injectJavaScript(`
+      (function() { try { window.drawRoute(${JSON.stringify(coordinates)}); } catch(e) {} })(); true;
+    `);
+  }, []);
+
+  const requestRoute = useCallback(async (coords) => {
+    if (!spotData?._id) return;
+    const st = routeReq.current;
+    const now = Date.now();
+    if (st.busy || now - st.at < 15000) return;
+    if (st.pt && haversineDistance(st.pt.latitude, st.pt.longitude, coords.latitude, coords.longitude) <= 45) return;
+    st.busy = true;
+    st.at = now;
+    try {
+      const res = await fetch(`${BASE_URL}/api/route?from=${coords.latitude},${coords.longitude}&spotId=${spotData._id}`);
+      const data = await res.json().catch(() => null);
+      if (!isMounted.current) return;
+      if (res.ok && data?.coordinates?.length >= 2) {
+        st.pt = coords;
+        lastRoute.current = data.coordinates;
+        setRouteInfo({ distance: data.distance, time: data.duration });
+        setRouteNote(null);
+        drawRouteOnMap(data.coordinates);
+      } else if (res.status === 422) {
+        st.pt = coords;
+        lastRoute.current = null;
+        setRouteInfo(null);
+        setRouteNote(data?.message || "No road route was found.");
+        drawRouteOnMap(null);
+      }
+      // Anything else (no signal, a busy server): the line already drawn
+      // stays, and the next fix after 15 s tries again.
+    } catch {
+      // Offline — as above.
+    } finally {
+      st.busy = false;
+    }
+  }, [spotData, drawRouteOnMap]);
+
   /* ── Update marker + proximity via injectJavaScript ── */
   const updateMarkerRef = useRef(null);
   const updateMarkerOnMap = useCallback((coords) => {
@@ -931,7 +983,8 @@ export default function Track({ route, navigation }) {
       } catch(e) {}
     })(); true;
   `);
-}, [spotData]);
+  requestRoute(coords);
+}, [spotData, requestRoute]);
 
   updateMarkerRef.current = updateMarkerOnMap;
 
@@ -944,8 +997,6 @@ export default function Track({ route, navigation }) {
         if (terminal) showSheet(terminal);
       } else if (data.type === "mapTapped") {
         if (sheetVisible.current) hideSheet();
-      } else if (data.type === "route") {
-        setRouteInfo({ distance: data.distance, time: data.time });
       }
     } catch {}
   }, [showSheet, hideSheet]);
@@ -1098,8 +1149,6 @@ export default function Track({ route, navigation }) {
            with the version in the URL. -->
       <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
         integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
-      <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.css"
-        integrity="sha384-n6BdBD4Ahcb9IGZDgjgv0hV2a/y2WOCf1n0kEMZDpZySy/Hv1QMAtLIrC3y9oIZD" crossorigin="" />
       <!-- The app's UI face for popups, tooltips and the loading line, as on
            the Nearby Eats map. media=print + onload keeps it from blocking
            the map; offline it falls back to the system font. -->
@@ -1162,8 +1211,7 @@ export default function Track({ route, navigation }) {
         /* Leaflet's tip is white by default — a white nub under a dark popup. */
         .leaflet-popup-tip { background:${surfaceBg}; box-shadow:none; }
         /* Route line — rounded joins for a smooth modern stroke */
-        .leaflet-routing-container { display:none; }
-        path.leaflet-interactive { stroke-linecap:round; stroke-linejoin:round; }
+        path.leaflet-interactive, path.route-line { stroke-linecap:round; stroke-linejoin:round; }
         @keyframes proximity-pulse {
           0%   { opacity:0.7;  transform:scale(0.85); }
           50%  { opacity:0.15; transform:scale(1.15); }
@@ -1184,8 +1232,6 @@ export default function Track({ route, navigation }) {
       <div id="map"></div>
       <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
         integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
-      <script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.js"
-        integrity="sha384-Le/Ab4WG5Ezkdf4RS5P5eZrpmvNgcZ4QcTozVDXGoOsTxGroBLM4e9OSqeh6V26n" crossorigin=""></script>
       <script>
         const DEST_LAT   = ${destLat};
         const DEST_LNG   = ${destLng};
@@ -1447,9 +1493,22 @@ window.updateSpotProximity = function(active) {
           });
         };
 
+        // ── Route line ──
+        // Drawn from the route the app fetched from the backend
+        // (GET /api/route); null clears it. A wide casing under the line.
+        window.routeLayers = [];
+        window.drawRoute = function(latlngs) {
+          window.routeLayers.forEach(function(l) { window.map.removeLayer(l); });
+          window.routeLayers = [];
+          if (!latlngs || latlngs.length < 2) return;
+          window.routeLayers = [
+            L.polyline(latlngs, { color:'${routeCasing}', weight:10, opacity:0.95, interactive:false, className:'route-line' }).addTo(window.map),
+            L.polyline(latlngs, { color:'${destColor}', weight:5.5, opacity:1, interactive:false, className:'route-line' }).addTo(window.map),
+          ];
+        };
+
         // ── User location ──
         window.userMarker     = null;
-        window.routingControl = null;
         window.mapReady       = false;
 
         window.initUserLocation = function(lat, lng) {
@@ -1465,29 +1524,6 @@ window.updateSpotProximity = function(active) {
           window.userMarker = L.marker([lat, lng], { icon: userIcon })
             .addTo(window.map).bindPopup('Your Location');
 
-          window.routingControl = L.Routing.control({
-            waypoints: [L.latLng(lat, lng), L.latLng(DEST_LAT, DEST_LNG)],
-            router: L.Routing.osrmv1({ serviceUrl:'https://router.project-osrm.org/route/v1' }),
-            lineOptions: { styles:[
-              { color:'${routeCasing}', weight:10, opacity:0.95 },
-              { color:'${destColor}', weight:5.5, opacity:1 },
-            ] },
-            createMarker: () => null,
-            addWaypoints: false, routeWhileDragging: false,
-            show: false, fitSelectedRoutes: false,
-          }).addTo(window.map);
-
-          // Surface distance / ETA to React Native for the floating card.
-          window.routingControl.on('routesfound', function (e) {
-            var r = e.routes && e.routes[0];
-            if (!r || !r.summary) return;
-            window.ReactNativeWebView.postMessage(JSON.stringify({
-              type: 'route',
-              distance: r.summary.totalDistance,
-              time: r.summary.totalTime,
-            }));
-          });
-
           if (Math.abs(lat - DEST_LAT) > 1e-5 || Math.abs(lng - DEST_LNG) > 1e-5) {
             window.map.fitBounds(
               L.latLngBounds([lat, lng], [DEST_LAT, DEST_LNG]),
@@ -1497,34 +1533,16 @@ window.updateSpotProximity = function(active) {
             window.map.setView([DEST_LAT, DEST_LNG], 16);
           }
 
-          window._lastRoutedAt = Date.now();
-          window._lastRoutedPt = [lat, lng];
           window.mapReady = true;
         };
 
+        // The route itself is fetched by the app, which calls drawRoute.
         window.updateUserLocation = function(lat, lng, follow) {
           if (!window.mapReady) {
             window.initUserLocation(lat, lng);
             return;
           }
           if (window.userMarker) window.userMarker.setLatLng([lat, lng]);
-
-          // Re-route only when the user has actually moved (~45 m) and not more
-          // often than every 15 s — the OSRM demo router rate-limits, and a
-          // request per GPS tick makes the route line flicker / vanish.
-          if (window.routingControl) {
-            var far = !window._lastRoutedPt ||
-              Math.hypot(lat - window._lastRoutedPt[0], lng - window._lastRoutedPt[1]) > 0.0004;
-            var due = !window._lastRoutedAt || (Date.now() - window._lastRoutedAt > 15000);
-            if (far && due) {
-              window._lastRoutedAt = Date.now();
-              window._lastRoutedPt = [lat, lng];
-              window.routingControl.setWaypoints([
-                L.latLng(lat, lng),
-                L.latLng(DEST_LAT, DEST_LNG)
-              ]);
-            }
-          }
           if (follow && window.map) window.map.panTo([lat, lng], { animate:true });
         };
       </script>
@@ -1589,6 +1607,8 @@ window.updateSpotProximity = function(active) {
           if (userLocation) {
             updateMarkerRef.current?.(userLocation);
           }
+          // A reload (e.g. a theme change) starts with a bare map.
+          if (lastRoute.current) drawRouteOnMap(lastRoute.current);
         }}
       />
 
@@ -1629,6 +1649,17 @@ window.updateSpotProximity = function(active) {
               </Text>
               <Text style={[styles.etaSecondary, { color: colors.textMuted }]} numberOfLines={1}>
                 to {spotData.name}
+              </Text>
+            </View>
+          </View>
+        ) : routeNote ? (
+          <View style={[styles.etaCard, { backgroundColor: colors.background }, shadow.lg]} accessibilityLiveRegion="polite">
+            <View style={[styles.etaIcon, { backgroundColor: colors.brandSoft }]}>
+              <Icon name="info" size={15} color={colors.brand} />
+            </View>
+            <View style={styles.etaText}>
+              <Text style={[styles.etaSecondary, { color: colors.textPrimary }]} numberOfLines={3}>
+                {routeNote}
               </Text>
             </View>
           </View>
