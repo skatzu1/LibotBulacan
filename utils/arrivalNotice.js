@@ -8,7 +8,7 @@
 //
 // Each arrival is { spotId, spotName, isFirstVisit }.
 
-const joinNames = (names) =>
+export const joinNames = (names) =>
   names.length <= 1 ? names.join("") : `${names.slice(0, -1).join(", ")} and ${names.at(-1)}`;
 
 export function arrivalNoticeContent(arrivals) {
