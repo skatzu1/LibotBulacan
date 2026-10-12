@@ -24,6 +24,8 @@ import {
   GOOGLE_BUSY, googleWindowBusy, googleWindowClosed, googleErrorMessage,
 } from "../utils/authValidation";
 import Icon from "../components/Icon";
+import MunicipalityPicker from "../components/MunicipalityPicker";
+import { municipalityError } from "../utils/municipalities";
 
 // Same full-screen background as sign-in; it carries its own cyan→yellow wash.
 const REGISTER_BG = require("../assets/bg.png");
@@ -138,8 +140,9 @@ function TermsNotice({ action }) {
 // Rules and wording are shared with the other auth screens
 // (utils/authValidation). The password additionally has to reach "Good"
 // on the strength meter below, i.e. meet 3 of the 4 rules.
-function validateRegister({ name, email, password, confirm, dob }) {
+function validateRegister({ municipality, name, email, password, confirm, dob }) {
   const e = {};
+  const h = municipalityError(municipality); if (h) e.municipality = h;
   const n = nameError(name);   if (n) e.name = n;
   const m = emailError(email); if (m) e.email = m;
   if (!password) e.password = "Enter a password.";
@@ -149,7 +152,9 @@ function validateRegister({ name, email, password, confirm, dob }) {
   return e;
 }
 
-const FIELD_ORDER = ["name", "email", "password", "confirm", "dob"];
+// Municipality first: it sits above both sign-up buttons, because the
+// specification asks every traveler for it, Google sign-ups included.
+const FIELD_ORDER = ["municipality", "name", "email", "password", "confirm", "dob"];
 
 // ── Main Component ────────────────────────────────────────────────
 export default function Register({ navigation }) {
@@ -158,6 +163,7 @@ export default function Register({ navigation }) {
   const { isLoaded, signUp, setActive } = useSignUp();
   const { startOAuthFlow }              = useOAuth({ strategy: "oauth_google" });
 
+  const [municipality, setMunicipality]   = useState("");
   const [name, setName]                   = useState("");
   const [email, setEmail]                 = useState("");
   const [password, setPassword]           = useState("");
@@ -178,12 +184,13 @@ export default function Register({ navigation }) {
   const [formError, setFormError]       = useState("");
 
   const inputRefs = {
+    municipality: useRef(null),
     name: useRef(null), email: useRef(null), password: useRef(null), confirm: useRef(null), dob: useRef(null),
   };
 
   const clientErrors = useMemo(
-    () => validateRegister({ name, email, password, confirm, dob }),
-    [name, email, password, confirm, dob]
+    () => validateRegister({ municipality, name, email, password, confirm, dob }),
+    [municipality, name, email, password, confirm, dob]
   );
   const errorFor = (field) => serverErrors[field] || (touched[field] ? clientErrors[field] : null);
 
@@ -231,9 +238,17 @@ export default function Register({ navigation }) {
   const handleGoogleSignUp = async () => {
     if (isGoogleLoading || !isLoaded) return;
     setFormError("");
+    // Google fills in the name and email, but not where the traveler lives.
+    if (clientErrors.municipality) {
+      touch("municipality");
+      inputRefs.municipality.current?.focus();
+      return;
+    }
     setIsGoogleLoading(true);
     try {
-      const { createdSessionId, authSessionResult } = await startOAuthFlow();
+      // unsafeMetadata rides on the new Clerk account; the backend copies the
+      // municipality from it (webhook and /register).
+      const { createdSessionId, authSessionResult } = await startOAuthFlow({ unsafeMetadata: { municipality } });
       if (googleWindowBusy(authSessionResult)) {
         setFormError(GOOGLE_BUSY);
         return;
@@ -269,7 +284,7 @@ export default function Register({ navigation }) {
   // ── Email signup ──
   const handleRegister = async () => {
     setFormError("");
-    setTouched({ name: true, email: true, password: true, confirm: true, dob: true });
+    setTouched({ municipality: true, name: true, email: true, password: true, confirm: true, dob: true });
 
     const firstBad = FIELD_ORDER.find((f) => clientErrors[f] || serverErrors[f]);
     if (firstBad) {
@@ -291,7 +306,10 @@ export default function Register({ navigation }) {
 
       const [firstName, ...lastNameParts] = name.trim().split(/\s+/);
       const lastName = lastNameParts.join(" ") || "";
-      const signUpResult = await signUp.create({ emailAddress: email.trim(), password, firstName, lastName });
+      const signUpResult = await signUp.create({
+        emailAddress: email.trim(), password, firstName, lastName,
+        unsafeMetadata: { municipality },
+      });
       await signUp.prepareEmailAddressVerification({ strategy: "email_code" });
       navigation.navigate("EmailVerification", {
         email: email.trim(), firstName, lastName, fromLogin: false, signUpId: signUpResult.id,
@@ -320,6 +338,20 @@ export default function Register({ navigation }) {
       title="Create an Account"
       subtitle="Fill in the form to continue"
     >
+      {/* Home municipality — above both ways to sign up, since both need it. */}
+      <View>
+        <Text style={a.label}>WHERE IN BULACAN YOU LIVE</Text>
+        <MunicipalityPicker
+          ref={inputRefs.municipality}
+          value={municipality}
+          onChange={edit("municipality", setMunicipality)}
+          onClose={() => touch("municipality")}
+          invalid={!!errorFor("municipality")}
+          disabled={anyLoading}
+        />
+        <FieldError>{errorFor("municipality")}</FieldError>
+      </View>
+
       {/* Google */}
       <TouchableOpacity
         style={[a.googleBtn, disabled && styles.disabled]}
