@@ -86,11 +86,11 @@ database (and ideally the Clerk **development** instance), then add to the
 
 ## Known launch risks
 
-- **Directions use the public OSRM demo server** (`router.project-osrm.org`,
-  `Screens/Track.js`). Its policy is "no heavy use, no production apps"; it can
-  rate-limit or go away. Before real traffic, switch to a hosted routing API
-  (e.g. OpenRouteService, free tier) called through the backend so the API key
-  stays off the phone.
+- **Directions come from our own backend** (`GET /api/route`, searching
+  Bulacan's OpenStreetMap roads saved in LibotBackend `data/`). They replaced
+  the public OSRM demo server on 2026-10-12. The road file is a snapshot:
+  re-run `node scripts/buildRoadGraph.js` in LibotBackend now and then to
+  pick up new roads. Directions start only inside Bulacan.
 - **Map library from unpkg.com.** Leaflet loads from the CDN at runtime, with
   integrity hashes so a tampered file is refused. If unpkg is down, the Track
   map cannot load.

@@ -128,8 +128,8 @@ mission photos — the photo change cut its biggest cost by ~98 %.
    `Location.startGeofencingAsync` with one region per spot lets the OS watch
    the 24 spots at almost no battery cost, instead of streaming GPS. It still
    needs Play's background-location declaration.
-3. **A real routing service** in place of the OSRM demo server, called through
-   the backend so the key stays private (see docs/RELEASE.md).
+3. ~~A real routing service in place of the OSRM demo server.~~ Done
+   2026-10-12: the backend routes over Bulacan's roads itself (`GET /api/route`).
 4. **Speed-aware rates:** use the fix's `speed` to shorten intervals at vehicle
    speeds and lengthen them when stationary for a while.
 
