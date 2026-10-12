@@ -142,9 +142,14 @@ export async function currentCoords({ ask = false, maxAgeMs = 0, timeoutMs = 0 }
       if (last) return last.coords;
     }
     const fresh = Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced });
-    const pos = timeoutMs
-      ? await Promise.race([fresh, new Promise((resolve) => setTimeout(() => resolve(null), timeoutMs))])
-      : await fresh;
+    if (!timeoutMs) return (await fresh)?.coords ?? null;
+    // The timer is cleared once the race is decided; it used to run on for
+    // the full 12 s after a fix had already arrived.
+    let timer;
+    const pos = await Promise.race([
+      fresh,
+      new Promise((resolve) => { timer = setTimeout(() => resolve(null), timeoutMs); }),
+    ]).finally(() => clearTimeout(timer));
     return pos?.coords ?? null;
   } catch (_) {
     return null;
