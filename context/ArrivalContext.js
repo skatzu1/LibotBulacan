@@ -32,6 +32,37 @@ import { BASE_URL } from "../api";
 import { badgeImage } from "../utils/image";
 import { evaluateFix, watchTierFor } from "../utils/arrivalEngine";
 import { usePoints } from "./PointsContext";
+import { arrivalNoticeContent } from "../utils/arrivalNotice";
+
+// One "you arrived" notification for arrivals that come together (spots a
+// few dozen metres apart — see utils/arrivalNotice.js). The foreground awards
+// each spot separately, each after its own server reply, so they are gathered
+// for NOTICE_WINDOW_MS after the last one before a single notification goes
+// out. The background task sees all its arrivals in one loop and sends them
+// at once instead (a timer may not outlive that task).
+const NOTICE_WINDOW_MS = 2000;
+let noticeBatch = [];
+let noticeTimer = null;
+
+async function sendArrivalNotice(arrivals) {
+  if (!arrivals.length) return;
+  await Notifications.scheduleNotificationAsync({ content: arrivalNoticeContent(arrivals), trigger: null });
+}
+
+function queueArrivalNotice(arrival) {
+  if (noticeBatch.some((a) => a.spotId === arrival.spotId)) return;
+  noticeBatch.push(arrival);
+  clearTimeout(noticeTimer);
+  noticeTimer = setTimeout(() => {
+    const batch = noticeBatch;
+    noticeBatch = [];
+    noticeTimer = null;
+    sendArrivalNotice(batch).catch((e) => console.warn("[Arrival] Notification failed:", e?.message));
+  }, NOTICE_WINDOW_MS);
+  // Under Node (the tests) a pending timer would hold the process open; on a
+  // phone setTimeout returns a number and this does nothing.
+  noticeTimer?.unref?.();
+}
 
 // Single source of truth for the backend host — see api.js.
 const ARRIVAL_RADIUS_METERS    = 50;
@@ -154,6 +185,7 @@ async function handleBackgroundArrival(coords) {
     const claimed    = claimedRaw ? JSON.parse(claimedRaw) : [];
 
     let changed = false;
+    const arrivals = [];
 
     for (const spot of spots) {
       const spotId = String(spot._id ?? "").trim();
@@ -177,17 +209,7 @@ async function handleBackgroundArrival(coords) {
         await addPendingReward(currentUserId, { spotId, lat: coords.latitude, lng: coords.longitude });
 
         const isFirstVisit = !claimed.includes(spotId);
-
-        await Notifications.scheduleNotificationAsync({
-          content: {
-            title: isFirstVisit ? "You arrived!" : "Welcome back!",
-            body: isFirstVisit
-              ? `You've reached ${spot.name}! Open Libot Bulacan to claim your badge.`
-              : `You've arrived at ${spot.name}. Open Libot Bulacan to explore!`,
-            data: { spotId, spotName: spot.name, isFirstVisit },
-          },
-          trigger: null,
-        });
+        arrivals.push({ spotId, spotName: spot.name, isFirstVisit });
 
         console.log(
           isFirstVisit
@@ -205,6 +227,8 @@ async function handleBackgroundArrival(coords) {
     if (changed) {
       await AsyncStorage.setItem(insideKey, JSON.stringify([...insideSet]));
     }
+    // One notification for every spot entered on this fix.
+    await sendArrivalNotice(arrivals);
   } catch (e) {
     console.error("[BG Arrival] Error:", e);
   }
@@ -858,17 +882,8 @@ export function ArrivalProvider({ children }) {
       refreshPointsRef.current?.();
     }
 
-    // ── Notification (every fresh arrival) ─────────────────────────────────
-    await Notifications.scheduleNotificationAsync({
-      content: {
-        title: isFirstVisit ? "You arrived!" : "Welcome back!",
-        body: isFirstVisit
-          ? `You've reached ${spot.name}! Open Libot Bulacan to claim your badge.`
-          : `You've arrived at ${spot.name}. Open Libot Bulacan to explore!`,
-        data: { spotId, spotName: spot.name, isFirstVisit },
-      },
-      trigger: null,
-    });
+    // ── Notification (every fresh arrival; nearby ones share one) ──────────
+    queueArrivalNotice({ spotId, spotName: spot.name, isFirstVisit });
 
     // ── Badge (first visit only; the server gives it once) ─────────────────
     const badge = result?.badge;
