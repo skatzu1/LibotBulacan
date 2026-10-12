@@ -142,8 +142,10 @@ export default function LocationMission({ navigation, route }) {
         const smoother = new GpsSmoother();
         smoother.push(best);
 
-        watchRef.current = await Location.watchPositionAsync(
-          { accuracy: Location.Accuracy.High, timeInterval: 3000, distanceInterval: 3 },
+        // Same settings as the AR screen and the map: a fresh fix every
+        // second, no minimum distance, navigation-grade accuracy on iOS.
+        const sub = await Location.watchPositionAsync(
+          { accuracy: Location.Accuracy.BestForNavigation, timeInterval: 1000, distanceInterval: 0 },
           (loc) => {
             if (cancelled) return;
             const next = {
@@ -159,6 +161,9 @@ export default function LocationMission({ navigation, route }) {
             setCoords({ latitude: s.latitude, longitude: s.longitude });
           }
         );
+        // Left the screen while the watch was starting: the cleanup already ran.
+        if (cancelled) { sub.remove(); return; }
+        watchRef.current = sub;
       } catch {
         if (!cancelled) setLocError("Unable to get your location. Please try again.");
       }

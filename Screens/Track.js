@@ -1046,10 +1046,12 @@ export default function Track({ route, navigation }) {
         const smoother = new GpsSmoother();
         smoother.push(best);
 
-        locationSubscription.current = await Location.watchPositionAsync(
-          { accuracy: Location.Accuracy.High, timeInterval: 3000, distanceInterval: 3 },
+        // Same settings as the AR screen: a fresh fix every second, no
+        // minimum distance, navigation-grade accuracy on iOS.
+        const sub = await Location.watchPositionAsync(
+          { accuracy: Location.Accuracy.BestForNavigation, timeInterval: 1000, distanceInterval: 0 },
           (loc) => {
-            if (!isMounted.current) return;
+            if (cancelled || !isMounted.current) return;
             const next = {
               latitude: loc.coords.latitude,
               longitude: loc.coords.longitude,
@@ -1065,6 +1067,8 @@ export default function Track({ route, navigation }) {
             updateMarkerRef.current?.(c);
           }
         );
+        if (cancelled) { sub.remove(); return; }
+        locationSubscription.current = sub;
       } catch {
         if (!cancelled && isMounted.current) {
           setLocationError("Unable to get your location. Please try again.");
@@ -1074,7 +1078,13 @@ export default function Track({ route, navigation }) {
     };
 
     startTracking();
-    return () => { cancelled = true; };
+    // Stop this watch if spotData changes, not just on unmount: at one fix a
+    // second, a leftover watch running alongside the new one costs battery.
+    return () => {
+      cancelled = true;
+      locationSubscription.current?.remove();
+      locationSubscription.current = null;
+    };
   }, [spotData]);
 
   /* ── Center on Me ── */
