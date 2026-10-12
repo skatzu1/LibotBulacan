@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { Platform } from "react-native";
 import { HeadingFilter, shouldEmit } from "../utils/headingFilter";
 
 /*
@@ -17,9 +16,9 @@ import { HeadingFilter, shouldEmit } from "../utils/headingFilter";
  * render.
  *
  * Returns { heading, needsCalibration }:
- *   needsCalibration — the OS says the magnetometer is unreliable (Android
- *     accuracy 0–1 of 3; iOS error > 25°); fixed by moving the phone in a
- *     figure 8.
+ *   needsCalibration — the OS says the magnetometer is unreliable (accuracy
+ *     0–1 of 3; expo-location puts iOS's error in degrees on the same scale,
+ *     1 meaning over 35°); fixed by moving the phone in a figure 8.
  */
 export default function useCompassHeading() {
   const [heading, setHeading] = useState(0);
@@ -51,7 +50,10 @@ export default function useCompassHeading() {
           const raw = data.trueHeading >= 0 ? data.trueHeading : data.magHeading;
           if (raw >= 0) applyCompass(raw);
           if (Number.isFinite(data.accuracy)) {
-            const poor = Platform.OS === "android" ? data.accuracy <= 1 : data.accuracy > 25;
+            // 0–3 on both platforms. iOS used to be checked for degrees
+            // (> 25), which the 0–3 value never reaches, so iPhones never
+            // showed the figure-8 hint.
+            const poor = data.accuracy <= 1;
             setNeedsCalibration((prev) => (prev === poor ? prev : poor));
           }
         });
