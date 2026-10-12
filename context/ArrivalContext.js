@@ -415,11 +415,20 @@ async function requestAllLocationPermissions() {
 // leaves it. If Android won't show its page any more (asked and refused
 // twice), a second modal offers Libot's Settings page instead. At most once
 // per 12 h. Resolves true if background access was granted.
+//
+// iPhone: the same modal, then iOS's own "Change to Always Allow" prompt,
+// which iOS shows only once; after that, Settings is the only way. (This used
+// to return early on iOS, so an iPhone never asked and never got background
+// alerts.)
 const ALLTIME_PROMPT_KEY  = "alltimeLocationPromptAt";
 const ALLTIME_PROMPT_EVERY = 12 * 60 * 60 * 1000; // at most once per 12h
 
+const alwaysWording = () => (Platform.OS === "ios"
+  ? { choose: `When iPhone asks next, choose "Change to Always Allow".`, settings: `Settings > Libot Bulacan > Location > "Always"` }
+  : { choose: `On the next screen, choose "Allow all the time".`,       settings: `Permissions > Location > "Allow all the time"` });
+
 async function promptForAllTimeLocation() {
-  if (Platform.OS !== "android") return false; // iOS shows its own "Always Allow" prompt
+  if (Platform.OS !== "android" && Platform.OS !== "ios") return false;
   try {
     const last = Number(await AsyncStorage.getItem(ALLTIME_PROMPT_KEY)) || 0;
     if (Date.now() - last < ALLTIME_PROMPT_EVERY) return false;
@@ -428,7 +437,7 @@ async function promptForAllTimeLocation() {
 
   const proceed = await confirmAsync(
     "Background location access needed",
-    `For a better experience, Libot Bulacan needs access to your location in the background — even when the app is closed or not in use — so it can tell you when a tourist spot is nearby, alert you when you arrive, and log your visit. On the next screen, choose "Allow all the time".`,
+    `For a better experience, Libot Bulacan needs access to your location in the background — even when the app is closed or not in use — so it can tell you when a tourist spot is nearby, alert you when you arrive, and log your visit. ${alwaysWording().choose}`,
     { confirmText: "Continue", cancelText: "Not now", icon: "map-pin", tone: "info" },
   );
   if (!proceed) return false;
@@ -442,7 +451,7 @@ async function promptForAllTimeLocation() {
     if (res.canAskAgain === false) {
       const openSettings = await confirmAsync(
         "Background location access needed",
-        `For a better experience, turn it on in Settings: Permissions > Location > "Allow all the time".`,
+        `For a better experience, turn it on in Settings: ${alwaysWording().settings}.`,
         { confirmText: "Go to Settings", cancelText: "Not now", icon: "map-pin", tone: "info" },
       );
       if (openSettings) Linking.openSettings();
