@@ -33,6 +33,7 @@ import { badgeImage } from "../utils/image";
 import { evaluateFix, watchTierFor } from "../utils/arrivalEngine";
 import { usePoints } from "./PointsContext";
 import { arrivalNoticeContent } from "../utils/arrivalNotice";
+import { nearbyToAnnounce, nearbyNoticeContent, NEARBY_CHANNEL_ID } from "../utils/nearbyAlerts";
 
 // One "you arrived" notification for arrivals that come together (spots a
 // few dozen metres apart — see utils/arrivalNotice.js). The foreground awards
@@ -164,9 +165,75 @@ TaskManager.defineTask(BACKGROUND_LOCATION_TASK, async ({ data, error }) => {
     await handleBackgroundArrival({
       latitude:  loc.coords.latitude,
       longitude: loc.coords.longitude,
+      accuracy:  loc.coords.accuracy,
     });
   }
 });
+
+// ─────────────────────────────────────────────
+// "A spot is nearby" alerts (utils/nearbyAlerts.js)
+// Run by both the foreground watcher and the background task — the task keeps
+// running after Libot is closed (its foreground service outlives the app), so
+// this works with the app closed too. When each spot was last announced is
+// kept per user in storage, which both read, so a spot is announced once a
+// day whichever of them sees it first.
+// ─────────────────────────────────────────────
+const NEARBY_NOTIFIED_KEY_PREFIX = "nearbyNotified_";
+// While the app is open the watcher checks at most this often (each check
+// reads storage); the background task checks on every fix it gets.
+const NEARBY_CHECK_EVERY_MS = 15_000;
+let nearbyBusy = false;
+// The notification tap last acted on (see openFromNotification).
+let lastHandledNotification = null;
+
+const readJson = async (key, fallback) => {
+  try {
+    const raw = await AsyncStorage.getItem(key);
+    return raw ? JSON.parse(raw) : fallback;
+  } catch { return fallback; }
+};
+
+async function sendNearbyNotice(due) {
+  if (Platform.OS === "android") {
+    await Notifications.setNotificationChannelAsync?.(NEARBY_CHANNEL_ID, {
+      name: "Nearby spots",
+      description: "When you're near a tourist spot you haven't visited yet",
+      importance: Notifications.AndroidImportance?.DEFAULT ?? 3,
+    })?.catch?.(() => {});
+  }
+  await Notifications.scheduleNotificationAsync({
+    content: nearbyNoticeContent(due),
+    trigger: Platform.OS === "android" ? { channelId: NEARBY_CHANNEL_ID } : null,
+  });
+}
+
+async function announceNearby(userId, spots, fix, alsoSkip = []) {
+  if (!userId || nearbyBusy) return;
+  nearbyBusy = true;
+  try {
+    const key = `${NEARBY_NOTIFIED_KEY_PREFIX}${userId}`;
+    const [notified, claimed, inside] = await Promise.all([
+      readJson(key, {}),
+      readJson(`claimedSpotIds_${userId}`, []),
+      readJson(`${INSIDE_SPOTS_KEY_PREFIX}${userId}`, []),
+    ]);
+    // Visited spots, spots being arrived at, and any the caller names (the
+    // one already being navigated to) are not news.
+    const skip = new Set([...claimed, ...inside, ...alsoSkip].map(String));
+    const { due, notifiedAt } = nearbyToAnnounce({
+      spots, fix, notifiedAt: notified, skip, innerMeters: ARRIVAL_RADIUS_METERS,
+    });
+    if (!due.length) return;
+    // Stamped before sending, so the other runner can't announce it twice.
+    await AsyncStorage.setItem(key, JSON.stringify(notifiedAt));
+    await sendNearbyNotice(due);
+    console.log("[Nearby] Announced:", due.map((s) => `${s.spotName} (${Math.round(s.distance)} m)`).join(", "));
+  } catch (e) {
+    console.warn("[Nearby] Error:", e?.message);
+  } finally {
+    nearbyBusy = false;
+  }
+}
 
 async function handleBackgroundArrival(coords) {
   try {
@@ -229,6 +296,9 @@ async function handleBackgroundArrival(coords) {
     }
     // One notification for every spot entered on this fix.
     await sendArrivalNotice(arrivals);
+    // And one for unvisited spots within 500 m (after the "inside" set is
+    // saved, so a spot just arrived at isn't announced as nearby too).
+    await announceNearby(currentUserId, spots, coords);
   } catch (e) {
     console.error("[BG Arrival] Error:", e);
   }
@@ -256,6 +326,15 @@ async function setupNotifications() {
         shouldSetBadge:   true,
       }),
     });
+
+    // Its own channel, so it shows in Android's settings as "Nearby spots".
+    if (Platform.OS === "android") {
+      await Notifications.setNotificationChannelAsync?.(NEARBY_CHANNEL_ID, {
+        name: "Nearby spots",
+        description: "When you're near a tourist spot you haven't visited yet",
+        importance: Notifications.AndroidImportance?.DEFAULT ?? 3,
+      });
+    }
 
     console.log("[Notifications] Configured");
   } catch (e) {
@@ -292,7 +371,7 @@ async function requestAllLocationPermissions() {
     const proceed = await confirmAsync(
       "Libot Bulacan uses your location",
       BACKGROUND_ARRIVALS_ENABLED
-        ? "To show spots near you, log the places you visit, and send arrival alerts. You'll pick a permission level on the next screen."
+        ? "To show spots near you, tell you when one is nearby, log the places you visit, and send arrival alerts. You'll pick a permission level on the next screen."
         : "To show spots near you and recognise when you arrive at one while Libot Bulacan is open. Libot Bulacan doesn't use your location when the app is closed.",
       { confirmText: "Continue", icon: "map-pin", tone: "info" },
     );
@@ -349,7 +428,7 @@ async function promptForAllTimeLocation() {
 
   const proceed = await confirmAsync(
     "Background location access needed",
-    `For a better experience, Libot Bulacan needs access to your location in the background — even when the app is closed or not in use — so it can alert you when you arrive at a tourist spot and log your visit. On the next screen, choose "Allow all the time".`,
+    `For a better experience, Libot Bulacan needs access to your location in the background — even when the app is closed or not in use — so it can tell you when a tourist spot is nearby, alert you when you arrive, and log your visit. On the next screen, choose "Allow all the time".`,
     { confirmText: "Continue", cancelText: "Not now", icon: "map-pin", tone: "info" },
   );
   if (!proceed) return false;
@@ -444,6 +523,8 @@ export function ArrivalProvider({ children }) {
   // Replays rewards that never reached the server (see PENDING_REWARDS).
   const flushPendingRef   = useRef(null);
   const lastFlushAtRef    = useRef(0);
+  // When the open app last checked for nearby spots (NEARBY_CHECK_EVERY_MS).
+  const lastNearbyCheckRef = useRef(0);
 
   useEffect(() => { activeSpotRef.current = activeSpot; }, [activeSpot]);
 
@@ -501,6 +582,37 @@ export function ArrivalProvider({ children }) {
   }, []);
 
   // ─────────────────────────────────────────
+  // Notification taps: a nearby alert opens directions to that spot; an
+  // arrival opens Badges, as before. Handled once each, and cleared, so an
+  // old tap doesn't send the traveler somewhere again on the next launch.
+  // ─────────────────────────────────────────
+  const openFromNotification = useCallback((response) => {
+    const request = response?.notification?.request;
+    if (!request?.identifier || request.identifier === lastHandledNotification) return;
+    lastHandledNotification = request.identifier;
+    Notifications.clearLastNotificationResponseAsync?.()?.catch?.(() => {});
+    const data = request.content?.data || {};
+    if (!data.spotId) return;
+
+    // Right after a cold start the navigator may not be mounted yet.
+    const go = (triesLeft) => {
+      if (!navigationRef.isReady()) {
+        if (triesLeft > 0) setTimeout(() => go(triesLeft - 1), 500);
+        return;
+      }
+      if (data.type === "nearby") {
+        const spot =
+          allSpotsRef.current.find((s) => String(s._id) === String(data.spotId)) ||
+          { _id: data.spotId, name: data.spotName, coordinates: { lat: data.lat, lng: data.lng } };
+        navigationRef.navigate("Track", { spot });
+      } else {
+        navigationRef.navigate("Badges");
+      }
+    };
+    go(10);
+  }, []);
+
+  // ─────────────────────────────────────────
   // 1. On sign-in: request permissions + setup notifs + sync cache
   // ─────────────────────────────────────────
   useEffect(() => {
@@ -538,12 +650,12 @@ export function ArrivalProvider({ children }) {
 
     init();
 
-    const subscription = Notifications.addNotificationResponseReceivedListener((response) => {
-      const spotId = response.notification.request.content.data?.spotId;
-      if (spotId && navigationRef.isReady()) {
-        navigationRef.navigate("Badges");
-      }
-    });
+    const subscription = Notifications.addNotificationResponseReceivedListener(openFromNotification);
+    // A tap can be what launched Libot (it was closed). That tap came before
+    // this listener existed, so it is read back here.
+    Notifications.getLastNotificationResponseAsync?.()
+      .then((response) => { if (response) openFromNotification(response); })
+      .catch(() => {});
 
     return () => subscription.remove();
   }, [isSignedIn]);
@@ -588,6 +700,10 @@ export function ArrivalProvider({ children }) {
                   notificationTitle: "Libot Bulacan is tracking your location",
                   notificationBody:  "Detecting nearby tourist spots in Bulacan.",
                   notificationColor: "#0A6F78", // lightColors.brand
+                  // Keep running after Libot is swiped away, so nearby and
+                  // arrival alerts still come with the app closed. (expo's
+                  // default, written out because the feature depends on it.)
+                  killServiceOnDestroy: false,
                 },
               });
               console.log("[Location] Background tracking started");
@@ -984,6 +1100,17 @@ export function ArrivalProvider({ children }) {
     for (const id of entered) awardRewards(byId.get(id), fix);
     for (const id of left) console.log("[Arrival] Left:", byId.get(id)?.name);
     if (entered.length || left.length) persistInsideSpots();
+
+    // Unvisited spots within 500 m. Not the spots being arrived at, nor the
+    // one the traveler is already being navigated to.
+    if (Date.now() - lastNearbyCheckRef.current > NEARBY_CHECK_EVERY_MS) {
+      lastNearbyCheckRef.current = Date.now();
+      const navigatingTo = activeSpotRef.current?._id;
+      announceNearby(currentUserIdRef.current, allSpotsRef.current, fix, [
+        ...insideSpotsRef.current,
+        ...(navigatingTo ? [String(navigatingTo)] : []),
+      ]);
+    }
     return nearestM;
   }, [awardRewards, persistInsideSpots]);
 

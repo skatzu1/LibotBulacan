@@ -212,6 +212,49 @@ it("an arrival while the app is closed is queued for the server, with its positi
   ]);
 });
 
+describe("nearby alerts (500 m), with the app closed or open", () => {
+  const Notifications = require("expo-notifications");
+  const { Platform } = require("react-native");
+  const TaskManager = require("expo-task-manager");
+  const task = () => TaskManager.defineTask.mock.calls[0][1];
+  const nearbyCalls = () =>
+    Notifications.scheduleNotificationAsync.mock.calls.filter(([n]) => n.content.data?.type === "nearby");
+  let realOS;
+  beforeEach(() => { realOS = Platform.OS; Platform.OS = "android"; Notifications.scheduleNotificationAsync.mockClear(); });
+  afterEach(() => { Platform.OS = realOS; });
+
+  const closedAppFix = async (meters) => {
+    await AsyncStorage.setItem("currentUserId", "user_test");
+    await AsyncStorage.setItem("allSpots", JSON.stringify([SPOT]));
+    await task()({ data: { locations: [{ coords: { latitude: north(meters), longitude: SPOT.coordinates.lng, accuracy: 20 } }] } });
+  };
+
+  it("tells you a spot is nearby while the app is closed, on its own channel, once a day", async () => {
+    await closedAppFix(300);
+    expect(nearbyCalls()).toHaveLength(1);
+    const [{ content, trigger }] = nearbyCalls()[0];
+    expect(content.title).toBe("Barasoain is nearby");
+    expect(content.data).toMatchObject({ type: "nearby", spotId: "spot1" });
+    expect(trigger).toEqual({ channelId: "nearby-spots" });
+
+    await closedAppFix(250); // still nearby, minutes later
+    expect(nearbyCalls()).toHaveLength(1);
+  });
+
+  it("says nothing about a spot already visited", async () => {
+    await AsyncStorage.setItem("claimedSpotIds_user_test", JSON.stringify(["spot1"]));
+    await closedAppFix(300);
+    expect(nearbyCalls()).toHaveLength(0);
+  });
+
+  it("tells you while the app is open too", async () => {
+    await mount();
+    await feed(300, 10);
+    await settle();
+    expect(nearbyCalls()).toHaveLength(1);
+  });
+});
+
 it("a visit that reaches the server is not queued", async () => {
   await mount();
   await feed(20_000, 60);
