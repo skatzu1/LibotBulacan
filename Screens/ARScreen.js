@@ -430,7 +430,22 @@ const makeFlashSt = (TOKEN) => StyleSheet.create({
 //
 // Orientation is camera-relative — the top of the radar is wherever the phone
 // is pointing — so the blip sits in the direction you would actually turn.
-const RADAR_PX = 148;                       // drawing area
+//
+// Sized to the screen. The radar is the tallest thing in the step card, and the
+// card has to leave room for the camera. On the Mi 10T (873 dp tall) the card
+// with a 148 radar covers 46% of the screen; the same 148 on an iPhone XS
+// (812 pt, with the card sitting 12 pt higher) covered 51%, and the camera view
+// above it shrank by nearly a quarter. So the radar gives up whatever keeps the
+// card at 46%: 148 on the Mi 10T, 109 on an XS, 123 on an iPhone 12–14,
+// never under 96. The physical screen height, not the window's, because the
+// AR view is full screen and Android's window height leaves out the system
+// bars.
+const HUD_BOTTOM      = Platform.OS === "ios" ? 52 : 40;
+const STEP_CARD_SHARE = 0.46;
+const STEP_CARD_REST  = 213;                // the card minus the radar: padding, header, step line, label, title, 3 lines
+const RADAR_PX = Math.round(Math.min(148, Math.max(96,
+  Dimensions.get("screen").height * STEP_CARD_SHARE - STEP_CARD_REST - HUD_BOTTOM
+)));                                        // drawing area
 const RADAR_R  = RADAR_PX / 2 - 12;         // usable radius, leaving an edge margin
 
 // No `inRange` prop: this radar only ever renders in step 1, which by
@@ -2279,7 +2294,7 @@ const makeStep = (TOKEN) => StyleSheet.create({
 const makeHud = (TOKEN) => StyleSheet.create({
   container: {
     position:        "absolute",
-    bottom:          Platform.OS === "ios" ? 52 : 40,
+    bottom:          HUD_BOTTOM,
     left: 16, right: 16,
     backgroundColor: TOKEN.surface,
     borderRadius:    TOKEN.radiusLg,

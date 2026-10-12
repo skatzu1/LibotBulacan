@@ -52,9 +52,11 @@ describe("useCompassHeading", () => {
 
   it("asks for a figure 8 while the OS says the compass is unreliable", async () => {
     const { result } = await mount();
-    compassFor(0.5, 90, 30); // iOS accuracy 30° -> needs calibration
+    // expo-location reports 0–3 on both platforms (iOS degrees are mapped:
+    // 1 = 35–50° of error).
+    compassFor(0.5, 90, 1);
     expect(result.current.needsCalibration).toBe(true);
-    compassFor(0.5, 90, 5);
+    compassFor(0.5, 90, 3);
     expect(result.current.needsCalibration).toBe(false);
   });
 });
