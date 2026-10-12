@@ -49,6 +49,14 @@
         }
       ],
       [
+        "expo-image-picker",
+        {
+          "cameraPermission": "Libot Bulacan uses the camera for AR and to take mission photos at tourist spots.",
+          "photosPermission": "Libot Bulacan uses your photos when you choose a profile picture or add photos to a review.",
+          "microphonePermission": "Libot Bulacan does not record audio. The camera and AR libraries it uses can, so iOS asks for this note."
+        }
+      ],
+      [
         "@reactvision/react-viro",
         {
           "android": {
@@ -78,13 +86,6 @@
         }
       ],
       [
-        "expo-image-picker",
-        {
-          "cameraPermission": "Libot Bulacan uses the camera to scan and verify products for missions.",
-          "microphonePermission": false
-        }
-      ],
-      [
         "expo-build-properties",
         {
           "android": {
@@ -104,10 +105,10 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.skatzu15.libot",
       "infoPlist": {
-        "NSCameraUsageDescription": "Libot Bulacan uses the camera to show augmented reality tourism content and scan products for missions.",
+        "NSCameraUsageDescription": "Libot Bulacan uses the camera for AR and to take mission photos at tourist spots.",
         "NSLocationWhenInUseUsageDescription": "Libot Bulacan uses your location to show nearby tourist spots, give directions, and check when you arrive at a spot.",
         "NSLocationAlwaysAndWhenInUseUsageDescription": "Libot Bulacan uses your location in the background to tell you when a tourist spot is nearby and when you arrive at one, even when the app is closed.",
-        "NSPhotoLibraryUsageDescription": "Libot Bulacan needs access to your photos for AR and mission scanning.",
+        "NSPhotoLibraryUsageDescription": "Libot Bulacan uses your photos when you choose a profile picture or add photos to a review.",
         "CFBundleURLTypes": [
           {
             "CFBundleURLSchemes": [
@@ -116,7 +117,7 @@
           }
         ],
         "NSPhotoLibraryAddUsageDescription": "Allow $(PRODUCT_NAME) to save photos",
-        "NSMicrophoneUsageDescription": "Libot Bulacan uses your microphone for AR experiences.",
+        "NSMicrophoneUsageDescription": "Libot Bulacan does not record audio. The camera and AR libraries it uses can, so iOS asks for this note.",
         "ITSAppUsesNonExemptEncryption": false
       }
     },
