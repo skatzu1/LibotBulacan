@@ -4,7 +4,6 @@ import {
   Text,
   StyleSheet,
   Platform,
-  PermissionsAndroid,
   ActivityIndicator,
   TouchableOpacity,
   Modal,
@@ -15,7 +14,7 @@ import {
   Easing,
   Linking,
 } from "react-native";
-import Geolocation from "@react-native-community/geolocation";
+import * as Location from "expo-location";
 import * as Haptics from "expo-haptics";
 import { useIsFocused } from "@react-navigation/native";
 import { useMissions } from "../context/MissionContext";
@@ -1537,7 +1536,6 @@ export default function ARScreen({ route, navigation }) {
   const missionJustCompletedRef = useRef(false);
   const [missionJustCompleted, setMissionJustCompleted] = useState(false);
 
-  const watchId    = useRef(null);
   const hudOpacity = useRef(new Animated.Value(0)).current;
 
   const totalAnchors    = spot.modelsCoordinates?.length ?? 0;
@@ -1553,6 +1551,7 @@ export default function ARScreen({ route, navigation }) {
 
   useEffect(() => {
     let cancelled = false;
+    let watch = null;
 
     // Raw last-accepted fix, used only to judge whether the next one is an
     // improvement. What the screen actually renders is the smoothed output.
@@ -1587,98 +1586,77 @@ export default function ARScreen({ route, navigation }) {
     };
 
     // Step 1 — seed the screen with whatever fix the device can give us
-    // *immediately*, including a cached one. Without this the HUD sat on
-    // "Acquiring GPS signal…" indefinitely: the watch below asks for a
-    // satellite-grade fix, which can take a minute outdoors and may never
-    // arrive indoors, and with no timeout it never reported an error either.
+    // *immediately*. Without this the HUD sat on "Acquiring GPS signal…"
+    // while the satellite-grade watch below warmed up, which can take a
+    // minute outdoors. The last known fix answers at once and a quick
+    // wifi/cell fix follows; both go through applyFix, so the first real GPS
+    // fix still replaces them.
     const seed = () => {
-      Geolocation.getCurrentPosition(
-        applyFix,
-        () => {}, // non-fatal: the watch is still coming
-        { enableHighAccuracy: false, timeout: 8000, maximumAge: 60000 }
-      );
+      // Non-fatal if either fails: the watch is still coming.
+      Location.getLastKnownPositionAsync({ maxAge: 60000 })
+        .then((pos) => pos && applyFix(pos))
+        .catch(() => {});
+      Location.getCurrentPositionAsync({ accuracy: Location.Accuracy.Balanced })
+        .then(applyFix)
+        .catch(() => {});
     };
 
-    // Step 2 — the live high-accuracy watch. If it errors (commonly a
-    // timeout indoors), fall back to a coarser watch rather than leaving the
-    // user staring at a spinner: a network/wifi fix is still good enough to
-    // show distance and guide someone toward the spot.
-    const startWatch = () => {
-      watchId.current = Geolocation.watchPosition(
+    // Step 2 — the live watch, at expo-location's highest setting: a fresh
+    // fix every second, no minimum distance. On Android that is Play
+    // Services' fused provider at high accuracy (GPS, wifi and cell merged),
+    // which leans on wifi/cell by itself indoors, so the old fallback to a
+    // second, coarser watch isn't needed. On iOS it is Core Location's
+    // navigation-grade accuracy. Track and LocationMission watch with the
+    // same settings, so the map and AR agree on where you are.
+    const startWatch = async () => {
+      const sub = await Location.watchPositionAsync(
+        { accuracy: Location.Accuracy.BestForNavigation, timeInterval: 1000, distanceInterval: 0 },
         applyFix,
-        () => {
+        (reason) => {
           if (cancelled) return;
-          if (watchId.current != null) {
-            Geolocation.clearWatch(watchId.current);
-            watchId.current = null;
+          // An error once we already have a fix leaves a perfectly good
+          // position on screen; replacing it with "Can't find your location"
+          // would simply be false. Only surface it if we have nothing at all.
+          if (bestRef.current) {
+            console.warn("[Location] watch error, keeping last fix:", reason);
+            return;
           }
-          watchId.current = Geolocation.watchPosition(
-            applyFix,
-            (err2) => {
-              if (cancelled) return;
-              // A watch error once we already have a fix is almost always just
-              // a timeout waiting for the NEXT update — the position we have
-              // is still perfectly good. Reporting "Can't find your location"
-              // then is simply false, and it replaced a working screen with an
-              // error card. Only surface it if we have nothing at all.
-              if (bestRef.current) {
-                console.warn("[Location] watch error, keeping last fix:", err2.message);
-                return;
-              }
-              setLocationError(err2.message);
-            },
-            { enableHighAccuracy: false, distanceFilter: 0, interval: 3000, timeout: 30000, maximumAge: 30000 }
-          );
-        },
-        {
-          enableHighAccuracy: true,
-          distanceFilter:     0,
-          interval:           1000,
-          fastestInterval:    500,
-          timeout:            20000,
-          // Was 15000, which let the OS hand back a fix up to fifteen seconds
-          // old — on a screen whose whole job is "how far away am I right
-          // now". 0 forces every callback to be a fresh reading.
-          maximumAge:         0,
+          setLocationError(reason);
         }
       );
+      if (cancelled) sub.remove();
+      else watch = sub;
     };
 
     const init = async () => {
-      if (Platform.OS === "android") {
-        // Use Google Play Services' fused provider instead of the bare
-        // platform LocationManager. It merges GPS, wifi and cell signals, so
-        // the first fix arrives in a couple of seconds rather than tens of
-        // seconds, and subsequent fixes are tighter. The dependency was
-        // already in android/app/build.gradle; nothing was selecting it.
-        try {
-          Geolocation.setRNConfiguration({
-            skipPermissionRequests: false,
-            authorizationLevel: "whenInUse",
-            locationProvider: "playServices",
-          });
-        } catch {
-          // Older builds / no Play Services — the platform provider still works.
-        }
-
-        const granted = await PermissionsAndroid.request(
-          PermissionsAndroid.PERMISSIONS.ACCESS_FINE_LOCATION
-        );
-        if (granted !== PermissionsAndroid.RESULTS.GRANTED) {
+      try {
+        const perm = await Location.requestForegroundPermissionsAsync();
+        if (cancelled) return;
+        if (perm.status !== "granted") {
           setLocationError("Location permission denied");
           return;
         }
+        // Android 12+ lets people allow only "approximate" location, good to
+        // a few kilometres. The filter above drops every such fix, so the
+        // screen would wait forever; say what to change instead.
+        if (perm.android?.accuracy === "coarse") {
+          setLocationError("Precise location permission denied");
+          return;
+        }
+        seed();
+        // With location switched off, Android shows its own "turn on
+        // location" prompt here; declining it rejects into the catch below.
+        await startWatch();
+      } catch (err) {
+        if (!cancelled && !bestRef.current) setLocationError(err?.message || "Location unavailable");
       }
-      if (cancelled) return;
-      seed();
-      startWatch();
     };
 
     init();
     return () => {
       cancelled = true;
       smoother.reset();
-      if (watchId.current != null) Geolocation.clearWatch(watchId.current);
+      watch?.remove();
     };
   }, []);
 
@@ -1850,6 +1828,7 @@ export default function ARScreen({ route, navigation }) {
       // dead end — nothing to tap, and no hint that the fix lives in system
       // settings. Explain it in plain words and give them the way out.
       const isPermission = /permission|denied/i.test(locationError);
+      const isPrecise    = /precise/i.test(locationError);
       return (
         <Animated.View style={[hud.container, hud.errorContainer, { opacity: hudOpacity }]}>
           <View style={hud.errorRow}>
@@ -1858,10 +1837,14 @@ export default function ARScreen({ route, navigation }) {
             </View>
             <View style={{ flex: 1 }}>
               <Text style={hud.errorTitle}>
-                {isPermission ? "Location access is off" : "Can't find your location"}
+                {isPrecise
+                  ? "Precise location is off"
+                  : isPermission ? "Location access is off" : "Can't find your location"}
               </Text>
               <Text style={hud.errorMsg}>
-                {isPermission
+                {isPrecise
+                  ? "Approximate location is too rough to find the landmark. Turn on Use precise location for Libot in Settings."
+                  : isPermission
                   ? "The AR activity needs your location to know when you've reached the landmark."
                   : "We couldn't get a location fix. Check that location is turned on, then try again."}
               </Text>
