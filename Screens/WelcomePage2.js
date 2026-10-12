@@ -9,15 +9,11 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { showAlert } from "../components/AppAlert";
 import { useTheme, typography, fonts, radius, shadow, MAX_FONT_SCALE } from "../context/ThemeContext";
 import Icon from "../components/Icon";
+import { BULACAN_MUNICIPALITIES as TOWNS } from "../utils/municipalities";
 
-const BULACAN_MUNICIPALITIES = [
-  "Angat", "Balagtas", "Baliuag", "Bocaue", "Bulakan", "Bustos",
-  "Calumpit", "Doña Remedios Trinidad", "Guiguinto", "Hagonoy",
-  "Marilao", "Meycauayan City", "Norzagaray", "Obando", "Pandi",
-  "Paombong", "Plaridel", "Pulilan", "San Ildefonso",
-  "San Jose del Monte City", "San Miguel", "San Rafael", "Santa Maria",
-  "I don't live in Bulacan",
-];
+// All 24 municipalities — Malolos, the capital, was missing from this list —
+// in the spelling the server stores, plus the way out.
+const BULACAN_MUNICIPALITIES = [...TOWNS, "I don't live in Bulacan"];
 
 /*
  * Onboarding, screen 2 of 2.

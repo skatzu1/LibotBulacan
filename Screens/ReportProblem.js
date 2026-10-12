@@ -33,6 +33,8 @@ const CATEGORIES = [
   { key: "crash",   label: "The app crashes or freezes" },
   { key: "install", label: "Downloading or installing" },
   { key: "account", label: "My account or signing in" },
+  // Wrong visiting hours, fee, pin or description: this is where it's reported.
+  { key: "spot",    label: "Wrong details about a spot" },
   { key: "other",   label: "Something else" },
 ];
 
@@ -118,8 +120,8 @@ const ReportProblem = ({ navigation }) => {
         contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 40 }]}
       >
         <Text style={[typography.body, { color: colors.textSecondary }]}>
-          This goes to the Libot Bulacan developers at {SUPPORT_EMAIL}. Wrong details about a spot,
-          or a bad review? Use Report on the spot's page instead, so the admins can fix it.
+          This goes to the Libot Bulacan developers at {SUPPORT_EMAIL}. For wrong details about a
+          spot, choose that below and name the spot. A bad review? Use Report on the review itself.
         </Text>
 
         <GroupLabel style={styles.label}>What kind of problem?</GroupLabel>
