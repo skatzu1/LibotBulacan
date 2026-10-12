@@ -24,8 +24,9 @@ import {
   GOOGLE_BUSY, googleWindowBusy, googleWindowClosed, googleErrorMessage,
 } from "../utils/authValidation";
 import Icon from "../components/Icon";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import MunicipalityPicker from "../components/MunicipalityPicker";
-import { municipalityError } from "../utils/municipalities";
+import { municipalityError, normalizeMunicipality } from "../utils/municipalities";
 
 // Same full-screen background as sign-in; it carries its own cyan→yellow wash.
 const REGISTER_BG = require("../assets/bg.png");
@@ -164,6 +165,10 @@ export default function Register({ navigation }) {
   const { startOAuthFlow }              = useOAuth({ strategy: "oauth_google" });
 
   const [municipality, setMunicipality]   = useState("");
+  // Picked on the second welcome screen and saved on the phone. When it is
+  // there, sign-up just sends it; the picker below shows only without it
+  // (it used to ask a second time).
+  const [askMunicipality, setAskMunicipality] = useState(false);
   const [name, setName]                   = useState("");
   const [email, setEmail]                 = useState("");
   const [password, setPassword]           = useState("");
@@ -204,6 +209,16 @@ export default function Register({ navigation }) {
   };
 
   useEffect(() => {
+    AsyncStorage.getItem("userMunicipality")
+      .then((saved) => {
+        const m = normalizeMunicipality(saved);
+        if (m) setMunicipality(m);
+        else setAskMunicipality(true);
+      })
+      .catch(() => setAskMunicipality(true));
+  }, []);
+
+  useEffect(() => {
     WebBrowser.warmUpAsync();
     return () => {
       if (Platform.OS !== "android") WebBrowser.coolDownAsync();
@@ -240,6 +255,7 @@ export default function Register({ navigation }) {
     setFormError("");
     // Google fills in the name and email, but not where the traveler lives.
     if (clientErrors.municipality) {
+      setAskMunicipality(true);
       touch("municipality");
       inputRefs.municipality.current?.focus();
       return;
@@ -287,6 +303,7 @@ export default function Register({ navigation }) {
     setTouched({ municipality: true, name: true, email: true, password: true, confirm: true, dob: true });
 
     const firstBad = FIELD_ORDER.find((f) => clientErrors[f] || serverErrors[f]);
+    if (firstBad === "municipality") setAskMunicipality(true);
     if (firstBad) {
       // Straight to the first thing that needs fixing.
       inputRefs[firstBad].current?.focus();
@@ -338,19 +355,22 @@ export default function Register({ navigation }) {
       title="Create an Account"
       subtitle="Fill in the form to continue"
     >
-      {/* Home municipality — above both ways to sign up, since both need it. */}
-      <View>
-        <Text style={a.label}>WHERE IN BULACAN YOU LIVE</Text>
-        <MunicipalityPicker
-          ref={inputRefs.municipality}
-          value={municipality}
-          onChange={edit("municipality", setMunicipality)}
-          onClose={() => touch("municipality")}
-          invalid={!!errorFor("municipality")}
-          disabled={anyLoading}
-        />
-        <FieldError>{errorFor("municipality")}</FieldError>
-      </View>
+      {/* Home municipality — only when the welcome screen's choice isn't on
+          the phone. Above both ways to sign up, since both need it. */}
+      {askMunicipality && (
+        <View>
+          <Text style={a.label}>WHERE IN BULACAN YOU LIVE</Text>
+          <MunicipalityPicker
+            ref={inputRefs.municipality}
+            value={municipality}
+            onChange={edit("municipality", setMunicipality)}
+            onClose={() => touch("municipality")}
+            invalid={!!errorFor("municipality")}
+            disabled={anyLoading}
+          />
+          <FieldError>{errorFor("municipality")}</FieldError>
+        </View>
+      )}
 
       {/* Google */}
       <TouchableOpacity
