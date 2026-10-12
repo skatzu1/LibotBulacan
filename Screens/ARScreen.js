@@ -2108,7 +2108,8 @@ export default function ARScreen({ route, navigation }) {
     return renderNoAR({
       icon: "camera-off",
       title: "AR isn't available on this phone",
-      text: `This mission needs ARCore, which this device doesn't support. You can still visit ${spot.name} and complete the other missions there.`,
+      // ARCore on Android, ARKit on iPhone (Viro uses whichever the phone has).
+      text: `This mission needs ${Platform.OS === "ios" ? "ARKit (iPhone XS or newer)" : "ARCore"}, which this device doesn't support. You can still visit ${spot.name} and complete the other missions there.`,
     });
   }
 

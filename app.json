@@ -70,9 +70,9 @@
       [
         "expo-location",
         {
-          "locationAlwaysAndWhenInUsePermission": "Libot Bulacan needs your location to provide navigation to tourist spots in Bulacan.",
-          "locationWhenInUsePermission": "Libot Bulacan needs your location to show nearby tourist attractions.",
-          "isIosBackgroundLocationEnabled": false,
+          "locationAlwaysAndWhenInUsePermission": "Libot Bulacan uses your location in the background to tell you when a tourist spot is nearby and when you arrive at one, even when the app is closed.",
+          "locationWhenInUsePermission": "Libot Bulacan uses your location to show nearby tourist spots, give directions, and check when you arrive at a spot.",
+          "isIosBackgroundLocationEnabled": true,
           "isAndroidBackgroundLocationEnabled": true,
           "isAndroidForegroundServiceEnabled": true
         }
@@ -105,8 +105,8 @@
       "bundleIdentifier": "com.skatzu15.libot",
       "infoPlist": {
         "NSCameraUsageDescription": "Libot Bulacan uses the camera to show augmented reality tourism content and scan products for missions.",
-        "NSLocationWhenInUseUsageDescription": "Libot Bulacan needs your location to show nearby tourist spots and provide navigation.",
-        "NSLocationAlwaysAndWhenInUseUsageDescription": "Libot Bulacan needs your location to show nearby tourist spots and provide navigation.",
+        "NSLocationWhenInUseUsageDescription": "Libot Bulacan uses your location to show nearby tourist spots, give directions, and check when you arrive at a spot.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "Libot Bulacan uses your location in the background to tell you when a tourist spot is nearby and when you arrive at one, even when the app is closed.",
         "NSPhotoLibraryUsageDescription": "Libot Bulacan needs access to your photos for AR and mission scanning.",
         "CFBundleURLTypes": [
           {
