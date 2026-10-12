@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from "react";
+import React, { useEffect, useState, useRef, useCallback } from "react";
 import {
   View,
   Text,
@@ -7,8 +7,9 @@ import {
   FlatList,
   RefreshControl,
   useWindowDimensions,
+  AppState,
 } from "react-native";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useUser, useAuth } from "@clerk/clerk-expo";
@@ -46,6 +47,13 @@ const fmtPts = (n) => (n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n));
 // every registered user on each visit to this tab.
 const BOARD_SIZE = 50;
 
+// The board refreshes itself this often while it is on screen and the app is
+// in front, so it stays current without a pull-down (the specification asks
+// for a leaderboard that updates in real time).
+const LIVE_REFRESH_MS = 30 * 1000;
+
+// The server ranks travelers by distinct spots visited, then points (the
+// system specification); the board keeps its order and shows both.
 const toEntry = (u) => ({
   id:          u._id,
   clerkUserId: u.clerkUserId,
@@ -54,10 +62,13 @@ const toEntry = (u) => ({
       ? u.name
       : `${u.firstName || ""} ${u.lastName || ""}`.trim() ||
         u.email?.split("@")[0] || "User",
-  points: typeof u.points === "number" ? u.points : 0,
-  avatar: u.profileImage || null,
-  isMe:   false,
+  points:  typeof u.points === "number" ? u.points : 0,
+  visited: typeof u.spotsVisited === "number" ? u.spotsVisited : 0,
+  avatar:  u.profileImage || null,
+  isMe:    false,
 });
+
+const spotsLabel = (n) => `${n} ${n === 1 ? "spot" : "spots"}`;
 
 export default function Leaderboard() {
   const navigation                    = useNavigation();
@@ -121,7 +132,7 @@ export default function Leaderboard() {
         if (mine) AsyncStorage.setItem("userPoints", String(mine.points)).catch(() => {});
       }
 
-      users.sort((a, b) => b.points - a.points || a.name.localeCompare(b.name));
+      // No re-sort here: the server's order is the ranking.
       setAllUsers(users);
       setMeBelow(below);
       setTotal(typeof data.total === "number" ? data.total : users.length);
@@ -141,6 +152,20 @@ export default function Leaderboard() {
     const unsub = navigation.addListener("focus", () => { if (isLoaded) buildLeaderboard(); });
     return unsub;
   }, [navigation, isLoaded]);
+
+  // Live refresh while this screen is focused. Through a ref, so the timer
+  // always calls this render's buildLeaderboard rather than the first one.
+  const buildRef = useRef(buildLeaderboard);
+  buildRef.current = buildLeaderboard;
+  useFocusEffect(
+    useCallback(() => {
+      if (!isLoaded) return undefined;
+      const id = setInterval(() => {
+        if (AppState.currentState === "active") buildRef.current();
+      }, LIVE_REFRESH_MS);
+      return () => clearInterval(id);
+    }, [isLoaded])
+  );
 
   // Your own photo is read here, at render, from the phone's copy — Edit
   // Profile updates it the moment you save. It used to be baked into allUsers
@@ -207,7 +232,7 @@ export default function Leaderboard() {
       <EmptyState
         icon="award"
         title="No rankings yet"
-        text="Visit places around Bulacan to earn points and climb the board."
+        text="Visit spots around Bulacan to climb the board."
       />
     );
   }
@@ -221,6 +246,8 @@ export default function Leaderboard() {
           { borderColor: colors.divider },
           user.isMe && { backgroundColor: colors.brandSoft, borderColor: colors.brand },
         ]}
+        accessible
+        accessibilityLabel={`Rank ${rank}, ${user.isMe ? "you" : user.name}, ${spotsLabel(user.visited)} visited, ${user.points} points`}
       >
         <View style={[styles.rankCoin, { backgroundColor: colors.brandSoft }]}>
           <Text style={[styles.rankCoinText, { color: colors.brand }]}>{rank}</Text>
@@ -230,16 +257,21 @@ export default function Leaderboard() {
           {personAvatar(user, 40)}
         </View>
 
-        <Text
-          style={[styles.rowName, { color: colors.textPrimary }, user.isMe && { color: colors.brand, fontFamily: fonts.sansBold }]}
-          numberOfLines={1}
-        >
-          {user.name}{user.isMe ? " · You" : ""}
-        </Text>
+        <View style={styles.rowNameCol}>
+          <Text
+            style={[styles.rowName, { color: colors.textPrimary }, user.isMe && { color: colors.brand, fontFamily: fonts.sansBold }]}
+            numberOfLines={1}
+          >
+            {user.name}{user.isMe ? " · You" : ""}
+          </Text>
+          <Text style={[styles.rowSub, { color: colors.textMuted }]} numberOfLines={1}>
+            {fmtPts(user.points)} points
+          </Text>
+        </View>
 
         <View style={[styles.rowPtsPill, { backgroundColor: colors.background, borderColor: colors.divider }]}>
-          <Icon name="star" size={12} color={colors.accent} weight="fill" />
-          <Text style={[styles.rowPts, { color: colors.brandDark }]}>{fmtPts(user.points)}</Text>
+          <Icon name="map-pin" size={12} color={colors.brand} weight="fill" />
+          <Text style={[styles.rowPts, { color: colors.brandDark }]}>{spotsLabel(user.visited)}</Text>
         </View>
       </View>
     );
@@ -264,7 +296,7 @@ export default function Leaderboard() {
 
         {heroNav}
 
-        <Text style={[styles.heroSub, { color: colors.textSecondary }]}>Top explorers of Bulacan</Text>
+        <Text style={[styles.heroSub, { color: colors.textSecondary }]}>Top explorers of Bulacan, by spots visited</Text>
 
         <View style={styles.podiumRow}>
           {podiumVisual.map((user, i) => {
@@ -290,9 +322,13 @@ export default function Leaderboard() {
                   {user.isMe ? "You" : user.name}
                 </Text>
 
-                <View style={[styles.podiumPts, { backgroundColor: colors.background }]}>
-                  <Icon name="star" size={10} color={colors.accent} />
-                  <Text style={[styles.podiumPtsText, { color: colors.brandDark }]}>{fmtPts(user.points)}</Text>
+                <View
+                  style={[styles.podiumPts, { backgroundColor: colors.background }]}
+                  accessible
+                  accessibilityLabel={`${spotsLabel(user.visited)} visited, ${user.points} points`}
+                >
+                  <Icon name="map-pin" size={10} color={colors.brand} />
+                  <Text style={[styles.podiumPtsText, { color: colors.brandDark }]}>{spotsLabel(user.visited)}</Text>
                 </View>
 
                 <View style={[
@@ -366,8 +402,8 @@ export default function Leaderboard() {
               You
             </Text>
             <View style={styles.rowPtsWrap}>
-              <Icon name="star" size={13} color={colors.onBrand} />
-              <Text style={[styles.myRankPts, { color: colors.onBrand }]}>{fmtPts(myEntry.points)}</Text>
+              <Icon name="map-pin" size={13} color={colors.onBrand} />
+              <Text style={[styles.myRankPts, { color: colors.onBrand }]}>{spotsLabel(myEntry.visited)}</Text>
             </View>
           </View>
         )}
@@ -511,7 +547,9 @@ const styles = StyleSheet.create({
     borderWidth: 1.5,
     overflow: "hidden",
   },
-  rowName: { flex: 1, fontSize: 14.5, fontFamily: fonts.sansSemi },
+  rowNameCol: { flex: 1, marginRight: 8 },
+  rowName: { fontSize: 14.5, fontFamily: fonts.sansSemi },
+  rowSub:  { fontSize: 11.5, fontFamily: fonts.sansMedium, marginTop: 1 },
   rowPtsPill: {
     flexDirection: "row",
     alignItems: "center",
