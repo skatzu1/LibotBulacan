@@ -10,29 +10,41 @@ goes through EAS.
 
 | | |
 |---|---|
-| Apple Developer Program | **Individual** enrollment, US$99 a year, at developer.apple.com or in the Apple Developer app (fastest). The Apple ID needs two-factor authentication. |
+| Apple Developer Program | **Individual** enrollment, US$99 a year, at developer.apple.com or in the Apple Developer app (fastest). The Apple ID needs two-factor authentication. Activation can take up to 48 hours; nothing below works until it's active. |
 | An iPhone | **iPhone XS or newer, iOS 15.1 or later** (React Native 0.81's minimum). AR uses ARKit, which every iPhone XS and newer has. |
 | Expo account | The project's owner, `komiigurii` (`app.json` → `owner`). |
 | On the PC | Node.js and `npm install -g eas-cli`. |
 
 ## One-time setup
 
-1. `eas login` with the komiigurii account.
-2. Register every iPhone the app should install on: `eas device:create`,
-   choose the website option, open the link **in Safari on the iPhone** and
-   install the profile. A build only installs on iPhones registered
-   **before** it was made.
+1. `eas login` with the komiigurii account (`eas whoami` shows who's
+   signed in).
+2. Register every iPhone the app should install on: `eas device:create`.
+   It first asks you to sign in with the Apple Developer account, which
+   links your Apple team to Expo. Choose the website option, open the link
+   **in Safari on the iPhone** and install the profile (Settings → Profile
+   Downloaded → Install). A build only installs on iPhones registered
+   **before** it was made; register a new iPhone, then build again.
 
 ## Build and install
 
-Build from a clean copy of `main`, so no one's uncommitted work goes in:
+Build from a clean copy of `main`, so no one's uncommitted work goes in.
+`--detach` is needed because `main` is already checked out in the main
+folder, and git won't check out one branch in two places:
 
 ```
-git worktree add ..\LibotBulacan-ios main
+git worktree add --detach ..\LibotBulacan-ios main
 cd ..\LibotBulacan-ios
 npm ci
 eas build -p ios --profile preview
 ```
+
+For later builds, reuse the folder: `git checkout --detach main`, then
+`npm ci` and `eas build` again.
+
+The copy has no `.env` (it's gitignored), and none is needed: with no
+`EXPO_PUBLIC_*` variables the app uses the production server and the
+production Clerk key, and crash reporting stays off.
 
 - When asked, sign in with the Apple Developer account and let EAS create and
   manage the certificate and provisioning profile.
