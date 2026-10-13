@@ -928,7 +928,8 @@ export default function Track({ route, navigation }) {
     st.busy = true;
     st.at = now;
     try {
-      const res = await fetch(`${BASE_URL}/api/route?from=${coords.latitude},${coords.longitude}&spotId=${spotData._id}`);
+      const heading = coords.heading != null ? `&heading=${Math.round(coords.heading)}` : "";
+      const res = await fetch(`${BASE_URL}/api/route?from=${coords.latitude},${coords.longitude}&spotId=${spotData._id}${heading}`);
       const data = await res.json().catch(() => null);
       if (!isMounted.current) return;
       if (res.ok && data?.coordinates?.length >= 2) {
@@ -1063,6 +1064,11 @@ export default function Track({ route, navigation }) {
             best = next;
             const s = smoother.push(next);
             const c = { latitude: s.latitude, longitude: s.longitude };
+            // Direction of travel, only once actually moving (~9 km/h):
+            // standing still, the GPS heading is noise. The route then won't
+            // start against it, e.g. on the far side of a divided road.
+            const { heading, speed } = loc.coords;
+            if (speed > 2.5 && Number.isFinite(heading) && heading >= 0) c.heading = heading;
             setUserLocation(c);
             updateMarkerRef.current?.(c);
           }
