@@ -1,6 +1,7 @@
 import React from "react";
 import { Text } from "react-native";
 import { render, act } from "@testing-library/react-native";
+import { SafeAreaProvider } from "react-native-safe-area-context";
 
 // Drives the real ArrivalProvider with a fake location service and checks the
 // adaptive GPS rate: the watch is re-created with cheaper settings far from
@@ -99,25 +100,25 @@ beforeEach(async () => {
 afterEach(() => { jest.restoreAllMocks(); });
 
 const settle = async (n = 6) => { for (let i = 0; i < n; i++) await act(async () => {}); };
-const mount = async () => {
-  render(
+// The app mounts SafeAreaProvider at its root; the popups place themselves by
+// its insets (an iPhone with a notch here).
+const metrics = { frame: { x: 0, y: 0, width: 390, height: 844 }, insets: { top: 47, left: 0, right: 0, bottom: 34 } };
+const app = () => (
+  <SafeAreaProvider initialMetrics={metrics}>
     <ThemeProvider>
       <ArrivalProvider>
         <Text>app</Text>
       </ArrivalProvider>
-    </ThemeProvider>,
-  );
+    </ThemeProvider>
+  </SafeAreaProvider>
+);
+const mount = async () => {
+  render(app());
   await settle();
 };
 
 it("adapts GPS effort to the distance from the nearest spot, and still detects arrival", async () => {
-  render(
-    <ThemeProvider>
-      <ArrivalProvider>
-        <Text>app</Text>
-      </ArrivalProvider>
-    </ThemeProvider>,
-  );
+  render(app());
   for (let i = 0; i < 6; i++) await act(async () => {}); // mount effects, spots fetch
 
   // Starts in the middle tier until the first fix says how far away we are.
@@ -261,6 +262,14 @@ it("a visit that reaches the server is not queued", async () => {
   await feed(10, 6);
   await settle();
   expect(JSON.parse(await AsyncStorage.getItem("pendingRewards_user_test"))).toEqual([]);
+});
+
+it("an alert that comes while the app is open shows as a banner and stays in the list (iOS)", async () => {
+  const Notifications = require("expo-notifications");
+  Notifications.setNotificationHandler.mockClear();
+  await mount();
+  const [{ handleNotification }] = Notifications.setNotificationHandler.mock.calls[0];
+  await expect(handleNotification()).resolves.toMatchObject({ shouldShowBanner: true, shouldShowList: true });
 });
 
 describe('"Allow all the time" (background location)', () => {

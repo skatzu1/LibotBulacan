@@ -72,13 +72,19 @@
           }
         }
       ],
-      "expo-secure-store",
+      [
+        "expo-secure-store",
+        {
+          "faceIDPermission": false
+        }
+      ],
       "expo-web-browser",
       "@react-native-community/datetimepicker",
       [
         "expo-location",
         {
           "locationAlwaysAndWhenInUsePermission": "Libot Bulacan uses your location in the background to tell you when a tourist spot is nearby and when you arrive at one, even when the app is closed.",
+          "locationAlwaysPermission": "Libot Bulacan uses your location in the background to tell you when a tourist spot is nearby and when you arrive at one, even when the app is closed.",
           "locationWhenInUsePermission": "Libot Bulacan uses your location to show nearby tourist spots, give directions, and check when you arrive at a spot.",
           "isIosBackgroundLocationEnabled": true,
           "isAndroidBackgroundLocationEnabled": true,
@@ -116,7 +122,7 @@
             ]
           }
         ],
-        "NSPhotoLibraryAddUsageDescription": "Allow $(PRODUCT_NAME) to save photos",
+        "NSPhotoLibraryAddUsageDescription": "Libot Bulacan saves a badge picture to your photos when you choose Save Image while sharing a badge.",
         "NSMicrophoneUsageDescription": "Libot Bulacan does not record audio. The camera and AR libraries it uses can, so iOS asks for this note.",
         "ITSAppUsesNonExemptEncryption": false
       }

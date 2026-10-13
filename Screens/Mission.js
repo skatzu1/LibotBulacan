@@ -6,13 +6,16 @@ import {
   TouchableOpacity,
   Image,
   ActivityIndicator,
-  SafeAreaView,
   ScrollView,
   Dimensions,
   StatusBar,
   Animated,
   PanResponder,
 } from 'react-native';
+// Not React Native's own SafeAreaView: that one only pads on iOS, so on
+// Android (edge to edge) the header and the camera's close and flip buttons
+// sat under the status bar.
+import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { showAlert } from "../components/AppAlert";
 import { Camera, useCameraDevice, useCameraPermission } from 'react-native-vision-camera';
 import * as ImageManipulator from 'expo-image-manipulator';
@@ -256,6 +259,7 @@ export default function Mission({ navigation, route }) {
   const C = useMemo(() => makeColors(colors), [colors]);
   const styles = useMemo(() => makeStyles(C), [C]);
 
+  const insets = useSafeAreaInsets();
   const cameraRef = useRef(null);
   // Where the phone was when the camera opened — the fallback if a fresh fix
   // can't be had at the moment the photo is taken.
@@ -555,7 +559,7 @@ export default function Mission({ navigation, route }) {
             />
           )}
 
-            <SafeAreaView style={styles.cameraTopBar}>
+            <SafeAreaView edges={['top']} style={styles.cameraTopBar}>
               <TouchableOpacity
                 accessibilityRole="button" accessibilityLabel="Close camera" onPress={closeCamera} style={styles.cameraIconBtn}>
                 <Icon name="x" size={20} color="white" />
@@ -636,7 +640,7 @@ export default function Mission({ navigation, route }) {
               <Icon name="zoom-out" size={14} color="rgba(255,255,255,0.8)" />
             </View>
 
-            <View style={styles.cameraBottomBar}>
+            <View style={[styles.cameraBottomBar, { bottom: Math.max(48, insets.bottom + 24) }]}>
               <TouchableOpacity
                 accessibilityRole="button"
                 accessibilityLabel="Take the photo"
@@ -653,7 +657,7 @@ export default function Mission({ navigation, route }) {
 
   // ─── MAIN SCREEN ──────────────────────────────────────────────────────────
   return (
-    <SafeAreaView style={styles.container}>
+    <SafeAreaView edges={['top', 'left', 'right']} style={styles.container}>
       <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={C.bg} />
       <ScrollView
         contentContainerStyle={styles.scroll}
@@ -853,7 +857,7 @@ export default function Mission({ navigation, route }) {
 
         </View>
 
-        <View style={{ height: 48 }} />
+        <View style={{ height: 48 + insets.bottom }} />
       </ScrollView>
     </SafeAreaView>
   );
@@ -1074,7 +1078,8 @@ const makeStyles = (COLORS) => StyleSheet.create({
     borderWidth: 2, borderColor: COLORS.brand,
   },
 
-  cameraBottomBar: { position: 'absolute', bottom: 48, width: '100%', alignItems: 'center' },
+  // `bottom` comes from the insets at render: clear of the navigation bar.
+  cameraBottomBar: { position: 'absolute', width: '100%', alignItems: 'center' },
   captureButton: {
     width: 74, height: 74, borderRadius: 37,
     backgroundColor: 'rgba(255,255,255,0.2)',

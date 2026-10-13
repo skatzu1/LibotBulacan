@@ -17,6 +17,7 @@ import {
 import * as Location from "expo-location";
 import * as Haptics from "expo-haptics";
 import { useIsFocused } from "@react-navigation/native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useMissions } from "../context/MissionContext";
 import { usePreferredFrameRate } from "../modules/frame-rate";
 import {
@@ -440,7 +441,15 @@ const makeFlashSt = (TOKEN) => StyleSheet.create({
 // never under 96. The physical screen height, not the window's, because the
 // AR view is full screen and Android's window height leaves out the system
 // bars.
-const HUD_BOTTOM      = Platform.OS === "ios" ? 52 : 40;
+// The card's distance from the bottom edge: clear of the home indicator or the
+// navigation bar, with at least 40 under it. The phone's own insets, not a
+// per-platform guess: Android's bar is ~20 dp with gestures but 48 dp with the
+// three buttons, which covered the bottom of the card.
+const HUD_BOTTOM_MIN  = 40;
+const hudBottom = (insets) => Math.max(HUD_BOTTOM_MIN, insets.bottom + 18);
+// The radar is sized once, before any insets are known: the iPhone's 34 pt
+// home indicator, or the usual minimum on Android.
+const HUD_BOTTOM      = Platform.OS === "ios" ? 52 : HUD_BOTTOM_MIN;
 const STEP_CARD_SHARE = 0.46;
 const STEP_CARD_REST  = 213;                // the card minus the radar: padding, header, step line, label, title, 3 lines
 const RADAR_PX = Math.round(Math.min(148, Math.max(96,
@@ -1161,6 +1170,7 @@ const TriviaPopup = ({
   alreadyDone,
 }) => {
   const { TOKEN, popup } = useAr();
+  const insets = useSafeAreaInsets();
   const slideAnim = useRef(new Animated.Value(100)).current;
   const fadeAnim  = useRef(new Animated.Value(0)).current;
   const [modalMounted, setModalMounted] = useState(false);
@@ -1199,7 +1209,12 @@ const TriviaPopup = ({
       </Animated.View>
 
       <Animated.View
-        style={[popup.card, { transform: [{ translateY: slideAnim }], opacity: fadeAnim }]}
+        style={[
+          popup.card,
+          // Clear of the home indicator / navigation bar (32 when there's none).
+          { paddingBottom: Math.max(32, insets.bottom + 8) },
+          { transform: [{ translateY: slideAnim }], opacity: fadeAnim },
+        ]}
       >
         <View style={popup.dragHandle} />
 
@@ -1274,7 +1289,6 @@ const makePopup = (TOKEN) => StyleSheet.create({
     borderTopRightRadius: TOKEN.radiusXl,
     paddingHorizontal:    H_PAD,
     paddingTop:           12,
-    paddingBottom:        Platform.OS === "ios" ? 42 : 32,
     borderTopWidth: 1, borderLeftWidth: 1, borderRightWidth: 1,
     borderColor:          TOKEN.border,
     ...shadow.lg,
@@ -1378,6 +1392,13 @@ export default function ARScreen({ route, navigation }) {
   const { spot } = route.params;
   const { TOKEN, step, hud, main } = useAr();
   const { completeMission, completedMissions, fetchMissions, getMissionsForSpot } = useMissions();
+
+  // The camera runs edge to edge on both platforms, so the floating controls
+  // sit by the phone's real insets: a fixed 54 pt top put the back button in
+  // the status bar on iPhones whose safe area is 59–62 pt (14 Pro and later).
+  const insets = useSafeAreaInsets();
+  const hudPos = { bottom: hudBottom(insets) };
+  const topBarPos = { top: Math.max(insets.top, 24) + 10 };
 
   // The camera only delivers ~30 frames a second, but the HUD's looping
   // animations (radar sweep, ground reticle) redraw the whole window at the
@@ -1845,7 +1866,7 @@ export default function ARScreen({ route, navigation }) {
       const isPermission = /permission|denied/i.test(locationError);
       const isPrecise    = /precise/i.test(locationError);
       return (
-        <Animated.View style={[hud.container, hud.errorContainer, { opacity: hudOpacity }]}>
+        <Animated.View style={[hud.container, hudPos, hud.errorContainer, { opacity: hudOpacity }]}>
           <View style={hud.errorRow}>
             <View style={hud.errorIconWrap}>
               <Icon name="map-pin" size={14} color={TOKEN.danger} />
@@ -1889,7 +1910,7 @@ export default function ARScreen({ route, navigation }) {
 
     if (!userLocation) {
       return (
-        <Animated.View style={[hud.container, { opacity: hudOpacity }]} pointerEvents="box-none">
+        <Animated.View style={[hud.container, hudPos, { opacity: hudOpacity }]} pointerEvents="box-none">
           <View style={hud.loadingRow}>
             <ActivityIndicator size="small" color={TOKEN.goldLight} style={{ marginRight: 10 }} />
             <View style={{ flex: 1 }}>
@@ -1923,7 +1944,7 @@ export default function ARScreen({ route, navigation }) {
       : null;
 
     return (
-      <Animated.View style={[hud.container, { opacity: hudOpacity }]} pointerEvents="box-none">
+      <Animated.View style={[hud.container, hudPos, { opacity: hudOpacity }]} pointerEvents="box-none">
 
         {/* Header: the place, and progress in words.
             Everything unlabeled is gone. There used to be a "2/3" badge, a
@@ -2175,7 +2196,7 @@ export default function ARScreen({ route, navigation }) {
       {focusAnchor && arTracking && !modelPlaced && !modelFailed && <GroundReticle />}
 
       {/* ── Top bar ── */}
-      <View style={main.topBar}>
+      <View style={[main.topBar, topBarPos]}>
         <TouchableOpacity
           style={main.iconBtn}
           onPress={() => navigation.goBack()}
@@ -2292,9 +2313,9 @@ const makeStep = (TOKEN) => StyleSheet.create({
 // HUD STYLES
 // ─────────────────────────────────────────────
 const makeHud = (TOKEN) => StyleSheet.create({
+  // `bottom` comes from the insets at render (hudBottom).
   container: {
     position:        "absolute",
-    bottom:          HUD_BOTTOM,
     left: 16, right: 16,
     backgroundColor: TOKEN.surface,
     borderRadius:    TOKEN.radiusLg,
@@ -2333,9 +2354,9 @@ const makeMain = (TOKEN) => StyleSheet.create({
   // just clearly backgrounded while walking is the job.
   arView:      { flex: 1 },
   travelScrim: { ...StyleSheet.absoluteFillObject, backgroundColor: TOKEN.travelScrim },
+  // `top` comes from the insets at render.
   topBar: {
     position:       "absolute",
-    top:            Platform.OS === "ios" ? 54 : 36,
     left: 16, right: 16,
     flexDirection:  "row",
     alignItems:     "center",
