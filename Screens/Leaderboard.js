@@ -52,8 +52,9 @@ const BOARD_SIZE = 50;
 // for a leaderboard that updates in real time).
 const LIVE_REFRESH_MS = 30 * 1000;
 
-// The server ranks travelers by distinct spots visited, then points (the
-// system specification); the board keeps its order and shows both.
+// The server ranks travelers by points, then distinct spots visited
+// (LibotBackend utils/leaderboard.js); the board keeps its order and shows
+// both, points first.
 const toEntry = (u) => ({
   id:          u._id,
   clerkUserId: u.clerkUserId,
@@ -69,6 +70,7 @@ const toEntry = (u) => ({
 });
 
 const spotsLabel = (n) => `${n} ${n === 1 ? "spot" : "spots"}`;
+const ptsLabel   = (n) => `${fmtPts(n)} pts`;
 
 export default function Leaderboard() {
   const navigation                    = useNavigation();
@@ -232,7 +234,7 @@ export default function Leaderboard() {
       <EmptyState
         icon="award"
         title="No rankings yet"
-        text="Visit spots around Bulacan to climb the board."
+        text="Visit places around Bulacan to earn points and climb the board."
       />
     );
   }
@@ -247,7 +249,7 @@ export default function Leaderboard() {
           user.isMe && { backgroundColor: colors.brandSoft, borderColor: colors.brand },
         ]}
         accessible
-        accessibilityLabel={`Rank ${rank}, ${user.isMe ? "you" : user.name}, ${spotsLabel(user.visited)} visited, ${user.points} points`}
+        accessibilityLabel={`Rank ${rank}, ${user.isMe ? "you" : user.name}, ${user.points} points, ${spotsLabel(user.visited)} visited`}
       >
         <View style={[styles.rankCoin, { backgroundColor: colors.brandSoft }]}>
           <Text style={[styles.rankCoinText, { color: colors.brand }]}>{rank}</Text>
@@ -265,13 +267,14 @@ export default function Leaderboard() {
             {user.name}{user.isMe ? " · You" : ""}
           </Text>
           <Text style={[styles.rowSub, { color: colors.textMuted }]} numberOfLines={1}>
-            {fmtPts(user.points)} points
+            {spotsLabel(user.visited)} visited
           </Text>
         </View>
 
+        {/* Points, with the sparkle the points pill on Home uses. */}
         <View style={[styles.rowPtsPill, { backgroundColor: colors.background, borderColor: colors.divider }]}>
-          <Icon name="map-pin" size={12} color={colors.brand} weight="fill" />
-          <Text style={[styles.rowPts, { color: colors.brandDark }]}>{spotsLabel(user.visited)}</Text>
+          <Icon name="stars" size={12} color={colors.brand} weight="fill" />
+          <Text style={[styles.rowPts, { color: colors.brandDark }]}>{ptsLabel(user.points)}</Text>
         </View>
       </View>
     );
@@ -296,7 +299,7 @@ export default function Leaderboard() {
 
         {heroNav}
 
-        <Text style={[styles.heroSub, { color: colors.textSecondary }]}>Top explorers of Bulacan, by spots visited</Text>
+        <Text style={[styles.heroSub, { color: colors.textSecondary }]}>Top explorers of Bulacan, by points</Text>
 
         <View style={styles.podiumRow}>
           {podiumVisual.map((user, i) => {
@@ -325,10 +328,10 @@ export default function Leaderboard() {
                 <View
                   style={[styles.podiumPts, { backgroundColor: colors.background }]}
                   accessible
-                  accessibilityLabel={`${spotsLabel(user.visited)} visited, ${user.points} points`}
+                  accessibilityLabel={`${user.points} points, ${spotsLabel(user.visited)} visited`}
                 >
-                  <Icon name="map-pin" size={10} color={colors.brand} />
-                  <Text style={[styles.podiumPtsText, { color: colors.brandDark }]}>{spotsLabel(user.visited)}</Text>
+                  <Icon name="stars" size={10} color={colors.brand} weight="fill" />
+                  <Text style={[styles.podiumPtsText, { color: colors.brandDark }]}>{ptsLabel(user.points)}</Text>
                 </View>
 
                 <View style={[
@@ -402,8 +405,8 @@ export default function Leaderboard() {
               You
             </Text>
             <View style={styles.rowPtsWrap}>
-              <Icon name="map-pin" size={13} color={colors.onBrand} />
-              <Text style={[styles.myRankPts, { color: colors.onBrand }]}>{spotsLabel(myEntry.visited)}</Text>
+              <Icon name="stars" size={13} color={colors.onBrand} weight="fill" />
+              <Text style={[styles.myRankPts, { color: colors.onBrand }]}>{ptsLabel(myEntry.points)}</Text>
             </View>
           </View>
         )}
