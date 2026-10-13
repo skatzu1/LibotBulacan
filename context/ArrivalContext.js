@@ -6,6 +6,7 @@ import React, {
   useRef,
   useState,
   useCallback,
+  useMemo,
 } from "react";
 import {
   Animated,
@@ -25,6 +26,7 @@ import * as Notifications from "expo-notifications";
 import * as TaskManager from "expo-task-manager";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useAuth, useUser } from "@clerk/clerk-expo";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Icon from "../components/Icon";
 import { navigationRef } from "../navigation/navigationRef";
 import { useTheme, fonts } from "./ThemeContext";
@@ -322,6 +324,9 @@ async function setupNotifications() {
     Notifications.setNotificationHandler({
       handleNotification: async () => ({
         shouldShowBanner: true,
+        // iOS: also keep it in Notification Center. Without this, an alert
+        // that came while Libot was open vanished with its banner.
+        shouldShowList:   true,
         shouldPlaySound:  true,
         shouldSetBadge:   true,
       }),
@@ -493,6 +498,7 @@ export function ArrivalProvider({ children }) {
   refreshPointsRef.current = refreshPoints;
   const { user: clerkUser }      = useUser();
   const { colors }               = useTheme();
+  const insets                   = useSafeAreaInsets();
 
   const [activeSpot, setActiveSpotState] = useState(null);
   const [allSpots, setAllSpots]          = useState([]);
@@ -1198,12 +1204,20 @@ export function ArrivalProvider({ children }) {
   // ─────────────────────────────────────────
   // Render
   // ─────────────────────────────────────────
+  // Memoised: the points popup and badge banner are this provider's own state,
+  // and a fresh object on each of their renders re-rendered every screen that
+  // reads spots — Navigate's map included — whenever one opened or closed.
+  const value = useMemo(
+    () => ({ activeSpot, setActiveSpot, clearActiveSpot, allSpots, spotsStatus, reloadSpots }),
+    [activeSpot, setActiveSpot, clearActiveSpot, allSpots, spotsStatus, reloadSpots],
+  );
+
   return (
-    <ArrivalContext.Provider value={{ activeSpot, setActiveSpot, clearActiveSpot, allSpots, spotsStatus, reloadSpots }}>
+    <ArrivalContext.Provider value={value}>
       {children}
 
       <Modal visible={showPointsPopup} transparent animationType="none" statusBarTranslucent onRequestClose={() => {}}>
-        <View style={styles.pointsOverlay} pointerEvents="box-none">
+        <View style={[styles.pointsOverlay, { paddingBottom: 110 + insets.bottom }]} pointerEvents="box-none">
           <Animated.View
             pointerEvents="none"
             style={[styles.pointsPopup, {
@@ -1226,6 +1240,8 @@ export function ArrivalProvider({ children }) {
           <Animated.View
             pointerEvents="auto"
             style={[styles.badgeBanner, {
+              // Under the status bar, notch or Dynamic Island, whatever its height.
+              marginTop: insets.top + 12,
               backgroundColor: colors.card,
               borderColor: colors.accent,
               opacity:   badgeOpacity,
@@ -1260,7 +1276,7 @@ export function ArrivalProvider({ children }) {
 // ─────────────────────────────────────────────
 // Colours come from the theme inline in the JSX above; these are layout only.
 const styles = StyleSheet.create({
-  pointsOverlay: { flex: 1, justifyContent: "flex-end", alignItems: "center", paddingBottom: 110 },
+  pointsOverlay: { flex: 1, justifyContent: "flex-end", alignItems: "center" },
   pointsPopup: {
     borderRadius: 24, paddingVertical: 22, paddingHorizontal: 40,
     alignItems: "center", shadowColor: "#000", shadowOffset: { width: 0, height: 6 },
@@ -1273,7 +1289,7 @@ const styles = StyleSheet.create({
 
   badgeBackdrop: { flex: 1, pointerEvents: "none" },
   badgeBanner: {
-    marginTop: Platform.OS === "ios" ? 55 : 40, marginHorizontal: 16,
+    marginHorizontal: 16,
     borderRadius: 18, paddingVertical: 14, paddingHorizontal: 16, flexDirection: "row",
     alignItems: "center", shadowColor: "#000", shadowOffset: { width: 0, height: 5 },
     shadowOpacity: 0.2, shadowRadius: 12, elevation: 25, borderWidth: 1.5,

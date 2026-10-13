@@ -1158,7 +1158,10 @@ export default function Track({ route, navigation }) {
 
     return `<!DOCTYPE html><html>
     <head>
-      <meta name="viewport" content="width=device-width, initial-scale=1.0">
+      <!-- No page zoom: pinches and double taps belong to Leaflet, never to
+           the WebView (the loading overlay and attribution sit outside the
+           map's own touch handling). Same as components/MissionMap.js. -->
+      <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
       <!-- integrity: the WebView refuses these files if the CDN ever serves
            anything other than the exact published versions. Leaflet's hashes
            are the ones on leafletjs.com/download; change them only together
@@ -1613,6 +1616,12 @@ window.updateSpotProximity = function(active) {
         style={styles.map}
         javaScriptEnabled
         domStorageEnabled
+        // The page is exactly one screen and Leaflet does the panning, so the
+        // WebView itself never scrolls: no rubber-band on iOS, no overscroll
+        // glow on Android. Same as components/MissionMap.js.
+        scrollEnabled={false}
+        bounces={false}
+        overScrollMode="never"
         onMessage={handleWebViewMessage}
         onError={(e) => console.error("WebView error:", e.nativeEvent)}
         onLoadStart={() => { webViewReady.current = false; }}
