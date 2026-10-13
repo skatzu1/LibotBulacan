@@ -14,7 +14,8 @@ export const ABOUT_URL   = SITE_URL;
 export const TERMS_URL   = `${SITE_URL}/terms`;
 export const PRIVACY_URL = `${SITE_URL}/privacy`;
 // Edit Profile → Request account deletion. The app has no delete button;
-// this page explains how to ask (by email) and what is deleted.
+// this page explains how to ask (by email) and that the account is archived,
+// not erased.
 export const DELETE_ACCOUNT_URL = `${SITE_URL}/delete-account`;
 
 // Settings → Report a Problem writes an email to this inbox (the developers',

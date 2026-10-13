@@ -241,7 +241,8 @@ export default function EditProfile({ navigation }) {
   };
 
   // There is no delete button: the app only opens the website's deletion page,
-  // which explains what is deleted and how to ask (by email). App stores look
+  // which explains how to ask (by email) and what happens: the sign-in is
+  // deleted, the account itself is archived, never erased. App stores look
   // for a way to request deletion from inside the app; this is that way.
   const handleRequestDeletion = async () => {
     try {

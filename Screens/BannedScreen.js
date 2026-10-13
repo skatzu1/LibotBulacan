@@ -20,24 +20,30 @@ export default function BannedScreen({ banInfo }) {
   const [submitted, setSubmitted] = useState(banInfo.appealStatus === 'submitted');
   const [submitting, setSubmitting] = useState(false);
 
+  const rejected = banInfo.appealStatus === 'rejected';
+  // Accounts are archived, never deleted. A ban can be appealed until its
+  // deadline; an inactive traveler can ask for their account back any time.
+  const inactive = banInfo.archiveReason === 'inactivity';
+  const daysLeft = Number(banInfo.daysLeft) || 0;
+  const windowClosed = !inactive && banInfo.daysLeft != null && daysLeft <= 0;
+
   const handleSubmit = async () => {
+    const what = inactive ? 'request' : 'appeal';
     if (!text.trim()) {
-      return showAlert('Required', 'Please write your appeal before submitting.');
+      return showAlert('Required', `Please write your ${what} before sending it.`);
     }
 
     setSubmitting(true);
     try {
       await appealAPI.submit(text.trim());
       setSubmitted(true);
-      showToast('Appeal submitted — it’s under review.', { type: 'success' });
+      showToast(inactive ? 'Request sent — an admin will look at it.' : 'Appeal submitted — it’s under review.', { type: 'success' });
     } catch (err) {
-      showAlert('Error', err.message || 'Failed to submit appeal. Try again.');
+      showAlert('Error', err.message || `Failed to send your ${what}. Try again.`);
     } finally {
       setSubmitting(false);
     }
   };
-
-  const rejected = banInfo.appealStatus === 'rejected';
 
   return (
     <SafeAreaView style={[s.screen, { backgroundColor: colors.background }]} edges={['top', 'bottom']}>
@@ -47,51 +53,61 @@ export default function BannedScreen({ banInfo }) {
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        <View style={[s.iconWrap, { backgroundColor: colors.dangerBg }]}>
-          <Icon name="slash" size={30} color={colors.danger} />
+        <View style={[s.iconWrap, { backgroundColor: inactive ? colors.warningBg : colors.dangerBg }]}>
+          <Icon name={inactive ? 'clock' : 'slash'} size={30} color={inactive ? colors.warning : colors.danger} />
         </View>
 
         <Text style={[typography.h1, s.center, { color: colors.textPrimary }]}>
-          Your account has been banned
+          {inactive ? 'Your account was archived' : 'Your account has been banned'}
         </Text>
         <Text style={[typography.body, s.center, { color: colors.textSecondary, marginTop: spacing.sm, marginBottom: spacing.xl }]}>
-          Your account was flagged and permanently banned following a report review by our admin team.
+          {inactive
+            ? "You hadn't used Libot Bulacan for 30 days or more, so it was archived. Your trips, badges and points are kept. Ask below to have your account restored."
+            : 'Your account was flagged and permanently banned following a report review by our admin team.'}
         </Text>
 
-        <View style={[s.deadlineBox, { backgroundColor: colors.warningBg }]}>
-          <Text style={[typography.label, { color: colors.warning, marginBottom: spacing.xs }]}>
-            Time remaining to appeal
-          </Text>
-          <Text style={[s.deadlineDays, { color: colors.warning }]}>{plural(Number(banInfo.daysLeft) || 0, 'day')}</Text>
-          <Text style={[typography.caption, s.center, { color: colors.warning, marginTop: spacing.xs, lineHeight: 18 }]}>
-            After this period, your account and all associated data will be permanently deleted.
-          </Text>
-        </View>
+        {!inactive && (
+          <View style={[s.deadlineBox, { backgroundColor: colors.warningBg }]}>
+            <Text style={[typography.label, { color: colors.warning, marginBottom: spacing.xs }]}>
+              Time remaining to appeal
+            </Text>
+            <Text style={[s.deadlineDays, { color: colors.warning }]}>{plural(daysLeft, 'day')}</Text>
+            <Text style={[typography.caption, s.center, { color: colors.warning, marginTop: spacing.xs, lineHeight: 18 }]}>
+              Your account is archived, not deleted. After this period you can no longer appeal.
+            </Text>
+          </View>
+        )}
 
-        {submitted || rejected ? (
+        {submitted || rejected || windowClosed ? (
           <View style={[s.statusBox, { backgroundColor: colors.card }]}>
             <Icon
-              name={rejected ? 'x-circle' : 'inbox'}
+              name={submitted ? 'inbox' : 'x-circle'}
               size={26}
-              color={rejected ? colors.danger : colors.brand}
+              color={submitted ? colors.brand : colors.danger}
               style={{ marginBottom: spacing.sm }}
             />
             <Text style={[typography.title, { color: colors.textPrimary, marginBottom: spacing.xs }]}>
-              {rejected ? 'Appeal rejected' : 'Appeal submitted'}
+              {submitted
+                ? (inactive ? 'Request sent' : 'Appeal submitted')
+                : rejected ? (inactive ? 'Request declined' : 'Appeal rejected') : 'Appeals closed'}
             </Text>
             <Text style={[typography.body, s.center, { color: colors.textSecondary }]}>
-              {rejected
-                ? 'Your appeal was reviewed and rejected. Your account will be permanently deleted when the deadline above passes.'
-                : "Your appeal is under review. We'll process it before your deadline."}
+              {submitted
+                ? (inactive ? 'An admin will look at your request to restore your account.' : 'Your appeal is under review.')
+                : rejected
+                  ? `Your ${inactive ? 'request' : 'appeal'} was reviewed and declined. Your account stays archived.`
+                  : 'The time to appeal this ban has passed. Your account stays archived.'}
             </Text>
           </View>
         ) : (
           <View style={s.appealBox}>
             <Text style={[typography.title, { color: colors.textPrimary, marginBottom: spacing.xs }]}>
-              Submit an appeal
+              {inactive ? 'Ask for your account back' : 'Submit an appeal'}
             </Text>
             <Text style={[typography.body, { color: colors.textSecondary, marginBottom: spacing.md }]}>
-              Explain why you believe this ban was a mistake. Be specific.
+              {inactive
+                ? "Tell us you're back and would like to keep exploring."
+                : 'Explain why you believe this ban was a mistake. Be specific.'}
             </Text>
             <TextInput
               style={[
@@ -100,15 +116,15 @@ export default function BannedScreen({ banInfo }) {
               ]}
               multiline
               numberOfLines={6}
-              placeholder="Write your appeal here..."
+              placeholder={inactive ? 'Write your request here...' : 'Write your appeal here...'}
               placeholderTextColor={colors.placeholder}
               value={text}
               onChangeText={setText}
               maxLength={1000}
               textAlignVertical="top"
-              accessibilityLabel="Your appeal"
+              accessibilityLabel={inactive ? 'Your request' : 'Your appeal'}
             />
-            <PrimaryButton title="Submit appeal" onPress={handleSubmit} loading={submitting} style={s.btn} />
+            <PrimaryButton title={inactive ? 'Send request' : 'Submit appeal'} onPress={handleSubmit} loading={submitting} style={s.btn} />
           </View>
         )}
 
