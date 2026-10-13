@@ -40,7 +40,7 @@ access. Start this first; everything else can happen during the 14 days.
 | Target audience | **13 and over** (matches the privacy policy and terms). Do not include under-13 ages, or Play's Families policy applies. |
 | News app / Health / Financial features / Government app | No / none / none / **No**. Libot is not an official government app; avoid wording in the listing that suggests it is. |
 | Data safety | See the table below. |
-| Account deletion | In the app: **Settings → Edit Profile → Request account deletion**, which opens the deletion link above. That page explains what is deleted and how to ask (by email). There is no button in the app that deletes the account itself. |
+| Account deletion | In the app: **Settings → Edit Profile → Request account deletion**, which opens the deletion link above. That page explains how to ask (by email) and what happens: the Clerk sign-in is deleted, and the account is archived, never erased (decided 2026-10-14). There is no button in the app that deletes the account itself. |
 | Sensitive permissions | None to declare. The build no longer requests background location. |
 
 ### 3. Data safety answers
@@ -66,8 +66,12 @@ checks the distance and discards them (they are not stored or logged), and
 treats as a service provider rather than "sharing". If you prefer the cautious
 answer, mark precise location as shared.
 
-Security practices: data is **encrypted in transit** (yes); users **can request
-deletion** (yes, with the deletion link).
+Security practices: data is **encrypted in transit** (yes). Users **can request
+deletion**: since 2026-10-14 the system only archives accounts (the sign-in is
+deleted, the data is kept and hidden), so do not claim that data is deleted.
+Play's account-deletion policy expects the data to be deleted on request unless
+there is a stated reason to keep it; the deletion page and privacy policy give
+record-keeping as that reason. Expect Play review to question it.
 
 The privacy policy (LibotWeb `libot-download-site/privacy.html`, written 2026-10-02 for the
 Philippine Data Privacy Act) describes exactly what the app does, so it and
