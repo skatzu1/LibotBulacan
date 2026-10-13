@@ -1,5 +1,3 @@
-import * as Sentry from "@sentry/react-native";
-
 /*
  * Crash reporting, behind one switch.
  *
@@ -16,6 +14,11 @@ import * as Sentry from "@sentry/react-native";
 
 const DSN = process.env.EXPO_PUBLIC_SENTRY_DSN;
 let enabled = false;
+// Required in init, only when there is a DSN. Sentry is ~790 KB of the app's
+// JavaScript (session replay, feedback and browser code included), and a
+// top-level import ran all of it on every launch, on iPhone and Android,
+// even with reporting off.
+let Sentry = null;
 
 export function initCrashReporting() {
   if (!DSN) {
@@ -23,6 +26,7 @@ export function initCrashReporting() {
     return;
   }
   try {
+    Sentry = require("@sentry/react-native");
     Sentry.init({
       dsn: DSN,
       // Don't report from the simulator/dev client — those crashes are ours,
