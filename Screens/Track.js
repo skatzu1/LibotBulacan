@@ -1515,15 +1515,74 @@ window.updateSpotProximity = function(active) {
         // ── Route line ──
         // Drawn from the route the app fetched from the backend
         // (GET /api/route); null clears it. A wide casing under the line.
+        // The route runs on the roads, from the road point nearest the
+        // traveler (who may be in a house, a yard, or off the roads the
+        // server knows) to the one nearest the spot, so dotted links join it
+        // to the blue dot and to the pin. As the traveler moves, the part
+        // already passed is cut off, so the line always starts at them.
+        window.routePts = null;  // the route as fetched
+        window.routeFrom = 0;    // the segment the traveler was last nearest
         window.routeLayers = [];
+        window.routeLinks = [];
+
+        // [lat, lng] to metres on a flat map around latitude lat0.
+        function metresAround(lat0) {
+          var kx = Math.cos(lat0 * Math.PI / 180) * 111320;
+          return function(p) { return [p[1] * kx, p[0] * 110540]; };
+        }
+
+        // The point of the route nearest (lat, lng), looking from segment
+        // number "from" on: { i: segment, pt: [lat, lng], d: metres away }.
+        function nearestOnRoute(lat, lng, from) {
+          var pts = window.routePts, xy = metresAround(lat), u = xy([lat, lng]), best = null;
+          for (var i = Math.max(0, from); i < pts.length - 1; i++) {
+            var a = xy(pts[i]), b = xy(pts[i + 1]);
+            var dx = b[0] - a[0], dy = b[1] - a[1], len2 = dx * dx + dy * dy;
+            var t = len2 ? Math.max(0, Math.min(1, ((u[0] - a[0]) * dx + (u[1] - a[1]) * dy) / len2)) : 0;
+            var d = Math.hypot(a[0] + t * dx - u[0], a[1] + t * dy - u[1]);
+            if (!best || d < best.d) {
+              best = { i: i, d: d, pt: [pts[i][0] + t * (pts[i + 1][0] - pts[i][0]), pts[i][1] + t * (pts[i + 1][1] - pts[i][1])] };
+            }
+          }
+          return best;
+        }
+
         window.drawRoute = function(latlngs) {
-          window.routeLayers.forEach(function(l) { window.map.removeLayer(l); });
+          window.routeLayers.concat(window.routeLinks).forEach(function(l) { window.map.removeLayer(l); });
           window.routeLayers = [];
-          if (!latlngs || latlngs.length < 2) return;
+          window.routeLinks = [];
+          window.routePts = latlngs && latlngs.length >= 2 ? latlngs : null;
+          window.routeFrom = 0;
+          if (!window.routePts) return;
+          var dots = { color:'${destColor}', weight:4, opacity:0.8, dashArray:'1 9', lineCap:'round', interactive:false };
+          window.routeLinks = [L.polyline([], dots).addTo(window.map), L.polyline([], dots).addTo(window.map)];
           window.routeLayers = [
             L.polyline(latlngs, { color:'${routeCasing}', weight:10, opacity:0.95, interactive:false, className:'route-line' }).addTo(window.map),
             L.polyline(latlngs, { color:'${destColor}', weight:5.5, opacity:1, interactive:false, className:'route-line' }).addTo(window.map),
           ];
+          window.placeRoute();
+        };
+
+        // Fits the route to where the traveler is now: trims what they have
+        // passed and redraws the two dotted links.
+        window.placeRoute = function() {
+          var pts = window.routePts;
+          if (!pts) return;
+          var line = pts, start = null;
+          var here = window.userMarker ? window.userMarker.getLatLng() : null;
+          if (here) {
+            // From one segment back, so GPS jitter can't skip ahead and a
+            // route that doubles back near itself isn't cut short.
+            var near = nearestOnRoute(here.lat, here.lng, window.routeFrom - 1);
+            window.routeFrom = near.i;
+            line = [near.pt].concat(pts.slice(near.i + 1));
+            if (near.d > 3) start = [[here.lat, here.lng], near.pt];
+          }
+          window.routeLayers.forEach(function(l) { l.setLatLngs(line); });
+          window.routeLinks[0].setLatLngs(start || []);
+          var end = pts[pts.length - 1];
+          var gap = window.map.distance(end, [DEST_LAT, DEST_LNG]);
+          window.routeLinks[1].setLatLngs(gap > 3 ? [end, [DEST_LAT, DEST_LNG]] : []);
         };
 
         // ── User location ──
@@ -1553,6 +1612,7 @@ window.updateSpotProximity = function(active) {
           }
 
           window.mapReady = true;
+          window.placeRoute();
         };
 
         // The route itself is fetched by the app, which calls drawRoute.
@@ -1562,6 +1622,7 @@ window.updateSpotProximity = function(active) {
             return;
           }
           if (window.userMarker) window.userMarker.setLatLng([lat, lng]);
+          window.placeRoute();
           if (follow && window.map) window.map.panTo([lat, lng], { animate:true });
         };
       </script>
