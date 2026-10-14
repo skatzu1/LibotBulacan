@@ -45,7 +45,7 @@ const STEPS = [
   {
     key: "featured",
     title: "Featured places",
-    body: "Swipe through them, and tap one to open its story, missions and reviews.",
+    body: "Each one can be seen in AR and as a 3D model. Swipe through them, and tap one to open its story, missions and reviews.",
   },
   {
     key: "tabs",

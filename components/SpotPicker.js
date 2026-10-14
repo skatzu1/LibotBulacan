@@ -3,21 +3,28 @@ import { View, Text, StyleSheet, StatusBar, FlatList } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useArrival } from "../context/ArrivalContext";
+import { useReviews } from "../context/ReviewContext";
 import { useTheme, fonts } from "../context/ThemeContext";
-import { ScreenHeader, SpotCard, EmptyState, ErrorState, H_PAD } from "./ui";
+import { ScreenHeader, FeatureCard, EmptyState, ErrorState, H_PAD } from "./ui";
 import ListsSkeleton from "./ListsSkeleton";
 import usePullToRefresh from "../hooks/usePullToRefresh";
+
+// The card is Home's Featured card (FeatureCard), a little shorter so a list
+// of them still shows three at a time.
+const CARD_H = 220;
 
 /**
  * Shared "pick a spot" list screen used by the AR / Missions / Navigate flows.
  * Props: title, subtitle, onPick(spot) -> navigation action,
+ *        cta -> the card's yellow pill ("Explore" by default),
  *        renderRight(spot) -> optional node for the card's top-right corner,
  *        filter(spot) -> optional; only spots it returns true for are listed.
  */
-export default function SpotPicker({ title, subtitle, onPick, renderRight, filter }) {
+export default function SpotPicker({ title, subtitle, onPick, cta, renderRight, filter }) {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const { allSpots, spotsStatus, reloadSpots } = useArrival();
+  const { getAverageRating } = useReviews();
   const { colors, isDark } = useTheme();
   const spots = useMemo(() => (filter ? allSpots.filter(filter) : allSpots), [allSpots, filter]);
   const { refreshing, refreshControl } = usePullToRefresh(reloadSpots);
@@ -34,7 +41,7 @@ export default function SpotPicker({ title, subtitle, onPick, renderRight, filte
       <ScreenHeader title={title} onBack={() => navigation.goBack()} />
 
       {loading ? (
-        <ListsSkeleton cardCount={4} />
+        <ListsSkeleton cardCount={4} cardHeight={CARD_H} />
       ) : failed ? (
         <View style={styles.pad}>
           <ErrorState text="Couldn't load the spots. Check your connection." onRetry={reloadSpots} />
@@ -53,10 +60,11 @@ export default function SpotPicker({ title, subtitle, onPick, renderRight, filte
           }
           ListEmptyComponent={<EmptyState icon="map-pin" text="No spots available yet." />}
           renderItem={({ item }) => (
-            <SpotCard
+            <FeatureCard
               spot={item}
-              wide
-              height={132}
+              height={CARD_H}
+              rating={getAverageRating(item._id, item.ratingAvg)}
+              cta={cta}
               onPress={() => onPick(item, navigation)}
               right={renderRight?.(item)}
               style={styles.card}

@@ -134,9 +134,9 @@ export default function ProfileScreen() {
   // available yet" popup — a destructive-sounding dead end as the first thing
   // on the page. Deleting the account is real and lives in Edit Profile.
   const menuItems = [
-    { id: "trips",    icon: "map-pin",  title: "Previous Trips", subtitle: "Places you've arrived at", onPress: () => navigation.navigate("PreviousTrips") },
-    { id: "badges",   icon: "award",    title: "Badges",         subtitle: "Earned by visiting spots", onPress: () => navigation.navigate("Badges") },
-    { id: "settings", icon: "settings", title: "Settings",       subtitle: "Account, appearance, support", onPress: () => navigation.navigate("Settings") },
+    { id: "trips",    icon: "map-pin",  title: "Previous Trips", onPress: () => navigation.navigate("PreviousTrips") },
+    { id: "badges",   icon: "award",    title: "Badges",         onPress: () => navigation.navigate("Badges") },
+    { id: "settings", icon: "settings", title: "Settings",       onPress: () => navigation.navigate("Settings") },
   ];
 
   const header = (

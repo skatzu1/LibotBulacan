@@ -5,7 +5,6 @@ import {
   Text,
   StyleSheet,
   TouchableOpacity,
-  Image,
   ScrollView,
   RefreshControl,
   Platform,
@@ -30,13 +29,13 @@ import {
 // heading and quick-action tile. They had already drifted from the shared ones
 // (rank numerals, text sizes), so it now uses the kit like every other screen.
 import {
-  PhotoScrim, SearchField, ErrorState, EmptyState, SpotCard, SectionTitle, IconTile, Avatar,
-  useGrid, H_PAD, TAP,
+  SearchField, ErrorState, EmptyState, SpotCard, FeatureCard, SectionTitle, IconTile, Avatar,
+  useGrid, H_PAD,
 } from "../components/ui";
 import Logo from "../components/Logo";
 import HomeTour, { tourTarget } from "../components/HomeTour";
 import { BASE_URL } from "../api";
-import { spotImage, clerkPhoto } from "../utils/image";
+import { clerkPhoto } from "../utils/image";
 
 import Bookmark      from "./Bookmark";
 import Leaderboard   from "./Leaderboard";
@@ -202,7 +201,7 @@ function HomeTab() {
 /*                              HOME CONTENT                                  */
 /* -------------------------------------------------------------------------- */
 function HomeContent({ profilePhoto, navigation }) {
-  const { allSpots }                  = useArrival();
+  const { allSpots, spotsStatus }     = useArrival();
   const { getAverageRating }          = useReviews();
   const { colors }                    = useTheme();
   const { user: clerkUser }           = useUser();
@@ -238,20 +237,26 @@ function HomeContent({ profilePhoto, navigation }) {
 
   const handleSpotPress = (spot) => navigation.navigate("InformationScreen", { spot });
 
-  const sliderData = useMemo(() => allSpots.slice(0, 8).map(
-    ({ _id, image, name, description, city, rating, modelUrl, visitCount, ratingAvg }, i) => ({
-      id:          _id || String(i),
-      image,
-      title:       name,
-      location:    city || "Philippines",
-      description: description || "",
-      rating:      getAverageRating(_id, ratingAvg) || 0,
-      visitCount:  visitCount ?? 0,
-      spot:        { _id, image, name, description, city, rating, modelUrl },
+  // Featured = spots you can both open in AR and turn around in the 3D
+  // viewer, the two things only Libot does. A spot missing either model
+  // isn't featured.
+  const sliderData = useMemo(() => allSpots
+    .filter((s) => s.AR3DModelURL && s.modelUrl)
+    .slice(0, 8)
+    .map((s, i) => ({
+      id:         s._id || String(i),
+      image:      s.image,
+      title:      s.name,
+      location:   s.city || "Philippines",
+      rating:     getAverageRating(s._id, s.ratingAvg) || 0,
+      visitCount: s.visitCount ?? 0,
+      // The whole spot, as Most visited and search pass it. A trimmed copy
+      // left the spot page without its AR model ("No 3D model here yet"),
+      // coordinates, hours, fee and contact.
+      spot:       s,
     })
   ), [allSpots, getAverageRating]);
 
-  const activeSpot = sliderData[activeIndex] ?? null;
 
   // ── Global search ───────────────────────────────────────────────────────
   // Previously search existed only INSIDE a category, so a user who knew they
@@ -296,28 +301,41 @@ function HomeContent({ profilePhoto, navigation }) {
 
   return (
     <View style={{ flex: 1, backgroundColor: colors.background }}>
-      {/* ─── Slim fixed header ───
-          paddingTop now derives from the real safe-area inset. It used to be a
-          hardcoded 52, which over-padded small devices and under-padded ones
-          with large insets — and disagreed with ScreenHeader everywhere else. */}
-      <View style={[h.header, { backgroundColor: colors.background, paddingTop: Math.max(insets.top, 12) + 6 }]}>
-        {/* The logo is only a mark. Settings lives on the Profile screen. */}
-        <View accessible accessibilityRole="image" accessibilityLabel="Libot Bulacan">
-          <Logo size={32} />
-        </View>
+      {/* ─── Fixed top bar: logo · points · profile ───
+          Logo, pill and avatar are all 36 high, on one line. The points pill
+          used to sit a row lower, beside the name, stacked under the avatar
+          with its edge 4 pt off; the bar then ended in a lone logo. */}
+      <View style={[h.header, { backgroundColor: colors.background, paddingTop: Math.max(insets.top, 12) + 12 }]}>
+        {/* Only a mark: Settings lives on the Profile screen. */}
+        <Logo size={36} />
 
-        {/* No search icon here: the search field sits right under the
-            greeting, so the icon only duplicated it. */}
-        <TouchableOpacity
-          onPress={() => navigation.navigate("Profile")}
-          style={h.headerBtn}
-          accessibilityRole="button"
-          accessibilityLabel="Go to your profile"
-        >
-          <View ref={tourTarget("avatar")} collapsable={false}>
-            <Avatar uri={profilePhoto} name={clerkUser?.fullName || firstName} size={36} strong />
+        <View style={h.headerRight}>
+          <View
+            ref={tourTarget("points")}
+            collapsable={false}
+            style={[h.pointsPill, { backgroundColor: colors.brandLight }]}
+            accessible
+            accessibilityLabel={`${userPoints ?? 0} points`}
+          >
+            <Icon name="stars" size={15} color={colors.brand} weight="fill" />
+            <Text style={[h.pointsText, { color: colors.brand }]} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+              {userPoints ?? 0}
+            </Text>
           </View>
-        </TouchableOpacity>
+
+          {/* The 36 pt avatar sits on the gutter like the pill beside it; the
+              hitSlop makes up the 44 pt target the old wrapper box gave it. */}
+          <TouchableOpacity
+            onPress={() => navigation.navigate("Profile")}
+            hitSlop={4}
+            accessibilityRole="button"
+            accessibilityLabel="Go to your profile"
+          >
+            <View ref={tourTarget("avatar")} collapsable={false}>
+              <Avatar uri={profilePhoto} name={clerkUser?.fullName || firstName} size={36} strong />
+            </View>
+          </TouchableOpacity>
+        </View>
       </View>
 
       <ScrollView
@@ -336,32 +354,19 @@ function HomeContent({ profilePhoto, navigation }) {
           />
         }
       >
-        {/* ─── Greeting ─── */}
+        {/* ─── Greeting ─── the name gets the line to itself. */}
         <Wrap {...anim(0)} style={h.greeting}>
-          <Text style={[h.greetHi, { color: colors.textMuted }]} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+          <Text style={[h.greetHi, { color: colors.textMuted }]} numberOfLines={1} maxFontSizeMultiplier={MAX_FONT_SCALE}>
             {greetingFor()},
           </Text>
-          <View style={h.greetRow}>
-            <Text
-              style={[h.greetName, { color: colors.textPrimary }]}
-              numberOfLines={1}
-              accessibilityRole="header"
-              maxFontSizeMultiplier={MAX_FONT_SCALE}
-            >
-              {firstName}
-            </Text>
-            <View
-              ref={tourTarget("points")}
-              collapsable={false}
-              style={[h.pointsPill, { backgroundColor: colors.brandLight }]}
-              accessibilityLabel={`${userPoints ?? 0} points`}
-            >
-              <Icon name="stars" size={15} color={colors.brand} weight="fill" />
-              <Text style={[h.pointsText, { color: colors.brand }]} maxFontSizeMultiplier={MAX_FONT_SCALE}>
-                {userPoints ?? 0}
-              </Text>
-            </View>
-          </View>
+          <Text
+            style={[h.greetName, { color: colors.textPrimary }]}
+            numberOfLines={1}
+            accessibilityRole="header"
+            maxFontSizeMultiplier={MAX_FONT_SCALE}
+          >
+            {firstName}
+          </Text>
         </Wrap>
 
         {/* ─── Global search ─── */}
@@ -401,6 +406,7 @@ function HomeContent({ profilePhoto, navigation }) {
                 The plain View is what the tour measures: an Animated.View is
                 still sliding in when it looks. */}
             <Wrap {...anim(2)} style={h.quickRow}>
+              <SectionTitle>Quick Actions</SectionTitle>
               <View ref={tourTarget("quick")} collapsable={false} style={h.quickInner}>
                 {QUICK_ACTIONS.map((a) => (
                   <IconTile
@@ -414,7 +420,10 @@ function HomeContent({ profilePhoto, navigation }) {
               </View>
             </Wrap>
 
-            {/* ─── Featured carousel ─── */}
+            {/* ─── Featured carousel ───
+                A placeholder while the spots load; no section at all if
+                none has both models, rather than a placeholder forever. */}
+            {(sliderData.length > 0 || spotsStatus === "loading") && (
             <Wrap {...anim(3)}>
               <SectionTitle>Featured</SectionTitle>
 
@@ -437,39 +446,20 @@ function HomeContent({ profilePhoto, navigation }) {
                       setActiveIndex(Math.round(abs) % sliderData.length)
                     }
                     renderItem={({ item }) => (
-                      // The whole slide is the target now. Previously only the
-                      // small "Explore" pill navigated, while everyone taps the photo.
-                      <TouchableOpacity
+                      // The same card the spot lists behind the quick actions
+                      // use (components/ui.js FeatureCard). The whole slide is
+                      // the button; the yellow pill only labels it.
+                      <FeatureCard
+                        spot={item.spot}
+                        rating={item.rating}
+                        height={HERO_H}
+                        imageWidth={width - H_PAD * 2}
                         style={h.heroSlide}
-                        activeOpacity={0.92}
                         onPress={() => handleSpotPress(item.spot)}
-                        accessibilityRole="button"
                         accessibilityLabel={`Featured: ${item.title}, ${item.location}, rated ${item.rating} of 5`}
-                      >
-                        <Image source={{ uri: spotImage(item.image, width - H_PAD * 2, HERO_H) }} style={h.heroImage} resizeMode="cover" />
-                        <PhotoScrim from={0.34} />
-                        <View style={h.heroInfo}>
-                          <Text style={h.heroName} numberOfLines={2} maxFontSizeMultiplier={MAX_FONT_SCALE}>
-                            {item.title}
-                          </Text>
-                          <View style={h.heroMetaRow}>
-                            <Icon name="map-pin" size={12} color="rgba(255,255,255,0.95)" />
-                            <Text style={h.heroMeta} numberOfLines={1}>{item.location}</Text>
-                            <View style={h.heroSep} />
-                            <Icon name="star" size={13} color={colors.star} weight="fill" />
-                            <Text style={h.heroMeta}>{item.rating}</Text>
-                          </View>
-                        </View>
-                      </TouchableOpacity>
+                      />
                     )}
                   />
-                )}
-
-                {activeSpot && (
-                  <View style={[h.heroCta, { backgroundColor: colors.accent }]} pointerEvents="none">
-                    <Text style={[h.heroCtaText, { color: colors.onAccent }]}>Explore</Text>
-                    <Icon name="arrow-up-right" size={15} color={colors.onAccent} />
-                  </View>
                 )}
               </View>
 
@@ -492,6 +482,7 @@ function HomeContent({ profilePhoto, navigation }) {
                 </View>
               )}
             </Wrap>
+            )}
 
             {/* ─── Most visited ─── */}
             <Wrap {...anim(4)}>
@@ -582,29 +573,36 @@ const styles = StyleSheet.create({
   tabIndicator:{ width: 16, height: 2.5, borderRadius: 2, marginTop: 3 },
 });
 
+// Font trial for the greeting name. Swap the value and reload the app:
+//   fonts.display (Newsreader, current) · "Raleway_700Bold" · "Epilogue_700Bold"
+//   "Nunito_700Bold" · "Dosis_700Bold"
+// Each name must also be loaded in App.js's useFonts, or it falls back to the
+// phone's default font.
+const NAME_FONT = "Dosis_700Bold";
+
 const h = StyleSheet.create({
   scroll: { flex: 1 },
 
-  // ── Slim fixed header ──
+  // ── Fixed top bar: logo · points · profile ──
   header: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
+    justifyContent: "space-between",
     paddingHorizontal: H_PAD,
     paddingBottom: 10,
     zIndex: 10,
   },
-  headerBtn:      { width: TAP, height: TAP, alignItems: "center", justifyContent: "center" },
+  headerRight: { flexDirection: "row", alignItems: "center", gap: 8 },
 
   // ── Greeting ──
-  greeting: { paddingHorizontal: H_PAD, paddingTop: 6, paddingBottom: 4 },
-  greetHi:  { ...typography.bodyStrong, fontSize: 14 },
-  greetRow: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 2 },
+  greeting: { paddingHorizontal: H_PAD, paddingTop: 10 },
+  greetHi:  { ...typography.bodyStrong, fontSize: 14, lineHeight: 20 },
   // The signature line of the app — the one place on Home that gets the serif.
-  greetName: { ...typography.h1, fontSize: 30, flex: 1, marginRight: 10 },
+  greetName: { ...typography.h1, fontFamily: NAME_FONT, fontSize: 32, lineHeight: 40 },
+  // As tall as the avatar beside it, so the two read as one group.
   pointsPill: {
     flexDirection: "row", alignItems: "center", gap: 5,
-    paddingHorizontal: 12, paddingVertical: 7, borderRadius: radius.pill,
+    height: 36, paddingHorizontal: 12, borderRadius: radius.pill,
   },
   pointsText: { fontFamily: fonts.sansBold, fontSize: 13, letterSpacing: -0.2 },
 
@@ -613,34 +611,18 @@ const h = StyleSheet.create({
   resultCount: { ...typography.caption, marginTop: 20, marginBottom: 12 },
 
   // ── Quick actions ──
-  quickRow: {
-    paddingHorizontal: H_PAD,
-    marginTop: 24,
-  },
-  quickInner: { flexDirection: "row", justifyContent: "space-between" },
+  // No margin of its own: its SectionTitle brings the same 28 every section
+  // heading has. With a 24 here as well, the gap above it was 52.
+  quickRow: {},
+  quickInner: { flexDirection: "row", justifyContent: "space-between",paddingHorizontal: H_PAD, },
 
   // ── Sections ──
   sectionBody:  { paddingHorizontal: H_PAD },
 
   // ── Featured carousel ──
   heroWrap: { marginHorizontal: H_PAD, borderRadius: radius.card, overflow: "hidden" },
-  heroSlide: { width: "100%", height: "100%" },
-  heroImage: { width: "100%", height: "100%" },
-  heroInfo: { position: "absolute", left: 16, right: 120, bottom: 16 },
-  heroName: { ...typography.display, fontSize: 23, lineHeight: 28, color: "#fff", marginBottom: 5 },
-  heroMetaRow: { flexDirection: "row", alignItems: "center", gap: 5 },
-  heroMeta: { color: "rgba(255,255,255,0.95)", fontFamily: fonts.sansSemi, fontSize: 12 },
-  heroSep: { width: 3, height: 3, borderRadius: 2, backgroundColor: "rgba(255,255,255,0.6)", marginHorizontal: 3 },
-  heroCta: {
-    position: "absolute",
-    right: 14, bottom: 14,
-    flexDirection: "row", alignItems: "center", gap: 4,
-    paddingVertical: 11, paddingHorizontal: 16,
-    borderRadius: radius.pill,
-    shadowColor: "#0B2E31", shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.28, shadowRadius: 12, elevation: 6,
-  },
-  heroCtaText: { fontFamily: fonts.sansBold, fontSize: 13, letterSpacing: -0.1 },
+  // The slide's look lives in components/ui.js FeatureCard.
+  heroSlide: { width: "100%" },
 
   dotsRow: { flexDirection: "row", gap: 5, alignSelf: "center", marginTop: 14 },
   dot:       { width: 6, height: 6, borderRadius: 3 },

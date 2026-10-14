@@ -4,21 +4,23 @@ import {
   View,
   Text,
   StyleSheet,
-  TouchableOpacity,
   FlatList,
-  Image,
   RefreshControl,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useAuth } from "@clerk/clerk-expo";
-import { useTheme, fonts, typography, radius } from "../context/ThemeContext";
-import { ScreenHeader, EmptyState, ErrorState, LoadingState, PrimaryButton, H_PAD } from "../components/ui";
+import { useTheme, fonts } from "../context/ThemeContext";
+import {
+  ScreenHeader, EmptyState, ErrorState, LoadingState, PrimaryButton, FeatureCard, PhotoChip, H_PAD,
+} from "../components/ui";
 // Was a hardcoded "https://libotbackend.onrender.com".
 import { BASE_URL } from "../api";
-import { spotImage } from "../utils/image";
 import { useArrival } from "../context/ArrivalContext";
-import Icon from "../components/Icon";
+import { useReviews } from "../context/ReviewContext";
+
+// Same height as the cards in the AR / Bakit List / Navigate spot lists.
+const CARD_H = 220;
 
 export default function PreviousTripsScreen() {
   const navigation   = useNavigation();
@@ -26,6 +28,7 @@ export default function PreviousTripsScreen() {
   const { getToken } = useAuth();
   const { colors }   = useTheme();
   const { allSpots } = useArrival();
+  const { getAverageRating } = useReviews();
 
   const [visited, setVisited]       = useState([]);
   const [loading, setLoading]       = useState(true);
@@ -83,6 +86,13 @@ export default function PreviousTripsScreen() {
     });
   };
 
+  const formatShortDate = (iso) => {
+    if (!iso) return "";
+    return new Date(iso).toLocaleDateString("en-PH", {
+      month: "short", day: "numeric", year: "numeric",
+    });
+  };
+
   const formatTime = (iso) => {
     if (!iso) return "";
     return new Date(iso).toLocaleTimeString("en-PH", {
@@ -93,85 +103,29 @@ export default function PreviousTripsScreen() {
   const renderItem = useCallback(({ item, index }) => {
     const spot = item.spot;
     if (!spot) return null;
-    // Spot.category is an array in the schema; rendering it raw ran the names
-    // together ("ReligiousHistorical").
-    const category = Array.isArray(spot.category) ? spot.category.join(" · ") : spot.category;
     // The visit log only populates a handful of fields. Open the detail page
     // with the full spot (description, 3D model…) when we have it.
     const fullSpot = allSpots.find((s) => s._id === spot._id) || spot;
+    // The visit log only began carrying `city` on 2026-10-04, so fall back to
+    // the full spot list for older trips.
+    const shown = { ...fullSpot, name: spot.name, image: spot.image || fullSpot.image, city: spot.city || fullSpot.city };
+    const trip = visited.length - index;
 
+    // Home's Featured card, like the spot lists behind the other quick
+    // actions: the trip number top-left, when you were there top-right.
     return (
-      <TouchableOpacity
-        style={[styles.card, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}
-        activeOpacity={0.88}
+      <FeatureCard
+        spot={shown}
+        height={CARD_H}
+        rating={getAverageRating(fullSpot._id, fullSpot.ratingAvg)}
+        badge={<PhotoChip>#{trip}</PhotoChip>}
+        right={<PhotoChip>{formatShortDate(item.visitedAt)} · {formatTime(item.visitedAt)}</PhotoChip>}
         onPress={() => navigation.navigate("InformationScreen", { spot: fullSpot })}
-        accessibilityRole="button"
-        accessibilityLabel={`Trip ${visited.length - index}: ${spot.name}, ${formatDate(item.visitedAt)}`}
-        accessibilityHint="Opens the spot details"
-      >
-        <View style={styles.imageWrapper}>
-          {spot.image ? (
-            <Image source={{ uri: spotImage(spot.image, 400, 170) }} style={styles.spotImage} />
-          ) : (
-            <View style={[styles.imagePlaceholder, { backgroundColor: colors.brandLight }]}>
-              <Icon name="map-pin" size={28} color={colors.textMuted} />
-            </View>
-          )}
-          {/* Was a hardcoded brown rgba(107,75,69) — the last of the old
-              terracotta palette. Now the same dark photo chip as the category. */}
-          <View style={styles.photoChip}>
-            <Text style={styles.photoChipText}>#{visited.length - index}</Text>
-          </View>
-          {category ? (
-            <View style={[styles.photoChip, styles.photoChipRight]}>
-              <Text style={styles.photoChipText} numberOfLines={1}>{category}</Text>
-            </View>
-          ) : null}
-        </View>
-
-        <View style={styles.cardBody}>
-          <Text style={[styles.spotName, { color: colors.textPrimary }]} numberOfLines={1}>{spot.name}</Text>
-
-          <View style={styles.infoRow}>
-            <Icon name="map-pin" size={13} color={colors.brand} />
-            {/* The spot's city. This used to show `location`, a field that was
-                empty on every spot (and is now gone), so only the pin showed.
-                The visit log only began carrying `city` on 2026-10-04, so
-                fall back to the full spot list. */}
-            <Text style={[styles.infoText, { color: colors.textSecondary }]} numberOfLines={1}>{spot.city || fullSpot.city}</Text>
-          </View>
-
-          <View style={[styles.divider, { backgroundColor: colors.divider }]} />
-
-          <View style={styles.metaRow}>
-            <View style={styles.metaItem}>
-              <Icon name="calendar" size={12} color={colors.textSecondary} />
-              <Text style={[styles.metaText, { color: colors.textSecondary }]}>{formatDate(item.visitedAt)}</Text>
-            </View>
-            <View style={styles.metaItem}>
-              <Icon name="clock" size={12} color={colors.textSecondary} />
-              <Text style={[styles.metaText, { color: colors.textSecondary }]}>{formatTime(item.visitedAt)}</Text>
-            </View>
-          </View>
-
-          <View style={styles.detailsRow}>
-            {spot.visitingHours ? (
-              <View style={[styles.detailChip, { backgroundColor: colors.brandLight }]}>
-                <Icon name="clock" size={11} color={colors.brand} />
-                <Text style={[styles.detailChipText, { color: colors.brand }]}>{spot.visitingHours}</Text>
-              </View>
-            ) : null}
-            {spot.entranceFee ? (
-              <View style={[styles.detailChip, { backgroundColor: colors.brandLight }]}>
-                <Icon name="tag" size={11} color={colors.brand} />
-                <Text style={[styles.detailChipText, { color: colors.brand }]}>{spot.entranceFee}</Text>
-              </View>
-            ) : null}
-          </View>
-        </View>
-      </TouchableOpacity>
+        accessibilityLabel={`Trip ${trip}: ${spot.name}, ${formatDate(item.visitedAt)}`}
+        style={styles.card}
+      />
     );
-  }, [visited.length, colors, allSpots, navigation]);
+  }, [visited.length, allSpots, navigation, getAverageRating]);
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -256,49 +210,6 @@ const styles = StyleSheet.create({
 
   listContent: { paddingHorizontal: H_PAD, paddingTop: 8, flexGrow: 1 },
 
-  card: {
-    borderRadius: radius.card,
-    borderWidth: 1,
-    marginBottom: 16,
-    overflow: "hidden",
-  },
-  imageWrapper:     { width: "100%", height: 170, position: "relative" },
-  spotImage:        { width: "100%", height: "100%", resizeMode: "cover" },
-  imagePlaceholder: {
-    width: "100%",
-    height: "100%",
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  photoChip: {
-    position: "absolute",
-    top: 10,
-    left: 10,
-    maxWidth: "60%",
-    backgroundColor: "rgba(6,20,22,0.62)",
-    borderRadius: radius.pill,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-  },
-  photoChipRight: { left: undefined, right: 10 },
-  photoChipText:  { color: "#fff", fontSize: 11.5, fontFamily: fonts.sansBold },
-
-  cardBody:  { padding: 16 },
-  spotName:  { ...typography.h3, fontSize: 18, lineHeight: 23, marginBottom: 6 },
-  infoRow:   { flexDirection: "row", alignItems: "center", gap: 5, marginBottom: 10 },
-  infoText:  { ...typography.body, fontSize: 13.5, lineHeight: 19, flex: 1 },
-  divider:   { height: 1, marginBottom: 10 },
-  metaRow:   { flexDirection: "row", gap: 16, marginBottom: 10 },
-  metaItem:  { flexDirection: "row", alignItems: "center", gap: 5 },
-  metaText:  { fontSize: 12.5, fontFamily: fonts.sansMedium },
-  detailsRow: { flexDirection: "row", gap: 8, flexWrap: "wrap" },
-  detailChip: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 4,
-    borderRadius: radius.pill,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-  },
-  detailChipText: { fontSize: 11.5, fontFamily: fonts.sansSemi },
+  // The same 14 apart as the spot lists behind the other quick actions.
+  card: { marginBottom: 14 },
 });

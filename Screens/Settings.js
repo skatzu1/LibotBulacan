@@ -152,22 +152,14 @@ const Settings = ({ navigation }) => {
         <View style={styles.section}>
           <GroupLabel>Support & About</GroupLabel>
           {/* Back to Home, where the first-run tour plays again. */}
-          <ListRow
-            icon="compass"
-            title="Show the app tour"
-            subtitle="A quick look around Home"
-            onPress={() => {
-              navigation.navigate("Home", { screen: "HomeScreen" });
-              requestHomeTour();
-            }}
-          />
+          
           <ListRow icon="help-circle" title="Help & Support"   onPress={() => openURL(HELP_URL)}    accessibilityLabel="Help and support" />
-          <ListRow icon="info"        title="About Libot Bulacan" onPress={() => openURL(ABOUT_URL)}   />
           <ListRow icon="file-text"   title="Terms of Service" onPress={() => openURL(TERMS_URL)}   />
           <ListRow icon="lock"        title="Privacy Policy"   onPress={() => openURL(PRIVACY_URL)} />
+          <ListRow icon="info"        title="About Libot Bulacan" onPress={() => openURL(ABOUT_URL)}   />
           {/* A screen, not a bare mailto: link. On a phone with no mail app
               set up, mailto: opened a blank page. See Screens/ReportProblem.js. */}
-          <ListRow icon="flag"        title="Report a Problem" subtitle="Email the developers" onPress={() => navigation.navigate("ReportProblem")} />
+          <ListRow icon="flag"        title="Report a Problem" onPress={() => navigation.navigate("ReportProblem")} />
         </View>
 
         <View style={styles.section}>

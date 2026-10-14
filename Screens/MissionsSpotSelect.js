@@ -6,6 +6,7 @@ export default function MissionsSpotSelect() {
     <SpotPicker
       title="Bakit List"
       subtitle="Pick a spot to see its Bakit List and start an activity"
+      cta="Bakit List"
       // The Mission screen needs both a spot AND a chosen activity, so route
       // through the spot's detail page, opening straight on its Bakit List tab.
       onPick={(spot, navigation) =>

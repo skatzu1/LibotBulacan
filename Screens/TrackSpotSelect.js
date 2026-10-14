@@ -6,6 +6,7 @@ export default function TrackSpotSelect() {
     <SpotPicker
       title="Navigate"
       subtitle="Choose where you'd like directions to"
+      cta="Navigate"
       onPick={(spot, navigation) => navigation.navigate("Track", { spot })}
     />
   );
