@@ -676,7 +676,7 @@ export default function InformationScreen({ route, navigation }) {
   // invented details a visitor could plan a trip around.
   const facts = [
     { icon: "clock",   label: "Visiting hours", value: spot.visitingHours },
-    { icon: "tag",     label: "Entrance fee",   value: spot.entranceFee },
+    { icon: "tag",     label: "Entrance fee",   value: spot.entranceFee, stacked: true },
     // Always under its label, like long visiting hours, however short.
     { icon: "map-pin", label: "Location",       value: cityText, stacked: true },
     { icon: "phone",   label: "Contact",        value: spot.contact },

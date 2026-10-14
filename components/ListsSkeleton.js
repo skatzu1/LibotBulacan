@@ -12,7 +12,7 @@ import Skeleton from "./Skeleton";
 import { useTheme } from "../context/ThemeContext";
 import { H_PAD } from "./ui";
 
-export default function ListsSkeleton({ cardCount = 4 }) {
+export default function ListsSkeleton({ cardCount = 4, cardHeight = 180 }) {
   const { colors } = useTheme();
   return (
     <View
@@ -23,10 +23,10 @@ export default function ListsSkeleton({ cardCount = 4 }) {
         {/* ── Count line ── */}
         <Skeleton width={130} height={14} radius={6} style={{ marginBottom: 16 }} />
 
-        {/* ── Cards — same 180h full-width shape as the real SpotCard ── */}
+        {/* ── Cards — the full-width shape of the real cards (180 by default) ── */}
         <View style={styles.cardsContainer}>
           {Array.from({ length: cardCount }).map((_, i) => (
-            <Skeleton key={i} width="100%" height={180} radius={22} />
+            <Skeleton key={i} width="100%" height={cardHeight} radius={22} />
           ))}
         </View>
       </View>

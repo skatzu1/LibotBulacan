@@ -1,14 +1,14 @@
 /**
  * HomeSkeleton.js — mirrors the current HomeContent layout in Home.js:
- *   slim header · greeting · search field · quick-action row · Featured carousel
- *   · Most-visited grid
+ *   header (greeting · points · avatar) · search field · quick actions ·
+ *   Featured carousel · Most-visited grid
  */
 import React from "react";
 import { View, StyleSheet, ScrollView, useWindowDimensions } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Skeleton from "./Skeleton";
 import { useTheme, TAB_BAR_CLEARANCE } from "../context/ThemeContext";
-import { useGrid, H_PAD, TAP } from "./ui";
+import { useGrid, H_PAD } from "./ui";
 
 export default function HomeSkeleton() {
   const { colors } = useTheme();
@@ -24,25 +24,29 @@ export default function HomeSkeleton() {
       scrollEnabled={false}
       accessibilityLabel="Loading home"
     >
-      {/* Header — matches the real one's safe-area padding so nothing jumps */}
-      <View style={[styles.header, { paddingTop: Math.max(insets.top, 12) + 6 }]}>
-        <Skeleton width={32} height={32} radius={9} />
-        <View style={styles.headerActions}>
-          <Skeleton width={22} height={22} radius={6} />
+      {/* Top bar — matches the real one's safe-area padding so nothing jumps:
+          logo on the left, points and avatar on the right, all 36 high. */}
+      <View style={[styles.header, { paddingTop: Math.max(insets.top, 12) + 12 }]}>
+        <Skeleton width={36} height={36} radius={9} />
+        <View style={styles.headerRight}>
+          <Skeleton width={60} height={36} radius={18} />
           <Skeleton width={36} height={36} radius={18} />
         </View>
       </View>
 
-      {/* Greeting */}
-      <View style={styles.pad}>
-        <Skeleton width={90} height={13} radius={5} style={{ marginTop: 8 }} />
-        <Skeleton width={190} height={30} radius={7} style={{ marginTop: 8 }} />
+      {/* Greeting: a 20-high line and a 40-high name line */}
+      <View style={[styles.pad, { paddingTop: 10 }]}>
+        <Skeleton width={110} height={13} radius={5} style={{ marginVertical: 3.5 }} />
+        <Skeleton width={150} height={28} radius={7} style={{ marginVertical: 6 }} />
       </View>
 
       {/* Search */}
-      <Skeleton width="100%" height={46} radius={999} style={[styles.pad, { marginTop: 16 }]} />
+      <View style={[styles.pad, { marginTop: 16 }]}>
+        <Skeleton width="100%" height={46} radius={999} />
+      </View>
 
       {/* Quick actions */}
+      <Skeleton width={150} height={22} radius={6} style={styles.title} />
       <View style={styles.quickRow}>
         {[0, 1, 2, 3].map((i) => (
           <View key={i} style={{ alignItems: "center" }}>
@@ -53,7 +57,7 @@ export default function HomeSkeleton() {
       </View>
 
       {/* Featured */}
-      <Skeleton width={100} height={22} radius={6} style={[styles.pad, { marginTop: 30, marginBottom: 14 }]} />
+      <Skeleton width={100} height={22} radius={6} style={styles.title} />
       <Skeleton width={width - H_PAD * 2} height={HERO_H} radius={22} style={{ marginHorizontal: H_PAD }} />
       <View style={styles.dots}>
         {[0, 1, 2].map((i) => (
@@ -62,7 +66,7 @@ export default function HomeSkeleton() {
       </View>
 
       {/* Most visited */}
-      <Skeleton width={120} height={22} radius={6} style={[styles.pad, { marginTop: 30, marginBottom: 14 }]} />
+      <Skeleton width={120} height={22} radius={6} style={styles.title} />
       <View style={styles.pad}>
         <Skeleton width="100%" height={200} radius={22} style={{ marginBottom: 12 }} />
         <View style={[styles.gridRow, { gap }]}>
@@ -79,19 +83,21 @@ export default function HomeSkeleton() {
 const styles = StyleSheet.create({
   header: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
+    justifyContent: "space-between",
     paddingHorizontal: H_PAD,
     paddingBottom: 10,
-    height: TAP + 22,
   },
-  headerActions: { flexDirection: "row", alignItems: "center", gap: 14 },
+  headerRight: { flexDirection: "row", alignItems: "center", gap: 8 },
   pad:      { paddingHorizontal: H_PAD },
+  // A section heading (SectionTitle: 28 above, 14 below, on the gutter).
+  // Margin, not padding: padding on a fixed-width bone doesn't move it, so
+  // these used to sit flush against the left edge of the screen.
+  title:    { marginLeft: H_PAD, marginTop: 28, marginBottom: 14 },
   quickRow: {
     flexDirection: "row",
     justifyContent: "space-between",
     paddingHorizontal: H_PAD,
-    marginTop: 24,
   },
   dots:    { flexDirection: "row", gap: 5, alignSelf: "center", marginTop: 14 },
   gridRow: { flexDirection: "row" },

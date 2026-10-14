@@ -39,6 +39,7 @@ export default function ARSpotSelect() {
     <SpotPicker
       title="AR Experience"
       subtitle="Choose a landmark to view in augmented reality"
+      cta="Start AR"
       onPick={handlePick}
       renderRight={renderDone}
       filter={spotHasAR}

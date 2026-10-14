@@ -193,6 +193,91 @@ export function SpotCard({
   );
 }
 
+/* ── Featured card: photo, scrim, name, town · rating, yellow action ───────
+   The layout of Home's Featured slides, shared so a spot looks the same
+   wherever it's picked: Featured, and the spot lists behind AR View, Bakit
+   List, Navigate and My Trips. The whole card is the button; the yellow
+   pill only says what it does. `meta` replaces the town · rating line,
+   `badge` sits top-left and `right` top-right (e.g. a "Done" chip). */
+export function FeatureCard({
+  spot, onPress, height = 220, rating, meta, cta = "Explore", badge, right,
+  imageWidth, style, accessibilityLabel, accessibilityHint = "Opens the spot details",
+}) {
+  const { colors } = useTheme();
+  const { width } = useWindowDimensions();
+  const name = spot?.name || "Unknown spot";
+  const city = spot?.city || "";
+  const items = meta ?? [
+    city ? { icon: "map-pin", text: city } : null,
+    rating != null ? { icon: "star", text: String(rating), fill: true } : null,
+  ].filter(Boolean);
+  const label = accessibilityLabel
+    ?? [name, city, rating != null ? `rated ${rating} of 5` : null].filter(Boolean).join(", ");
+
+  return (
+    <TouchableOpacity
+      style={[s.feature, { height, backgroundColor: colors.brandLight }, style]}
+      activeOpacity={0.92}
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityHint={accessibilityHint}
+    >
+      {spot?.image ? (
+        <Image
+          source={{ uri: spotImage(spot.image, imageWidth ?? width - H_PAD * 2, height) }}
+          style={s.featureImg}
+          resizeMode="cover"
+        />
+      ) : (
+        <View style={[s.featureImg, s.cardImgFallback]}>
+          <Icon name="image" size={30} color={colors.textMuted} />
+        </View>
+      )}
+      <PhotoScrim from={0.34} />
+
+      {badge ? <View style={s.featureBadge}>{badge}</View> : null}
+      {right ? <View style={s.cardRight}>{right}</View> : null}
+
+      <View style={s.featureInfo}>
+        <Text style={s.featureName} numberOfLines={2} maxFontSizeMultiplier={MAX_FONT_SCALE}>{name}</Text>
+        {items.length > 0 && (
+          <View style={s.featureMetaRow}>
+            {items.map((m, i) => (
+              <React.Fragment key={`${m.icon}-${i}`}>
+                {i > 0 && <View style={s.featureSep} />}
+                <Icon
+                  name={m.icon}
+                  size={m.icon === "star" ? 13 : 12}
+                  color={m.icon === "star" ? colors.star : "rgba(255,255,255,0.95)"}
+                  weight={m.fill ? "fill" : "regular"}
+                />
+                <Text style={s.featureMeta} numberOfLines={1} maxFontSizeMultiplier={MAX_FONT_SCALE}>{m.text}</Text>
+              </React.Fragment>
+            ))}
+          </View>
+        )}
+      </View>
+
+      {!!cta && (
+        <View style={[s.featureCta, { backgroundColor: colors.accent }]} pointerEvents="none">
+          <Text style={[s.featureCtaText, { color: colors.onAccent }]} maxFontSizeMultiplier={MAX_FONT_SCALE}>{cta}</Text>
+          <Icon name="arrow-up-right" size={15} color={colors.onAccent} />
+        </View>
+      )}
+    </TouchableOpacity>
+  );
+}
+
+/** A small dark chip for a FeatureCard's corner ("#3", a date). */
+export function PhotoChip({ children }) {
+  return (
+    <View style={s.photoChip}>
+      <Text style={s.photoChipText} numberOfLines={1} maxFontSizeMultiplier={MAX_FONT_SCALE}>{children}</Text>
+    </View>
+  );
+}
+
 /* ── Search field ─────────────────────────────────────────────────────────
    Shared so Home (global) and Lists (in-category) behave identically. */
 export const SearchField = React.forwardRef(function SearchField(
@@ -632,6 +717,30 @@ const s = StyleSheet.create({
   cardMeta: { flexDirection: "row", alignItems: "center", gap: 12 },
   cardMetaItem: { flexDirection: "row", alignItems: "center", gap: 3 },
   cardMetaText: { fontFamily: fonts.sansBold, fontSize: 11, color: "#fff" },
+
+  // FeatureCard — the values of Home's Featured slide.
+  feature:       { borderRadius: radius.card, overflow: "hidden" },
+  featureImg:    { ...StyleSheet.absoluteFillObject, width: "100%", height: "100%" },
+  featureBadge:  { position: "absolute", top: 10, left: 10 },
+  // Leaves room on the right for the action pill.
+  featureInfo:   { position: "absolute", left: 16, right: 124, bottom: 16 },
+  featureName:   { ...typography.display, fontSize: 23, lineHeight: 28, color: "#fff", marginBottom: 5 },
+  featureMetaRow:{ flexDirection: "row", alignItems: "center", gap: 5 },
+  featureMeta:   { color: "rgba(255,255,255,0.95)", fontFamily: fonts.sansSemi, fontSize: 12, flexShrink: 1 },
+  featureSep:    { width: 3, height: 3, borderRadius: 2, backgroundColor: "rgba(255,255,255,0.6)", marginHorizontal: 3 },
+  featureCta: {
+    position: "absolute", right: 14, bottom: 14,
+    flexDirection: "row", alignItems: "center", gap: 4,
+    paddingVertical: 11, paddingHorizontal: 16, borderRadius: radius.pill,
+    shadowColor: "#0B2E31", shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.28, shadowRadius: 12, elevation: 6,
+  },
+  featureCtaText: { fontFamily: fonts.sansBold, fontSize: 13, letterSpacing: -0.1 },
+  photoChip: {
+    maxWidth: 220, backgroundColor: "rgba(6,20,22,0.62)",
+    borderRadius: radius.pill, paddingHorizontal: 10, paddingVertical: 4,
+  },
+  photoChipText: { color: "#fff", fontSize: 11.5, fontFamily: fonts.sansBold },
 
   search: {
     flexDirection: "row", alignItems: "center", gap: 9,
