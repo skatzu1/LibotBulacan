@@ -1711,11 +1711,25 @@ window.updateSpotProximity = function(active) {
           <Icon name="chevron-left" size={22} color={colors.brand} />
         </TouchableOpacity>
 
-        <View style={[styles.titleChip, { backgroundColor: colors.background }, shadow.md]}>
-          <Icon name="map-pin" size={13} color={colors.brand} />
-          <Text style={[styles.titleChipText, { color: colors.textPrimary }]} numberOfLines={1}>
-            {spotData.name}
-          </Text>
+        {/* Says what the map is: the way TO this spot. A pin beside the name
+            read as "you are here" (QA 2026-10-16, the map's location header). */}
+        <View
+          style={[styles.titleChip, { backgroundColor: colors.background }, shadow.md]}
+          accessible
+          accessibilityRole="header"
+          accessibilityLabel={`Directions to ${spotData.name}${spotData.city ? `, ${spotData.city}` : ""}`}
+        >
+          <View style={[styles.titleIcon, { backgroundColor: colors.brandLight }]}>
+            <Icon name="flag" size={13} color={colors.brand} />
+          </View>
+          <View style={styles.titleTextCol}>
+            <Text style={[styles.titleChipLabel, { color: colors.textMuted }]} numberOfLines={1}>
+              Directions to{spotData.city ? ` · ${spotData.city}` : ""}
+            </Text>
+            <Text style={[styles.titleChipText, { color: colors.textPrimary }]} numberOfLines={1}>
+              {spotData.name}
+            </Text>
+          </View>
         </View>
       </View>
 
@@ -1953,16 +1967,27 @@ const styles = StyleSheet.create({
     flex: 1,
     flexDirection: "row",
     alignItems: "center",
-    gap: 7,
-    height: 42,
-    paddingHorizontal: 16,
+    gap: 9,
+    height: 46,
+    paddingLeft: 6,
+    paddingRight: 16,
     borderRadius: radius.pill,
   },
+  titleIcon: {
+    width: 34, height: 34, borderRadius: 17,
+    alignItems: "center", justifyContent: "center",
+  },
+  titleTextCol: { flex: 1 },
+  titleChipLabel: {
+    fontSize: 11,
+    fontFamily: fonts.sansSemi,
+    letterSpacing: 0.1,
+  },
   titleChipText: {
-    flex: 1,
     fontSize: 14.5,
     fontFamily: fonts.sansBold,
     letterSpacing: -0.2,
+    marginTop: -1,
   },
 
   // ── Floating bottom controls ──

@@ -9,12 +9,10 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { showAlert } from "../components/AppAlert";
-import { useAuth } from "../context/AuthContext";
 import { useTheme } from "../context/ThemeContext";
 import { ScreenHeader, ListRow, GroupLabel, Segmented, H_PAD } from "../components/ui";
 import * as Notifications from "expo-notifications";
 import { HELP_URL, ABOUT_URL, TERMS_URL, PRIVACY_URL } from "../utils/legalLinks";
-import { requestHomeTour } from "../components/HomeTour";
 
 const openURL = async (url) => {
   try {
@@ -30,7 +28,6 @@ const THEME_OPTIONS = [
 ];
 
 const Settings = ({ navigation }) => {
-  const { logout } = useAuth();
   const { pref, setThemePref, colors } = useTheme();
   const insets = useSafeAreaInsets();
 
@@ -77,23 +74,6 @@ const Settings = ({ navigation }) => {
         ]
       );
     }
-  };
-
-  const handleLogout = () => {
-    showAlert("Log Out", "Are you sure you want to log out?", [
-      { text: "Cancel", style: "cancel" },
-      {
-        text: "Log Out",
-        style: "destructive",
-        onPress: async () => {
-          try {
-            await logout();
-          } catch {
-            showAlert("Error", "Failed to log out. Please try again.");
-          }
-        },
-      },
-    ]);
   };
 
   return (
@@ -149,21 +129,16 @@ const Settings = ({ navigation }) => {
           <Segmented options={THEME_OPTIONS} value={pref} onChange={setThemePref} role="radio" />
         </View>
 
+        {/* About comes last (QA 2026-10-16). Log Out moved to the Profile
+            screen itself. */}
         <View style={styles.section}>
           <GroupLabel>Support & About</GroupLabel>
-          {/* Back to Home, where the first-run tour plays again. */}
-          
           <ListRow icon="help-circle" title="Help & Support"   onPress={() => openURL(HELP_URL)}    accessibilityLabel="Help and support" />
+          {/* A screen, not a bare mailto: link. See Screens/ReportProblem.js. */}
+          <ListRow icon="flag"        title="Report a Problem" onPress={() => navigation.navigate("ReportProblem")} />
           <ListRow icon="file-text"   title="Terms of Service" onPress={() => openURL(TERMS_URL)}   />
           <ListRow icon="lock"        title="Privacy Policy"   onPress={() => openURL(PRIVACY_URL)} />
           <ListRow icon="info"        title="About Libot Bulacan" onPress={() => openURL(ABOUT_URL)}   />
-          {/* A screen, not a bare mailto: link. On a phone with no mail app
-              set up, mailto: opened a blank page. See Screens/ReportProblem.js. */}
-          <ListRow icon="flag"        title="Report a Problem" onPress={() => navigation.navigate("ReportProblem")} />
-        </View>
-
-        <View style={styles.section}>
-          <ListRow icon="log-out" title="Log Out" onPress={handleLogout} danger right={null} />
         </View>
       </ScrollView>
     </View>

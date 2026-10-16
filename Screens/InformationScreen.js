@@ -19,6 +19,7 @@ import { splitByTier, ARRIVAL_POINTS, TIER_LABELS } from "../utils/missionTiers"
 import { useTheme, radius, shadow, fonts, typography, MAX_FONT_SCALE } from "../context/ThemeContext";
 import ModelViewer from "../utils/ModelViewer";
 import { ensureAtSpotForAR, spotHasAR } from "../utils/arLocationGate";
+import { afterAlertCloses, ensureCameraAccess, explainPickerError } from "../utils/cameraAccess";
 import InformationSkeleton from "../components/InformationSkeleton";
 import KeyboardAvoider from "../components/KeyboardAvoider";
 import usePullToRefresh from "../hooks/usePullToRefresh";
@@ -150,10 +151,17 @@ const tapFeel     = () => { Haptics.selectionAsync().catch(() => {}); };
 const successFeel = () => { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {}); };
 const warnFeel    = () => { Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning).catch(() => {}); };
 
-const TABS = [
-  { key: "Overview",   label: "Overview",   icon: "book-open" },
-  { key: "BucketList", label: "Bakit List", icon: "flag"      },
-];
+// The 3D model has its own tab, in the middle (QA 2026-10-16). It used to be
+// a small cube button in the header that swapped the photo for the model,
+// which testers missed. Spots without a model get the two outer tabs.
+const OVERVIEW_TAB = { key: "Overview",   label: "Overview",   icon: "book-open" };
+const MODEL_TAB    = { key: "Model3D",    label: "3D Model",   icon: "cube-scan" };
+const BUCKET_TAB   = { key: "BucketList", label: "Bakit List", icon: "flag"      };
+const tabsFor = (spot) => (spot?.modelUrl ? [OVERVIEW_TAB, MODEL_TAB, BUCKET_TAB] : [OVERVIEW_TAB, BUCKET_TAB]);
+
+// The server's limit (LibotBackend utils/textLimits.js); QA 2026-10-16 asked
+// for 250, down from 500.
+const REVIEW_MAX = 250;
 
 /* ── Pieces of the screen ─────────────────────────────────────────────────
    These used to be declared INSIDE InformationScreen, which makes each one a
@@ -509,9 +517,9 @@ export default function InformationScreen({ route, navigation }) {
 
   // Callers can deep-link to a specific tab (e.g. the Missions flow lands here
   // on the missions list rather than Overview).
-  const initialTab = TABS.some((t) => t.key === route?.params?.tab) ? route.params.tab : "Overview";
+  const tabs = tabsFor(spot);
+  const initialTab = tabs.some((t) => t.key === route?.params?.tab) ? route.params.tab : "Overview";
   const [activeTab,        setActiveTab]        = useState(initialTab);
-  const [show3D,           setShow3D]           = useState(false);
   const [newRating,        setNewRating]        = useState(0);
   const [newReview,        setNewReview]        = useState("");
   // The Facebook-style review box at the end of the reviews: focused while
@@ -548,8 +556,9 @@ export default function InformationScreen({ route, navigation }) {
   const { hasVisited, refresh: refreshPoints } = usePoints();
   const { profileImage } = useProfileImage();
   const isFocused = useIsFocused();
-
-  useEffect(() => { if (!isFocused) setShow3D(false); }, [isFocused]);
+  // The model only renders while its tab is open and this screen is in front:
+  // a Viro scene left running behind another screen keeps the GPU busy.
+  const showing3D = activeTab === "Model3D" && !!spot?.modelUrl && isFocused;
 
   // The review box is the last thing on the page. When the keyboard opens
   // for it, scroll to the end so the box sits just above the keyboard
@@ -579,8 +588,8 @@ export default function InformationScreen({ route, navigation }) {
 
   // Pull to refresh: the spot itself (an admin may have edited it), its
   // reviews and missions, and the visit log behind "Arrive at the spot". Off
-  // while the 3D model shows: dragging down on the model turns it, and at the
-  // top of the page the pull would take that drag instead.
+  // on the 3D Model tab: dragging down on the model turns it, and at the top
+  // of the page the pull would take that drag instead.
   const reloadSpotPage = useCallback(async () => {
     const id = paramSpot?._id;
     if (!id) return;
@@ -593,7 +602,7 @@ export default function InformationScreen({ route, navigation }) {
       refreshPoints(),
     ]);
   }, [paramSpot?._id, fetchReviews, refetchMissions, refreshPoints]);
-  const { refreshControl } = usePullToRefresh(reloadSpotPage, { enabled: !(show3D && spot?.modelUrl) });
+  const { refreshControl } = usePullToRefresh(reloadSpotPage, { enabled: activeTab !== "Model3D" });
 
   const header = (right) => (
     <View style={[styles.header, { backgroundColor: colors.background, paddingTop: Math.max(insets.top, 12) + 6, borderBottomColor: colors.divider }]}>
@@ -723,10 +732,16 @@ export default function InformationScreen({ route, navigation }) {
     forceJpg: true,
   };
 
+  // Opened from the Camera / Gallery choice, which is an AppAlert: wait for it
+  // to close, and for the camera, make sure the app may use it. A refused
+  // camera or photo permission is explained with a way to Settings
+  // (utils/cameraAccess.js).
   const addPhotos = async (source) => {
     const room = MAX_REVIEW_PHOTOS - reviewPhotos.length;
     if (room <= 0) return;
     try {
+      await afterAlertCloses();
+      if (source === "camera" && !(await ensureCameraAccess("to take a photo for your review"))) return;
       const picked = source === "camera"
         ? [await ImageCropPicker.openCamera(PHOTO_PICK)]
         // maxFiles is honoured on iOS only, hence the slice below.
@@ -740,10 +755,8 @@ export default function InformationScreen({ route, navigation }) {
       }
       setReviewPhotos((prev) => [...prev, ...list.slice(0, room)]);
     } catch (err) {
-      if (err?.code !== "E_PICKER_CANCELLED") {
-        console.error("[Review] photo pick error:", err);
-        showAlert("Couldn't add the photo", "Please try again.");
-      }
+      if (err?.code !== "E_PICKER_CANCELLED") console.error("[Review] photo pick error:", err);
+      explainPickerError(err);
     }
   };
 
@@ -796,6 +809,14 @@ export default function InformationScreen({ route, navigation }) {
         showMutedAlert(result);
         return;
       }
+      // Only visitors can review. The box is hidden until the visit is logged,
+      // so this is a visit logged elsewhere being out of date here.
+      if (result?.notVisited) {
+        inputRef.current?.blur();
+        refreshPoints();
+        showAlert("Visit this spot first", result.message);
+        return;
+      }
       // One review per spot. The reloaded list now shows theirs; the draft is
       // kept, so it's still there if they delete the old review to post this.
       if (result?.alreadyReviewed) {
@@ -829,17 +850,19 @@ export default function InformationScreen({ route, navigation }) {
     }
   };
 
-  // BookmarkContext re-renders this screen on its own. This used to bump a
-  // `key` on the whole screen to force a refresh, which remounted everything
-  // and threw the user back to the top of a long review list.
+  // BookmarkContext re-renders this screen on its own, and says "Saved" or
+  // "Removed" in a toast. This used to bump a `key` on the whole screen to
+  // force a refresh, which remounted everything and threw the user back to
+  // the top of a long review list.
   const handleBookmarkToggle = () => toggleBookmark(spot);
 
   const handleLaunchAR = async () => {
-    // AR models are anchored to real places at the spot — warn if the user
-    // isn't physically there before launching.
-    if (await ensureAtSpotForAR(spot)) {
-      navigation.navigate("ar", { spot, arMissionId: arMission?._id ?? null });
-    }
+    // AR models are anchored to real places at the spot: away from it, AR
+    // doesn't open (the alert offers directions instead). Then the camera.
+    if (!(await ensureAtSpotForAR(spot, { onDirections: () => navigation.navigate("Track", { spot }) }))) return;
+    await afterAlertCloses();
+    if (!(await ensureCameraAccess("for AR View"))) return;
+    navigation.navigate("ar", { spot, arMissionId: arMission?._id ?? null });
   };
 
   const openMission = (mission) => {
@@ -878,22 +901,12 @@ export default function InformationScreen({ route, navigation }) {
     }
   };
 
-  const showing3D = show3D && !!spot.modelUrl && isFocused;
-
   return (
     <KeyboardAvoider style={[styles.container, { backgroundColor: colors.background }]}>
       <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={colors.background} />
 
       {header(
         <>
-          {spot.modelUrl && (
-            <CircleBtn
-              colors={colors}
-              accessibilityLabel={show3D ? "Show photo" : "Show 3D model"}
-              onPress={() => setShow3D(!show3D)}
-              iconNode={<Icon name={show3D ? "image-outline" : "cube-scan"} size={20} color={colors.textPrimary} />}
-            />
-          )}
           <CircleBtn
             colors={colors}
             accessibilityLabel={spotIsBookmarked ? "Remove bookmark" : "Bookmark this spot"}
@@ -916,14 +929,8 @@ export default function InformationScreen({ route, navigation }) {
         {/* [0] Hero */}
         <View style={styles.heroWrap}>
           <View style={[styles.heroCard, { backgroundColor: colors.card }, shadow.md]}>
-            {showing3D ? (
-              <ModelViewer url={spot.modelUrl} style={styles.heroImage} />
-            ) : (
-              <Image source={{ uri: spotImage(spot.image, 400, 260) }} style={styles.heroImage} resizeMode="cover" />
-            )}
-            {/* Over the 3D view the scrim only needs to back the caption; from
-                halfway down it would dim the lower half of the model. */}
-            <PhotoScrim from={showing3D ? 0.72 : 0.5} />
+            <Image source={{ uri: spotImage(spot.image, 400, 260) }} style={styles.heroImage} resizeMode="cover" />
+            <PhotoScrim from={0.5} />
             {reviewCount > 0 && (
               <View style={styles.heroRating}>
                 <Icon name="star" size={13} color={colors.accent} weight="fill" />
@@ -941,7 +948,7 @@ export default function InformationScreen({ route, navigation }) {
         {/* [1] Sticky tabs */}
         <View style={[styles.segmentWrap, { backgroundColor: colors.background }]}>
           <Segmented
-            options={TABS}
+            options={tabs}
             value={activeTab}
             onChange={setActiveTab}
           />
@@ -1028,11 +1035,12 @@ export default function InformationScreen({ route, navigation }) {
                   bar is also a filter: tap it to see only that rating. */}
               {reviewCount === 0 ? (
                 <TouchableOpacity
-                  onPress={startReview}
+                  onPress={arrived ? startReview : undefined}
+                  disabled={!arrived}
                   activeOpacity={0.85}
                   style={[styles.firstReview, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}
-                  accessibilityRole="button"
-                  accessibilityLabel="No reviews yet. Write the first review."
+                  accessibilityRole={arrived ? "button" : undefined}
+                  accessibilityLabel={arrived ? "No reviews yet. Write the first review." : "No reviews yet."}
                 >
                   <View style={[styles.firstReviewIcon, { backgroundColor: colors.brandLight }]}>
                     <Icon name="star" size={22} color={colors.brand} />
@@ -1040,7 +1048,9 @@ export default function InformationScreen({ route, navigation }) {
                   <View style={styles.firstReviewText}>
                     <Text style={[styles.firstReviewTitle, { color: colors.textPrimary }]}>No reviews yet</Text>
                     <Text style={[styles.firstReviewSub, { color: colors.textSecondary }]}>
-                      Been here? Be the first to tell the next visitor what it was like.
+                      {arrived
+                        ? "You've been here. Be the first to tell the next visitor what it was like."
+                        : "Reviews here come from travelers who visited with Libot Bulacan."}
                     </Text>
                   </View>
                 </TouchableOpacity>
@@ -1277,10 +1287,38 @@ export default function InformationScreen({ route, navigation }) {
                 </View>
               )}
 
+              {/* Not been here yet: the reviews above can be read, but only
+                  travelers who visited can write one (QA 2026-10-16; the
+                  server refuses it too). Arriving opens the box. */}
+              {!hasMyReview && !arrived && (
+                <View style={[styles.fbComposer, styles.fbDone, { borderTopColor: colors.divider }]}>
+                  <View style={[styles.visitIcon, { backgroundColor: colors.brandLight }]}>
+                    <Icon name="map-pin" size={18} color={colors.brand} />
+                  </View>
+                  <View style={styles.fbDoneText}>
+                    <Text style={[styles.fbDoneTitle, { color: colors.textPrimary }]}>Visit to write a review</Text>
+                    <Text style={[styles.fbDoneSub, { color: colors.textSecondary }]}>
+                      Only travelers who have been to {spot.name} with Libot Bulacan can review it.
+                      Arrive there and the review box opens here.
+                    </Text>
+                    <TouchableOpacity
+                      onPress={() => navigation.navigate("Track", { spot })}
+                      hitSlop={8}
+                      style={styles.visitLink}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Get directions to ${spot.name}`}
+                    >
+                      <Text style={[styles.visitLinkText, { color: colors.brand }]}>Get directions</Text>
+                      <Icon name="chevron-right" size={15} color={colors.brand} />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              )}
+
               {/* Write a review, Facebook-comment style: your avatar and a
                   rounded box with a camera icon. It opens up (stars, photo
                   thumbnails, send) once you tap in or start. */}
-              {!hasMyReview && (
+              {!hasMyReview && arrived && (
               <View style={[styles.fbComposer, { borderTopColor: colors.divider }]}>
                 {composerOpen && (
                   <View style={styles.fbRateRow}>
@@ -1353,8 +1391,9 @@ export default function InformationScreen({ route, navigation }) {
                       onBlur={() => setComposerFocused(false)}
                       editable={!submittingReview}
                       multiline
-                      maxLength={500}
+                      maxLength={REVIEW_MAX}
                       accessibilityLabel="Write a review"
+                      accessibilityHint={`Up to ${REVIEW_MAX} characters`}
                     />
                     <TouchableOpacity
                       onPress={pickPhotoSource}
@@ -1384,8 +1423,15 @@ export default function InformationScreen({ route, navigation }) {
                   </View>
                 </View>
 
-                {composerOpen && newReview.length > 400 && (
-                  <Text style={[styles.fbCount, { color: colors.textMuted }]}>{newReview.length}/500</Text>
+                {/* Always showing while the box is open, so the 250 limit is
+                    known before it's hit. */}
+                {composerOpen && (
+                  <Text
+                    style={[styles.fbCount, { color: newReview.length >= REVIEW_MAX - 25 ? colors.warning : colors.textMuted }]}
+                    accessibilityLabel={`${newReview.length} of ${REVIEW_MAX} characters`}
+                  >
+                    {newReview.length}/{REVIEW_MAX}
+                  </Text>
                 )}
                 {submittingReview && reviewPhotos.length > 0 && (
                   <Text style={[styles.fbNote, { color: colors.textMuted }]} accessibilityLiveRegion="polite">
@@ -1393,6 +1439,33 @@ export default function InformationScreen({ route, navigation }) {
                   </Text>
                 )}
               </View>
+              )}
+            </>
+          )}
+
+          {/* The model on its own tab, big enough to turn and zoom. It only
+              mounts while this tab is open (see showing3D). */}
+          {activeTab === "Model3D" && spot.modelUrl && (
+            <>
+              <View style={[styles.modelCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
+                {showing3D ? (
+                  <ModelViewer url={spot.modelUrl} style={styles.modelView} />
+                ) : (
+                  <View style={[styles.modelView, styles.modelPaused]}>
+                    <ActivityIndicator color={colors.brand} />
+                  </View>
+                )}
+              </View>
+              <View style={styles.modelHintRow}>
+                <Icon name="rotate-3d-variant" size={16} color={colors.textMuted} />
+                <Text style={[styles.modelHint, { color: colors.textSecondary }]}>
+                  Drag to turn it around. Pinch or use the buttons to zoom.
+                </Text>
+              </View>
+              {hasAR && (
+                <Text style={[styles.modelHint, styles.modelArNote, { color: colors.textMuted }]}>
+                  At {spot.name} itself, AR View puts the models around you, life-size.
+                </Text>
               )}
             </>
           )}
@@ -1562,7 +1635,14 @@ const styles = StyleSheet.create({
   heroWrap:        { paddingHorizontal: H_PAD, paddingTop: 14, paddingBottom: 4 },
   heroCard:        { borderRadius: radius.xl, overflow: "hidden", height: 288 },
   heroImage:       { width: "100%", height: "100%" },
-  heroRating:      { position: "absolute", top: 12, left: 12, flexDirection: "row", alignItems: "center", gap: 3, backgroundColor: "rgba(11,30,32,0.62)", paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999 },
+  // The 3D Model tab: taller than the hero, so the model has room to turn.
+  modelCard:       { borderRadius: radius.xl, borderWidth: 1, overflow: "hidden", height: 360 },
+  modelView:       { width: "100%", height: "100%" },
+  modelPaused:     { alignItems: "center", justifyContent: "center" },
+  modelHintRow:    { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 12, paddingHorizontal: 2 },
+  modelHint:       { flex: 1, fontSize: 13, lineHeight: 19, fontFamily: fonts.sansMedium },
+  modelArNote:     { marginTop: 6, paddingHorizontal: 2 },
+  heroRating:     { position: "absolute", top: 12, left: 12, flexDirection: "row", alignItems: "center", gap: 3, backgroundColor: "rgba(11,30,32,0.62)", paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999 },
   heroRatingText:  { color: "#fff", fontSize: 12.5, fontFamily: fonts.sansBold },
   heroRatingCount: { color: "rgba(255,255,255,0.75)", fontSize: 11, fontFamily: fonts.sansSemi },
   heroCaption:     { position: "absolute", left: 14, right: 14, bottom: 12, flexDirection: "row", alignItems: "center", gap: 5 },
@@ -1723,6 +1803,9 @@ const styles = StyleSheet.create({
   fbNote:          { fontSize: 12, fontFamily: fonts.sansMedium, paddingLeft: 46 },
   // In its place once you've reviewed the spot.
   fbDone:          { flexDirection: "row", alignItems: "center", gap: 10 },
+  visitIcon:       { width: 36, height: 36, borderRadius: 18, alignItems: "center", justifyContent: "center", alignSelf: "flex-start" },
+  visitLink:       { flexDirection: "row", alignItems: "center", gap: 2, marginTop: 8, alignSelf: "flex-start" },
+  visitLinkText:   { fontSize: 13.5, fontFamily: fonts.sansBold },
   fbDoneText:      { flex: 1 },
   fbDoneTitle:     { fontSize: 14, fontFamily: fonts.sansSemi },
   fbDoneSub:       { fontSize: 12.5, lineHeight: 18, fontFamily: fonts.sans, marginTop: 2 },

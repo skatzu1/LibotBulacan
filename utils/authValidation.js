@@ -35,6 +35,16 @@ export const nameError = (name, what = "your full name") => {
   return null;
 };
 
+// A middle name is optional, and a lone initial ("D.") is a common way to
+// write one, so a single letter is enough here.
+export const middleNameError = (name) => {
+  const v = String(name || "").trim();
+  if (!v) return null;
+  if (!NAME_ONLY_ALLOWED.test(v)) return "Use letters only. Spaces, hyphens (-), apostrophes (') and periods (.) are fine.";
+  if (!STARTS_WITH_LETTER.test(v)) return "Start with a letter.";
+  return null;
+};
+
 // ── Email ──
 export const EMAIL_MAX = 254;
 
@@ -62,9 +72,26 @@ export const requiredPasswordError = (password) => (password ? null : "Enter you
 
 export const MIN_PASSWORD = 8;
 
-export const newPasswordError = (password) => {
-  if (!password) return "Enter a new password.";
+// The strength meter's rules (components/PasswordStrength.js draws them). A
+// new password has to meet 3 of the 4 ("Good"): on sign-up, when resetting a
+// forgotten one, and when changing it in Login & Security.
+export const PASSWORD_RULES = [
+  { id: "length",  label: "At least 8 characters",        test: (p) => p.length >= MIN_PASSWORD },
+  { id: "upper",   label: "One uppercase letter",          test: (p) => /[A-Z]/.test(p) },
+  { id: "number",  label: "One number",                    test: (p) => /\d/.test(p) },
+  { id: "special", label: "One special character (!@#$…)", test: (p) => /[^A-Za-z0-9]/.test(p) },
+];
+
+/** 0 Weak · 1 Fair · 2 Good · 3 Strong */
+export const passwordLevel = (password) => {
+  const passed = PASSWORD_RULES.filter((r) => r.test(String(password || ""))).length;
+  return passed <= 1 ? 0 : passed - 1;
+};
+
+export const strongPasswordError = (password, empty = "Enter a password.") => {
+  if (!password) return empty;
   if (password.length < MIN_PASSWORD) return `Use at least ${MIN_PASSWORD} characters.`;
+  if (passwordLevel(password) < 2) return "Too weak. Meet at least 3 of the rules below.";
   return null;
 };
 
@@ -98,7 +125,28 @@ export const dobError = (dob, today = new Date()) => {
   let age = today.getFullYear() - y;
   if (today.getMonth() < m - 1 || (today.getMonth() === m - 1 && today.getDate() < d)) age -= 1;
   if (age < MIN_AGE) return `You must be at least ${MIN_AGE} to use Libot Bulacan.`;
+  if (age > 120) return "Check the year.";
   return null;
+};
+
+const pad2 = (n) => String(n).padStart(2, "0");
+
+/** A Date from the calendar picker, as the field shows it: MM/DD/YYYY. */
+export const formatDob = (date) =>
+  `${pad2(date.getMonth() + 1)}/${pad2(date.getDate())}/${date.getFullYear()}`;
+
+/** The typed MM/DD/YYYY as a Date, or null while it isn't a whole date. */
+export const dobToDate = (dob) => {
+  const digits = String(dob || "").replace(/\D/g, "");
+  if (digits.length !== 8) return null;
+  const date = new Date(+digits.slice(4, 8), +digits.slice(0, 2) - 1, +digits.slice(2, 4));
+  return Number.isNaN(date.getTime()) ? null : date;
+};
+
+/** MM/DD/YYYY → "YYYY-MM-DD", the form the server stores (Clerk metadata). */
+export const dobToIso = (dob) => {
+  const digits = String(dob || "").replace(/\D/g, "");
+  return digits.length === 8 ? `${digits.slice(4, 8)}-${digits.slice(0, 2)}-${digits.slice(2, 4)}` : "";
 };
 
 export const DISPOSABLE_EMAIL_ERROR =

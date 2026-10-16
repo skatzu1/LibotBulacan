@@ -42,6 +42,7 @@ import Icon from "../components/Icon";
 import { showAlert } from "../components/AppAlert";
 import { PrimaryButton, EmptyState, ScreenHeader, H_PAD } from "../components/ui";
 import { useCachedModel } from "../utils/modelCache";
+import { ensureCameraAccess } from "../utils/cameraAccess";
 
 // ─────────────────────────────────────────────
 // DESIGN TOKENS
@@ -1200,6 +1201,11 @@ const TriviaPopup = ({
   if (!modalMounted) return null;
 
   const remaining = totalCount - tappedCount;
+  // The facts are told as one story, a part per model, in trail order
+  // (QA 2026-10-16: "connected storytelling"). The trail is strictly in
+  // order (utils/arTrail.js), so model n is always part n.
+  const parts = Math.max(totalCount, modelNumber);
+  const lastPart = remaining <= 0;
 
   return (
     <Modal transparent visible={modalMounted} animationType="none" onRequestClose={onClose}>
@@ -1216,12 +1222,14 @@ const TriviaPopup = ({
           { transform: [{ translateY: slideAnim }], opacity: fadeAnim },
         ]}
       >
-        <View style={popup.dragHandle} />
-
+        {/* No drag handle: it looked like the card could be swiped down,
+            and it can't (QA 2026-10-16). It closes with X or the button. */}
         <View style={popup.header}>
           <View style={popup.categoryBadge}>
             <Icon name="book-open" size={13} color={TOKEN.goldLight} style={{ marginRight: 6 }} />
-            <Text style={popup.categoryText}>Did you know?</Text>
+            <Text style={popup.categoryText}>
+              {parts > 1 ? `The story, part ${modelNumber} of ${parts}` : "The story"}
+            </Text>
           </View>
           <TouchableOpacity
             accessibilityRole="button"
@@ -1265,7 +1273,7 @@ const TriviaPopup = ({
         <View style={popup.divider} />
 
         <View style={popup.triviaBox}>
-          <View style={popup.triviaIndexBadge} accessibilityLabel={`Model ${modelNumber}`}>
+          <View style={popup.triviaIndexBadge} accessibilityLabel={`Part ${modelNumber}`}>
             <Text style={popup.triviaIndexText}>{modelNumber}</Text>
           </View>
           <ScrollView showsVerticalScrollIndicator={false} style={{ flex: 1 }}>
@@ -1273,7 +1281,25 @@ const TriviaPopup = ({
           </ScrollView>
         </View>
 
-        <PrimaryButton title="Return to AR View" onPress={onClose} />
+        {/* The thread: one mark per part, filled up to this one, and what
+            comes next. */}
+        {parts > 1 && (
+          <View style={popup.storyRow} accessible accessibilityLabel={`Part ${modelNumber} of ${parts}`}>
+            {Array.from({ length: parts }, (_, i) => (
+              <View
+                key={i}
+                style={[popup.storyMark, { backgroundColor: i < modelNumber ? TOKEN.gold : TOKEN.border }]}
+              />
+            ))}
+          </View>
+        )}
+        <Text style={popup.storyNext}>
+          {lastPart
+            ? `That's the whole story of ${spot?.name || "this place"}.`
+            : `The story goes on at the next object. Follow the radar to part ${modelNumber + 1}.`}
+        </Text>
+
+        <PrimaryButton title={lastPart ? "Return to AR View" : "Continue the story"} onPress={onClose} />
       </Animated.View>
     </Modal>
   );
@@ -1288,19 +1314,14 @@ const makePopup = (TOKEN) => StyleSheet.create({
     borderTopLeftRadius:  TOKEN.radiusXl,
     borderTopRightRadius: TOKEN.radiusXl,
     paddingHorizontal:    H_PAD,
-    paddingTop:           12,
+    paddingTop:           22,
     borderTopWidth: 1, borderLeftWidth: 1, borderRightWidth: 1,
     borderColor:          TOKEN.border,
     ...shadow.lg,
   },
-  dragHandle: {
-    alignSelf:       "center",
-    width:           40,
-    height:          4,
-    borderRadius:    2,
-    backgroundColor: TOKEN.border,
-    marginBottom:    18,
-  },
+  storyRow:  { flexDirection: "row", gap: 6 },
+  storyMark: { flex: 1, height: 4, borderRadius: 2 },
+  storyNext: { ...typography.body, fontSize: 13.5, lineHeight: 19, color: TOKEN.textSecond, marginTop: 10, marginBottom: 16 },
   header:        { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 },
   // A pill, like the app's other chips. It used to be 9pt tracked capitals.
   categoryBadge: {
@@ -1558,6 +1579,18 @@ export default function ARScreen({ route, navigation }) {
 
     check();
     return () => { cancelled = true; };
+  }, []);
+
+  // The camera has to be allowed before Viro starts: started without it, it
+  // stops with "resumed without the required camera permissions" (QA
+  // 2026-10-16: the camera crashed and was never asked for). The spot page
+  // and the AR list ask first (utils/cameraAccess.js); this covers any other
+  // way in. null while asking.
+  const [cameraAllowed, setCameraAllowed] = useState(null);
+  useEffect(() => {
+    let alive = true;
+    ensureCameraAccess("for AR View").then((ok) => { if (alive) setCameraAllowed(ok); });
+    return () => { alive = false; };
   }, []);
 
   // The guide opens every time the AR activity does (the adviser asked for it
@@ -2121,6 +2154,15 @@ export default function ARScreen({ route, navigation }) {
     });
   }
 
+  // Camera refused: ensureCameraAccess has already offered Settings.
+  if (cameraAllowed === false) {
+    return renderNoAR({
+      icon: "camera-off",
+      title: "Camera access is off",
+      text: `AR View shows ${spot.name}'s models through the camera. Allow camera access for Libot Bulacan in your phone's Settings, then open AR View again.`,
+    });
+  }
+
   // Device can't do AR — say so plainly instead of mounting the navigator and
   // leaving the user on a black screen wondering what broke.
   if (arSupport === "unsupported") {
@@ -2145,6 +2187,8 @@ export default function ARScreen({ route, navigation }) {
         onTouchEnd={onArTouchEnd}
         onTouchCancel={() => { touchRef.current = null; }}
       >
+      {/* Not until the camera is allowed (see cameraAllowed). */}
+      {cameraAllowed && (
       <ViroARSceneNavigator
         initialScene={{ scene: ARScene }}
         // Viro turns all of these on by default, at full-screen size, 30
@@ -2178,6 +2222,7 @@ export default function ARScreen({ route, navigation }) {
         }}
         style={{ flex: 1 }}
       />
+      )}
       </View>
 
       {/* Tap anywhere that isn't the model → the camera refocuses. */}

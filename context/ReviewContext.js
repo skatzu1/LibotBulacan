@@ -132,6 +132,10 @@ export const ReviewProvider = ({ children }) => {
       // and hand the fresh isSuspended/suspendedUntil/isMuted/commentMuteUntil
       // fields straight back to the caller (the UI needs the exact end date
       // to show a "time remaining" countdown, not just the message string).
+      // A 403 with notVisited is different: only travelers who have been to
+      // the spot can review it (backend, QA 2026-10-16).
+      const notVisited = err.response?.data?.notVisited === true;
+      if (notVisited) return { success: false, message, notVisited };
       let status = null;
       if (err.response?.status === 403) status = await fetchModerationStatus();
       // One review per spot (409): the list this screen has must be out of

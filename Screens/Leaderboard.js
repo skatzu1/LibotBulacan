@@ -54,8 +54,20 @@ const LIVE_REFRESH_MS = 30 * 1000;
 
 // The server ranks travelers by points, then distinct spots visited
 // (LibotBackend utils/leaderboard.js); the board keeps its order and shows
-// both, points first.
+// both, points first. Equal points share a rank: 1, 2, 2, 4 (QA 2026-10-16,
+// "same points, same standing"). The server sends each `rank`; withRanks
+// works it out here too, for a server from before it did.
+const withRanks = (list) => {
+  let rank = 0;
+  let lastPoints = null;
+  return list.map((u, i) => {
+    if (u.points !== lastPoints) { rank = i + 1; lastPoints = u.points; }
+    return { ...u, rank: u.rank ?? rank };
+  });
+};
+
 const toEntry = (u) => ({
+  rank:    typeof u.rank === "number" ? u.rank : undefined,
   id:          u._id,
   clerkUserId: u.clerkUserId,
   name:
@@ -120,7 +132,7 @@ export default function Leaderboard() {
       const list = Array.isArray(data) ? data : Array.isArray(data.users) ? data.users : null;
       if (!list) { setError("Unexpected response."); return; }
 
-      let users = list.map(toEntry);
+      let users = withRanks(list.map(toEntry));
       let below = null;
 
       if (clerkUser?.id) {
@@ -239,8 +251,12 @@ export default function Leaderboard() {
     );
   }
 
+  // How many on the board share this rank: "Tied" shows when it's more than one.
+  const tiedAt = (rank) => allUsers.filter((u) => u.rank === rank).length > 1;
+
   const renderRow = ({ item: user, index }) => {
-    const rank = index + 4;
+    const rank = user.rank ?? index + 4;
+    const tied = tiedAt(rank);
     return (
       <View
         style={[
@@ -249,7 +265,7 @@ export default function Leaderboard() {
           user.isMe && { backgroundColor: colors.brandSoft, borderColor: colors.brand },
         ]}
         accessible
-        accessibilityLabel={`Rank ${rank}, ${user.isMe ? "you" : user.name}, ${user.points} points, ${spotsLabel(user.visited)} visited`}
+        accessibilityLabel={`Rank ${rank}${tied ? ", tied" : ""}, ${user.isMe ? "you" : user.name}, ${user.points} points, ${spotsLabel(user.visited)} visited`}
       >
         <View style={[styles.rankCoin, { backgroundColor: colors.brandSoft }]}>
           <Text style={[styles.rankCoinText, { color: colors.brand }]}>{rank}</Text>
@@ -267,7 +283,7 @@ export default function Leaderboard() {
             {user.name}{user.isMe ? " · You" : ""}
           </Text>
           <Text style={[styles.rowSub, { color: colors.textMuted }]} numberOfLines={1}>
-            {spotsLabel(user.visited)} visited
+            {spotsLabel(user.visited)} visited{tied ? " · Tied" : ""}
           </Text>
         </View>
 
@@ -287,8 +303,10 @@ export default function Leaderboard() {
 
   const myIndex = allUsers.findIndex((u) => u.isMe);
   const myEntry = myIndex >= 0 ? allUsers[myIndex] : meBelow;
-  const myRank  = myIndex >= 0 ? myIndex + 1 : meBelow?.rank ?? null;
-  const showMyRankBar = myRank != null && myRank > 3;
+  const myRank  = myEntry?.rank ?? (myIndex >= 0 ? myIndex + 1 : null);
+  // Shown whenever you're not on the podium. By position, not rank: tied
+  // with the third place, you can still be listed fourth.
+  const showMyRankBar = myRank != null && (myIndex < 0 || myIndex >= 3);
 
   return (
     <View style={[styles.fullScreen, { backgroundColor: colors.background }]}>
@@ -304,9 +322,12 @@ export default function Leaderboard() {
         <View style={styles.podiumRow}>
           {podiumVisual.map((user, i) => {
             if (!user) return <View key={i} style={{ flex: 1 }} />;
-            const rank  = podiumRanks[i];
-            const cfg   = PODIUM[rank];
-            const medal = MEDAL[rank];
+            // The step's height follows its place on the podium; the number
+            // and medal follow the rank, so two travelers tied for first both
+            // show a gold 1.
+            const cfg   = PODIUM[podiumRanks[i]];
+            const rank  = user.rank ?? podiumRanks[i];
+            const medal = MEDAL[rank] || MEDAL[3];
             return (
               <View key={user.id || i} style={styles.podiumCol}>
                 {rank === 1 && <Icon name="star" size={16} color={colors.accent} style={{ marginBottom: 4 }} />}
@@ -328,7 +349,7 @@ export default function Leaderboard() {
                 <View
                   style={[styles.podiumPts, { backgroundColor: colors.background }]}
                   accessible
-                  accessibilityLabel={`${user.points} points, ${spotsLabel(user.visited)} visited`}
+                  accessibilityLabel={`Rank ${rank}${tiedAt(rank) ? ", tied" : ""}, ${user.points} points, ${spotsLabel(user.visited)} visited`}
                 >
                   <Icon name="stars" size={10} color={colors.brand} weight="fill" />
                   <Text style={[styles.podiumPtsText, { color: colors.brandDark }]}>{ptsLabel(user.points)}</Text>

@@ -40,7 +40,7 @@ access. Start this first; everything else can happen during the 14 days.
 | Target audience | **13 and over** (matches the privacy policy and terms). Do not include under-13 ages, or Play's Families policy applies. |
 | News app / Health / Financial features / Government app | No / none / none / **No**. Libot is not an official government app; avoid wording in the listing that suggests it is. |
 | Data safety | See the table below. |
-| Account deletion | In the app: **Settings → Edit Profile → Request account deletion**, which opens the deletion link above. That page explains how to ask (by email) and what happens: the Clerk sign-in is deleted, and the account is archived, never erased (decided 2026-10-14). There is no button in the app that deletes the account itself. |
+| Account deletion | In the app: **Settings → Edit Profile → Delete account**: one confirmation, then the Clerk sign-in is deleted and the account is archived, never erased (decided 2026-10-14; in-app since the QA pass of 2026-10-16). Without the app, the deletion link above explains how to ask by email. |
 | Sensitive permissions | None to declare. The build no longer requests background location. |
 
 ### 3. Data safety answers

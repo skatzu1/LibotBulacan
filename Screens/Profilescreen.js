@@ -14,6 +14,8 @@ import {
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { useUser, useAuth } from "@clerk/clerk-expo";
+import { useAuth as useAppAuth } from "../context/AuthContext";
+import { showAlert } from "../components/AppAlert";
 import { useProfileImage } from "../context/ProfileImageContext";
 import { useTheme, fonts, typography } from "../context/ThemeContext";
 import { ScreenHeader, ListRow, LoadingState, Avatar, H_PAD, TAP } from "../components/ui";
@@ -29,6 +31,7 @@ export default function ProfileScreen() {
   const navigation                    = useNavigation();
   const { user: clerkUser, isLoaded } = useUser();
   const { getToken }                  = useAuth();
+  const { logout }                    = useAppAuth();
   const { profileImage }              = useProfileImage();
   const { colors }                    = useTheme();
   const { width: winWidth, height: winHeight } = useWindowDimensions();
@@ -124,6 +127,23 @@ export default function ProfileScreen() {
         useNativeDriver: true,
       }),
     ]).start(() => setPhotoModalVisible(false));
+  };
+
+  const handleLogout = () => {
+    showAlert("Log Out", "Are you sure you want to log out?", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Log Out",
+        style: "destructive",
+        onPress: async () => {
+          try {
+            await logout();
+          } catch {
+            showAlert("Error", "Failed to log out. Please try again.");
+          }
+        },
+      },
+    ]);
   };
 
   const displayPhoto = profileImage || userInfo.profilePhoto;
@@ -233,6 +253,17 @@ export default function ProfileScreen() {
         {menuItems.map((item) => (
           <ListRow key={item.id} icon={item.icon} title={item.title} subtitle={item.subtitle} onPress={item.onPress} />
         ))}
+
+        {/* On the profile itself, apart from the rest (QA 2026-10-16). It
+            used to sit at the bottom of Settings, one screen further in. */}
+        <ListRow
+          icon="log-out"
+          title="Log Out"
+          onPress={handleLogout}
+          danger
+          right={null}
+          style={styles.logout}
+        />
       </ScrollView>
 
       {/* ── Photo Modal ── */}
@@ -314,6 +345,8 @@ const styles = StyleSheet.create({
   statLabel:   { fontSize: 11, fontFamily: fonts.sansMedium, marginBottom: 4 },
   // Figures carry the serif, like the rank numerals and the rating summary.
   statCount:   { ...typography.display, fontSize: 28, lineHeight: 32 },
+
+  logout: { marginTop: 18 },
 
   // ── Modal ──
   modalBackdrop: {

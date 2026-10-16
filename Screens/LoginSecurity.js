@@ -11,7 +11,9 @@ import {
   ScreenHeader, HeaderAction, FormField, GroupLabel, LoadingState, H_PAD,
 } from "../components/ui";
 import Icon from "../components/Icon";
+import PasswordStrength from "../components/PasswordStrength";
 import KeyboardAvoider from "../components/KeyboardAvoider";
+import { strongPasswordError } from "../utils/authValidation";
 import useKeyboardAwareScroll from "../hooks/useKeyboardAwareScroll";
 
 export default function LoginSecurity({ navigation }) {
@@ -33,12 +35,10 @@ export default function LoginSecurity({ navigation }) {
       showAlert("Validation", "Please enter your current password.");
       return false;
     }
-    if (!pwNew) {
-      showAlert("Validation", "Please enter a new password.");
-      return false;
-    }
-    if (pwNew.length < 8) {
-      showAlert("Validation", "Password must be at least 8 characters.");
+    // Same rules as sign-up and Forgot Password: 3 of the 4 on the meter.
+    const weak = strongPasswordError(pwNew, "Please enter a new password.");
+    if (weak) {
+      showAlert("Choose a stronger password", weak.replace(" below", " under the new password"));
       return false;
     }
     if (pwNew !== pwConfirm) {
@@ -150,6 +150,7 @@ export default function LoginSecurity({ navigation }) {
             placeholder="At least 8 characters"
             secure
           />
+          <PasswordStrength password={pwNew} style={styles.strength} />
 
           <FormField
             label="Confirm new password"
@@ -184,4 +185,6 @@ const styles = StyleSheet.create({
   infoBanner:     { flexDirection: "row", borderRadius: radius.md, padding: spacing.md, marginBottom: spacing.md },
   infoIcon:       { marginRight: 8, marginTop: 3 },
   infoBannerText: { flex: 1 },
+  // Pulled up under its field, and clear of the next field's label.
+  strength:       { marginTop: -6, marginBottom: spacing.md },
 });
