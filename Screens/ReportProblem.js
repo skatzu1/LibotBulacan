@@ -98,11 +98,17 @@ const ReportProblem = ({ navigation }) => {
       if (status === 400 || status === 429) {
         showAlert("Couldn't send the report", body?.message || "Please try again.");
       } else {
-        // Not set up on the server yet, or no connection: send it by email.
+        // Anything else: send it by email. The first line says which failure
+        // it was, so a tester can tell "not set up" from "no connection".
+        const why =
+          body?.notConfigured ? "Sending reports from the app isn't switched on yet."
+          : !err?.response   ? "Couldn't reach the server. Check your connection."
+          : status === 401   ? "Your sign-in has expired. Log out and in again."
+          : "The server couldn't send the email just now.";
         setUseEmailInstead(true);
         showAlert(
           "Send it by email instead",
-          "The report couldn't be sent from the app just now. Use the email buttons below: your report is already written in the email.",
+          `${why} Use the email buttons below: your report is already written in the email.`,
         );
       }
     } finally {
