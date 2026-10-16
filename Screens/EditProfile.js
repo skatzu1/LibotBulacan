@@ -287,8 +287,8 @@ export default function EditProfile({ navigation }) {
   const confirmDeleteAccount = () => {
     showAlert(
       "Delete your account?",
-      "You'll be signed out and can't sign in with this account again. Your account is archived, not erased: "
-        + "your reviews, trips and badges are kept in Libot Bulacan's records and hidden from everyone. "
+      "Your account is deleted right away and you'll be signed out. A copy of your reviews, trips and "
+        + "badges is kept for Libot Bulacan's records, hidden from everyone. "
         + "You can make a new account with the same email later.",
       [
         { text: "Cancel", style: "cancel" },
@@ -378,7 +378,7 @@ export default function EditProfile({ navigation }) {
             <ListRow
               icon="user-x"
               title="Delete account"
-              subtitle="Signs you out. Your account is archived, not erased."
+              subtitle="Deletes your account and signs you out."
               onPress={deleting ? undefined : confirmDeleteAccount}
               danger
               right={deleting ? <ActivityIndicator size="small" color={colors.danger} /> : undefined}

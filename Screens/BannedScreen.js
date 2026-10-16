@@ -58,11 +58,11 @@ export default function BannedScreen({ banInfo }) {
         </View>
 
         <Text style={[typography.h1, s.center, { color: colors.textPrimary }]}>
-          {inactive ? 'Your account was archived' : 'Your account has been banned'}
+          {inactive ? 'Your account was deactivated' : 'Your account has been banned'}
         </Text>
         <Text style={[typography.body, s.center, { color: colors.textSecondary, marginTop: spacing.sm, marginBottom: spacing.xl }]}>
           {inactive
-            ? "You hadn't used Libot Bulacan for 30 days or more, so it was archived. Your trips, badges and points are kept. Ask below to have your account restored."
+            ? "You hadn't used Libot Bulacan for 30 days or more, so it was deactivated. Your trips, badges and points are kept. Ask below to have your account restored."
             : 'Your account was flagged and permanently banned following a report review by our admin team.'}
         </Text>
 
@@ -73,7 +73,7 @@ export default function BannedScreen({ banInfo }) {
             </Text>
             <Text style={[s.deadlineDays, { color: colors.warning }]}>{plural(daysLeft, 'day')}</Text>
             <Text style={[typography.caption, s.center, { color: colors.warning, marginTop: spacing.xs, lineHeight: 18 }]}>
-              Your account is archived, not deleted. After this period you can no longer appeal.
+              Your account is closed but kept until then, so you can appeal. After this period you can no longer appeal.
             </Text>
           </View>
         )}
@@ -95,8 +95,8 @@ export default function BannedScreen({ banInfo }) {
               {submitted
                 ? (inactive ? 'An admin will look at your request to restore your account.' : 'Your appeal is under review.')
                 : rejected
-                  ? `Your ${inactive ? 'request' : 'appeal'} was reviewed and declined. Your account stays archived.`
-                  : 'The time to appeal this ban has passed. Your account stays archived.'}
+                  ? `Your ${inactive ? 'request' : 'appeal'} was reviewed and declined. Your account stays ${inactive ? 'deactivated' : 'closed'}.`
+                  : 'The time to appeal this ban has passed. Your account stays closed.'}
             </Text>
           </View>
         ) : (
