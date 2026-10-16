@@ -1,19 +1,21 @@
 // Screens/ReportProblem.js
 //
 // Settings → Report a Problem. Two questions (what kind of problem, what
-// happened), then it opens an email to support@libotbulacan.com with all of it
-// written, plus the app version and phone model. The person sends it from
-// their own email, so the developers can simply reply.
+// happened), then Send: the server emails it to the developers at
+// support@libotbulacan.com, with the app version and phone model, and with
+// Reply-To set to the email this account signed up with, so the developers
+// can simply reply (backend routes/support.js).
 //
-// It used to open a bare mailto: link straight away. On a phone with no mail
-// app set up, Android offered to open it in something else and the user got a
-// blank page. So the email app is the first way to send, and if that fails the
-// screen shows the address (long-press to copy) and offers Gmail in the
-// browser, which works on any phone signed in to Google.
+// QA 2026-10-16: "use the email used in the registration … submit agad". This
+// used to write an email for the person to send from Gmail or their mail app.
+// That is now only the fallback, for when the server can't send (no SMTP login
+// set up yet, or offline): the old buttons appear, and if there is no mail app
+// the address can be copied.
 //
 // These reports are about the APP (crashes, sign-in, installing), not about a
 // spot or a review: those are reported from the spot's page and go to the
-// admins. The website's Report a problem (LibotWeb report.js) works the same.
+// admins. The website's Report a problem (LibotWeb report.js) still writes an
+// email.
 import React, { useMemo, useState } from "react";
 import {
   View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity,
@@ -21,12 +23,14 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import Constants from "expo-constants";
-import { showAlert } from "../components/AppAlert";
+import { useUser } from "@clerk/clerk-expo";
+import { showAlert, showToast } from "../components/AppAlert";
 import { useTheme, fonts, typography } from "../context/ThemeContext";
 import { ScreenHeader, GroupLabel, PrimaryButton, H_PAD } from "../components/ui";
 import { SUPPORT_EMAIL } from "../utils/legalLinks";
 import KeyboardAvoider from "../components/KeyboardAvoider";
 import useKeyboardAwareScroll from "../hooks/useKeyboardAwareScroll";
+import api from "../api";
 
 const CATEGORIES = [
   { key: "bug",     label: "Something isn't working" },
@@ -37,6 +41,10 @@ const CATEGORIES = [
   { key: "spot",    label: "Wrong details about a spot" },
   { key: "other",   label: "Something else" },
 ];
+
+// The server refuses anything outside these (routes/support.js REPORT_MIN/MAX).
+const MIN_CHARS = 10;
+const MAX_CHARS = 1000;
 
 // What the developers need to reproduce a problem, without asking for it.
 function deviceDetails() {
@@ -52,16 +60,58 @@ const ReportProblem = ({ navigation }) => {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const kb = useKeyboardAwareScroll();
+  const { user: clerkUser } = useUser();
+  const accountEmail = clerkUser?.primaryEmailAddress?.emailAddress || "";
 
   const [category, setCategory] = useState("bug");
   const [message, setMessage] = useState("");
   const [focused, setFocused] = useState(false);
+  const [sending, setSending] = useState(false);
+  // The server couldn't send: offer the email app / Gmail, as before.
+  const [useEmailInstead, setUseEmailInstead] = useState(false);
   const [mailFailed, setMailFailed] = useState(false);
 
   const device = useMemo(deviceDetails, []);
+  const count = message.trim().length;
+  const nearLimit = message.length >= MAX_CHARS * 0.9;
 
+  const label = CATEGORIES.find((c) => c.key === category)?.label || "Something else";
+
+  const ready = () => {
+    if (count < MIN_CHARS) {
+      showAlert("A little more, please", "Tell us what you were doing and what went wrong.");
+      return false;
+    }
+    return true;
+  };
+
+  const send = async () => {
+    if (!ready() || sending) return;
+    setSending(true);
+    try {
+      await api.post("/api/support/report", { category, message: message.trim(), device });
+      showToast(accountEmail ? `Report sent. We'll reply to ${accountEmail}.` : "Report sent. Thank you!", { type: "success" });
+      navigation.goBack();
+    } catch (err) {
+      const status = err?.response?.status;
+      const body = err?.response?.data;
+      if (status === 400 || status === 429) {
+        showAlert("Couldn't send the report", body?.message || "Please try again.");
+      } else {
+        // Not set up on the server yet, or no connection: send it by email.
+        setUseEmailInstead(true);
+        showAlert(
+          "Send it by email instead",
+          "The report couldn't be sent from the app just now. Use the email buttons below: your report is already written in the email.",
+        );
+      }
+    } finally {
+      setSending(false);
+    }
+  };
+
+  // ── Fallback: an email the person sends themselves ──
   const compose = () => {
-    const label = CATEGORIES.find((c) => c.key === category)?.label || "Something else";
     const subject = `Libot Bulacan problem: ${label}`;
     const body = [
       message.trim(),
@@ -75,17 +125,9 @@ const ReportProblem = ({ navigation }) => {
     return { subject, body };
   };
 
-  const ready = () => {
-    if (message.trim().length < 10) {
-      showAlert("A little more, please", "Tell us what you were doing and what went wrong.");
-      return null;
-    }
-    return compose();
-  };
-
   const openEmailApp = async () => {
-    const m = ready();
-    if (!m) return;
+    if (!ready()) return;
+    const m = compose();
     const url = `mailto:${SUPPORT_EMAIL}?subject=${encodeURIComponent(m.subject)}&body=${encodeURIComponent(m.body)}`;
     try {
       await Linking.openURL(url);
@@ -95,8 +137,8 @@ const ReportProblem = ({ navigation }) => {
   };
 
   const openGmailWeb = async () => {
-    const m = ready();
-    if (!m) return;
+    if (!ready()) return;
+    const m = compose();
     const url = "https://mail.google.com/mail/?view=cm&fs=1" +
       `&to=${encodeURIComponent(SUPPORT_EMAIL)}` +
       `&su=${encodeURIComponent(m.subject)}` +
@@ -120,8 +162,8 @@ const ReportProblem = ({ navigation }) => {
         contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 40 }]}
       >
         <Text style={[typography.body, { color: colors.textSecondary }]}>
-          This goes to the Libot Bulacan developers at {SUPPORT_EMAIL}. For wrong details about a
-          spot, choose that below and name the spot. A bad review? Use Report on the review itself.
+          This goes straight to the Libot Bulacan developers. For wrong details about a spot, choose
+          that below and name the spot. A bad review? Use Report on the review itself.
         </Text>
 
         <GroupLabel style={styles.label}>What kind of problem?</GroupLabel>
@@ -166,18 +208,39 @@ const ReportProblem = ({ navigation }) => {
           onBlur={() => setFocused(false)}
           placeholder="What were you doing, and what went wrong?"
           placeholderTextColor={colors.placeholder}
-          maxLength={4000}
+          maxLength={MAX_CHARS}
           textAlignVertical="top"
           accessibilityLabel="What happened"
+          accessibilityHint={`Up to ${MAX_CHARS} characters`}
         />
+        <View style={styles.countRow}>
+          <Text style={[typography.caption, { color: count > 0 && count < MIN_CHARS ? colors.warning : colors.textMuted }]}>
+            {count > 0 && count < MIN_CHARS ? `At least ${MIN_CHARS} characters` : " "}
+          </Text>
+          <Text
+            style={[styles.count, { color: nearLimit ? colors.warning : colors.textMuted }]}
+            accessibilityLabel={`${message.length} of ${MAX_CHARS} characters`}
+          >
+            {message.length}/{MAX_CHARS}
+          </Text>
+        </View>
 
         <Text style={[typography.caption, styles.note, { color: colors.textMuted }]}>
-          Your email opens with this written for you, plus your app version ({device.appVersion})
-          and phone model. Add a screenshot there if you have one, then press send.
+          {accountEmail
+            ? `Sent from your account's email, ${accountEmail}, so we can reply to you there. `
+            : ""}
+          Your app version ({device.appVersion}) and phone model are added for us.
         </Text>
 
-        <PrimaryButton title="Write the email" icon="mail" onPress={openEmailApp} />
-        <PrimaryButton title="Use Gmail in the browser" icon="globe" variant="secondary" onPress={openGmailWeb} style={styles.second} />
+        <PrimaryButton title="Send report" icon="send" onPress={send} loading={sending} />
+
+        {useEmailInstead && (
+          <View style={styles.emailBox}>
+            <Text style={[typography.bodyStrong, { color: colors.textPrimary }]}>Or send it by email</Text>
+            <PrimaryButton title="Write the email" icon="mail" variant="secondary" onPress={openEmailApp} style={styles.second} />
+            <PrimaryButton title="Use Gmail in the browser" icon="globe" variant="secondary" onPress={openGmailWeb} style={styles.second} />
+          </View>
+        )}
 
         {mailFailed && (
           <View style={[styles.fallback, { backgroundColor: colors.card, borderColor: colors.cardBorder }]} accessibilityLiveRegion="polite">
@@ -204,7 +267,10 @@ const styles = StyleSheet.create({
   radioDot:   { width: 10, height: 10, borderRadius: 5 },
   optionText: { fontSize: 14.5, fontFamily: fonts.sans, flexShrink: 1 },
   message:    { marginTop: 10, borderRadius: 14, borderWidth: 1, padding: 14, minHeight: 140, fontSize: 15, fontFamily: fonts.sans, lineHeight: 21 },
-  note:       { marginTop: 14, marginBottom: 16 },
+  countRow:   { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginTop: 6, paddingHorizontal: 4 },
+  count:      { fontFamily: fonts.sansSemi, fontSize: 12.5 },
+  note:       { marginTop: 10, marginBottom: 16 },
+  emailBox:   { marginTop: 22, gap: 0 },
   second:     { marginTop: 10 },
   fallback:   { marginTop: 16, padding: 16, borderRadius: 14, borderWidth: 1, gap: 6 },
   address:    { fontSize: 16, fontFamily: fonts.sansSemi, marginTop: 4 },

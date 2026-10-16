@@ -20,8 +20,8 @@ const BULACAN_MUNICIPALITIES = [...TOWNS, "I don't live in Bulacan"];
  *
  * Same bg.png backdrop as screen 1 so the pair reads as one piece, with the
  * municipality picker as a card-coloured pill. Theme colours throughout, so it
- * follows light/dark like the rest of the app. All of the original gating logic is
- * unchanged: a selection is required, "I don't live in Bulacan" is refused, and
+ * follows light/dark like the rest of the app. A selection is required,
+ * "I don't live in Bulacan" is refused (the app is for residents only), and
  * the choice plus the hasSeenWelcome flag are persisted before Login.
  */
 export default function WelcomePage2({ navigation }) {
@@ -38,11 +38,14 @@ export default function WelcomePage2({ navigation }) {
       showAlert("Select your municipality", "Choose where you live in Bulacan to continue.");
       return;
     }
+    // "Residents and visitors" contradicted the refusal itself: a visitor
+    // from outside Bulacan picks this and is turned away (QA 2026-10-16).
     if (isNotBulacan) {
       showAlert(
-        "App Not Available",
-        "Sorry, this app is designed for residents and visitors of Bulacan only.",
-        [{ text: "OK" }]
+        "For Bulacan residents only",
+        "Sorry, Libot Bulacan is for residents of Bulacan only.",
+        [{ text: "OK" }],
+        { tone: "info", icon: "map-pin" }
       );
       return;
     }
@@ -99,7 +102,7 @@ export default function WelcomePage2({ navigation }) {
 
           {isNotBulacan && (
             <Text style={styles.warning} maxFontSizeMultiplier={MAX_FONT_SCALE}>
-              This app is only available for Bulacan residents and visitors.
+              Libot Bulacan is for residents of Bulacan only.
             </Text>
           )}
         </View>

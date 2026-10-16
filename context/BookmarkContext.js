@@ -1,6 +1,7 @@
 import React, { createContext, useState, useContext, useCallback, useEffect } from 'react';
 import { useAuth } from '@clerk/clerk-expo';
 import { BASE_URL } from "../api";
+import { showToast } from "../components/AppAlert";
 
 const BookmarkContext = createContext();
 export const useBookmark = () => useContext(BookmarkContext);
@@ -176,13 +177,20 @@ export const BookmarkProvider = ({ children }) => {
       return bookmarkedSpotId === String(spot._id);
     });
 
-    console.log(`Toggle bookmark for ${spot.name} (currently: ${alreadyBookmarked ? "bookmarked": "not bookmarked"})`);
-
+    // A toast either way, from every place a bookmark is toggled (spot page,
+    // Saved, category lists). The icon alone changing was easy to miss
+    // (QA 2026-10-16). Shown at once, like the icon (both are optimistic);
+    // a failure says so and the icon rolls back.
     if (alreadyBookmarked) {
-      return await removeBookmark(spot._id);
-    } else {
-      return await addBookmark(spot);
+      showToast("Removed from Saved", { type: "info" });
+      const ok = await removeBookmark(spot._id);
+      if (!ok) showToast("Couldn't remove the bookmark. Try again.", { type: "error" });
+      return ok;
     }
+    showToast("Saved. Find it in the Saved tab.", { type: "success" });
+    const ok = await addBookmark(spot);
+    if (!ok) showToast("Couldn't save the bookmark. Try again.", { type: "error" });
+    return ok;
   }, [bookmarks, addBookmark, removeBookmark]);
 
   return (

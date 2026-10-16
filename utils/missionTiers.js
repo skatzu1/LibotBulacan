@@ -26,6 +26,17 @@ export const ARRIVAL_POINTS = 10;
 
 export const isMajor = (mission) => MAJOR_TYPES.has(mission?.type);
 
+/**
+ * How far along a spot's Bakit List is: { done, total }. Arriving counts as
+ * the first item (it isn't a Mission document), then each mission. The spot
+ * page's progress bar and the Bakit List quick action's "2/5" both use this.
+ */
+export function spotProgress(missions = [], completedMissionIds = [], arrived = false) {
+  const completed = new Set((completedMissionIds || []).map(String));
+  const done = (arrived ? 1 : 0) + missions.filter((m) => completed.has(String(m._id))).length;
+  return { done, total: 1 + missions.length };
+}
+
 /** Splits a spot's missions into { major, minor }, each in `order` order. */
 export function splitByTier(missions = []) {
   const sorted = [...missions].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));

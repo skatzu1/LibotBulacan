@@ -23,6 +23,7 @@ import { useIsFocused } from '@react-navigation/native';
 import { useAuth } from '@clerk/clerk-expo';
 import { loadModel, runPrediction } from '../utils/missionAI';
 import { ensureAtSpotForPhoto, currentCoords } from '../utils/arLocationGate';
+import { ensureCameraAccess } from '../utils/cameraAccess';
 import * as Haptics from "expo-haptics";
 import { useTheme, fonts, typography } from '../context/ThemeContext';
 import { useMissions } from '../context/MissionContext';
@@ -264,7 +265,7 @@ export default function Mission({ navigation, route }) {
   // Where the phone was when the camera opened — the fallback if a fresh fix
   // can't be had at the moment the photo is taken.
   const photoCoordsRef = useRef(null);
-  const { hasPermission, requestPermission } = useCameraPermission();
+  const { hasPermission } = useCameraPermission();
   const isFocused = useIsFocused();
   const [cameraOpen, setCameraOpen]     = useState(false);
   const [capturedImage, setCapturedImage] = useState(null);
@@ -318,13 +319,9 @@ export default function Mission({ navigation, route }) {
   }, []);
 
   const openCamera = async () => {
-    if (!hasPermission) {
-      const granted = await requestPermission();
-      if (!granted) {
-        showAlert('Camera Required', 'Camera access is needed to spot this one.');
-        return;
-      }
-    }
+    // Asks the phone's permission prompt if it hasn't been answered, and
+    // explains a refusal with a way to Settings (utils/cameraAccess.js).
+    if (!hasPermission && !(await ensureCameraAccess('to take mission photos'))) return;
     // The photo only counts if it's taken at the spot (the server checks the
     // position sent with it), so say so now rather than after the photo.
     if (checkingSpot) return;

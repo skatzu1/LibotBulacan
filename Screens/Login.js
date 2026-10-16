@@ -19,12 +19,13 @@ import { captureError } from "../utils/crashReporter";
 import { useTheme, fonts, MAX_FONT_SCALE } from "../context/ThemeContext";
 import AuthScaffold, { useAuthStyles, FieldError, FormError } from "../components/AuthScaffold";
 import {
-  emailError as checkEmail, requiredPasswordError, newPasswordError, confirmPasswordError,
+  emailError as checkEmail, requiredPasswordError, strongPasswordError, confirmPasswordError,
   codeError as checkCode, clerkErrorToField, NETWORK_ERROR,
   cleanEmail, digitsOnly, EMAIL_MAX,
   GOOGLE_BUSY, googleWindowBusy, googleWindowClosed, googleErrorMessage,
 } from "../utils/authValidation";
 import Icon from "../components/Icon";
+import PasswordStrength from "../components/PasswordStrength";
 
 // Full-screen background for sign-in and forgot-password. It already carries
 // the app's cyan→yellow wash, so nothing is layered over it but the form.
@@ -117,9 +118,11 @@ function ForgotPasswordModal({ visible, onClose, signIn }) {
 
   // Step 2 — verify OTP + set new password
   const handleResetPassword = async () => {
+    // The same rules as sign-up (3 of the 4 on the meter below). It used to
+    // take any 8 characters (QA 2026-10-16).
     const next = {
       code:     checkCode(code),
-      password: newPasswordError(newPassword),
+      password: strongPasswordError(newPassword, "Enter a new password."),
       confirm:  confirmPasswordError(newPassword, confirmPassword),
     };
     setErrors(next);
@@ -255,6 +258,7 @@ function ForgotPasswordModal({ visible, onClose, signIn }) {
                 </TouchableOpacity>
               </View>
               <FieldError>{errors.password}</FieldError>
+              <PasswordStrength password={newPassword} />
             </View>
 
             <View>

@@ -71,9 +71,12 @@ function confirm(title, message, confirmText = "Start anyway") {
 
 /**
  * @param {object} spot  the spot the user wants to view in AR
+ * @param {object} [opts]
+ * @param {Function} [opts.onDirections]  offered as "Get directions" when the
+ *   user is too far away
  * @returns {Promise<boolean>}  true -> caller should launch AR, false -> don't
  */
-export async function ensureAtSpotForAR(spot) {
+export async function ensureAtSpotForAR(spot, { onDirections } = {}) {
   const name = spot?.name || "this spot";
   const dest = getSpotCoords(spot);
 
@@ -111,11 +114,20 @@ export async function ensureAtSpotForAR(spot) {
     dest.lng
   );
 
+  // Known to be away from the spot: AR doesn't open. There used to be a
+  // "Start anyway" here, which only led to a camera with nothing in it
+  // (QA 2026-10-16: just Cancel when you aren't there).
   if (dist > AR_RANGE_METERS) {
-    return confirm(
+    showAlert(
       `You're not at ${name}`,
-      `You're about ${formatAway(dist)} away. The AR experience only works when you're physically at the spot — the models are anchored to real locations there. Head over and try again once you've arrived.`
+      `You're about ${formatAway(dist)} away. AR only works at the spot itself, because the models are pinned to real places there. Come back to AR View once you've arrived.`,
+      [
+        { text: "Cancel", style: "cancel" },
+        ...(onDirections ? [{ text: "Get directions", onPress: onDirections }] : []),
+      ],
+      { tone: "warning", icon: "map-pin" }
     );
+    return false;
   }
 
   return true;

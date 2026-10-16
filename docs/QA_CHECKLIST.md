@@ -23,22 +23,27 @@ https://developers.google.com/ar/devices). Add an iPhone when iOS is in scope.
 - [ ] Location prompt: Libot explains first; Android offers only "While using the app" / "Only this time" / "Don't allow". There is **no "Allow all the time"** request anywhere.
 - [ ] Deny location: the app still works; spots list, reviews and profile load.
 - [ ] Deny camera: missions explain what is needed instead of crashing.
+- [ ] Camera prompt (fresh install, Android and iPhone): the phone's own "Allow camera" prompt appears before the photo-mission camera, the profile photo camera, the review photo camera and AR View. "Don't allow" → an explanation with Open Settings, no crash.
+- [ ] Sign-up asks first, middle (optional) and last name, municipality, email, password, then date of birth (typed or from the calendar). Under 13 is refused. "Continue with Google" needs the municipality and date of birth first.
 
 **Core journeys**
 - [ ] Arrive at a spot (or test at the spot's coordinates): arrival alert, +10 points once. Leave and return: no second award.
 - [ ] Complete each mission type (photo, location, AR) at one spot.
-- [ ] Post, react to, report and delete a review. A muted account cannot post.
-- [ ] Leaderboard, badges, previous trips, bookmarks all load.
+- [ ] Post, react to, report and delete a review. A muted account cannot post. Before visiting a spot its reviews can be read but the box says "Visit to write a review"; a review is at most 250 characters.
+- [ ] Leaderboard, badges, previous trips, bookmarks all load. Equal points show the same rank. Badges and Previous Trips can be searched.
+- [ ] Bookmarking or un-bookmarking a spot shows a toast.
 - [ ] Directions on the Track screen draw a route.
-- [ ] Settings → Privacy / Terms / Help open the web pages.
-- [ ] Settings → Edit Profile → Request account deletion opens libotbulacan.com/delete-account in the browser. There is no button that deletes the account in the app.
+- [ ] Settings → Privacy / Terms / Help open the web pages. Report a Problem sends from the app (a toast names the account email); About Libot Bulacan is the last row.
+- [ ] Profile → Log Out (bottom of the Profile screen).
+- [ ] Edit Profile → Save stays on the screen with a "Profile updated" toast. Delete account → one confirmation → signed out; the account is archived (admin panel), not erased.
 
 **Network**
 - [ ] Airplane mode: the offline banner appears; Retry keeps it; reconnecting shows "Back online" and it disappears.
 - [ ] First launch after the server has been idle (free Render plan): screens wait rather than fail. (Paid plan: no wait.)
 
 **AR**
-- [ ] ARCore phone: model places on a surface; trail order is respected.
+- [ ] ARCore phone: model places on a surface; trail order is respected. Each model's card reads "The story, part n of N".
+- [ ] Away from the spot, AR View doesn't open: only Cancel and Get directions.
 - [ ] Non-ARCore phone: "AR isn't available on this phone" card, with a way back.
 - [ ] Radar arrow is steady when still and follows a turn without lag; near a laptop or car the label shows the figure-8 calibration prompt.
 

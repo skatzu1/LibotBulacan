@@ -22,7 +22,7 @@ import RNShare from "react-native-share";
 import * as Haptics from "expo-haptics";
 import { useTheme, fonts, typography } from "../context/ThemeContext";
 import {
-  ScreenHeader, Segmented, EmptyState, ErrorState, LoadingState, PrimaryButton,
+  ScreenHeader, Segmented, EmptyState, ErrorState, LoadingState, PrimaryButton, SearchField,
 } from "../components/ui";
 import { useArrival } from "../context/ArrivalContext";
 import { BASE_URL } from "../api";
@@ -72,6 +72,7 @@ export default function BadgeScreen() {
   const [refreshing, setRefreshing]     = useState(false);
   const [error, setError]               = useState(null);
   const [filter, setFilter]             = useState("all");
+  const [query, setQuery]               = useState("");
   const [selectedBadge, setSelectedBadge] = useState(null);
   const [modalVisible, setModalVisible]   = useState(false);
   const [sharing, setSharing]             = useState(null); // "link" | "image" | null
@@ -152,11 +153,21 @@ export default function BadgeScreen() {
   const claimedCount = useMemo(() => badges.filter((b) => b.claimed).length, [badges]);
   const lockedCount  = badges.length - claimedCount;
 
+  // The filter, then the search (QA 2026-10-16): a badge matches on its own
+  // name, its description, or the name or town of its spot.
+  const q = query.trim().toLowerCase();
   const visibleBadges = useMemo(() => {
-    if (filter === "claimed") return badges.filter((b) => b.claimed);
-    if (filter === "locked")  return badges.filter((b) => !b.claimed);
-    return badges;
-  }, [badges, filter]);
+    const byFilter =
+      filter === "claimed" ? badges.filter((b) => b.claimed)
+      : filter === "locked" ? badges.filter((b) => !b.claimed)
+      : badges;
+    if (!q) return byFilter;
+    return byFilter.filter((b) =>
+      [b.name, b.description, b.spotId?.name, b.spotId?.city]
+        .filter(Boolean)
+        .some((f) => String(f).toLowerCase().includes(q))
+    );
+  }, [badges, filter, q]);
 
   const openBadge = (badge) => {
     // Opening a badge you actually earned is the reward moment of the whole
@@ -411,6 +422,8 @@ export default function BadgeScreen() {
         columnWrapperStyle={styles.row}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
+        keyboardShouldPersistTaps="handled"
+        keyboardDismissMode="on-drag"
         // Virtualization tuning — grid cells are small/cheap, so a modest
         // window keeps memory bounded even if the catalog grows past 50+.
         windowSize={7}
@@ -428,6 +441,16 @@ export default function BadgeScreen() {
         ListHeaderComponent={
           <>
             {error && <ErrorState text={error} onRetry={onRefresh} style={styles.errorBox} />}
+
+            {badges.length > 0 && (
+              <SearchField
+                value={query}
+                onChangeText={setQuery}
+                onClear={() => setQuery("")}
+                placeholder="Search badges or spots"
+                style={styles.search}
+              />
+            )}
 
             {badges.length > 0 && (
               <Segmented
@@ -449,6 +472,8 @@ export default function BadgeScreen() {
               title="No badges yet"
               text="Arrive at a spot in person to earn its badge."
             />
+          ) : !error && q && visibleBadges.length === 0 ? (
+            <EmptyState icon="search" text="No badge matches that. Try a spot or town name." />
           ) : !error && visibleBadges.length === 0 ? (
             <EmptyState
               icon={filter === "claimed" ? "target" : "check-circle"}
@@ -664,6 +689,7 @@ const styles = StyleSheet.create({
   scrollContent: { paddingHorizontal: H_GUTTER / 2, paddingTop: 8, flexGrow: 1 },
   row: { justifyContent: "flex-start", gap: GRID_GAP, marginBottom: GRID_GAP },
 
+  search:    { marginBottom: 12 },
   filterBar: { marginBottom: 16 },
   errorBox:  { marginBottom: 16 },
 

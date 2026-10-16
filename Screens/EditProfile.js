@@ -1,20 +1,21 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import {
   View, Text, StyleSheet, TouchableOpacity, ScrollView,
-  ActivityIndicator, Linking,
+  ActivityIndicator,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { showAlert, showToast } from "../components/AppAlert";
 import { useUser, useAuth } from "@clerk/clerk-expo";
 import ImageCropPicker from "react-native-image-crop-picker";
+import { useAuth as useAppAuth } from "../context/AuthContext";
 import { useProfileImage } from "../context/ProfileImageContext";
 import { useTheme, fonts, typography } from "../context/ThemeContext";
 import {
   ScreenHeader, HeaderAction, FormField, GroupLabel, ListRow, LoadingState, Avatar, H_PAD,
 } from "../components/ui";
-import { BASE_URL } from "../api";
-import { DELETE_ACCOUNT_URL } from "../utils/legalLinks";
-import { cleanName, nameError } from "../utils/authValidation";
+import api, { BASE_URL } from "../api";
+import { cleanName, nameError, middleNameError } from "../utils/authValidation";
+import { afterAlertCloses, ensureCameraAccess, explainPickerError } from "../utils/cameraAccess";
 import Icon from "../components/Icon";
 import KeyboardAvoider from "../components/KeyboardAvoider";
 import useKeyboardAwareScroll from "../hooks/useKeyboardAwareScroll";
@@ -58,11 +59,15 @@ export default function EditProfile({ navigation }) {
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const kb = useKeyboardAwareScroll();
-  // Set just before leaving after a successful save, so the unsaved-changes
-  // guard below doesn't fire on the way out.
+  const { logout } = useAppAuth();
+  // Set just before the account is deleted and the app signs out, so the
+  // unsaved-changes guard below doesn't fire on the way out.
   const leavingRef = useRef(false);
 
   const [firstName, setFirstName]           = useState("");
+  // Optional. Clerk has no field for it, so it lives in the account's unsafe
+  // metadata (the server copies it), like the municipality from sign-up.
+  const [middleName, setMiddleName]         = useState("");
   const [lastName, setLastName]             = useState("");
   const [avatar, setAvatar]                 = useState(null);
   const [newLocalAvatar, setNewLocalAvatar] = useState(null);
@@ -70,19 +75,24 @@ export default function EditProfile({ navigation }) {
   const [removeAvatar, setRemoveAvatar]     = useState(false);
   const [saving, setSaving]                 = useState(false);
   const [pickingImage, setPickingImage]     = useState(false);
+  const [deleting, setDeleting]             = useState(false);
 
-  const [originalFirstName, setOriginalFirstName] = useState("");
-  const [originalLastName, setOriginalLastName]   = useState("");
+  const [originalFirstName, setOriginalFirstName]   = useState("");
+  const [originalMiddleName, setOriginalMiddleName] = useState("");
+  const [originalLastName, setOriginalLastName]     = useState("");
 
   const isGoogleUser = !(clerkUser?.passwordEnabled ?? false);
 
   useEffect(() => {
     if (!isLoaded || !clerkUser) return;
     const fn = clerkUser.firstName || "";
+    const mn = typeof clerkUser.unsafeMetadata?.middleName === "string" ? clerkUser.unsafeMetadata.middleName : "";
     const ln = clerkUser.lastName  || "";
     setFirstName(fn);
+    setMiddleName(mn);
     setLastName(ln);
     setOriginalFirstName(fn);
+    setOriginalMiddleName(mn);
     setOriginalLastName(ln);
     setAvatar(profileImage || clerkPhoto(clerkUser));
   }, [isLoaded, clerkUser]);
@@ -92,11 +102,12 @@ export default function EditProfile({ navigation }) {
   }, [profileImage]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const hasChanges = useMemo(() => {
-    const nameChanged   = firstName.trim() !== originalFirstName.trim() ||
-                          lastName.trim()  !== originalLastName.trim();
+    const nameChanged   = firstName.trim()  !== originalFirstName.trim() ||
+                          middleName.trim() !== originalMiddleName.trim() ||
+                          lastName.trim()   !== originalLastName.trim();
     const avatarChanged = !!newLocalAvatar || removeAvatar;
     return nameChanged || avatarChanged;
-  }, [firstName, lastName, originalFirstName, originalLastName, newLocalAvatar, removeAvatar]);
+  }, [firstName, middleName, lastName, originalFirstName, originalMiddleName, originalLastName, newLocalAvatar, removeAvatar]);
 
   useEffect(() => {
     const unsubscribe = navigation.addListener("beforeRemove", (e) => {
@@ -144,9 +155,13 @@ export default function EditProfile({ navigation }) {
     cropperToolbarTitle: "Adjust Photo",
   };
 
+  // Opened from the Camera / Gallery choice, which is an AppAlert: wait for it
+  // to close, and for the camera, make sure the app may use it (utils/cameraAccess.js).
   const launchPicker = async (source) => {
     setPickingImage(true);
     try {
+      await afterAlertCloses();
+      if (source === "camera" && !(await ensureCameraAccess("to take your profile photo"))) return;
       const result = source === "camera"
         ? await ImageCropPicker.openCamera(cropperOptions)
         : await ImageCropPicker.openPicker(cropperOptions);
@@ -157,19 +172,18 @@ export default function EditProfile({ navigation }) {
         setRemoveAvatar(false);
       }
     } catch (err) {
-      if (err?.code !== "E_PICKER_CANCELLED") {
-        console.error("[EditProfile] Image pick error:", err);
-        showAlert("Error", "Could not select image. Please try again.");
-      }
+      if (err?.code !== "E_PICKER_CANCELLED") console.error("[EditProfile] Image pick error:", err);
+      explainPickerError(err, "Couldn't use that photo");
     } finally {
       setPickingImage(false);
     }
   };
 
-  // Same name rules as sign-up. The last name may be left blank.
+  // Same name rules as sign-up. The middle and last name may be left blank.
   const validate = () => {
     const problem =
       nameError(firstName, "your first name") ||
+      middleNameError(middleName) ||
       (lastName.trim() ? nameError(lastName, "your last name") : null);
     if (problem) {
       showAlert("Check your name", problem);
@@ -189,7 +203,11 @@ export default function EditProfile({ navigation }) {
         finalImageUrl = await uploadImageToCloudinary(newLocalAvatar, token);
       }
 
-      await clerkUser.update({ firstName: firstName.trim(), lastName: lastName.trim() });
+      await clerkUser.update({
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
+        unsafeMetadata: { ...(clerkUser.unsafeMetadata || {}), middleName: middleName.trim() },
+      });
 
       // Removing has to clear Clerk's copy too (for a Google sign-in that's the
       // Google photo): the server falls back to it wherever ours is empty.
@@ -207,6 +225,7 @@ export default function EditProfile({ navigation }) {
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
         body: JSON.stringify({
           firstName:    firstName.trim(),
+          middleName:   middleName.trim(),
           lastName:     lastName.trim(),
           profileImage: imageToSave,
         }),
@@ -224,14 +243,17 @@ export default function EditProfile({ navigation }) {
       setNewLocalAvatar(null);
       setRemoveAvatar(false);
 
-      // The saved values are the new baseline. Without this the name still
-      // differed from the ORIGINAL one, so tapping OK on "Success" was met with
-      // "Discard changes? You have unsaved changes".
+      // The saved values are the new baseline, so Save greys out again and
+      // leaving afterwards doesn't ask "Discard changes?".
+      setFirstName(firstName.trim());
+      setMiddleName(middleName.trim());
+      setLastName(lastName.trim());
       setOriginalFirstName(firstName.trim());
+      setOriginalMiddleName(middleName.trim());
       setOriginalLastName(lastName.trim());
-      leavingRef.current = true;
+      // Stays on this screen with a toast (QA 2026-10-16); it used to jump
+      // back to the profile, so the change couldn't be checked here.
       showToast("Profile updated", { type: "success" });
-      navigation.goBack();
     } catch (err) {
       console.error("[EditProfile] Save error:", err);
       showAlert("Error", err?.errors?.[0]?.longMessage || err?.message || "Failed to update profile.");
@@ -240,16 +262,40 @@ export default function EditProfile({ navigation }) {
     }
   };
 
-  // There is no delete button: the app only opens the website's deletion page,
-  // which explains how to ask (by email) and what happens: the sign-in is
-  // deleted, the account itself is archived, never erased. App stores look
-  // for a way to request deletion from inside the app; this is that way.
-  const handleRequestDeletion = async () => {
+  // Delete account, right here (QA 2026-10-16: a prompt, not a trip to the
+  // website). One confirmation, then the server does what an emailed request
+  // used to: the sign-in is deleted and the account is archived, never erased
+  // (backend POST /api/users/me/archive). Then the app signs out.
+  const deleteAccount = async () => {
+    setDeleting(true);
     try {
-      await Linking.openURL(DELETE_ACCOUNT_URL);
-    } catch {
-      showAlert("Couldn't open the page", `Go to ${DELETE_ACCOUNT_URL} in your browser.`);
+      const { data } = await api.post("/api/users/me/archive");
+      if (!data?.success) throw new Error(data?.message);
+      leavingRef.current = true;
+      showToast("Your account was deleted.", { type: "success" });
+      await logout();
+    } catch (err) {
+      showAlert(
+        "Couldn't delete your account",
+        err?.response?.data?.message || "Check your connection and try again.",
+      );
+    } finally {
+      setDeleting(false);
     }
+  };
+
+  const confirmDeleteAccount = () => {
+    showAlert(
+      "Delete your account?",
+      "You'll be signed out and can't sign in with this account again. Your account is archived, not erased: "
+        + "your reviews, trips and badges are kept in Libot Bulacan's records and hidden from everyone. "
+        + "You can make a new account with the same email later.",
+      [
+        { text: "Cancel", style: "cancel" },
+        { text: "Delete account", style: "destructive", onPress: deleteAccount },
+      ],
+      { tone: "danger", icon: "user-x" },
+    );
   };
 
   const fullName = `${firstName} ${lastName}`.trim() || "User";
@@ -315,8 +361,9 @@ export default function EditProfile({ navigation }) {
 
           <View style={styles.section}>
             <GroupLabel>Personal info</GroupLabel>
-            <FormField label="First name" icon="user" value={firstName} onChangeText={(v) => setFirstName(cleanName(v))} placeholder="First name" autoCapitalize="words" />
-            <FormField label="Last name"  icon="user" value={lastName}  onChangeText={(v) => setLastName(cleanName(v))}  placeholder="Last name"  autoCapitalize="words" />
+            <FormField label="First name"  icon="user" value={firstName}  onChangeText={(v) => setFirstName(cleanName(v))}  placeholder="First name" autoCapitalize="words" />
+            <FormField label="Middle name" icon="user" value={middleName} onChangeText={(v) => setMiddleName(cleanName(v))} placeholder="Optional"   autoCapitalize="words" />
+            <FormField label="Last name"   icon="user" value={lastName}   onChangeText={(v) => setLastName(cleanName(v))}   placeholder="Last name"  autoCapitalize="words" />
             <FormField
               label="Email"
               icon="mail"
@@ -330,11 +377,12 @@ export default function EditProfile({ navigation }) {
             <GroupLabel>Your data</GroupLabel>
             <ListRow
               icon="user-x"
-              title="Request account deletion"
-              subtitle="Opens libotbulacan.com"
-              onPress={handleRequestDeletion}
-              right={<Icon name="arrow-up-right" size={18} color={colors.textMuted} />}
-              accessibilityLabel="Request account deletion. Opens a web page."
+              title="Delete account"
+              subtitle="Signs you out. Your account is archived, not erased."
+              onPress={deleting ? undefined : confirmDeleteAccount}
+              danger
+              right={deleting ? <ActivityIndicator size="small" color={colors.danger} /> : undefined}
+              accessibilityLabel="Delete account"
             />
           </View>
         </ScrollView>
