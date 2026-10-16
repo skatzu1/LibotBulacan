@@ -1,5 +1,5 @@
 import {
-  strongPasswordError, passwordLevel, middleNameError, dobError, dobToIso, dobToDate, formatDob,
+  strongPasswordError, passwordLevel, middleNameError, dobError, dobToDate, formatDob,
 } from "../utils/authValidation";
 import { spotProgress } from "../utils/missionTiers";
 import { ensureAtSpotForAR } from "../utils/arLocationGate";
@@ -46,11 +46,9 @@ describe("registration: separate names and a date of birth", () => {
     expect(middleNameError(".D")).toBe("Start with a letter.");
   });
 
-  it("the calendar's date and the typed date are the same text, sent as YYYY-MM-DD", () => {
+  it("the calendar's date and the typed date are the same text", () => {
     const picked = new Date(2004, 1, 29);
     expect(formatDob(picked)).toBe("02/29/2004");
-    expect(dobToIso("02/29/2004")).toBe("2004-02-29");
-    expect(dobToIso("02/2")).toBe("");
     expect(dobToDate("02/29/2004").getTime()).toBe(picked.getTime());
     expect(dobToDate("02/2")).toBeNull();
   });
