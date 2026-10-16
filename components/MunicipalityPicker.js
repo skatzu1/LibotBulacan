@@ -12,6 +12,9 @@ import Icon from "./Icon";
  * municipalities. Built on React Native's own Modal, so no new native module
  * (and no new app build just for a picker library).
  *
+ * The last row, "I don't live in Bulacan", picks nothing: it explains the app
+ * is for residents only (the refusal the welcome screen used to give).
+ *
  * `ref.current.focus()` opens it, so the form's "jump to the first problem"
  * works here the same as on a text field.
  */
@@ -25,11 +28,12 @@ const MunicipalityPicker = forwardRef(function MunicipalityPicker(
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const [open, setOpen] = useState(false);
+  const [outside, setOutside] = useState(false);
 
   useImperativeHandle(ref, () => ({ focus: () => !disabled && setOpen(true) }), [disabled]);
 
-  const close = () => { setOpen(false); onClose?.(); };
-  const pick = (m) => { onChange(m); setOpen(false); onClose?.(); };
+  const close = () => { setOpen(false); setOutside(false); onClose?.(); };
+  const pick = (m) => { onChange(m); close(); };
   const initialIndex = Math.max(0, BULACAN_MUNICIPALITIES.indexOf(value) - 3);
 
   return (
@@ -93,6 +97,29 @@ const MunicipalityPicker = forwardRef(function MunicipalityPicker(
                 </TouchableOpacity>
               );
             }}
+            ListFooterComponent={
+              <View style={[styles.outside, { borderTopColor: colors.divider }]}>
+                <TouchableOpacity
+                  style={styles.outsideRow}
+                  onPress={() => setOutside(true)}
+                  accessibilityRole="button"
+                  accessibilityLabel="I don't live in Bulacan"
+                >
+                  <Text style={[styles.outsideText, { color: colors.danger }]} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+                    I don't live in Bulacan
+                  </Text>
+                </TouchableOpacity>
+                {outside && (
+                  <Text
+                    style={[styles.outsideNote, { color: colors.textSecondary }]}
+                    accessibilityLiveRegion="polite"
+                    maxFontSizeMultiplier={MAX_FONT_SCALE}
+                  >
+                    Sorry, Libot Bulacan is for residents of Bulacan only.
+                  </Text>
+                )}
+              </View>
+            }
           />
         </View>
       </Modal>
@@ -123,4 +150,9 @@ const styles = StyleSheet.create({
   },
   rowText:         { fontFamily: fonts.sansMedium, fontSize: 15.5 },
   rowTextSelected: { fontFamily: fonts.sansBold },
+
+  outside:     { marginTop: 10, borderTopWidth: 1 },
+  outsideRow:  { minHeight: ROW_H, paddingHorizontal: 24, justifyContent: "center" },
+  outsideText: { fontFamily: fonts.sansSemi, fontSize: 15.5 },
+  outsideNote: { fontFamily: fonts.sansMedium, fontSize: 14, lineHeight: 20, paddingHorizontal: 24, paddingBottom: 12 },
 });

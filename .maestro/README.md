@@ -21,7 +21,7 @@ Run a single flow with `maestro test .maestro/03-offline.yaml -e …`.
 
 | File | Checks |
 |---|---|
-| `01-sign-in.yaml` | Fresh install → welcome screens → municipality → sign in → Home |
+| `01-sign-in.yaml` | Fresh install → welcome screen → sign in → Home |
 | `02-browse-spot.yaml` | Search for a spot and open its page |
 | `03-offline.yaml` | Airplane mode shows the offline banner; reconnecting shows "Back online" |
 | `04-location-foreground-only.yaml` | The app never asks for "Allow all the time" location |

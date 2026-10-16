@@ -4,20 +4,30 @@ import {
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
+import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useTheme, typography, fonts, shadow, MAX_FONT_SCALE } from "../context/ThemeContext";
 
 /*
- * Onboarding, screen 1 of 2.
+ * Onboarding: the one welcome screen, shown once before sign-in.
  *
  * bg.png (Bulacan landmarks, shared with the sign-in and sign-up screens), an
- * oversized headline with two words picked out in the accent yellow, page
- * dots, and the yellow Next button. Colours are the app's theme tokens: in
- * dark mode the photo sits under the same dark veil as the sign-in screens.
+ * oversized headline with two words picked out in the accent yellow, and the
+ * yellow Next button. Colours are the app's theme tokens: in dark mode the
+ * photo sits under the same dark veil as the sign-in screens.
+ *
+ * Where the traveler lives is asked on the sign-up form (Register.js), not
+ * here; a second welcome screen used to ask it (until 2026-10-16).
  */
 export default function WelcomePage({ navigation }) {
   const insets = useSafeAreaInsets();
   const { colors, isDark } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
+
+  const handleNext = () => {
+    // If the flag can't be saved, the welcome screen just shows again next time.
+    AsyncStorage.setItem("hasSeenWelcome", "true").catch(() => {});
+    navigation.navigate("Login");
+  };
 
   return (
     <View style={styles.screen}>
@@ -51,26 +61,15 @@ export default function WelcomePage({ navigation }) {
           </Text>
         </View>
 
-        <View style={styles.bottom}>
-          <View
-            style={styles.dots}
-            accessibilityElementsHidden
-            importantForAccessibility="no-hide-descendants"
-          >
-            <View style={[styles.dot, styles.dotActive]} />
-            <View style={styles.dot} />
-          </View>
-
-          <TouchableOpacity
-            style={styles.cta}
-            onPress={() => navigation.navigate("WelcomePage2")}
-            activeOpacity={0.88}
-            accessibilityRole="button"
-            accessibilityLabel="Next — choose where you live"
-          >
-            <Text style={styles.ctaText}>Next</Text>
-          </TouchableOpacity>
-        </View>
+        <TouchableOpacity
+          style={styles.cta}
+          onPress={handleNext}
+          activeOpacity={0.88}
+          accessibilityRole="button"
+          accessibilityLabel="Next — continue to sign in"
+        >
+          <Text style={styles.ctaText}>Next</Text>
+        </TouchableOpacity>
       </View>
     </View>
   );
@@ -96,11 +95,6 @@ const makeStyles = (c) => StyleSheet.create({
     textShadowRadius: 12,
   },
   accentWord: { color: c.accent },
-
-  bottom: { gap: 22 },
-  dots:      { flexDirection: "row", gap: 9, alignSelf: "center" },
-  dot:       { width: 9, height: 9, borderRadius: 5, backgroundColor: "#FFFFFF" },
-  dotActive: { backgroundColor: c.accent },
 
   // The app's primary button.
   cta: {
