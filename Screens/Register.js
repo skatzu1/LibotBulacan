@@ -19,7 +19,7 @@ import { useTheme, fonts, MAX_FONT_SCALE } from "../context/ThemeContext";
 import { TERMS_URL as TERMS_OF_SERVICE_URL, PRIVACY_URL as PRIVACY_POLICY_URL } from "../utils/legalLinks";
 import AuthScaffold, { useAuthStyles, FieldError, FormError } from "../components/AuthScaffold";
 import {
-  nameError, middleNameError, emailError, dobError, dobToIso, strongPasswordError, confirmPasswordError,
+  nameError, middleNameError, emailError, dobError, strongPasswordError, confirmPasswordError,
   clerkErrorToField, DISPOSABLE_EMAIL_ERROR,
   cleanName, cleanEmail, NAME_MAX, EMAIL_MAX,
   GOOGLE_BUSY, googleWindowBusy, googleWindowClosed, googleErrorMessage,
@@ -177,10 +177,11 @@ export default function Register({ navigation }) {
   };
 
   // What the server copies onto the account (Clerk unsafe metadata → the
-  // backend's utils/signUpDetails.js).
+  // backend's utils/signUpDetails.js). Not the date of birth: it is only for
+  // the age check here on the phone, and the Privacy Policy says it is not
+  // sent to us or stored.
   const signUpDetails = () => ({
     municipality,
-    birthdate: dobToIso(dob),
     ...(middleName.trim() ? { middleName: middleName.trim() } : {}),
   });
 

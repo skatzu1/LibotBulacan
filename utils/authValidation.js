@@ -143,12 +143,6 @@ export const dobToDate = (dob) => {
   return Number.isNaN(date.getTime()) ? null : date;
 };
 
-/** MM/DD/YYYY → "YYYY-MM-DD", the form the server stores (Clerk metadata). */
-export const dobToIso = (dob) => {
-  const digits = String(dob || "").replace(/\D/g, "");
-  return digits.length === 8 ? `${digits.slice(4, 8)}-${digits.slice(0, 2)}-${digits.slice(2, 4)}` : "";
-};
-
 export const DISPOSABLE_EMAIL_ERROR =
   "Temporary email addresses can't be used. Use an inbox you'll keep, like Gmail or Yahoo.";
 
