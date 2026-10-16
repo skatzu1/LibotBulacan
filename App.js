@@ -51,7 +51,6 @@ import { useFonts } from "expo-font";
 
 // Screens
 import WelcomePage        from "./Screens/WelcomePage";
-import WelcomePage2       from "./Screens/WelcomePage2";
 import Login              from "./Screens/Login";
 import Register           from "./Screens/Register";
 import EmailVerification  from "./Screens/EmailVerification";
@@ -291,10 +290,7 @@ function AppNavigator() {
                         ) : (
                           <>
                             {!hasSeenWelcome && (
-                              <>
-                                <Stack.Screen name="WelcomePage"  component={WelcomePage} />
-                                <Stack.Screen name="WelcomePage2" component={WelcomePage2} />
-                              </>
+                              <Stack.Screen name="WelcomePage" component={WelcomePage} />
                             )}
                             <Stack.Screen name="Login"             component={Login}             options={{ gestureEnabled: false }} />
                             <Stack.Screen name="Register"          component={Register} />

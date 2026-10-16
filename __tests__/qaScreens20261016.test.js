@@ -64,10 +64,13 @@ describe("Register", () => {
     expect(tree.getByLabelText("Pick your date of birth from a calendar")).toBeTruthy();
   });
 
-  it("prefills the municipality chosen on the welcome screen", async () => {
-    await AsyncStorage.setItem("userMunicipality", "Malolos");
+  it("asks the municipality itself and turns away people outside Bulacan", async () => {
     const tree = wrap(<Register navigation={{ navigate: jest.fn() }} />);
-    expect(await tree.findByText("Malolos")).toBeTruthy();
+    fireEvent.press(await tree.findByLabelText("Choose your municipality"));
+    fireEvent.press(tree.getByLabelText("I don't live in Bulacan"));
+    expect(tree.getByText("Sorry, Libot Bulacan is for residents of Bulacan only.")).toBeTruthy();
+    fireEvent.press(tree.getByLabelText("Bocaue"));
+    expect(tree.getByLabelText("Municipality, Bocaue. Change")).toBeTruthy();
   });
 
   it("formats a typed date of birth as MM/DD/YYYY", async () => {
@@ -76,6 +79,18 @@ describe("Register", () => {
     const dob = tree.getByLabelText("Date of birth, month slash day slash year");
     fireEvent.changeText(dob, "05172000");
     expect(tree.getByDisplayValue("05/17/2000")).toBeTruthy();
+  });
+});
+
+describe("Welcome", () => {
+  const WelcomePage = require("../Screens/WelcomePage").default;
+
+  it("goes straight to sign-in; the municipality is asked on sign-up", async () => {
+    const navigate = jest.fn();
+    const tree = wrap(<WelcomePage navigation={{ navigate }} />);
+    fireEvent.press(await tree.findByLabelText("Next — continue to sign in"));
+    expect(navigate).toHaveBeenCalledWith("Login");
+    await waitFor(async () => expect(await AsyncStorage.getItem("hasSeenWelcome")).toBe("true"));
   });
 });
 

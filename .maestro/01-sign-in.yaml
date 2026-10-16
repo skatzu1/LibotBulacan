@@ -5,10 +5,6 @@ name: Sign in from a fresh install
     clearState: true
 - assertVisible: "Next"
 - tapOn: "Next"
-- assertVisible: "Where do you live?"
-- tapOn: "Select your municipality"
-- tapOn: "Malolos"
-- tapOn: "Next"
 - tapOn: "Email address"
 - inputText: ${LIBOT_EMAIL}
 - tapOn: "Password"

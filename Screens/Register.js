@@ -25,11 +25,10 @@ import {
   GOOGLE_BUSY, googleWindowBusy, googleWindowClosed, googleErrorMessage,
 } from "../utils/authValidation";
 import Icon from "../components/Icon";
-import AsyncStorage from "@react-native-async-storage/async-storage";
 import MunicipalityPicker from "../components/MunicipalityPicker";
 import PasswordStrength from "../components/PasswordStrength";
 import DobField from "../components/DobField";
-import { municipalityError, normalizeMunicipality } from "../utils/municipalities";
+import { municipalityError } from "../utils/municipalities";
 
 // Same full-screen background as sign-in; it carries its own cyan→yellow wash.
 const REGISTER_BG = require("../assets/bg.png");
@@ -106,7 +105,6 @@ export default function Register({ navigation }) {
   const [firstName, setFirstName]         = useState("");
   const [middleName, setMiddleName]       = useState("");
   const [lastName, setLastName]           = useState("");
-  // Prefilled from the second welcome screen's choice when the phone has it.
   const [municipality, setMunicipality]   = useState("");
   const [email, setEmail]                 = useState("");
   const [password, setPassword]           = useState("");
@@ -145,15 +143,6 @@ export default function Register({ navigation }) {
     if (serverErrors[field]) setServerErrors((prev) => ({ ...prev, [field]: null }));
     if (formError) setFormError("");
   };
-
-  useEffect(() => {
-    AsyncStorage.getItem("userMunicipality")
-      .then((saved) => {
-        const m = normalizeMunicipality(saved);
-        if (m) setMunicipality((current) => current || m);
-      })
-      .catch(() => {});
-  }, []);
 
   useEffect(() => {
     WebBrowser.warmUpAsync();
@@ -327,8 +316,8 @@ export default function Register({ navigation }) {
       {nameField("lastName", lastName, setLastName, "LAST NAME", "Last name",
         () => inputRefs.municipality.current?.focus(), "name-family")}
 
-      {/* Home municipality: every traveler is asked, Google sign-ups included.
-          Prefilled from the welcome screen's choice. */}
+      {/* Home municipality: asked here and only here (no longer on a welcome
+          screen), so every traveler answers it, Google sign-ups included. */}
       <View>
         <MunicipalityPicker
           ref={inputRefs.municipality}
