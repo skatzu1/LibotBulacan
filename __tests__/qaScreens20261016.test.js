@@ -33,6 +33,7 @@ jest.mock("../api", () => ({
   authAPI: { register: jest.fn(), isDisposableEmail: jest.fn(async () => false) },
 }));
 jest.mock("../components/AppAlert", () => ({ showAlert: jest.fn(), showToast: jest.fn() }));
+const { showAlert } = require("../components/AppAlert");
 
 const metrics = { frame: { x: 0, y: 0, width: 390, height: 844 }, insets: { top: 47, left: 0, right: 0, bottom: 34 } };
 const wrap = (ui) => render(
@@ -67,8 +68,15 @@ describe("Register", () => {
   it("asks the municipality itself and turns away people outside Bulacan", async () => {
     const tree = wrap(<Register navigation={{ navigate: jest.fn() }} />);
     fireEvent.press(await tree.findByLabelText("Choose your municipality"));
+    // A popup, once the list has closed (an iPhone won't show it over the sheet).
     fireEvent.press(tree.getByLabelText("I don't live in Bulacan"));
-    expect(tree.getByText("Sorry, Libot Bulacan is for residents of Bulacan only.")).toBeTruthy();
+    await waitFor(() => expect(showAlert).toHaveBeenCalledWith(
+      "For Bulacan residents only",
+      "Sorry, Libot Bulacan is for residents of Bulacan only.",
+      expect.anything(),
+      expect.anything(),
+    ));
+    fireEvent.press(tree.getByLabelText("Choose your municipality"));
     fireEvent.press(tree.getByLabelText("Bocaue"));
     expect(tree.getByLabelText("Municipality, Bocaue. Change")).toBeTruthy();
   });

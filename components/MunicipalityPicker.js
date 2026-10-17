@@ -5,6 +5,7 @@ import { useTheme, fonts, typography, radius, MAX_FONT_SCALE } from "../context/
 import { useAuthStyles } from "./AuthScaffold";
 import { BULACAN_MUNICIPALITIES } from "../utils/municipalities";
 import Icon from "./Icon";
+import { showAlert } from "./AppAlert";
 
 /*
  * The sign-up form's "which municipality do you live in" dropdown. Looks like
@@ -12,13 +13,16 @@ import Icon from "./Icon";
  * municipalities. Built on React Native's own Modal, so no new native module
  * (and no new app build just for a picker library).
  *
- * The last row, "I don't live in Bulacan", picks nothing: it explains the app
- * is for residents only (the refusal the welcome screen used to give).
+ * The last row, "I don't live in Bulacan", picks nothing: the sheet closes and
+ * a popup explains the app is for residents only (the refusal the welcome
+ * screen used to give).
  *
  * `ref.current.focus()` opens it, so the form's "jump to the first problem"
  * works here the same as on a text field.
  */
 const ROW_H = 52;
+// Long enough for the sheet's slide-down (animationType "slide").
+const SHEET_CLOSE_MS = 450;
 
 const MunicipalityPicker = forwardRef(function MunicipalityPicker(
   { value, onChange, onClose, invalid, disabled },
@@ -28,12 +32,25 @@ const MunicipalityPicker = forwardRef(function MunicipalityPicker(
   const { colors } = useTheme();
   const insets = useSafeAreaInsets();
   const [open, setOpen] = useState(false);
-  const [outside, setOutside] = useState(false);
 
   useImperativeHandle(ref, () => ({ focus: () => !disabled && setOpen(true) }), [disabled]);
 
-  const close = () => { setOpen(false); setOutside(false); onClose?.(); };
+  const close = () => { setOpen(false); onClose?.(); };
   const pick = (m) => { onChange(m); close(); };
+
+  // The sheet goes first: an iPhone won't show the popup (its own Modal) over
+  // a sheet that is still open, so it waits for the slide-down to finish.
+  const notResident = () => {
+    close();
+    setTimeout(() => {
+      showAlert(
+        "For Bulacan residents only",
+        "Sorry, Libot Bulacan is for residents of Bulacan only.",
+        [{ text: "OK" }],
+        { tone: "info", icon: "map-pin" },
+      );
+    }, SHEET_CLOSE_MS);
+  };
   const initialIndex = Math.max(0, BULACAN_MUNICIPALITIES.indexOf(value) - 3);
 
   return (
@@ -101,7 +118,7 @@ const MunicipalityPicker = forwardRef(function MunicipalityPicker(
               <View style={[styles.outside, { borderTopColor: colors.divider }]}>
                 <TouchableOpacity
                   style={styles.outsideRow}
-                  onPress={() => setOutside(true)}
+                  onPress={notResident}
                   accessibilityRole="button"
                   accessibilityLabel="I don't live in Bulacan"
                 >
@@ -109,15 +126,6 @@ const MunicipalityPicker = forwardRef(function MunicipalityPicker(
                     I don't live in Bulacan
                   </Text>
                 </TouchableOpacity>
-                {outside && (
-                  <Text
-                    style={[styles.outsideNote, { color: colors.textSecondary }]}
-                    accessibilityLiveRegion="polite"
-                    maxFontSizeMultiplier={MAX_FONT_SCALE}
-                  >
-                    Sorry, Libot Bulacan is for residents of Bulacan only.
-                  </Text>
-                )}
               </View>
             }
           />
@@ -154,5 +162,4 @@ const styles = StyleSheet.create({
   outside:     { marginTop: 10, borderTopWidth: 1 },
   outsideRow:  { minHeight: ROW_H, paddingHorizontal: 24, justifyContent: "center" },
   outsideText: { fontFamily: fonts.sansSemi, fontSize: 15.5 },
-  outsideNote: { fontFamily: fonts.sansMedium, fontSize: 14, lineHeight: 20, paddingHorizontal: 24, paddingBottom: 12 },
 });
