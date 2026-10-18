@@ -36,22 +36,26 @@ export const BookmarkProvider = ({ children }) => {
       if (!res.ok) throw new Error(`Failed to fetch bookmarks: ${res.status}`);
 
       const data = await res.json();
-      
+
       if (data.success) {
         setBookmarks(data.bookmarks || []);
       } else {
-        setBookmarks([]);
+        throw new Error(data.message || "Failed to fetch bookmarks");
       }
     } catch (err) {
+      // Keep what's shown. This used to empty the list, so a slow or failed
+      // request — including the re-sync after every save — made every saved
+      // spot disappear until the next load that worked.
       console.error("Error fetching bookmarks:", err);
-      setBookmarks([]);
     } finally {
       setLoading(false);
     }
   }, [userId, getToken]);
 
-  // Fetch bookmarks only when user loads (not in other functions)
+  // Another account (or none): start from an empty list, then load theirs.
+  // A failed fetch keeps the list, so this is what clears the last account's.
   useEffect(() => {
+    setBookmarks([]);
     if (isLoaded && userId) {
       fetchBookmarks();
     }

@@ -35,6 +35,7 @@ import {
 import Logo from "../components/Logo";
 import HomeTour, { tourTarget } from "../components/HomeTour";
 import { BASE_URL } from "../api";
+import { showToast } from "../components/AppAlert";
 import { clerkPhoto } from "../utils/image";
 
 import Bookmark      from "./Bookmark";
@@ -283,22 +284,29 @@ function HomeContent({ profilePhoto, navigation }) {
         if (d.success) {
           setTopSpots(d.spots);
           setTopError(false);
-        } else setTopError(true);
+          return true;
+        }
+        setTopError(true);
+        return false;
       })
       // A failed request is not an empty collection. Without this the screen
       // said "No visits yet — be the first to explore!" when the backend was
       // simply unreachable (which, on a cold Render dyno, it often is).
-      .catch(() => setTopError(true));
+      .catch(() => { setTopError(true); return false; });
   }, []);
 
   useEffect(() => { loadTopSpots().finally(() => setTopLoading(false)); }, [loadTopSpots]);
 
   useFocusEffect(useCallback(() => { refreshPoints(); }, [refreshPoints]));
 
+  // Spots already on screen stay when a pull fails (see topError below); the
+  // toast is what says it didn't work.
   const onRefresh = useCallback(() => {
     setRefreshing(true);
-    loadTopSpots().finally(() => setRefreshing(false));
-  }, [loadTopSpots]);
+    loadTopSpots()
+      .then((ok) => { if (!ok && topSpots.length > 0) showToast("Couldn't refresh. Check your connection.", { type: "error" }); })
+      .finally(() => setRefreshing(false));
+  }, [loadTopSpots, topSpots.length]);
 
   const Wrap = reduceMotion ? View : Animated.View;
   const anim = (i) => (reduceMotion ? {} : { entering: stagger(i) });
@@ -501,7 +509,7 @@ function HomeContent({ profilePhoto, navigation }) {
                       <Skeleton width={cardW} height={150} radius={radius.card} />
                     </View>
                   </View>
-                ) : topError ? (
+                ) : topError && topSpots.length === 0 ? (
                   <ErrorState
                     text="Couldn't load the most-visited spots."
                     onRetry={() => {

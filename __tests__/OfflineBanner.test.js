@@ -61,13 +61,13 @@ describe("OfflineBanner", () => {
     let ended;
     act(() => { ended = readStarted(); });
     act(() => jest.advanceTimersByTime(3900));
-    expect(screen.queryByText(/Waking up the server/)).toBeNull(); // a normal wait says nothing
+    expect(screen.queryByText(/Still loading/)).toBeNull(); // a normal wait says nothing
     act(() => jest.advanceTimersByTime(200));
-    expect(screen.getByText(/Waking up the server/)).toBeTruthy();
+    expect(screen.getByText(/Still loading/)).toBeTruthy();
 
     act(() => ended());
     act(() => jest.advanceTimersByTime(500));
-    expect(screen.queryByText(/Waking up the server/)).toBeNull();
+    expect(screen.queryByText(/Still loading/)).toBeNull();
   });
 
   it("says offline, not slow, when both are true", async () => {
@@ -77,7 +77,7 @@ describe("OfflineBanner", () => {
     act(() => mockEmit({ isConnected: false, isInternetReachable: false }));
     act(() => jest.advanceTimersByTime(5000));
     expect(screen.getByText(/You're offline/)).toBeTruthy();
-    expect(screen.queryByText(/Waking up the server/)).toBeNull();
+    expect(screen.queryByText(/Still loading/)).toBeNull();
     act(() => ended());
   });
 

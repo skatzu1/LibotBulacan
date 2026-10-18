@@ -137,7 +137,9 @@ export default function OfflineBanner() {
           {offline
             ? "You're offline. Spots, missions and reviews need a connection."
             : showWaking
-              ? "Waking up the server. The first load can take up to a minute."
+              // Can't tell which it is: a weak signal or the free server
+              // waking up both look like a read that hasn't answered yet.
+              ? "Still loading. A slow connection or a waking server can take up to a minute."
               : "Back online"}
         </Text>
         {offline && (

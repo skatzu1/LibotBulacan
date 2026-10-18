@@ -51,7 +51,7 @@ it("still explains a slow server without NetInfo", async () => {
   let ended;
   act(() => { ended = readStarted(); });
   act(() => jest.advanceTimersByTime(4100));
-  expect(screen.getByText(/Waking up the server/)).toBeTruthy();
+  expect(screen.getByText(/Still loading/)).toBeTruthy();
   act(() => ended());
   jest.useRealTimers();
 });

@@ -14,6 +14,8 @@ export const MissionProvider = ({ children }) => {
   const [completedMissions, setCompletedMissions] = useState([]);
   const fetchedSpots = useRef(new Set());
 
+  // Resolves false when the request failed; true or undefined otherwise
+  // (undefined: already loaded, or another call is loading it).
   const fetchMissions = useCallback(async (spotId) => {
     if (!spotId) return;
     if (fetchedSpots.current.has(spotId)) return;
@@ -27,13 +29,16 @@ export const MissionProvider = ({ children }) => {
 
       if (data.success) {
         setMissionsBySpot((prev) => ({ ...prev, [spotId]: data.missions }));
+        return true;
       } else {
         console.warn("fetchMissions: server returned success=false", data.message);
         fetchedSpots.current.delete(spotId);
+        return false;
       }
     } catch (err) {
       console.error("Error fetching missions:", err);
       fetchedSpots.current.delete(spotId);
+      return false;
     }
   }, []);
 
@@ -58,12 +63,18 @@ export const MissionProvider = ({ children }) => {
     (spotId) => missionsBySpot[spotId] || [],
     [missionsBySpot]
   );
+  // Whether the spot's missions have loaded (an empty list counts).
+  const hasMissionsFor = useCallback(
+    (spotId) => missionsBySpot[spotId] !== undefined,
+    [missionsBySpot]
+  );
 
   // Pull to refresh on the spot page. The current list stays on screen until
   // the new one arrives, and stays if the request fails; it used to be
   // cleared first, so a refresh on a bad signal emptied the missions.
+  // Resolves whether it worked.
   const refetchMissions = useCallback(async (spotId) => {
-    if (!spotId) return;
+    if (!spotId) return false;
     try {
       const res = await fetch(
         `${BASE_URL}/api/missions/${spotId}`
@@ -72,9 +83,12 @@ export const MissionProvider = ({ children }) => {
       if (data.success) {
         fetchedSpots.current.add(spotId);
         setMissionsBySpot((prev) => ({ ...prev, [spotId]: data.missions }));
+        return true;
       }
+      return false;
     } catch (err) {
       console.error("Error refetching missions:", err);
+      return false;
     }
   }, []);
 
@@ -139,6 +153,7 @@ export const MissionProvider = ({ children }) => {
       value={{
         fetchMissions,
         getMissionsForSpot,
+        hasMissionsFor,
         refetchMissions,
         completedMissions,
         completeMission,

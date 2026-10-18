@@ -32,20 +32,24 @@ export const ReviewProvider = ({ children }) => {
     fetchModerationStatus();
   }, [isLoaded, isSignedIn]);
 
+  // Resolves true once the spot's reviews are in, false when they couldn't be
+  // loaded (the ones already held stay).
   const fetchReviews = useCallback(async (spotId) => {
-    if (!spotId) return;
+    if (!spotId) return false;
     try {
       const res = await api.get(`/api/reviews/${spotId}`);
       const data = res.data;
       if (data.success) {
         setReviewsBySpot((prev) => ({ ...prev, [spotId]: data.reviews || [] }));
         setError(null);
+        return true;
       } else {
         throw new Error(data.message || "Failed to fetch reviews");
       }
     } catch (err) {
       console.error("Error fetching reviews:", err);
       setError(err.message);
+      return false;
     }
   }, []);
 
@@ -221,6 +225,9 @@ export const ReviewProvider = ({ children }) => {
   }, []);
 
   const getReviewsForSpot = useCallback((spotId) => reviewsBySpot[spotId] || [], [reviewsBySpot]);
+  // Whether the spot's reviews have loaded (an empty list counts) — until then
+  // getReviewsForSpot's [] means "not here yet", not "no reviews".
+  const hasReviewsFor     = useCallback((spotId) => reviewsBySpot[spotId] !== undefined, [reviewsBySpot]);
   // From the spot's reviews once they are loaded (its page loads them, and so
   // does posting or deleting one), so a new review counts at once; before that,
   // from `listed` — the spot's ratingAvg / ratingCount in the spot list.
@@ -257,7 +264,7 @@ export const ReviewProvider = ({ children }) => {
     <ReviewContext.Provider value={{
       reviewsBySpot, error, moderationStatus,
       fetchReviews, addReview, reportReview, reportSpot, reactToReview, fetchModerationStatus,
-      getReviewsForSpot, getAverageRating, getReviewCount, deleteReview,
+      getReviewsForSpot, hasReviewsFor, getAverageRating, getReviewCount, deleteReview,
     }}>
       {children}
     </ReviewContext.Provider>

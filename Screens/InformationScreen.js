@@ -20,12 +20,12 @@ import { useTheme, radius, shadow, fonts, typography, MAX_FONT_SCALE } from "../
 import ModelViewer from "../utils/ModelViewer";
 import { ensureAtSpotForAR, spotHasAR } from "../utils/arLocationGate";
 import { afterAlertCloses, ensureCameraAccess, explainPickerError } from "../utils/cameraAccess";
-import InformationSkeleton from "../components/InformationSkeleton";
+import Skeleton from "../components/Skeleton";
 import KeyboardAvoider from "../components/KeyboardAvoider";
 import usePullToRefresh from "../hooks/usePullToRefresh";
 import api from "../api";
 import {
-  PhotoScrim, Segmented, EmptyState, PrimaryButton, Avatar, SearchField, H_PAD, TAP,
+  PhotoScrim, Segmented, EmptyState, ErrorState, PrimaryButton, Avatar, SearchField, H_PAD, TAP,
 } from "../components/ui";
 import { spotImage, cdn, clerkPhoto } from "../utils/image";
 import {
@@ -544,7 +544,9 @@ export default function InformationScreen({ route, navigation }) {
   const [reviewPageIndex,  setReviewPageIndex]  = useState(0);
   const [reviewPhotos,     setReviewPhotos]     = useState([]);   // [{ uri, mime }] for the review being written
   const [viewer,           setViewer]           = useState(null); // { photos, index } while the full-screen viewer is open
-  const [screenReady,      setScreenReady]      = useState(false);
+  // This spot's reviews / missions couldn't be loaded (shown only while none are held).
+  const [reviewsFailed,    setReviewsFailed]    = useState(false);
+  const [missionsFailed,   setMissionsFailed]   = useState(false);
   const [reportTarget,     setReportTarget]     = useState(null);
   const [showReportModal,  setShowReportModal]  = useState(false);
   const [reportReason,     setReportReason]     = useState("");
@@ -560,8 +562,8 @@ export default function InformationScreen({ route, navigation }) {
   const bodyY = useRef(0);
   const { user: clerkUser } = useUser();
   const { isBookmarked, toggleBookmark } = useBookmark();
-  const { getReviewsForSpot, addReview, reportReview, reportSpot, reactToReview, getAverageRating, getReviewCount, fetchReviews, deleteReview } = useReviews();
-  const { fetchMissions, refetchMissions, getMissionsForSpot, completedMissions } = useMissions();
+  const { getReviewsForSpot, hasReviewsFor, addReview, reportReview, reportSpot, reactToReview, getAverageRating, getReviewCount, fetchReviews, deleteReview } = useReviews();
+  const { fetchMissions, refetchMissions, getMissionsForSpot, hasMissionsFor, completedMissions } = useMissions();
   const { hasVisited, refresh: refreshPoints } = usePoints();
   const { profileImage } = useProfileImage();
   const isFocused = useIsFocused();
@@ -588,12 +590,27 @@ export default function InformationScreen({ route, navigation }) {
   // "Arrive at the spot" is ticked from the visit logs, so re-read them when
   // the user comes back here — e.g. from navigating to the spot.
   useEffect(() => { if (isFocused) refreshPoints(); }, [isFocused, refreshPoints]);
+  // The page opens at once with the spot it was handed; its reviews and
+  // missions load into their own sections. The whole page used to wait for
+  // both behind a skeleton — on a slow signal, up to a minute of nothing.
   useEffect(() => {
-    if (spot?._id) {
-      setScreenReady(false);
-      Promise.all([fetchReviews(spot._id), fetchMissions(spot._id)]).finally(() => setScreenReady(true));
-    }
+    if (!spot?._id) return undefined;
+    let live = true;
+    setReviewsFailed(false);
+    setMissionsFailed(false);
+    fetchReviews(spot._id).then((ok) => { if (live) setReviewsFailed(!ok); });
+    fetchMissions(spot._id).then((ok) => { if (live) setMissionsFailed(ok === false); });
+    return () => { live = false; };
   }, [spot?._id]);
+
+  const retryReviews = () => {
+    setReviewsFailed(false);
+    fetchReviews(spot._id).then((ok) => setReviewsFailed(!ok));
+  };
+  const retryMissions = () => {
+    setMissionsFailed(false);
+    refetchMissions(spot._id).then((ok) => setMissionsFailed(!ok));
+  };
 
   // Pull to refresh: the spot itself (an admin may have edited it), its
   // reviews and missions, and the visit log behind "Arrive at the spot". Off
@@ -606,8 +623,8 @@ export default function InformationScreen({ route, navigation }) {
       api.get(`/api/spots/${id}`).then((res) => {
         if (res.data?.success && res.data.spot) setFreshSpot(res.data.spot);
       }),
-      fetchReviews(id),
-      refetchMissions(id),
+      fetchReviews(id).then((ok) => setReviewsFailed(!ok)),
+      refetchMissions(id).then((ok) => setMissionsFailed(!ok)),
       refreshPoints(),
     ]);
   }, [paramSpot?._id, fetchReviews, refetchMissions, refreshPoints]);
@@ -642,20 +659,10 @@ export default function InformationScreen({ route, navigation }) {
     </View>
   );
 
-  // The skeleton used to replace the ENTIRE screen, back button included — so on
-  // a cold backend (Render spins down, 30s+ to wake) the user was stranded with
-  // no way out. The header now renders immediately and only the body is a
-  // skeleton, which is also why the title no longer pops in afterwards.
-  if (!screenReady) return (
-    <View style={[styles.container, { backgroundColor: colors.background }]}>
-      <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={colors.background} />
-      {header(null)}
-      <InformationSkeleton />
-    </View>
-  );
-
   const spotIsBookmarked = isBookmarked(spot._id || spot.id);
   const reviews          = getReviewsForSpot(spot._id);
+  const reviewsLoaded    = hasReviewsFor(spot._id);
+  const missionsLoaded   = hasMissionsFor(spot._id);
   // The spot list's figures until this page's own fetch of the reviews lands.
   const averageRating    = getAverageRating(spot._id, spot.ratingAvg) || "0.0";
   const reviewCount      = getReviewCount(spot._id, spot.ratingCount);
@@ -1068,6 +1075,20 @@ export default function InformationScreen({ route, navigation }) {
                 </Text>
               </View>
 
+              {/* Until this spot's reviews are in: a placeholder, or a retry
+                  when they couldn't be loaded — never "No reviews yet" for
+                  reviews that are only slow to arrive. */}
+              {!reviewsLoaded ? (
+                reviewsFailed ? (
+                  <ErrorState text="Couldn't load the reviews. Check your connection." onRetry={retryReviews} />
+                ) : (
+                  <View accessible accessibilityLabel="Loading reviews">
+                    <Skeleton width="100%" height={120} radius={radius.card} style={styles.reviewsSkeleton} />
+                    <Skeleton width="100%" height={88} radius={radius.card} />
+                  </View>
+                )
+              ) : (
+              <>
               {/* No reviews: an invitation instead of "–" and five empty bars;
                   tapping it jumps to the review box below. Otherwise the
                   average on the left and the 5→1 breakdown on the right — a
@@ -1479,6 +1500,8 @@ export default function InformationScreen({ route, navigation }) {
                 )}
               </View>
               )}
+              </>
+              )}
             </>
           )}
 
@@ -1513,6 +1536,9 @@ export default function InformationScreen({ route, navigation }) {
               every spot has, even one with no Mission documents yet. */}
           {activeTab === "BucketList" && (
               <>
+                {/* Counted once the missions are in; before that it would
+                    count the arrival alone. */}
+                {missionsLoaded && (
                 <View style={[styles.progressCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
                   <View style={styles.progressTop}>
                     <Text style={[styles.progressLabel, { color: colors.textPrimary }]}>Your progress</Text>
@@ -1530,6 +1556,7 @@ export default function InformationScreen({ route, navigation }) {
                     {minorTotal > 0 ? ` · ${minorDone} of ${minorTotal} ${TIER_LABELS.minor.title.toLowerCase()}` : ""}
                   </Text>
                 </View>
+                )}
 
                 <Text style={[styles.sectionHeading, styles.tierHeading, { color: colors.textPrimary }]} accessibilityRole="header">
                   {TIER_LABELS.major.title}
@@ -1562,6 +1589,17 @@ export default function InformationScreen({ route, navigation }) {
                     />
                   ))}
                 </View>
+
+                {/* The arrival is always there; the spot's own missions come
+                    from the server. */}
+                {!missionsLoaded && (missionsFailed ? (
+                  <ErrorState text="Couldn't load this spot's other missions. Check your connection." onRetry={retryMissions} />
+                ) : (
+                  <View style={styles.missionsLoading} accessible accessibilityLabel="Loading missions">
+                    <ActivityIndicator color={colors.brand} />
+                    <Text style={[styles.tierSub, styles.missionsLoadingText, { color: colors.textMuted }]}>Loading missions…</Text>
+                  </View>
+                ))}
 
                 {tiers.minor.length > 0 && (
                   <>
@@ -1738,6 +1776,8 @@ const styles = StyleSheet.create({
   tierHeading:     { marginBottom: 2, marginTop: 4 },
   tierSub:         { ...typography.caption, marginBottom: 12 },
   majorList:       { gap: 12, marginBottom: 24 },
+  missionsLoading: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 8 },
+  missionsLoadingText: { marginBottom: 0 },
   majorCard:       { borderRadius: radius.card, borderWidth: 1.5, padding: 16, gap: 14 },
   majorTop:        { flexDirection: "row", alignItems: "flex-start", gap: 14 },
   majorIcon:       { width: 50, height: 50, borderRadius: 16, alignItems: "center", justifyContent: "center" },
@@ -1754,6 +1794,7 @@ const styles = StyleSheet.create({
 
   // ── Ratings & Reviews (after the reference review UI) ──
   rrHeading:       { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 28, marginBottom: 10 },
+  reviewsSkeleton: { marginBottom: 12 },
   rrHeadingText:   { marginTop: 0, marginBottom: 0 },
   // Average on the left, the 5→1 bars on the right.
   ratingSummary:   { flexDirection: "row", alignItems: "center", gap: 16, borderRadius: radius.card, paddingHorizontal: 16, paddingVertical: 16, marginBottom: 18, borderWidth: 1 },

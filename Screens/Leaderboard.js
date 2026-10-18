@@ -16,6 +16,7 @@ import { useUser, useAuth } from "@clerk/clerk-expo";
 import { useProfileImage } from "../context/ProfileImageContext";
 import { useTheme, radius, shadow, fonts, typography, MAX_FONT_SCALE } from "../context/ThemeContext";
 import { Avatar, EmptyState, ErrorState, LoadingState, H_PAD, TAP } from "../components/ui";
+import { showToast } from "../components/AppAlert";
 import { BASE_URL } from "../api";
 import { clerkPhoto } from "../utils/image";
 import Icon from "../components/Icon";
@@ -120,17 +121,26 @@ export default function Leaderboard() {
     else if (!hasLoaded.current) setLoading(true);
     setError(null);
 
+    // A board already on screen stays when a later load fails. The focus
+    // reload and the live refresh used to swap it for the full-screen error
+    // whenever one request was slow, so on a weak signal the board kept
+    // vanishing. Only a pull, which the user asked for, says it didn't work.
+    const fail = (message) => {
+      if (!hasLoaded.current) setError(message);
+      else if (isRefresh) showToast("Couldn't refresh the leaderboard. Check your connection.", { type: "error" });
+    };
+
     try {
       const token = await getToken();
       const res   = await fetch(`${BASE_URL}/api/users?limit=${BOARD_SIZE}`, {
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
       });
       const ct = res.headers.get("content-type") ?? "";
-      if (!res.ok || !ct.includes("application/json")) { setError("Could not reach the server."); return; }
+      if (!res.ok || !ct.includes("application/json")) { fail("Could not reach the server."); return; }
 
       const data = await res.json();
       const list = Array.isArray(data) ? data : Array.isArray(data.users) ? data.users : null;
-      if (!list) { setError("Unexpected response."); return; }
+      if (!list) { fail("Unexpected response."); return; }
 
       let users = withRanks(list.map(toEntry));
       let below = null;
@@ -153,7 +163,7 @@ export default function Leaderboard() {
       hasLoaded.current = true;
     } catch (e) {
       console.warn("Leaderboard error:", e);
-      setError("Failed to load leaderboard.");
+      fail("Failed to load leaderboard.");
     } finally {
       setLoading(false);
       setRefreshing(false);

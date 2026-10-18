@@ -7,7 +7,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { NavigationContainer, DefaultTheme, DarkTheme } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { ClerkProvider, useAuth } from '@clerk/clerk-expo';
-import { ActivityIndicator, View, StyleSheet, AppState, useColorScheme } from 'react-native';
+import { ActivityIndicator, View, Text, StyleSheet, AppState, useColorScheme } from 'react-native';
 import { showAlert, AppAlertProvider } from './components/AppAlert';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import AsyncStorage from "@react-native-async-storage/async-storage";
@@ -22,7 +22,7 @@ import { ProfileImageProvider } from "./context/ProfileImageContext";
 import { navigationRef }        from './navigation/navigationRef';
 import { MissionProvider }      from "./context/MissionContext";
 import { PointsProvider }       from "./context/PointsContext";
-import { ThemeProvider, useTheme, lightColors, darkColors } from "./context/ThemeContext";
+import { ThemeProvider, useTheme, lightColors, darkColors, MAX_FONT_SCALE } from "./context/ThemeContext";
 import OfflineBanner            from "./components/OfflineBanner";
 import ErrorBoundary            from "./utils/ErrorBoundary";
 import { initCrashReporting }   from "./utils/crashReporter";
@@ -94,6 +94,35 @@ if (!CLERK_PUBLISHABLE_KEY) {
 }
 
 const Stack = createNativeStackNavigator();
+
+// Before the app knows who is signed in, Clerk has to reach its server, and on
+// a weak signal that takes a while (it retries quietly). The offline banner
+// isn't mounted yet, so a bare spinner looked stuck; after a few seconds this
+// says why.
+const SLOW_START_MS = 6000;
+
+function StartupWait() {
+  const { colors, fonts } = useTheme();
+  const [slow, setSlow] = useState(false);
+  useEffect(() => {
+    const timer = setTimeout(() => setSlow(true), SLOW_START_MS);
+    return () => clearTimeout(timer);
+  }, []);
+  return (
+    <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
+      <ActivityIndicator size="large" color={colors.brand} />
+      {slow && (
+        <Text
+          style={[styles.slowText, { color: colors.textSecondary, fontFamily: fonts.sans }]}
+          maxFontSizeMultiplier={MAX_FONT_SCALE}
+          accessibilityLiveRegion="polite"
+        >
+          Still connecting. On a slow connection this can take a minute.
+        </Text>
+      )}
+    </View>
+  );
+}
 
 function AppNavigator() {
   const { isLoaded, isSignedIn, getToken, userId, signOut } = useAuth();
@@ -238,11 +267,7 @@ function AppNavigator() {
   }, [isSignedIn, userId]);
 
   if (!isLoaded || hasSeenWelcome === null || isCheckingBan) {
-    return (
-      <View style={[styles.loadingContainer, { backgroundColor: colors.background }]}>
-        <ActivityIndicator size="large" color={colors.brand} />
-      </View>
-    );
+    return <StartupWait />;
   }
 
   return (
@@ -370,5 +395,12 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  slowText: {
+    marginTop: 16,
+    paddingHorizontal: 40,
+    fontSize: 14,
+    lineHeight: 20,
+    textAlign: 'center',
   },
 });
