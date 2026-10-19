@@ -59,15 +59,6 @@ const REPORT_REASONS = [
   { key:"other",              label:"Other" },
 ];
 
-// "Report wrong info" on the spot itself. Same keys as the backend's Report
-// model; the admin panel's Spot Reports page shows the same labels.
-const SPOT_REPORT_REASONS = [
-  { key:"wrong_info",     label:"Wrong details (hours, fee or description)" },
-  { key:"wrong_location", label:"The map pin is in the wrong place" },
-  { key:"closed",         label:"It's closed or no longer there" },
-  { key:"other",          label:"Something else" },
-];
-
 // How much longer a mute/suspension lasts, e.g. "3 days 4 hr" / "45 min".
 // Returns null once the window has actually elapsed (shouldn't normally be
 // shown at that point — the backend would no longer reject the request).
@@ -562,7 +553,7 @@ export default function InformationScreen({ route, navigation }) {
   const bodyY = useRef(0);
   const { user: clerkUser } = useUser();
   const { isBookmarked, toggleBookmark } = useBookmark();
-  const { getReviewsForSpot, hasReviewsFor, addReview, reportReview, reportSpot, reactToReview, getAverageRating, getReviewCount, fetchReviews, deleteReview } = useReviews();
+  const { getReviewsForSpot, hasReviewsFor, addReview, reportReview, reactToReview, getAverageRating, getReviewCount, fetchReviews, deleteReview } = useReviews();
   const { fetchMissions, refetchMissions, getMissionsForSpot, hasMissionsFor, completedMissions } = useMissions();
   const { hasVisited, refresh: refreshPoints } = usePoints();
   const { profileImage } = useProfileImage();
@@ -888,28 +879,13 @@ export default function InformationScreen({ route, navigation }) {
   };
 
   const openReportModal = (review) => {
-    setReportTarget({ kind: "review", reviewId: review._id, reportedClerkUserId: review.clerkUserId || "", userName: review.userName || "this user" });
+    setReportTarget({ reviewId: review._id, reportedClerkUserId: review.clerkUserId || "", userName: review.userName || "this user" });
     setReportReason(""); setReportDetails(""); setShowReportModal(true);
   };
-
-  // The same sheet, about the spot's own details instead of a review.
-  const openSpotReport = () => {
-    setReportTarget({ kind: "spot", spotId: spot._id, spotName: spot.name });
-    setReportReason(""); setReportDetails(""); setShowReportModal(true);
-  };
-  const reportingSpot = reportTarget?.kind === "spot";
 
   const handleSubmitReport = async () => {
     if (!reportReason) { showAlert("Select a reason", "Please choose a reason for reporting."); return; }
     setSubmittingReport(true);
-    if (reportingSpot) {
-      const sent = await reportSpot({ spotId: reportTarget.spotId, reason: reportReason, details: reportDetails });
-      setSubmittingReport(false);
-      setShowReportModal(false);
-      if (sent) showToast("Thanks. The Libot Bulacan admins will check it.", { type: "success" });
-      else showAlert("Couldn't send the report", "Check your connection and try again.");
-      return;
-    }
     try {
       const result = await reportReview({ reviewId: reportTarget.reviewId, reportedClerkUserId: reportTarget.reportedClerkUserId, reason: reportReason, details: reportDetails });
       setSubmittingReport(false);
@@ -1051,21 +1027,6 @@ export default function InformationScreen({ route, navigation }) {
                   );
                 })}
               </View>
-
-              {/* Wrong hours, fee, pin, or a place that has closed: goes to
-                  the admin panel's Spot Reports page. */}
-              <TouchableOpacity
-                onPress={openSpotReport}
-                style={styles.spotReportRow}
-                hitSlop={{ top: 6, bottom: 6, left: 6, right: 6 }}
-                accessibilityRole="button"
-                accessibilityLabel={`Report wrong information about ${spot.name}`}
-              >
-                <Icon name="flag" size={13} color={colors.textMuted} />
-                <Text style={[styles.spotReportText, { color: colors.textMuted }]} maxFontSizeMultiplier={MAX_FONT_SCALE}>
-                  Something wrong here? <Text style={{ color: colors.brand, fontFamily: fonts.sansBold }}>Report wrong info</Text>
-                </Text>
-              </TouchableOpacity>
 
               {/* ── Ratings & Reviews ── */}
               <View style={styles.rrHeading}>
@@ -1638,7 +1599,7 @@ export default function InformationScreen({ route, navigation }) {
           <View style={[styles.modalContent, { backgroundColor: colors.background, paddingBottom: Math.max(insets.bottom, 24) }]}>
             <View style={[styles.modalGrabber, { backgroundColor: colors.divider }]} />
             <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, { color: colors.textPrimary }]} accessibilityRole="header">{reportingSpot ? "Report wrong info" : "Report review"}</Text>
+              <Text style={[styles.modalTitle, { color: colors.textPrimary }]} accessibilityRole="header">Report review</Text>
               <TouchableOpacity
                 accessibilityRole="button"
                 accessibilityLabel="Close report"
@@ -1650,13 +1611,12 @@ export default function InformationScreen({ route, navigation }) {
             </View>
             {reportTarget && (
               <Text style={[styles.reportSubtitle, { color: colors.textMuted }]}>
-                {reportingSpot ? "About " : "Reporting comment by "}
-                <Text style={{ fontFamily: fonts.sansBold, color: colors.textPrimary }}>{reportingSpot ? reportTarget.spotName : reportTarget.userName}</Text>
+                Reporting comment by <Text style={{ fontFamily: fonts.sansBold, color: colors.textPrimary }}>{reportTarget.userName}</Text>
               </Text>
             )}
-            <Text style={[styles.modalLabel, { color: colors.textPrimary }]}>{reportingSpot ? "What's wrong?" : "Reason"}</Text>
+            <Text style={[styles.modalLabel, { color: colors.textPrimary }]}>Reason</Text>
             <View style={styles.reasonList} accessibilityRole="radiogroup">
-              {(reportingSpot ? SPOT_REPORT_REASONS : REPORT_REASONS).map((r) => {
+              {REPORT_REASONS.map((r) => {
                 const on = reportReason === r.key;
                 return (
                   <TouchableOpacity
@@ -1680,7 +1640,7 @@ export default function InformationScreen({ route, navigation }) {
             <TextInput
               style={[styles.reportDetailsInput, { backgroundColor: colors.inputBg, borderColor: colors.inputBorder, color: colors.textPrimary }]}
               multiline
-              placeholder={reportingSpot ? "What should it say? E.g. open until 5 PM, not 6." : "Add any extra context..."}
+              placeholder="Add any extra context..."
               placeholderTextColor={colors.placeholder}
               value={reportDetails}
               onChangeText={setReportDetails}
@@ -1909,10 +1869,6 @@ const styles = StyleSheet.create({
   modalClose:      { width: TAP, height: TAP, alignItems: "flex-end", justifyContent: "center" },
   modalLabel:      { fontSize: 14, fontFamily: fonts.sansBold, marginBottom: 10, marginTop: 14 },
   reportSubtitle:  { fontSize: 13.5, fontFamily: fonts.sans, marginBottom: 4 },
-  // Right under the facts card; the negative bottom margin keeps the gap to
-  // Ratings & Reviews what it was, despite the row's full tap height.
-  spotReportRow:   { flexDirection: "row", alignItems: "center", gap: 6, alignSelf: "flex-start", marginTop: 6, marginBottom: -10, minHeight: TAP },
-  spotReportText:  { fontSize: 13, fontFamily: fonts.sans },
   reasonList:      { gap: 8, marginBottom: 4 },
   reasonOption:    { flexDirection: "row", alignItems: "center", borderRadius: radius.md, paddingVertical: 13, paddingHorizontal: 14, borderWidth: 1.5, gap: 12 },
   reasonRadio:     { width: 20, height: 20, borderRadius: 10, borderWidth: 2, alignItems: "center", justifyContent: "center" },

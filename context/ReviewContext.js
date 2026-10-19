@@ -176,19 +176,6 @@ export const ReviewProvider = ({ children }) => {
     }
   }, []);
 
-  // "Report wrong info" on a spot's page: wrong details, a wrong pin, or a
-  // place that has closed. Goes to the admin panel's Spot Reports page.
-  const reportSpot = useCallback(async ({ spotId, reason, details = "" }) => {
-    if (!spotId || !reason) return false;
-    try {
-      const res = await api.post("/api/reports", { spotId, reason, details });
-      return !!res.data?.success;
-    } catch (err) {
-      console.error("Error reporting spot:", err);
-      return false;
-    }
-  }, []);
-
   // Like/dislike toggle. Optimistically patches the single review in
   // state with the server's returned counts + the caller's own reaction,
   // rather than refetching the whole spot's review list.
@@ -263,7 +250,7 @@ export const ReviewProvider = ({ children }) => {
   return (
     <ReviewContext.Provider value={{
       reviewsBySpot, error, moderationStatus,
-      fetchReviews, addReview, reportReview, reportSpot, reactToReview, fetchModerationStatus,
+      fetchReviews, addReview, reportReview, reactToReview, fetchModerationStatus,
       getReviewsForSpot, hasReviewsFor, getAverageRating, getReviewCount, deleteReview,
     }}>
       {children}

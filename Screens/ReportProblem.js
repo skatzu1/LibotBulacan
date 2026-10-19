@@ -37,9 +37,8 @@ const CATEGORIES = [
   { key: "crash",   label: "The app crashes or freezes" },
   { key: "install", label: "Downloading or installing" },
   { key: "account", label: "My account or signing in" },
-  // No "Wrong details about a spot" any more (2026-10-18): that is Report
-  // wrong info on the spot's page, which reaches the admins' Spot Reports
-  // page. The server still accepts "spot" from builds that offered it.
+  // Wrong visiting hours, fee, pin or description: this is where it's reported.
+  { key: "spot",    label: "Wrong details about a spot" },
   { key: "other",   label: "Something else" },
 ];
 
@@ -169,8 +168,8 @@ const ReportProblem = ({ navigation }) => {
         contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 40 }]}
       >
         <Text style={[typography.body, { color: colors.textSecondary }]}>
-          This goes straight to the Libot Bulacan developers. Wrong details about a spot? Open the
-          spot and tap Report wrong info. A bad review? Use Report on the review itself.
+          This goes straight to the Libot Bulacan developers. For wrong details about a spot, choose
+          that below and name the spot. A bad review? Use Report on the review itself.
         </Text>
 
         <GroupLabel style={styles.label}>What kind of problem?</GroupLabel>
