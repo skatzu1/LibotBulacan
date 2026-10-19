@@ -39,7 +39,9 @@ export default function BannedScreen({ banInfo }) {
       setSubmitted(true);
       showToast(inactive ? 'Request sent — an admin will look at it.' : 'Appeal submitted — it’s under review.', { type: 'success' });
     } catch (err) {
-      showAlert('Error', err.message || `Failed to send your ${what}. Try again.`);
+      // The server's message is written for the traveler ("Appeal window has
+      // expired"); err.message alone was axios's "Request failed with status code 410".
+      showAlert('Error', err?.response?.data?.message || `Failed to send your ${what}. Try again.`);
     } finally {
       setSubmitting(false);
     }
