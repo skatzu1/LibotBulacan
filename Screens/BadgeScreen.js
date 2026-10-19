@@ -32,6 +32,7 @@ import Icon from "../components/Icon";
 
 const GRID_GAP = 16;
 const H_GUTTER = 40; // total horizontal screen padding
+const ICON_SIZE = 60; // the round badge in each grid card
 
 // Columns scale with the viewport instead of being pinned at 3 — on a tablet or
 // in split-screen the old fixed grid produced either giant cells or clipping.
@@ -294,19 +295,22 @@ export default function BadgeScreen() {
             ? { backgroundColor: colors.card, borderColor: colors.cardBorder, borderWidth: 1 }
             : { backgroundColor: colors.backgroundSoft },
         ]}>
+          {/* A locked badge shows its own art in grayscale with a lock chip.
+              It used to sit at 30% under a dark overlay that covered it, so
+              every locked badge looked like the same dark seal. */}
           <View style={styles.iconCircle}>
             {badge.image ? (
               <Image
-                source={{ uri: badgeImage(badge.image, Math.round(cardSize)) }}
+                source={{ uri: badgeImage(badge.image, ICON_SIZE, { locked: !badge.claimed }) }}
                 style={[styles.badgeImage, !badge.claimed && styles.badgeImageLocked]}
-                resizeMode="contain"
+                resizeMode="cover"
               />
             ) : (
               <Icon name="award" size={26} color={badge.claimed ? colors.brand : colors.textMuted} />
             )}
             {!badge.claimed && (
-              <View style={[styles.lockOverlay, { backgroundColor: colors.overlay }]}>
-                <Icon name="lock" size={16} color={colors.textInverse} />
+              <View style={[styles.lockChip, { backgroundColor: colors.background }]}>
+                <Icon name="lock" size={11} color={colors.textMuted} />
               </View>
             )}
             {badge.claimed && (
@@ -401,7 +405,7 @@ export default function BadgeScreen() {
             <Image
               source={{ uri: badgeImage(selectedBadge.image, 200) }}
               style={styles.shareCardImage}
-              resizeMode="contain"
+              resizeMode="cover"
             />
           )}
           <Text style={[styles.shareCardName, { color: colors.textPrimary }]}>{selectedBadge?.name}</Text>
@@ -518,16 +522,16 @@ export default function BadgeScreen() {
               <View style={styles.modalIconInner}>
                 {selectedBadge?.image ? (
                   <Image
-                    source={{ uri: badgeImage(selectedBadge.image, 110) }}
+                    source={{ uri: badgeImage(selectedBadge.image, 110, { locked: !selectedBadge?.claimed }) }}
                     style={[styles.modalBadgeImage, !selectedBadge?.claimed && styles.badgeImageLocked]}
-                    resizeMode="contain"
+                    resizeMode="cover"
                   />
                 ) : (
                   <Icon name="award" size={52} color={selectedBadge?.claimed ? colors.brand : colors.textMuted} />
                 )}
                 {!selectedBadge?.claimed && (
-                  <View style={[styles.modalLockOverlay, { backgroundColor: colors.overlay }]}>
-                    <Icon name="lock" size={30} color={colors.textInverse} />
+                  <View style={[styles.modalLockChip, { backgroundColor: colors.background }]}>
+                    <Icon name="lock" size={16} color={colors.textMuted} />
                   </View>
                 )}
               </View>
@@ -665,6 +669,7 @@ const styles = StyleSheet.create({
   shareCardImage: {
     width: 200,
     height: 200,
+    borderRadius: 100,
     backgroundColor: "transparent",
   },
   // The shared image is the app's billboard — it goes out to Facebook and
@@ -702,19 +707,28 @@ const styles = StyleSheet.create({
     minHeight: 136,
   },
   iconCircle: {
-    width: 60,
-    height: 60,
+    width: ICON_SIZE,
+    height: ICON_SIZE,
     justifyContent: "center",
     alignItems: "center",
     marginBottom: 8,
     position: "relative",
     backgroundColor: "transparent",
   },
-  badgeImage:       { width: 56, height: 56, backgroundColor: "transparent" },
-  badgeImageLocked: { opacity: 0.3 },
-  lockOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    borderRadius: 30,
+  badgeImage: {
+    width: ICON_SIZE,
+    height: ICON_SIZE,
+    borderRadius: ICON_SIZE / 2,
+    backgroundColor: "transparent",
+  },
+  badgeImageLocked: { opacity: 0.55 },
+  lockChip: {
+    position: "absolute",
+    bottom: -4,
+    right: -4,
+    width: 20,
+    height: 20,
+    borderRadius: 10,
     justifyContent: "center",
     alignItems: "center",
   },
@@ -802,11 +816,16 @@ const styles = StyleSheet.create({
   modalBadgeImage: {
     width: 110,
     height: 110,
+    borderRadius: 55,
     backgroundColor: "transparent",
   },
-  modalLockOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    borderRadius: 55,
+  modalLockChip: {
+    position: "absolute",
+    bottom: 2,
+    right: 2,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     justifyContent: "center",
     alignItems: "center",
   },

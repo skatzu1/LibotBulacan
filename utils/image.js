@@ -79,6 +79,14 @@ export const clerkPhoto = (user) => (user?.hasImage ? user.imageUrl : null);
 export const avatarImage = (url, size) =>
   cdn(url, { width: size, height: size, crop: "fill", gravity: "face" });
 
-/** Badge art and other transparent PNGs — sized but never cropped, and left as
- *  PNG when it has an alpha channel (f_auto handles that itself). */
-export const badgeImage = (url, size) => cdn(url, { width: size });
+/** Badge art, trimmed to the round badge itself. The files carry wide margins
+ *  (transparent on the first PNGs, white on the newer JPGs), which drew every
+ *  badge at about half its box and put a white square behind the JPG ones.
+ *  `e_trim` cuts the margin off; callers clip the result to a circle. A badge
+ *  not yet earned comes back in grayscale so it stays recognisable. */
+export const badgeImage = (url, size, { locked = false } = {}) => {
+  const sized = cdn(url, { width: size });
+  if (!isCloudinary(url)) return sized;
+  const pre = locked ? "e_trim/e_grayscale" : "e_trim";
+  return sized.replace("/upload/", `/upload/${pre}/`);
+};
