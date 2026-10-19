@@ -3,8 +3,8 @@ import { render, fireEvent, waitFor } from "@testing-library/react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { ThemeProvider } from "../context/ThemeContext";
 
-// AR View and Navigate's spot lists, laid out like the Bakit List's (user,
-// 2026-10-20): the spots divided by done / not done, each card saying which.
+// AR View and Navigate's spot lists, laid out like the Badges screen (user,
+// 2026-10-20): a done/total count, a filter with counts, done spots first.
 
 jest.mock("@react-native-async-storage/async-storage", () =>
   require("@react-native-async-storage/async-storage/jest/async-storage-mock"),
@@ -15,8 +15,8 @@ jest.mock("@react-navigation/native", () => ({
 }));
 
 const mockSpots = [
-  { _id: "a", name: "Barasoain Church", city: "Malolos", category: ["Historical"] },
   { _id: "b", name: "Meyto Shrine", city: "Calumpit", category: ["Religious"] },
+  { _id: "a", name: "Barasoain Church", city: "Malolos", category: ["Historical"] },
   { _id: "r", name: "Calumpit River", city: "Calumpit", category: ["Nature"] },  // no AR
 ];
 jest.mock("../context/ArrivalContext", () => ({
@@ -24,7 +24,7 @@ jest.mock("../context/ArrivalContext", () => ({
 }));
 jest.mock("../context/MissionContext", () => ({
   useMissions: () => ({
-    getMissionsForSpot: (id) => (id === "r" ? [] : [{ _id: `${id}-ar`, type: "ar" }, { _id: `${id}-ai`, type: "ai" }]),
+    getMissionsForSpot: (id) => (id === "r" ? [] : [{ _id: `${id}-ar`, type: "ar", points: 50 }, { _id: `${id}-ai`, type: "ai" }]),
     completedMissions: ["a-ar", "b-ai"],
   }),
 }));
@@ -46,52 +46,51 @@ const wrap = (ui) => render(
     <ThemeProvider>{ui}</ThemeProvider>
   </SafeAreaProvider>,
 );
-const textsOf = (tree) => tree.UNSAFE_root
+const NAMES = mockSpots.map((s) => s.name);
+const shownSpots = (tree) => tree.UNSAFE_root
   .findAll((n) => n.type?.displayName === "Text")
-  .flatMap((n) => [].concat(n.props.children).filter((c) => typeof c === "string"));
-const inOrder = (texts, items) => {
-  const at = items.map((t) => texts.indexOf(t));
-  return at.every((i) => i > -1) && at.every((i, k) => k === 0 || i > at[k - 1]);
-};
+  .flatMap((n) => [].concat(n.props.children).filter((c) => typeof c === "string"))
+  .filter((t) => NAMES.includes(t))
+  .filter((t, i, all) => all.indexOf(t) === i);
 
 beforeEach(() => jest.clearAllMocks());
 
 describe("AR View", () => {
   const ARSpotSelect = require("../Screens/ARspotSelect").default;
 
-  it("divides the spots by whether their AR is done", async () => {
+  it("counts the AR done, lists those first, and shows what the rest are worth", async () => {
     const tree = wrap(<ARSpotSelect />);
+    expect(await tree.findByLabelText("1 of 2 done")).toBeTruthy();
+    expect(tree.getByLabelText("Not done, 1 spots")).toBeTruthy();
     // AI scan done at Meyto doesn't count: only its AR activity does.
-    expect(await tree.findByLabelText("Meyto Shrine, Calumpit, AR not done yet")).toBeTruthy();
-    expect(tree.getByLabelText("Barasoain Church, Malolos, AR done")).toBeTruthy();
-    expect(tree.queryByText("Calumpit River")).toBeNull();
-    // Each heading comes before the cards under it.
-    expect(inOrder(textsOf(tree), ["Not done yet", "Meyto Shrine", "Done", "Barasoain Church"])).toBe(true);
+    expect(tree.getByLabelText("Meyto Shrine, Calumpit, AR not done yet")).toBeTruthy();
+    expect(shownSpots(tree)).toEqual(["Barasoain Church", "Meyto Shrine"]);
+    expect(tree.getByText("AR done")).toBeTruthy();
+    expect(tree.getByText("+50")).toBeTruthy();
   });
 
   it("still checks the traveler is at the spot before opening AR", async () => {
     const tree = wrap(<ARSpotSelect />);
     fireEvent.press(await tree.findByLabelText("Barasoain Church, Malolos, AR done"));
-    await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith("ar", { spot: mockSpots[0], arMissionId: "a-ar" }));
-    expect(mockAtSpot).toHaveBeenCalledWith(mockSpots[0], expect.anything());
+    await waitFor(() => expect(mockNavigate).toHaveBeenCalledWith("ar", { spot: mockSpots[1], arMissionId: "a-ar" }));
+    expect(mockAtSpot).toHaveBeenCalledWith(mockSpots[1], expect.anything());
   });
 });
 
 describe("Navigate", () => {
   const TrackSpotSelect = require("../Screens/TrackSpotSelect").default;
 
-  it("divides the spots by whether they were visited", async () => {
+  it("counts the visited spots, lists them first, and filters by it", async () => {
     const tree = wrap(<TrackSpotSelect />);
-    expect(await tree.findByLabelText("Meyto Shrine, Calumpit, not visited yet")).toBeTruthy();
-    expect(tree.getByLabelText("Calumpit River, Calumpit, visited")).toBeTruthy();
-    expect(inOrder(textsOf(tree), [
-      "Not visited yet", "Meyto Shrine", "Visited", "Barasoain Church", "Calumpit River",
-    ])).toBe(true);
+    expect(await tree.findByLabelText("2 of 3 visited")).toBeTruthy();
+    expect(shownSpots(tree)).toEqual(["Barasoain Church", "Calumpit River", "Meyto Shrine"]);
+    fireEvent.press(tree.getByLabelText("Not visited, 1 spots"));
+    expect(shownSpots(tree)).toEqual(["Meyto Shrine"]);
   });
 
   it("opens directions to the spot", async () => {
     const tree = wrap(<TrackSpotSelect />);
     fireEvent.press(await tree.findByLabelText("Meyto Shrine, Calumpit, not visited yet"));
-    expect(mockNavigate).toHaveBeenCalledWith("Track", { spot: mockSpots[1] });
+    expect(mockNavigate).toHaveBeenCalledWith("Track", { spot: mockSpots[0] });
   });
 });

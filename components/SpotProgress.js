@@ -1,52 +1,67 @@
 import React from "react";
 import { View, Text, StyleSheet, Image, TouchableOpacity } from "react-native";
 import Icon from "./Icon";
-import { useTheme, fonts, radius, MAX_FONT_SCALE } from "../context/ThemeContext";
+import { useTheme, fonts, MAX_FONT_SCALE } from "../context/ThemeContext";
 import { spotImage } from "../utils/image";
 
 /*
- * One spot in the quick-action lists (Bakit List, AR View, Navigate): photo,
- * name, town, and one status line ("Visited", "2 of 4 done"). The lists are
- * divided into sections by that status (SpotPicker `sections`).
+ * One spot in the Bakit List, AR View and Navigate grids — the Badges screen's
+ * card (user, 2026-10-20: "make it like the badge screen"): the spot's photo in
+ * a circle, its name and town, and a footer.
  *
- * Kept to that on purpose (user, 2026-10-20: "make it simple"): the first
- * version had a summary card, section blurbs, progress bars, named step chips
- * and yellow buttons on every card.
+ * Done spots sit on a white card with a tick on the photo, like a claimed
+ * badge; the rest recede into the page tint. Unlike a locked badge, a spot not
+ * done yet keeps its colours and has no lock: it is open, just not done.
  *
- *   status  { text, tone: "done" | "progress" | "todo", icon? }
- *   steps   optional [{ key, icon, done }] — small icons before the text, one
- *           per item, ticked when done (the Bakit List's items)
+ *   footer  { text, icon? } — for a done spot, muted text under the name
+ *           (like a claimed badge's date); otherwise a tinted chip (like a
+ *           locked badge's points): "2 of 4", "+50", "Directions".
  */
 
-const THUMB = 56;
+export const PHOTO = 60;
 
-export function SpotStatusCard({ spot, onPress, status, steps, accessibilityLabel, accessibilityHint }) {
+// Padding, the photo, a two-line name, the town and the footer, with the text
+// parts grown by the phone's text size, so every card in a row is one height.
+export const spotCardHeightFor = (fontScale) => Math.ceil(104 + 58 * fontScale);
+
+export function SpotGridCard({ spot, done, footer, width, minHeight, onPress, accessibilityLabel, accessibilityHint }) {
   const { colors } = useTheme();
-  const tone = {
-    done:     colors.success,
-    progress: colors.brand,
-    todo:     colors.textMuted,
-  }[status.tone] || colors.textMuted;
-
   return (
     <TouchableOpacity
-      style={[s.card, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}
+      activeOpacity={0.75}
       onPress={onPress}
-      activeOpacity={0.85}
+      style={[s.wrapper, { width }]}
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel}
       accessibilityHint={accessibilityHint}
     >
-      {spot.image ? (
-        <Image source={{ uri: spotImage(spot.image, THUMB * 2, THUMB * 2) }} style={[s.thumb, { backgroundColor: colors.brandLight }]} />
-      ) : (
-        <View style={[s.thumb, s.thumbEmpty, { backgroundColor: colors.brandLight }]}>
-          <Icon name="image" size={20} color={colors.textMuted} />
+      <View style={[
+        s.card,
+        { minHeight },
+        done
+          ? { backgroundColor: colors.card, borderColor: colors.cardBorder, borderWidth: 1 }
+          : { backgroundColor: colors.backgroundSoft },
+      ]}>
+        <View style={s.photoWrap}>
+          {spot.image ? (
+            <Image source={{ uri: spotImage(spot.image, PHOTO * 2, PHOTO * 2) }} style={[s.photo, { backgroundColor: colors.brandLight }]} />
+          ) : (
+            <View style={[s.photo, s.photoEmpty, { backgroundColor: colors.brandLight }]}>
+              <Icon name="map-pin" size={24} color={colors.brand} />
+            </View>
+          )}
+          {done && (
+            <View style={[s.check, { backgroundColor: colors.background }]}>
+              <Icon name="check-circle" size={16} color={colors.brand} />
+            </View>
+          )}
         </View>
-      )}
 
-      <View style={s.body}>
-        <Text style={[s.name, { color: colors.textPrimary }]} numberOfLines={1} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+        <Text
+          style={[s.name, { color: done ? colors.textPrimary : colors.textSecondary }]}
+          numberOfLines={2}
+          maxFontSizeMultiplier={MAX_FONT_SCALE}
+        >
           {spot.name}
         </Text>
         {!!spot.city && (
@@ -54,41 +69,39 @@ export function SpotStatusCard({ spot, onPress, status, steps, accessibilityLabe
             {spot.city}
           </Text>
         )}
-        <View style={s.status}>
-          {steps ? (
-            <View style={s.dots}>
-              {steps.map((st) => (
-                <View
-                  key={st.key}
-                  style={[s.dot, st.done ? { backgroundColor: tone, borderColor: tone } : { borderColor: colors.cardBorder }]}
-                >
-                  <Icon name={st.done ? "check" : st.icon} size={10} color={st.done ? colors.card : colors.textMuted} weight={st.done ? "bold" : "regular"} />
-                </View>
-              ))}
-            </View>
-          ) : (
-            <Icon name={status.tone === "done" ? "check-circle" : status.icon || "circle"} size={14} color={tone} weight={status.tone === "done" ? "fill" : "regular"} />
-          )}
-          <Text style={[s.statusText, { color: tone }]} numberOfLines={1} maxFontSizeMultiplier={MAX_FONT_SCALE}>
-            {status.text}
-          </Text>
-        </View>
-      </View>
 
-      <Icon name="chevron-right" size={18} color={colors.textMuted} />
+        {/* Pinned to the bottom, so it lines up across cards whatever the
+            length of the name above it. */}
+        {!!footer && (
+          <View style={s.footer}>
+            {done ? (
+              <Text style={[s.doneText, { color: colors.textMuted }]} maxFontSizeMultiplier={MAX_FONT_SCALE}>{footer.text}</Text>
+            ) : (
+              <View style={[s.chip, { backgroundColor: colors.brandLight }]}>
+                {!!footer.icon && <Icon name={footer.icon} size={9} color={colors.brand} />}
+                <Text style={[s.chipText, { color: colors.brand }]} maxFontSizeMultiplier={MAX_FONT_SCALE}>{footer.text}</Text>
+              </View>
+            )}
+          </View>
+        )}
+      </View>
     </TouchableOpacity>
   );
 }
 
 const s = StyleSheet.create({
-  card:       { flexDirection: "row", alignItems: "center", gap: 12, borderRadius: radius.card, borderWidth: 1, padding: 10, paddingRight: 14 },
-  thumb:      { width: THUMB, height: THUMB, borderRadius: 14 },
-  thumbEmpty: { alignItems: "center", justifyContent: "center" },
-  body:       { flex: 1, minWidth: 0 },
-  name:       { fontSize: 15, lineHeight: 19, fontFamily: fonts.sansBold },
-  city:       { fontSize: 12, fontFamily: fonts.sansMedium },
-  status:     { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 5 },
-  statusText: { fontSize: 12.5, fontFamily: fonts.sansBold, flexShrink: 1 },
-  dots:       { flexDirection: "row", gap: 3 },
-  dot:        { width: 18, height: 18, borderRadius: 9, borderWidth: 1, alignItems: "center", justifyContent: "center" },
+  // flexGrow down the chain lets each card stretch to its row, so the cards in
+  // a row still match if a very large text size outgrows spotCardHeightFor.
+  wrapper:    { flexGrow: 1 },
+  card:       { flexGrow: 1, borderRadius: 16, padding: 10, alignItems: "center" },
+  photoWrap:  { width: PHOTO, height: PHOTO, marginBottom: 8 },
+  photo:      { width: PHOTO, height: PHOTO, borderRadius: PHOTO / 2 },
+  photoEmpty: { alignItems: "center", justifyContent: "center" },
+  check:      { position: "absolute", bottom: -4, right: -4, borderRadius: 10 },
+  name:       { fontSize: 11.5, lineHeight: 15, fontFamily: fonts.sansSemi, textAlign: "center" },
+  city:       { fontSize: 10.5, lineHeight: 14, fontFamily: fonts.sansMedium, textAlign: "center", marginTop: 2 },
+  footer:     { marginTop: "auto", paddingTop: 6, alignItems: "center" },
+  doneText:   { fontSize: 10.5, lineHeight: 14, fontFamily: fonts.sansMedium, textAlign: "center" },
+  chip:       { flexDirection: "row", alignItems: "center", gap: 3, borderRadius: 8, paddingHorizontal: 6, paddingVertical: 2 },
+  chipText:   { fontSize: 10, lineHeight: 13, fontFamily: fonts.sansBold },
 });

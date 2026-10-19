@@ -3,9 +3,9 @@ import { render, fireEvent } from "@testing-library/react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { ThemeProvider } from "../context/ThemeContext";
 
-// The Bakit List quick action (user, 2026-10-20: the "2/5" chips were
-// confusing; then "make it simple"): the spots divided by progress, each with
-// "n of m done" and an icon per item.
+// The Bakit List quick action, laid out like the Badges screen (user,
+// 2026-10-20): a finished/total count, a filter with counts, and a grid where
+// finished spots come first and each card says how far along it is.
 
 jest.mock("@react-native-async-storage/async-storage", () =>
   require("@react-native-async-storage/async-storage/jest/async-storage-mock"),
@@ -34,7 +34,6 @@ jest.mock("../context/MissionContext", () => ({
   useMissions: () => ({ getMissionsForSpot: (id) => mockMissions[id] || [], completedMissions: ["a-ai", "a-eat", "a-ar"] }),
 }));
 jest.mock("../context/PointsContext", () => ({ usePoints: () => ({ hasVisited: (id) => id === "a" || id === "b" }) }));
-jest.mock("../context/ReviewContext", () => ({ useReviews: () => ({ getAverageRating: () => null }) }));
 
 const MissionsSpotSelect = require("../Screens/MissionsSpotSelect").default;
 
@@ -47,48 +46,48 @@ const wrap = () => render(
 
 // Every text in the tree, in order.
 const textsOf = (tree) => tree.UNSAFE_root
-  .findAll((n) => typeof n.props?.children === "string" && n.type === "Text" || n.type?.displayName === "Text")
+  .findAll((n) => n.type?.displayName === "Text")
   .flatMap((n) => [].concat(n.props.children).filter((c) => typeof c === "string"));
+const NAMES = mockSpots.map((s) => s.name);
+const shownSpots = (tree) => textsOf(tree).filter((t) => NAMES.includes(t)).filter((t, i, all) => all.indexOf(t) === i);
 
-it("divides the spots: in progress, not started, finished", async () => {
+it("counts the finished spots and lists them first, then the furthest along", async () => {
   const tree = wrap();
-  expect(await tree.findByText("1 of 4 done")).toBeTruthy();
-  expect(tree.getByText("All done")).toBeTruthy();
-
-  const texts = textsOf(tree);
-  const order = [
-    "In progress", "Meyto Shrine",
-    "Not started", "Casa Real", "Bagbag Bridge",
-    "Finished", "Barasoain Church",
-  ].map((t) => texts.indexOf(t));
-  expect(order.every((i) => i > -1)).toBe(true);
-  expect([...order].sort((x, y) => x - y)).toEqual(order);
+  expect(await tree.findByLabelText("1 of 4 finished")).toBeTruthy();
+  expect(tree.getByLabelText("All, 4 spots")).toBeTruthy();
+  expect(tree.getByLabelText("To do, 3 spots")).toBeTruthy();
+  expect(tree.getByLabelText("Finished, 1 spots")).toBeTruthy();
+  expect(shownSpots(tree)).toEqual(["Barasoain Church", "Meyto Shrine", "Casa Real", "Bagbag Bridge"]);
 });
 
-it("names each spot's items and says which are done", async () => {
+it("says how far along each spot is", async () => {
   const tree = wrap();
-  expect(await tree.findByLabelText(
+  expect(await tree.findByText("All done")).toBeTruthy();
+  expect(tree.getByText("1 of 4")).toBeTruthy();
+  expect(tree.getByText("0 of 4")).toBeTruthy();
+  // A spot with no activities yet still has arriving on its list.
+  expect(tree.getByText("0 of 1")).toBeTruthy();
+  expect(tree.getByLabelText(
     "Meyto Shrine, Calumpit, 1 of 4 done, Arrive done, AR not done, AI Scan not done, Nearby Eats not done",
   )).toBeTruthy();
-  expect(tree.getByLabelText(
-    "Barasoain Church, Malolos, Bakit List finished, Arrive done, AR done, AI Scan done, Nearby Eats done",
-  )).toBeTruthy();
-  // A spot with no activities yet still has arriving on its list.
-  expect(tree.getByLabelText("Bagbag Bridge, Calumpit, 0 of 1 done, Arrive not done")).toBeTruthy();
+});
+
+it("filters like the badges: finished only, or to do only", async () => {
+  const tree = wrap();
+  fireEvent.press(await tree.findByLabelText("Finished, 1 spots"));
+  expect(shownSpots(tree)).toEqual(["Barasoain Church"]);
+  fireEvent.press(tree.getByLabelText("To do, 3 spots"));
+  expect(shownSpots(tree)).toEqual(["Meyto Shrine", "Casa Real", "Bagbag Bridge"]);
+});
+
+it("searches by spot or town", async () => {
+  const tree = wrap();
+  fireEvent.changeText(await tree.findByPlaceholderText("Search by spot or town"), "calumpit");
+  expect(shownSpots(tree)).toEqual(["Meyto Shrine", "Bagbag Bridge"]);
 });
 
 it("opens the spot on its Bakit List tab", async () => {
   const tree = wrap();
   fireEvent.press(await tree.findByLabelText(/^Casa Real,/));
   expect(mockNavigate).toHaveBeenCalledWith("InformationScreen", { spot: mockSpots[0], tab: "BucketList" });
-});
-
-it("keeps the sections while searching", async () => {
-  const tree = wrap();
-  fireEvent.changeText(await tree.findByPlaceholderText("Search by spot or town"), "calumpit");
-  const texts = textsOf(tree);
-  expect(texts).toContain("In progress");
-  expect(texts).toContain("Not started");
-  expect(texts).not.toContain("Finished");
-  expect(texts).not.toContain("Casa Real");
 });

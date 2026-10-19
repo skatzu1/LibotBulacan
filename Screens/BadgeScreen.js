@@ -29,15 +29,10 @@ import { BASE_URL } from "../api";
 import { badgeShareUrl } from "../utils/legalLinks";
 import { badgeImage } from "../utils/image";
 import Icon from "../components/Icon";
+// The grid is shared with the Bakit List, AR View and Navigate spot lists.
+import { GRID_GAP, H_GUTTER, columnsFor, cardSizeFor, AnimatedCell } from "../components/Grid";
 
-const GRID_GAP = 16;
-const H_GUTTER = 40; // total horizontal screen padding
 const ICON_SIZE = 60; // the round badge in each grid card
-
-// Columns scale with the viewport instead of being pinned at 3 — on a tablet or
-// in split-screen the old fixed grid produced either giant cells or clipping.
-const columnsFor = (w) => (w >= 900 ? 6 : w >= 600 ? 4 : 3);
-const cardSizeFor = (w) => (w - H_GUTTER - GRID_GAP * (columnsFor(w) - 1)) / columnsFor(w);
 
 // Every card is one height: padding, the badge, a two-line name and the footer
 // chip, with the text parts grown by the phone's text size so large text
@@ -53,19 +48,6 @@ const spotLine = (badge) => {
   const spot = badge.spotId?.name;
   return spot === badge.name ? null : spot || "Unknown spot";
 };
-
-// Self-contained fade-in wrapper — safe with FlatList recycling since each
-// mounted cell owns its own Animated.Value instead of indexing into a shared
-// array (which would replay stale values onto recycled/filtered cells).
-function AnimatedCell({ children, delay = 0 }) {
-  const opacity = useRef(new Animated.Value(0)).current;
-  useEffect(() => {
-    Animated.timing(opacity, {
-      toValue: 1, duration: 300, delay, useNativeDriver: true,
-    }).start();
-  }, []);
-  return <Animated.View style={{ opacity }}>{children}</Animated.View>;
-}
 
 const FILTERS = [
   { key: "all",     label: "All" },

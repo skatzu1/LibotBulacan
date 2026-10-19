@@ -195,8 +195,8 @@ export function SpotCard({
 
 /* ── Featured card: photo, scrim, name, town · rating, yellow action ───────
    The layout of Home's Featured slides, shared with My Trips. (The AR View,
-   Bakit List and Navigate lists use SpotStatusCard from SpotProgress.js, which
-   says where the traveler stands.) The whole card is the button; the yellow
+   Bakit List and Navigate lists are a badge-style grid of SpotGridCard, from
+   SpotProgress.js.) The whole card is the button; the yellow
    pill only says what it does. `meta` replaces the town · rating line,
    `badge` sits top-left and `right` top-right (e.g. a "Done" chip). */
 export function FeatureCard({
