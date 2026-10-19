@@ -37,6 +37,44 @@ const MEDAL = {
   3: { ring: "#E0A66B", coin: "#E0A66B", coinText: "#5E3A17" },
 };
 
+// Each podium step is a place: the middle step is 1, the left 2, the right 3.
+// Travelers with the same points share a place, so they stand together on its
+// step instead of on separate steps that all say 1 (2026-10-20). A place that
+// a tie skips stays empty, as at a medal ceremony: 1, 1, 3 has no silver. A
+// step shows up to PODIUM_FACES faces; the rest of a bigger tie is counted as
+// "+N" there and stays in the list below, with the same rank.
+const PODIUM_FACES = 3;
+const PLACES_LEFT_TO_RIGHT = [2, 1, 3];
+// avatarRing's 3px border and 2px padding, both sides.
+const FACE_RING = 10;
+// How far along each face on a shared step sits from the one before it, as a
+// share of a face's width (the rest is the overlap).
+const FACE_STEP = 0.55;
+
+export const podiumSteps = (users) => {
+  const steps = {};
+  for (const place of PLACES_LEFT_TO_RIGHT) {
+    const tied = users.filter((u) => u.rank === place);
+    if (!tied.length) continue;
+    // You first, so you're never one of the faces a big tie leaves off.
+    const all = [...tied.filter((u) => u.isMe), ...tied.filter((u) => !u.isMe)];
+    steps[place] = { all, shown: all.slice(0, PODIUM_FACES) };
+  }
+  return steps;
+};
+
+const firstName = (u) => (u.isMe ? "You" : u.name.split(/\s+/)[0]);
+
+// One traveler: the full name. A tie: first names, "Ana & Ben", "Ana, Ben &
+// Cy", or "Ana, Ben, Cy +2" when not everyone fits on the step.
+const stepNames = ({ all, shown }) => {
+  if (all.length === 1) return shown[0].isMe ? "You" : shown[0].name;
+  const names = shown.map(firstName);
+  const more  = all.length - shown.length;
+  if (more) return `${names.join(", ")} +${more}`;
+  return `${names.slice(0, -1).join(", ")} & ${names[names.length - 1]}`;
+};
+
 // Fixed row height so FlatList.getItemLayout can be exact: 40px avatar +
 // 9px padding top/bottom + 1px border each side, plus the 8px gap below.
 const ROW_H = 66;
@@ -96,6 +134,14 @@ export default function Leaderboard() {
     width: SW * 0.9, height: SW * 0.9, borderRadius: SW * 0.45,
   };
   const podiumNameMax = { maxWidth: SW / 3 - 16 };
+  // Faces on a shared step shrink so the row fits the step's width, keeping
+  // first place's faces the largest, as they are when it stands alone.
+  const faceSize = (place, faces) => {
+    const own = PODIUM[place].avatarSz;
+    if (faces === 1) return own;
+    const fits = podiumNameMax.maxWidth / (1 + FACE_STEP * (faces - 1)) - FACE_RING;
+    return Math.floor(Math.min(own, (fits * own) / PODIUM[1].avatarSz));
+  };
   const { user: clerkUser, isLoaded } = useUser();
   const { getToken }                  = useAuth();
   const { profileImage, loading: photoLoading } = useProfileImage();
@@ -264,8 +310,8 @@ export default function Leaderboard() {
   // How many on the board share this rank: "Tied" shows when it's more than one.
   const tiedAt = (rank) => allUsers.filter((u) => u.rank === rank).length > 1;
 
-  const renderRow = ({ item: user, index }) => {
-    const rank = user.rank ?? index + 4;
+  const renderRow = ({ item: user }) => {
+    const rank = user.rank;
     const tied = tiedAt(rank);
     return (
       <View
@@ -306,17 +352,16 @@ export default function Leaderboard() {
     );
   };
 
-  const top3      = allUsers.slice(0, 3);
-  const restUsers = allUsers.slice(3);
-  const podiumVisual = [top3[1], top3[0], top3[2]];
-  const podiumRanks  = [2, 1, 3];
+  const steps     = podiumSteps(allUsers);
+  const onPodium  = new Set(Object.values(steps).flatMap((step) => step.shown));
+  const restUsers = allUsers.filter((u) => !onPodium.has(u));
 
   const myIndex = allUsers.findIndex((u) => u.isMe);
   const myEntry = myIndex >= 0 ? allUsers[myIndex] : meBelow;
   const myRank  = myEntry?.rank ?? (myIndex >= 0 ? myIndex + 1 : null);
-  // Shown whenever you're not on the podium. By position, not rank: tied
-  // with the third place, you can still be listed fourth.
-  const showMyRankBar = myRank != null && (myIndex < 0 || myIndex >= 3);
+  // Shown whenever your face isn't on the podium — in a tie too big for its
+  // step, you're still on it (podiumSteps puts you first).
+  const showMyRankBar = myRank != null && !onPodium.has(myEntry);
 
   return (
     <View style={[styles.fullScreen, { backgroundColor: colors.background }]}>
@@ -330,46 +375,64 @@ export default function Leaderboard() {
         <Text style={[styles.heroSub, { color: colors.textSecondary }]}>Top explorers of Bulacan, by points</Text>
 
         <View style={styles.podiumRow}>
-          {podiumVisual.map((user, i) => {
-            if (!user) return <View key={i} style={{ flex: 1 }} />;
-            // The step's height follows its place on the podium; the number
-            // and medal follow the rank, so two travelers tied for first both
-            // show a gold 1.
-            const cfg   = PODIUM[podiumRanks[i]];
-            const rank  = user.rank ?? podiumRanks[i];
-            const medal = MEDAL[rank] || MEDAL[3];
+          {PLACES_LEFT_TO_RIGHT.map((place) => {
+            const step = steps[place];
+            if (!step) return <View key={place} style={{ flex: 1 }} />;
+            const { all, shown } = step;
+            const cfg   = PODIUM[place];
+            const medal = MEDAL[place];
+            const size  = faceSize(place, shown.length);
+            const lead  = shown[0];
+            const more  = all.length - shown.length;
+            const label = all.length === 1
+              ? `Rank ${place}, ${lead.points} points, ${spotsLabel(lead.visited)} visited`
+              : `Rank ${place}, tied: ${shown.map((u) => (u.isMe ? "you" : u.name)).join(", ")}` +
+                `${more ? `, and ${more} more listed below` : ""}, ${lead.points} points each`;
             return (
-              <View key={user.id || i} style={styles.podiumCol}>
-                {rank === 1 && <Icon name="star" size={16} color={colors.accent} style={{ marginBottom: 4 }} />}
+              <View key={place} style={styles.podiumCol}>
+                {place === 1 && <Icon name="star" size={16} color={colors.accent} style={{ marginBottom: 4 }} />}
 
-                <View style={[styles.avatarRing, { borderColor: medal.ring }, user.isMe && { borderColor: colors.brand }]}>
-                  {personAvatar(user, cfg.avatarSz)}
-                  <View style={[styles.medalCoin, { backgroundColor: medal.coin }]}>
-                    <Text style={[styles.medalCoinText, { color: medal.coinText }]}>{rank}</Text>
-                  </View>
+                <View style={styles.podiumFaces}>
+                  {shown.map((user, j) => (
+                    <View
+                      key={user.id || j}
+                      style={[
+                        styles.avatarRing,
+                        { borderColor: user.isMe ? colors.brand : medal.ring },
+                        j > 0 && { marginLeft: -(size + FACE_RING) * (1 - FACE_STEP) },
+                      ]}
+                    >
+                      {personAvatar(user, size)}
+                      {j === shown.length - 1 && (
+                        <View style={[styles.medalCoin, { backgroundColor: medal.coin }]}>
+                          <Text style={[styles.medalCoinText, { color: medal.coinText }]}>{place}</Text>
+                        </View>
+                      )}
+                    </View>
+                  ))}
                 </View>
 
                 <Text
-                  style={[styles.podiumName, podiumNameMax, { color: colors.brandDark }, user.isMe && { fontFamily: fonts.sansBold }]}
-                  numberOfLines={1}
+                  style={[styles.podiumName, podiumNameMax, { color: colors.brandDark }, lead.isMe && { fontFamily: fonts.sansBold }]}
+                  numberOfLines={all.length > 1 ? 2 : 1}
                 >
-                  {user.isMe ? "You" : user.name}
+                  {stepNames(step)}
                 </Text>
 
                 <View
                   style={[styles.podiumPts, { backgroundColor: colors.background }]}
                   accessible
-                  accessibilityLabel={`Rank ${rank}${tiedAt(rank) ? ", tied" : ""}, ${user.points} points, ${spotsLabel(user.visited)} visited`}
+                  accessibilityLabel={label}
                 >
                   <Icon name="stars" size={10} color={colors.brand} weight="fill" />
-                  <Text style={[styles.podiumPtsText, { color: colors.brandDark }]}>{ptsLabel(user.points)}</Text>
+                  <Text style={[styles.podiumPtsText, { color: colors.brandDark }]}>{ptsLabel(lead.points)}</Text>
                 </View>
 
                 <View style={[
                   styles.podiumBlock,
                   { height: cfg.blockH, backgroundColor: "rgba(255,255,255,0.42)" },
                 ]}>
-                  <Text style={[styles.podiumNum, { color: colors.brand }]}>{rank}</Text>
+                  <Text style={[styles.podiumNum, { color: colors.brand }]}>{place}</Text>
                 </View>
               </View>
             );
@@ -418,7 +481,7 @@ export default function Leaderboard() {
                 <Icon name="users" size={22} color={colors.brand} />
               </View>
               <Text style={[styles.topThreeOnly, { color: colors.textMuted }]}>
-                Only the top 3 so far — invite friends to explore!
+                Everyone's on the podium so far — invite friends to explore!
               </Text>
             </>
           }
@@ -483,11 +546,13 @@ const styles = StyleSheet.create({
   },
   podiumCol: { flex: 1, alignItems: "center" },
 
+  // The face, or the overlapping faces of a tie, on one step.
+  podiumFaces: { flexDirection: "row", marginBottom: 8 },
+  // borderWidth + padding must stay in sync with FACE_RING.
   avatarRing: {
     borderRadius: 999,
     borderWidth: 3,
     padding: 2,
-    marginBottom: 8,
     backgroundColor: "rgba(255,255,255,0.5)",
     ...shadow.md,
   },
