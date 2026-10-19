@@ -483,14 +483,27 @@ export default function Mission({ navigation, route }) {
           </View>
         </View>
 
-        {/* Square, like the scan frame it was cropped to. */}
-        {!!capturedImage && (
+        {/* Square, like the scan frame it was cropped to. Before a photo it
+            holds the frame itself, so the screen isn't empty and the photo
+            lands in the same place. */}
+        {capturedImage ? (
           <Image
             source={{ uri: capturedImage }}
             style={[styles.preview, { backgroundColor: colors.brandSoft }]}
             resizeMode="cover"
             accessibilityLabel="The photo you took"
           />
+        ) : (
+          <View style={[styles.preview, styles.slot, { backgroundColor: colors.brandSoft }]}>
+            <View style={[styles.slotCorner, styles.topLeft,     { borderColor: colors.brand }]} />
+            <View style={[styles.slotCorner, styles.topRight,    { borderColor: colors.brand }]} />
+            <View style={[styles.slotCorner, styles.bottomLeft,  { borderColor: colors.brand }]} />
+            <View style={[styles.slotCorner, styles.bottomRight, { borderColor: colors.brand }]} />
+            <Icon name="camera" size={40} color={colors.brand} />
+            <Text style={[typography.body, styles.center, { color: colors.textSecondary, marginTop: spacing.sm }]}>
+              Your photo shows here
+            </Text>
+          </View>
         )}
 
         {!!result && (
@@ -514,6 +527,24 @@ export default function Mission({ navigation, route }) {
           <Text style={[typography.caption, styles.match, { color: colors.textMuted }]}>
             AI match: {Math.round(Math.max(0, Math.min(100, confidence)))}%
           </Text>
+        )}
+
+        {/* What makes a photo count — the usual reasons one is turned down. */}
+        {status !== 'approved' && (
+          <View style={styles.tips}>
+            {[
+              { icon: 'map-pin',  text: `Take it at ${spot?.name || 'the spot'}. Photos from anywhere else don't count.` },
+              { icon: 'maximize', text: `Fit ${target} inside the frame.` },
+              { icon: 'sun',      text: 'Use good light and hold the phone still.' },
+            ].map((tip) => (
+              <View key={tip.icon} style={styles.tip}>
+                <Icon name={tip.icon} size={18} color={colors.brand} />
+                <Text style={[typography.body, styles.tipText, { color: colors.textSecondary }]} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+                  {tip.text}
+                </Text>
+              </View>
+            ))}
+          </View>
         )}
       </ScrollView>
 
@@ -544,6 +575,14 @@ const styles = StyleSheet.create({
   headText: { flex: 1 },
 
   preview: { width: '100%', aspectRatio: 1, borderRadius: radius.card, marginTop: spacing.lg },
+  slot:       { alignItems: 'center', justifyContent: 'center' },
+  // The camera's frame corners, inset into the empty slot.
+  slotCorner: { position: 'absolute', width: 34, height: 34, margin: 18 },
+  center:     { textAlign: 'center' },
+
+  tips:    { marginTop: spacing.lg, gap: spacing.md },
+  tip:     { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.md },
+  tipText: { flex: 1 },
 
   result: {
     flexDirection: 'row', alignItems: 'center', gap: spacing.sm,

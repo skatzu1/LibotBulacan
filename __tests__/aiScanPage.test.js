@@ -95,6 +95,11 @@ describe("AI Scan page", () => {
     expect(page.getByText("Take a photo of the Philippine flag")).toBeTruthy();
     expect(page.getByText("Barasoain Church · 5 points")).toBeTruthy();
     expect(page.getByRole("button", { name: "Open Camera" })).toBeTruthy();
+    // Not an empty page: the frame the photo will fill, and what makes it count.
+    expect(page.getByText("Your photo shows here")).toBeTruthy();
+    expect(page.getByText("Take it at Barasoain Church. Photos from anywhere else don't count.")).toBeTruthy();
+    expect(page.getByText("Fit the Philippine flag inside the frame.")).toBeTruthy();
+    expect(page.getByText("Use good light and hold the phone still.")).toBeTruthy();
     for (const gone of [/Hello there/, /What to do/, /Mark as Done/, /Match confidence/, /On the hunt/, /snap a clear photo/, /Point your camera/]) {
       expect(page.queryByText(gone)).toBeNull();
     }
