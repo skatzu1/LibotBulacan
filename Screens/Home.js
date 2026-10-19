@@ -277,12 +277,11 @@ function HomeContent({ profilePhoto, navigation }) {
     return fetch(`${BASE_URL}/api/spots/top/visited`)
       .then((r) => r.json())
       .then((d) => {
-        // Every spot the server sends (up to 10, most visited first), not
-        // only ones with visits: with few visits logged yet, that left a
-        // single card (QA 2026-10-16: show more places here). Only spots
-        // with visits get a rank number (see below).
+        // Up to 10, most visited first, and only spots someone has visited:
+        // a spot with no visits isn't "most visited". The server leaves those
+        // out too; this keeps them out against an older backend.
         if (d.success) {
-          setTopSpots(d.spots);
+          setTopSpots(d.spots.filter((s) => (s.visitCount ?? 0) > 0));
           setTopError(false);
           return true;
         }
@@ -521,25 +520,20 @@ function HomeContent({ profilePhoto, navigation }) {
                   <EmptyState icon="map" text="No visits yet — be the first to explore!" />
                 ) : (
                   <View style={[h.grid, { gap }]}>
-                    {/* This section is a ranking — so each card with visits
-                        shows its rank. Spots nobody has visited yet fill the
-                        rest of the list, unranked. */}
-                    {topSpots.map((spot, i) => {
-                      const visits = spot.visitCount ?? 0;
-                      return (
-                        <SpotCard
-                          key={spot._id}
-                          spot={spot}
-                          rank={visits > 0 ? i + 1 : undefined}
-                          wide={i === 0}
-                          height={i === 0 ? 200 : 150}
-                          rating={getAverageRating(spot._id, spot.ratingAvg) || 0}
-                          visits={visits > 0 ? visits : undefined}
-                          style={[h.gridCell, i !== 0 && { width: cardW }]}
-                          onPress={() => handleSpotPress(spot)}
-                        />
-                      );
-                    })}
+                    {/* This section is a ranking — so each card shows its rank. */}
+                    {topSpots.map((spot, i) => (
+                      <SpotCard
+                        key={spot._id}
+                        spot={spot}
+                        rank={i + 1}
+                        wide={i === 0}
+                        height={i === 0 ? 200 : 150}
+                        rating={getAverageRating(spot._id, spot.ratingAvg) || 0}
+                        visits={spot.visitCount}
+                        style={[h.gridCell, i !== 0 && { width: cardW }]}
+                        onPress={() => handleSpotPress(spot)}
+                      />
+                    ))}
                   </View>
                 )}
               </View>
