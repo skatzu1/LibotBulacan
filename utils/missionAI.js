@@ -48,8 +48,8 @@ export async function loadModel(missionId) {
 // accuracy } from expo-location.
 //
 // Returns { verified, confidence, noModel, tooFar, distance, noLocation,
-// completed }, { error: message } when the server refused the request, or null
-// when it couldn't be reached.
+// completed, pointsAwarded }, { error: message } when the server refused the
+// request, or null when it couldn't be reached.
 export async function runPrediction(imageUri, missionId, getToken, coords) {
   try {
     const base64Image = await uploadableBase64(imageUri);
@@ -85,6 +85,8 @@ export async function runPrediction(imageUri, missionId, getToken, coords) {
       noLocation: data.noLocation || false,
       // The server completed the mission (now or on an earlier attempt).
       completed:  !!data.verified && (data.alreadyCompleted === true || data.alreadyCompleted === false),
+      // 0 when it was already completed on an earlier attempt.
+      pointsAwarded: Number(data.pointsAwarded) || 0,
     };
 
   } catch (err) {

@@ -1,4 +1,14 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+// AI Scan — the photo mission. The traveler photographs the spot's object (the
+// Philippine flag at a historical spot, a cross at a religious one); the server
+// checks the photo and where it was taken, and completes the mission and pays
+// its points in the same step (app.js POST /api/verify).
+//
+// Kept simple on purpose (2026-10-20, "make the AI mission UI simple"): one
+// line saying what to photograph, the photo once taken, one status line, one
+// button. The greeting, the ticket card, the four-step guide, the confidence
+// meter, the zoom slider and the extra "Mark as Done" tap are gone — the
+// server has already completed the mission by the time the photo is accepted.
+import React, { useState, useRef, useMemo } from 'react';
 import {
   View,
   Text,
@@ -13,76 +23,25 @@ import {
   PanResponder,
 } from 'react-native';
 // Not React Native's own SafeAreaView: that one only pads on iOS, so on
-// Android (edge to edge) the header and the camera's close and flip buttons
-// sat under the status bar.
+// Android (edge to edge) the camera's close and flip buttons sat under the
+// status bar.
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context';
 import { showAlert } from "../components/AppAlert";
 import { Camera, useCameraDevice, useCameraPermission } from 'react-native-vision-camera';
 import * as ImageManipulator from 'expo-image-manipulator';
 import { useIsFocused } from '@react-navigation/native';
 import { useAuth } from '@clerk/clerk-expo';
-import { loadModel, runPrediction } from '../utils/missionAI';
+import { runPrediction } from '../utils/missionAI';
 import { ensureAtSpotForPhoto, currentCoords } from '../utils/arLocationGate';
 import { ensureCameraAccess } from '../utils/cameraAccess';
+import { missionKind } from '../utils/missionTiers';
 import * as Haptics from "expo-haptics";
-import { useTheme, fonts, typography } from '../context/ThemeContext';
+import { useTheme, fonts, typography, spacing, radius, MAX_FONT_SCALE } from '../context/ThemeContext';
 import { useMissions } from '../context/MissionContext';
+import { ScreenHeader, PrimaryButton, H_PAD } from '../components/ui';
 import Icon from "../components/Icon";
 
 const { width, height } = Dimensions.get('window');
-
-// ─── Palette ────────────────────────────────────────────────────────────────
-// Mission screen uses the shared app theme. This maps the local style keys
-// onto theme tokens so the screen adapts to light/dark like the rest of the app.
-const makeColors = (c) => ({
-  bg:          c.background,
-  surface:     c.card,
-  border:      c.cardBorder,
-  ink:         c.textPrimary,
-  inkSub:      c.textSecondary,
-  inkMuted:    c.textMuted,
-  brand:       c.brand,
-  brandDeep:   c.brandDark,
-  brandTint:   c.brandLight,
-  gold:        c.accent,
-  onGold:      c.onAccent,
-  danger:      c.danger,
-  dangerTint:  c.dangerBg,
-  success:     c.success,
-  successTint: c.successBg,
-});
-
-// `accentKey` names a ThemeContext colour token rather than a literal hex, so
-// each mission type stays on-brand and follows light/dark like the rest of the
-// app. (These used to be one-off hexes left over from the pre-cyan palette —
-// e.g. checkin was still the old maroon.)
-const TYPE_CONFIG = {
-  checkin: {
-    iconName:  'map-pin',
-    accentKey: 'success',      // arriving / confirming you're there
-    hint:      'Head to this spot in person, then check in to log it.',
-  },
-  photo: {
-    iconName:  'camera',
-    accentKey: 'accentDark',   // capture — the brand's gold
-    hint:      'Snap a clear photo so the sighting can be confirmed.',
-  },
-  ar: {
-    iconName:  'aperture',
-    accentKey: 'brand',        // camera/scan features share the brand teal
-    hint:      'Line it up in AR to log this sighting.',
-  },
-  quiz: {
-    iconName:  'help-circle',
-    accentKey: 'warning',
-    hint:      'Answer correctly to log this sighting.',
-  },
-  ai: {
-    iconName:  'cpu',
-    accentKey: 'brand',
-    hint:      'Snap a clear photo — an on-site AI scan confirms the sighting.',
-  },
-};
 
 // ─── Scan frame geometry (must match scanFrame style below) ───────────────────
 const FRAME_TOP_RATIO  = 0.22;  // matches scanFrame.top: height * 0.22
@@ -152,113 +111,20 @@ async function cropToScanFrame(uri) {
   }
 }
 
-// ─── Step Row ─────────────────────────────────────────────────────────────────
-function StepRow({ number, icon, text, isLast }) {
-  const { colors } = useTheme();
-  const C = useMemo(() => makeColors(colors), [colors]);
-  const stepStyles = useMemo(() => makeStepStyles(C), [C]);
-  return (
-    <View style={[stepStyles.row, isLast && { marginBottom: 0 }]}>
-      <View style={stepStyles.left}>
-        <View style={stepStyles.numCircle}>
-          <Text style={stepStyles.numText}>{number}</Text>
-        </View>
-        {!isLast && <View style={stepStyles.connector} />}
-      </View>
-      <View style={stepStyles.content}>
-        <Icon name={icon} size={13} color={C.inkMuted} style={{ marginRight: 8, marginTop: 1 }} />
-        <Text style={stepStyles.text}>{text}</Text>
-      </View>
-    </View>
-  );
-}
-
-const makeStepStyles = (COLORS) => StyleSheet.create({
-  row:       { flexDirection: 'row', marginBottom: 18 },
-  left:      { alignItems: 'center', marginRight: 14 },
-  numCircle: {
-    width: 24, height: 24, borderRadius: 12,
-    backgroundColor: COLORS.brandTint,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  numText:   { fontSize: 11, fontFamily: fonts.sansBold, color: COLORS.brandDeep },
-  connector: { width: 1.5, flex: 1, backgroundColor: COLORS.border, marginTop: 4 },
-  content:   { flexDirection: 'row', alignItems: 'flex-start', flex: 1, paddingTop: 3 },
-  text:      { fontSize: 13.5, fontFamily: fonts.sans, color: COLORS.inkSub, flex: 1, lineHeight: 20 },
-});
-
-// ─── Confidence Meter ───────────────────────────────────────────────────────────
-function ConfidenceMeter({ confidence, color }) {
-  const { colors } = useTheme();
-  const meterStyles = useMemo(() => makeMeterStyles(makeColors(colors)), [colors]);
-  if (confidence === null || confidence === undefined) return null;
-  const pct = Math.max(0, Math.min(100, confidence));
-
-  return (
-    <View style={meterStyles.wrap}>
-      <View style={meterStyles.labelRow}>
-        <Text style={meterStyles.label}>Match confidence</Text>
-        <Text style={[meterStyles.value, { color }]}>{pct.toFixed(1)}%</Text>
-      </View>
-      <View style={meterStyles.track}>
-        <View style={[meterStyles.fill, { width: `${pct}%`, backgroundColor: color }]} />
-      </View>
-    </View>
-  );
-}
-
-const makeMeterStyles = (COLORS) => StyleSheet.create({
-  wrap:     { width: '100%', marginBottom: 18 },
-  labelRow: {
-    flexDirection: 'row', justifyContent: 'space-between',
-    alignItems: 'center', marginBottom: 6,
-  },
-  label: { fontSize: 12, fontFamily: fonts.sansSemi, color: COLORS.inkMuted },
-  value: { fontSize: 13, fontFamily: fonts.sansBold },
-  track: {
-    width: '100%', height: 8, borderRadius: 4,
-    backgroundColor: COLORS.border, overflow: 'hidden',
-  },
-  fill: { height: '100%', borderRadius: 4 },
-});
-
-// ─── Zoom geometry ──────────────────────────────────────────────────────────
-const ZOOM_TRACK_HEIGHT = 160;
-const ZOOM_THUMB_SIZE   = 24;
-
 // ─── Component ────────────────────────────────────────────────────────────────
 export default function Mission({ navigation, route }) {
   const { spot, mission } = route.params;
 
-  const typeConfig = TYPE_CONFIG[mission.type] || TYPE_CONFIG.checkin;
-
-  const config = {
-    id:          mission._id,
-    title:       mission.title,
-    // For "ai" missions, `product` needs to read as a noun phrase ("the
-    // Philippine flag") since it's slotted into sentences like "Keep {product}
-    // inside the frame" — aiTargetPhrase is computed live server-side from the
-    // spot's current category (see missionRoutes.js) so it can't drift out of
-    // sync the way the mission title/description could.
-    product:     mission.type === 'ai' && mission.aiTargetPhrase
-      ? mission.aiTargetPhrase
-      : mission.title,
-    category:    mission.type === 'ai'
-      ? 'AI'
-      : mission.type.charAt(0).toUpperCase() + mission.type.slice(1),
-    iconName:    mission.icon || typeConfig.iconName,
-    hint:        mission.aiHint || mission.description || typeConfig.hint,
-    type:        mission.type,
-  };
+  // "the Philippine flag" — computed server-side from the spot's category
+  // (missionRoutes.js), so it can't drift from the model that checks the photo.
+  const target = mission.aiTargetPhrase || mission.title;
+  const heading = mission.aiTargetPhrase ? `Take a photo of ${mission.aiTargetPhrase}` : mission.title;
+  const cameraTitle = mission.aiTargetLabel || mission.title;
 
   const { getToken } = useAuth();
-  const { completeMission: persistMissionComplete, completedMissions, markCompleted } = useMissions();
+  const { completedMissions, markCompleted } = useMissions();
   const alreadyCompleted = completedMissions?.includes(mission._id);
   const { colors, isDark } = useTheme();
-  // Resolved here rather than in TYPE_CONFIG so it follows the active theme.
-  const accentColor = colors[typeConfig.accentKey] || colors.brand;
-  const C = useMemo(() => makeColors(colors), [colors]);
-  const styles = useMemo(() => makeStyles(C), [C]);
 
   const insets = useSafeAreaInsets();
   const cameraRef = useRef(null);
@@ -267,27 +133,26 @@ export default function Mission({ navigation, route }) {
   const photoCoordsRef = useRef(null);
   const { hasPermission } = useCameraPermission();
   const isFocused = useIsFocused();
-  const [cameraOpen, setCameraOpen]     = useState(false);
+  const [cameraOpen, setCameraOpen]       = useState(false);
   const [capturedImage, setCapturedImage] = useState(null);
-  const [modelReady, setModelReady]     = useState(false);
   // True while openCamera checks the user is at the spot, so the button says
   // so instead of looking like it ignored the tap.
   const [checkingSpot, setCheckingSpot] = useState(false);
+  // pending · scanning · approved · failed
   const [status, setStatus]             = useState('pending');
-  const [attempts, setAttempts]         = useState(0);
-  const [facing, setFacing]             = useState('back');
   const [confidence, setConfidence]     = useState(null);
-
-  // ── Focus & zoom state ──────────────────────────────────────────────────
-  // `facing` is declared above; useCameraDevice must come after it.
+  const [pointsEarned, setPointsEarned] = useState(0);
+  const [facing, setFacing]             = useState('back');
   const device = useCameraDevice(facing);
 
-  // `zoom` is a 0–1 user fraction (driven by the slider + pinch gesture); it's
-  // mapped onto the device's real zoom-factor range before being handed to
-  // <Camera>. Capping at neutralZoom×8 keeps the slider usable on devices that
-  // report an enormous maxZoom (e.g. 128×). vision-camera does continuous
-  // autofocus by default; tap-to-focus is handled explicitly via camera.focus().
-  const [zoom, setZoom]             = useState(0);
+  // `zoom` is a 0–1 fraction set by pinching; it's mapped onto the device's
+  // real zoom-factor range before being handed to <Camera>. Capping at
+  // neutralZoom×8 keeps pinching usable on devices that report an enormous
+  // maxZoom (e.g. 128×). The ref lets the pinch handler, created once, start
+  // each pinch from the current zoom rather than from the first render's.
+  const [zoom, setZoom] = useState(0);
+  const zoomRef = useRef(0);
+  const applyZoom = (z) => { zoomRef.current = z; setZoom(z); };
   const zoomFactor = useMemo(() => {
     if (!device) return 1;
     const max = Math.min(device.maxZoom, device.neutralZoom * 8);
@@ -298,25 +163,17 @@ export default function Mission({ navigation, route }) {
   // the reticle View below is ALWAYS mounted. Android's CameraView is backed
   // by a SurfaceView, which composites via a "hole punch" outside RN's normal
   // view diffing. Conditionally mounting/unmounting a sibling view on top of
-  // it (as this used to do) forces Android to re-punch that hole and
-  // recomposite for a frame — since the buffer swap isn't synced with the
-  // surrounding layout pass, you get a torn frame where part of the screen
-  // still shows the old camera image and part shows raw black. That's the
-  // "half the screen goes black" flash. Keeping the view permanently mounted
-  // and only animating its opacity/position avoids that entirely.
+  // it forces Android to re-punch that hole and recomposite for a frame —
+  // since the buffer swap isn't synced with the surrounding layout pass, you
+  // get a torn frame where part of the screen still shows the old camera image
+  // and part shows raw black. Keeping the view permanently mounted and only
+  // animating its opacity/position avoids that entirely.
   const [reticlePos, setReticlePos] = useState({ x: 0, y: 0 });
   const reticleAnim       = useRef(new Animated.Value(0)).current;
   const flashAnim         = useRef(new Animated.Value(0)).current;
   const zoomStartRef      = useRef(0);
   const pinchStartDistRef = useRef(null);
   const touchStartRef     = useRef({ time: 0, touches: 1 });
-
-  useEffect(() => {
-    (async () => {
-      const m = await loadModel(mission._id);
-      setModelReady(!!m);
-    })();
-  }, []);
 
   const openCamera = async () => {
     // Asks the phone's permission prompt if it hasn't been answered, and
@@ -338,7 +195,7 @@ export default function Mission({ navigation, route }) {
     setCapturedImage(null);
     setStatus('pending');
     setConfidence(null);
-    setZoom(0);
+    applyZoom(0);
     setCameraOpen(true);
   };
 
@@ -360,10 +217,10 @@ export default function Mission({ navigation, route }) {
     }
   };
 
-  // ── Single responder for BOTH tap-to-focus and pinch-to-zoom ────────────
-  // Combined into one PanResponder so the two gestures stop fighting over
-  // the responder (a separate TouchableWithoutFeedback + PanResponder pair
-  // on the same view clobber each other's touch handlers).
+  // ── One responder for BOTH tap-to-focus and pinch-to-zoom ───────────────
+  // Combined so the two gestures don't fight over the responder (a separate
+  // TouchableWithoutFeedback + PanResponder pair on the same view clobber
+  // each other's touch handlers).
   const gestureResponder = useRef(
     PanResponder.create({
       onStartShouldSetPanResponder: () => true,
@@ -371,36 +228,27 @@ export default function Mission({ navigation, route }) {
       onPanResponderGrant: (evt) => {
         const touches = evt.nativeEvent.touches;
         touchStartRef.current = { time: Date.now(), touches: touches.length };
-        if (touches.length === 2) {
-          const dx = touches[0].pageX - touches[1].pageX;
-          const dy = touches[0].pageY - touches[1].pageY;
-          pinchStartDistRef.current = Math.sqrt(dx * dx + dy * dy);
-          zoomStartRef.current = zoom;
-        }
+        pinchStartDistRef.current = null;
       },
       onPanResponderMove: (evt) => {
         const touches = evt.nativeEvent.touches;
-        if (touches.length === 2) {
-          if (!pinchStartDistRef.current) {
-            const dx = touches[0].pageX - touches[1].pageX;
-            const dy = touches[0].pageY - touches[1].pageY;
-            pinchStartDistRef.current = Math.sqrt(dx * dx + dy * dy);
-            zoomStartRef.current = zoom;
-            return;
-          }
-          const dx = touches[0].pageX - touches[1].pageX;
-          const dy = touches[0].pageY - touches[1].pageY;
-          const dist = Math.sqrt(dx * dx + dy * dy);
-          const delta = (dist - pinchStartDistRef.current) / width;
-          const next = Math.max(0, Math.min(1, zoomStartRef.current + delta));
-          setZoom(next);
+        if (touches.length !== 2) return;
+        touchStartRef.current.touches = 2;
+        const dx = touches[0].pageX - touches[1].pageX;
+        const dy = touches[0].pageY - touches[1].pageY;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        if (!pinchStartDistRef.current) {
+          pinchStartDistRef.current = dist;
+          zoomStartRef.current = zoomRef.current;
+          return;
         }
+        const delta = (dist - pinchStartDistRef.current) / width;
+        applyZoom(Math.max(0, Math.min(1, zoomStartRef.current + delta)));
       },
       onPanResponderRelease: (evt) => {
         const { time, touches } = touchStartRef.current;
-        const elapsed = Date.now() - time;
-        // A quick single-finger tap (no pinch involved) triggers focus.
-        if (touches === 1 && elapsed < 300) {
+        // A quick single-finger tap (no pinch involved) focuses there.
+        if (touches === 1 && Date.now() - time < 300) {
           const { locationX, locationY } = evt.nativeEvent;
           triggerFocusReticle(locationX, locationY);
         }
@@ -412,125 +260,96 @@ export default function Mission({ navigation, route }) {
     })
   ).current;
 
-  // ── Zoom slider ──────────────────────────────────────────────────────────
-  const zoomSliderResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: () => true,
-      onPanResponderGrant: (evt) => {
-        const y = evt.nativeEvent.locationY;
-        const next = Math.max(0, Math.min(1, 1 - y / ZOOM_TRACK_HEIGHT));
-        setZoom(next);
-      },
-      onPanResponderMove: (evt) => {
-        const y = evt.nativeEvent.locationY;
-        const next = Math.max(0, Math.min(1, 1 - y / ZOOM_TRACK_HEIGHT));
-        setZoom(next);
-      },
-    })
-  ).current;
-
   const takePhoto = async () => {
-  if (!cameraRef.current) return;
-  try {
-    // Custom (non-native) shutter flash
-    Animated.sequence([
-      Animated.timing(flashAnim, { toValue: 1, duration: 60, useNativeDriver: true }),
-      Animated.timing(flashAnim, { toValue: 0, duration: 180, useNativeDriver: true }),
-    ]).start();
+    if (!cameraRef.current) return;
+    try {
+      // Custom (non-native) shutter flash
+      Animated.sequence([
+        Animated.timing(flashAnim, { toValue: 1, duration: 60, useNativeDriver: true }),
+        Animated.timing(flashAnim, { toValue: 0, duration: 180, useNativeDriver: true }),
+      ]).start();
 
-    const photo = await cameraRef.current.takePhoto({ enableShutterSound: false });
-    // Where the photo was taken — read alongside the crop, not after it.
-    const coordsNow = currentCoords();
-    // vision-camera returns a bare filesystem path; <Image>, fetch() and
-    // ImageManipulator all need the file:// scheme.
-    const photoUri = photo.path.startsWith('file://') ? photo.path : `file://${photo.path}`;
+      const photo = await cameraRef.current.takePhoto({ enableShutterSound: false });
+      // Where the photo was taken — read alongside the crop, not after it.
+      const coordsNow = currentCoords();
+      // vision-camera returns a bare filesystem path; <Image>, fetch() and
+      // ImageManipulator all need the file:// scheme.
+      const photoUri = photo.path.startsWith('file://') ? photo.path : `file://${photo.path}`;
 
-    // Crop down to exactly what the user saw inside the scan frame,
-    // so the AI analyzes the same region the guide shows.
-    const croppedUri = await cropToScanFrame(photoUri);
-    const coords = (await coordsNow) || photoCoordsRef.current;
+      // Crop down to exactly what the user saw inside the scan frame,
+      // so the AI analyzes the same region the guide shows.
+      const croppedUri = await cropToScanFrame(photoUri);
+      const coords = (await coordsNow) || photoCoordsRef.current;
 
-    setCameraOpen(false);
-    setCapturedImage(croppedUri);
-    setStatus('scanning');
-    setConfidence(null);
-    setAttempts(prev => prev + 1);
+      setCameraOpen(false);
+      setCapturedImage(croppedUri);
+      setStatus('scanning');
+      setConfidence(null);
 
-    const result = await runPrediction(croppedUri, mission._id, getToken, coords);
+      const result = await runPrediction(croppedUri, mission._id, getToken, coords);
 
-    if (!result) {
-      showAlert('Error', 'Could not analyze image. Please try again.');
+      if (!result) {
+        showAlert('Error', 'Could not analyze image. Please try again.');
+        setStatus('failed');
+        return;
+      }
+
+      if (result.error) {
+        showAlert('Not accepted', result.error);
+        setStatus('pending');
+        return;
+      }
+
+      // If backend says no model exists yet for this mission
+      if (result.noModel) {
+        showAlert(
+          'Not Ready Yet',
+          `Verification for "${mission.title}" isn't set up yet. Check back soon!`
+        );
+        setStatus('pending');
+        return;
+      }
+
+      if (result.tooFar) {
+        const away = result.distance >= 1000
+          ? `${(result.distance / 1000).toFixed(1)} km`
+          : `${result.distance} m`;
+        showAlert(
+          `You're not at ${spot?.name || 'the spot'}`,
+          `This photo was taken about ${away} away. Photo missions only count when the photo is taken at the spot itself.`
+        );
+        setStatus('pending');
+        return;
+      }
+
+      if (result.noLocation) {
+        showAlert(
+          'Not Ready Yet',
+          `This spot's location isn't set up yet, so its photo mission can't be checked. Check back soon!`
+        );
+        setStatus('pending');
+        return;
+      }
+
+      setConfidence(typeof result.confidence === 'number' ? result.confidence : null);
+      setStatus(result.verified ? 'approved' : 'failed');
+      if (result.verified) {
+        setPointsEarned(result.pointsAwarded || 0);
+        // One of the few genuine reward moments in the app: it should register
+        // physically, not just visually.
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      }
+      // The server completed the mission and awarded its points along with the
+      // verification — reflect that straight away.
+      if (result.completed) markCompleted(mission._id);
+    } catch (error) {
+      console.error('Camera error:', error);
       setStatus('failed');
-      return;
     }
-
-    if (result.error) {
-      showAlert('Not accepted', result.error);
-      setStatus('pending');
-      return;
-    }
-
-    // If backend says no model exists yet for this mission
-    if (result.noModel) {
-      showAlert(
-        'Not Ready Yet',
-        `Verification for "${mission.title}" isn't set up yet. Check back soon!`
-      );
-      setStatus('pending');
-      return;
-    }
-
-    if (result.tooFar) {
-      const away = result.distance >= 1000
-        ? `${(result.distance / 1000).toFixed(1)} km`
-        : `${result.distance} m`;
-      showAlert(
-        `You're not at ${spot?.name || 'the spot'}`,
-        `This photo was taken about ${away} away. Photo missions only count when the photo is taken at the spot itself.`
-      );
-      setStatus('pending');
-      return;
-    }
-
-    if (result.noLocation) {
-      showAlert(
-        'Not Ready Yet',
-        `This spot's location isn't set up yet, so its photo mission can't be checked. Check back soon!`
-      );
-      setStatus('pending');
-      return;
-    }
-
-    setConfidence(typeof result.confidence === 'number' ? result.confidence : null);
-    setStatus(result.verified ? 'approved' : 'failed');
-    // The server completed the mission and awarded its points along with the
-    // verification — reflect that straight away.
-    if (result.completed) markCompleted(mission._id);
-  } catch (error) {
-    console.error('Camera error:', error);
-    setStatus('failed');
-  }
-};
+  };
 
   const flipCamera  = () => setFacing(prev => (prev === 'back' ? 'front' : 'back'));
   const closeCamera = () => { setCameraOpen(false); setStatus('pending'); };
-
-  const completeMission = () => {
-    // Completing a mission is one of the few genuine reward moments in the app
-    // and it awards points — it should register physically, not just visually.
-    Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-
-    // The server already completed the mission and awarded its points when it
-    // verified the photo; this just confirms it (it answers alreadyCompleted)
-    // and keeps local state in step. Fire-and-forget and idempotent.
-    persistMissionComplete(mission._id);
-    showAlert(
-      'Nice spotting!',
-      `"${mission.title}" is confirmed and logged as complete.`,
-      [{ text: 'Back to Missions', onPress: () => navigation.goBack() }]
-    );
-  };
 
   // ─── CAMERA VIEW ──────────────────────────────────────────────────────────
   if (cameraOpen) {
@@ -556,459 +375,195 @@ export default function Mission({ navigation, route }) {
             />
           )}
 
-            <SafeAreaView edges={['top']} style={styles.cameraTopBar}>
-              <TouchableOpacity
-                accessibilityRole="button" accessibilityLabel="Close camera" onPress={closeCamera} style={styles.cameraIconBtn}>
-                <Icon name="x" size={20} color="white" />
-              </TouchableOpacity>
-              <View style={styles.cameraTitleWrap}>
-                <Text style={styles.cameraLabel}>On the hunt</Text>
-                <Text style={styles.cameraTitle}>{config.product}</Text>
-              </View>
-              <TouchableOpacity
-                accessibilityRole="button" accessibilityLabel="Switch camera" onPress={flipCamera} style={styles.cameraIconBtn}>
-                <Icon name="refresh-cw" size={18} color="white" />
-              </TouchableOpacity>
-            </SafeAreaView>
+          <SafeAreaView edges={['top']} style={styles.cameraTopBar}>
+            <TouchableOpacity
+              accessibilityRole="button" accessibilityLabel="Close camera" onPress={closeCamera} style={styles.cameraIconBtn}>
+              <Icon name="x" size={20} color="white" />
+            </TouchableOpacity>
+            <Text style={styles.cameraTitle} numberOfLines={1} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+              {cameraTitle}
+            </Text>
+            <TouchableOpacity
+              accessibilityRole="button" accessibilityLabel="Switch camera" onPress={flipCamera} style={styles.cameraIconBtn}>
+              <Icon name="refresh-cw" size={18} color="white" />
+            </TouchableOpacity>
+          </SafeAreaView>
 
-            <View style={styles.scanFrame} pointerEvents="none">
-              <View style={[styles.corner, styles.topLeft]} />
-              <View style={[styles.corner, styles.topRight]} />
-              <View style={[styles.corner, styles.bottomLeft]} />
-              <View style={[styles.corner, styles.bottomRight]} />
-              <View style={styles.scanLineWrapper}>
-                <View style={styles.scanLine} />
-              </View>
-            </View>
+          <View style={styles.scanFrame} pointerEvents="none">
+            <View style={[styles.corner, styles.topLeft,     { borderColor: colors.accent }]} />
+            <View style={[styles.corner, styles.topRight,    { borderColor: colors.accent }]} />
+            <View style={[styles.corner, styles.bottomLeft,  { borderColor: colors.accent }]} />
+            <View style={[styles.corner, styles.bottomRight, { borderColor: colors.accent }]} />
+          </View>
 
-            {/*
-              Focus reticle — ALWAYS mounted (never conditionally rendered).
-              Visibility is driven purely by reticleAnim's opacity, and
-              position by reticlePos via style. See the note above `zoom`
-              state for why mount/unmount over a SurfaceView-backed
-              CameraView caused the black flash.
-            */}
-            <Animated.View
-              pointerEvents="none"
-              style={[
-                styles.focusReticle,
-                {
-                  left: reticlePos.x - 32,
-                  top:  reticlePos.y - 32,
-                  opacity: reticleAnim,
-                  transform: [{
-                    scale: reticleAnim.interpolate({
-                      inputRange: [0, 1],
-                      outputRange: [1.3, 1],
-                    }),
-                  }],
-                },
-              ]}
-            />
+          {/* Focus reticle — ALWAYS mounted; see the note above reticlePos. */}
+          <Animated.View
+            pointerEvents="none"
+            style={[
+              styles.focusReticle,
+              {
+                borderColor: colors.accent,
+                left: reticlePos.x - 32,
+                top:  reticlePos.y - 32,
+                opacity: reticleAnim,
+                transform: [{
+                  scale: reticleAnim.interpolate({ inputRange: [0, 1], outputRange: [1.3, 1] }),
+                }],
+              },
+            ]}
+          />
 
-            {/* Custom shutter flash (replaces native flash animation) */}
-            <Animated.View
-              pointerEvents="none"
-              style={[styles.shutterFlash, { opacity: flashAnim }]}
-            />
+          {/* Custom shutter flash (replaces native flash animation) */}
+          <Animated.View
+            pointerEvents="none"
+            style={[styles.shutterFlash, { backgroundColor: colors.brand, opacity: flashAnim }]}
+          />
 
-            <View style={styles.scanHintWrap} pointerEvents="none">
-              <Icon name="maximize" size={12} color="rgba(255,255,255,0.85)" style={{ marginRight: 6 }} />
-              <Text style={styles.scanHint}>Keep {config.product} inside the frame</Text>
-            </View>
+          <View style={styles.scanHintWrap} pointerEvents="none">
+            <Text style={styles.scanHint} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+              Keep {target} inside the frame
+            </Text>
+          </View>
 
-            {/* Zoom slider */}
-            <View style={styles.zoomTrackWrap}>
-              <Icon name="zoom-in" size={14} color="rgba(255,255,255,0.8)" />
-              <View style={styles.zoomTrack} {...zoomSliderResponder.panHandlers}>
-                <View
-                  style={[
-                    styles.zoomFill,
-                    { height: `${zoom * 100}%` },
-                  ]}
-                />
-                <View
-                  style={[
-                    styles.zoomThumb,
-                    { bottom: `${zoom * 100}%`, marginBottom: -ZOOM_THUMB_SIZE / 2 },
-                  ]}
-                />
-              </View>
-              <Icon name="zoom-out" size={14} color="rgba(255,255,255,0.8)" />
-            </View>
-
-            <View style={[styles.cameraBottomBar, { bottom: Math.max(48, insets.bottom + 24) }]}>
-              <TouchableOpacity
-                accessibilityRole="button"
-                accessibilityLabel="Take the photo"
-                accessibilityHint="Checks it against this mission"
-                style={styles.captureButton} onPress={takePhoto} activeOpacity={0.8}>
-                <View style={styles.captureInner} />
-              </TouchableOpacity>
-            </View>
-
+          <View style={[styles.cameraBottomBar, { bottom: Math.max(48, insets.bottom + 24) }]}>
+            <TouchableOpacity
+              accessibilityRole="button"
+              accessibilityLabel="Take the photo"
+              accessibilityHint="Checks it against this mission"
+              style={styles.captureButton} onPress={takePhoto} activeOpacity={0.8}>
+              <View style={styles.captureInner} />
+            </TouchableOpacity>
+          </View>
         </View>
       </View>
     );
   }
 
   // ─── MAIN SCREEN ──────────────────────────────────────────────────────────
+  const done = status === 'approved' || alreadyCompleted;
+  const result =
+    status === 'scanning' ? {
+      icon: null, bg: colors.brandSoft, fg: colors.brandDark,
+      text: 'Checking your photo…',
+    } : status === 'approved' ? {
+      icon: 'check-circle', bg: colors.successBg, fg: colors.success,
+      text: pointsEarned > 0 ? `Found it! +${pointsEarned} points` : 'Found it! This one is done.',
+    } : status === 'failed' ? {
+      icon: 'x-circle', bg: colors.dangerBg, fg: colors.danger,
+      text: `Couldn't find ${target}. Get closer, in good light, and try again.`,
+    } : alreadyCompleted ? {
+      icon: 'check-circle', bg: colors.successBg, fg: colors.success,
+      text: 'Already done. You can scan again for fun.',
+    } : null;
+
   return (
-    <SafeAreaView edges={['top', 'left', 'right']} style={styles.container}>
-      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={C.bg} />
-      <ScrollView
-        contentContainerStyle={styles.scroll}
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Header */}
-        <View style={styles.header}>
-          <TouchableOpacity
-            accessibilityRole="button" accessibilityLabel="Go back" onPress={() => navigation.goBack()} style={styles.backBtn}>
-            <Icon name="chevron-left" size={20} color={C.ink} />
-          </TouchableOpacity>
-          <Text style={styles.headerTitle}>Bakit List</Text>
-          <View style={{ width: 36 }} />
-        </View>
+    // ScreenHeader pads for the top inset itself, so only the bottom edge here.
+    <SafeAreaView style={[styles.screen, { backgroundColor: colors.background }]} edges={['bottom']}>
+      <StatusBar barStyle={isDark ? 'light-content' : 'dark-content'} backgroundColor={colors.background} />
 
-        {/* Greeting */}
-        <View style={styles.greetingBlock}>
-          <Text style={styles.greetingHello}>Hello there, traveler!</Text>
-          <Text style={styles.greetingSub}>Time for a hunting mission.</Text>
-        </View>
+      {/* The step's name from the Bakit List ("AI Scan"), like Nearby Eats. */}
+      <ScreenHeader title={missionKind(mission).label} onBack={() => navigation.goBack()} />
 
-        {/* Mission ticket */}
-        <View style={styles.ticketCard}>
-          <View style={styles.ticketMain}>
-            <View style={[styles.iconWrap, { backgroundColor: accentColor + '18' }]}>
-              <Icon name={config.iconName} size={24} color={accentColor} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.ticketCategory}>{config.category} sighting</Text>
-              <Text style={styles.ticketTitle}>{config.title}</Text>
-            </View>
-            {attempts > 0 && (
-              <View style={styles.attemptsBadge}>
-                <Text style={styles.attemptsNum}>{attempts}</Text>
-                <Text style={styles.attemptsLabel}>tries</Text>
-              </View>
-            )}
+      <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
+        <View style={styles.headRow}>
+          <View style={[styles.tile, { backgroundColor: done ? colors.successBg : colors.brandSoft }]}>
+            <Icon name={done ? 'check' : 'camera'} size={26} color={done ? colors.success : colors.brand} />
           </View>
-
-          <View style={styles.ticketDividerRow}>
-            <View style={[styles.ticketNotch, styles.ticketNotchLeft]} />
-            <View style={styles.ticketDividerLine} />
-            <View style={[styles.ticketNotch, styles.ticketNotchRight]} />
+          <View style={styles.headText}>
+            <Text style={[typography.h2, { color: colors.brandDark }]} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+              {heading}
+            </Text>
+            <Text
+              style={[typography.caption, { color: colors.textMuted, marginTop: 2 }]}
+              numberOfLines={2}
+              maxFontSizeMultiplier={MAX_FONT_SCALE}
+            >
+              {[spot?.name, mission.points ? `${mission.points} points` : null].filter(Boolean).join(' · ')}
+            </Text>
           </View>
-
-          <Text style={styles.ticketBrief}>
-            Spot <Text style={styles.ticketBriefStrong}>{config.product}</Text> to complete this activity.
-          </Text>
-
-          {spot?.name && (
-            <View style={styles.spotRow}>
-              <Icon name="map-pin" size={12} color={C.inkSub} />
-              <Text style={styles.spotRowText}>{spot.name}</Text>
-            </View>
-          )}
         </View>
 
-        {/* Model loading */}
-        {!modelReady && (
-          <View style={styles.loadingRow}>
-            <ActivityIndicator color={C.brand} size="small" />
-            <Text style={styles.loadingText}>Getting the scanner ready…</Text>
+        {/* Square, like the scan frame it was cropped to. */}
+        {!!capturedImage && (
+          <Image
+            source={{ uri: capturedImage }}
+            style={[styles.preview, { backgroundColor: colors.brandSoft }]}
+            resizeMode="cover"
+            accessibilityLabel="The photo you took"
+          />
+        )}
+
+        {!!result && (
+          <View
+            style={[styles.result, { backgroundColor: result.bg }]}
+            accessible
+            accessibilityLiveRegion="polite"
+            accessibilityLabel={result.text}
+          >
+            {result.icon
+              ? <Icon name={result.icon} size={18} color={result.fg} />
+              : <ActivityIndicator size="small" color={result.fg} />}
+            <Text style={[styles.resultText, { color: result.fg }]} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+              {result.text}
+            </Text>
           </View>
         )}
 
-        {/* Steps */}
-        <View style={styles.card}>
-          <Text style={styles.cardLabel}>What to do</Text>
-          {[
-            { icon: 'compass',      text: `Keep an eye out for ${config.product}` },
-            { icon: 'camera',       text: 'Tap "Open Camera" and line up your shot' },
-            { icon: 'maximize',     text: 'Keep it fully inside the frame' },
-            { icon: 'check-circle', text: 'Hold still — verification takes a few seconds' },
-          ].map((step, i, arr) => (
-            <StepRow
-              key={i}
-              number={i + 1}
-              icon={step.icon}
-              text={step.text}
-              isLast={i === arr.length - 1}
-            />
-          ))}
-
-          {config.hint && (
-            <View style={styles.hintBox}>
-              <Icon name="info" size={13} color={C.brandDeep} style={{ marginRight: 8, marginTop: 1 }} />
-              <Text style={styles.hintText}>{config.hint}</Text>
-            </View>
-          )}
-
-          {alreadyCompleted && status === 'pending' && (
-            <View style={[styles.hintBox, { backgroundColor: C.successTint, marginTop: 10 }]}>
-              <Icon name="check-circle" size={13} color={C.success} style={{ marginRight: 8, marginTop: 1 }} />
-              <Text style={[styles.hintText, { color: C.success }]}>
-                Already logged — feel free to scan again just for fun.
-              </Text>
-            </View>
-          )}
-        </View>
-
-        {/* Status card */}
-        <View style={styles.card}>
-
-          {/* PENDING */}
-          {status === 'pending' && (
-            <View style={styles.statusInner}>
-              <View style={styles.statusIconCircle}>
-                <Icon name="compass" size={28} color={C.brand} />
-              </View>
-              <Text style={styles.statusTitle}>Ready when you are</Text>
-              <Text style={styles.statusDesc}>
-                Open the camera and point it at {config.product.toLowerCase()} to log the sighting.
-              </Text>
-              <TouchableOpacity
-                accessibilityRole="button"
-                style={[styles.primaryBtn, !modelReady && styles.disabledBtn]}
-                onPress={openCamera}
-                disabled={!modelReady || checkingSpot}
-                activeOpacity={0.85}
-              >
-                {checkingSpot
-                  ? <ActivityIndicator size="small" color={C.onGold} style={{ marginRight: 8 }} />
-                  : <Icon name="camera" size={16} color={C.onGold} style={{ marginRight: 8 }} />}
-                <Text style={styles.primaryBtnText}>
-                  {checkingSpot ? 'Checking your location…' : modelReady ? 'Open Camera' : 'Loading scanner…'}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          )}
-
-          {/* SCANNING */}
-          {status === 'scanning' && (
-            <View style={styles.statusInner}>
-              {capturedImage && (
-                <Image source={{ uri: capturedImage }} style={styles.preview} resizeMode="contain" />
-              )}
-              <View style={styles.scanningRow}>
-                <ActivityIndicator size="small" color={C.brand} style={{ marginRight: 10 }} />
-                <Text style={styles.scanningText}>Checking your photo…</Text>
-              </View>
-            </View>
-          )}
-
-          {/* APPROVED */}
-          {status === 'approved' && (
-            <View style={styles.statusInner}>
-              {capturedImage && (
-                <Image source={{ uri: capturedImage }} style={styles.preview} resizeMode="contain" />
-              )}
-              <ConfidenceMeter confidence={confidence} color={C.success} />
-              <View style={[styles.statusBanner, { backgroundColor: C.successTint }]}>
-                <Icon name="check-circle" size={18} color={C.success} style={{ marginRight: 8 }} />
-                <Text style={[styles.statusBannerText, { color: C.success }]}>Sighting confirmed</Text>
-              </View>
-              <TouchableOpacity
-                accessibilityRole="button"
-                style={styles.primaryBtn}
-                onPress={completeMission}
-                activeOpacity={0.85}
-              >
-                <Icon name="check" size={16} color={C.onGold} style={{ marginRight: 8 }} />
-                <Text style={styles.primaryBtnText}>Mark as Done</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                accessibilityRole="button" style={styles.outlineBtn} onPress={openCamera} disabled={checkingSpot} activeOpacity={0.8}>
-                {checkingSpot
-                  ? <ActivityIndicator size="small" color={C.brand} style={{ marginRight: 6 }} />
-                  : <Icon name="refresh-cw" size={14} color={C.brand} style={{ marginRight: 6 }} />}
-                <Text style={styles.outlineBtnText}>{checkingSpot ? 'Checking your location…' : 'Scan Again'}</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-
-          {/* FAILED */}
-          {status === 'failed' && (
-            <View style={styles.statusInner}>
-              {capturedImage && (
-                <Image source={{ uri: capturedImage }} style={styles.preview} resizeMode="contain" />
-              )}
-              <ConfidenceMeter confidence={confidence} color={C.danger} />
-              <View style={[styles.statusBanner, { backgroundColor: C.dangerTint }]}>
-                <Icon name="x-circle" size={18} color={C.danger} style={{ marginRight: 8 }} />
-                <Text style={[styles.statusBannerText, { color: C.danger }]}>No match yet</Text>
-              </View>
-              <Text style={styles.failedTip}>
-                Make sure <Text style={{ fontFamily: fonts.sansBold }}>{config.product}</Text> is clearly visible and well-lit, then try again.
-              </Text>
-              <TouchableOpacity
-                accessibilityRole="button" style={styles.primaryBtn} onPress={openCamera} disabled={checkingSpot} activeOpacity={0.85}>
-                {checkingSpot
-                  ? <ActivityIndicator size="small" color={C.onGold} style={{ marginRight: 8 }} />
-                  : <Icon name="camera" size={16} color={C.onGold} style={{ marginRight: 8 }} />}
-                <Text style={styles.primaryBtnText}>{checkingSpot ? 'Checking your location…' : 'Try Again'}</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-
-        </View>
-
-        <View style={{ height: 48 + insets.bottom }} />
+        {/* The classifier's score, for anyone curious why a photo passed or not. */}
+        {confidence != null && (status === 'approved' || status === 'failed') && (
+          <Text style={[typography.caption, styles.match, { color: colors.textMuted }]}>
+            AI match: {Math.round(Math.max(0, Math.min(100, confidence)))}%
+          </Text>
+        )}
       </ScrollView>
+
+      {/* Pinned, so it's in reach with the phone held up at the spot. */}
+      <View style={[styles.footer, { borderTopColor: colors.divider }]}>
+        {status === 'approved' ? (
+          <PrimaryButton title="Back to Bakit List" onPress={() => navigation.goBack()} />
+        ) : (
+          <PrimaryButton
+            title={status === 'failed' ? 'Try Again' : 'Open Camera'}
+            icon="camera"
+            onPress={openCamera}
+            loading={checkingSpot || status === 'scanning'}
+          />
+        )}
+      </View>
     </SafeAreaView>
   );
 }
 
 // ─── Styles ───────────────────────────────────────────────────────────────────
-const makeStyles = (COLORS) => StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.bg },
-  scroll:    { paddingHorizontal: 20, paddingTop: 5, alignItems: 'center' },
+const styles = StyleSheet.create({
+  screen: { flex: 1 },
+  body:   { flexGrow: 1, paddingHorizontal: H_PAD, paddingTop: spacing.lg, paddingBottom: spacing.xl },
 
-  header: {
-    flexDirection: 'row', alignItems: 'center',
-    justifyContent: 'space-between', width: '100%',
-    height: 64,
-  },
-  backBtn: {
-    width: 36, height: 36, borderRadius: 10,
-    backgroundColor: COLORS.surface, alignItems: 'center', justifyContent: 'center',
-    borderWidth: 1, borderColor: COLORS.border,
-  },
-  // The same title as every other screen's header (components/ui.js ScreenHeader).
-  headerTitle: { ...typography.h3, color: COLORS.ink },
+  headRow:  { flexDirection: 'row', alignItems: 'center', gap: spacing.md },
+  tile:     { width: 64, height: 64, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center' },
+  headText: { flex: 1 },
 
-  greetingBlock: { width: '100%', marginBottom: 18, marginTop: 4 },
-  // Display serif, like Home's greeting: big headings are Newsreader app-wide.
-  greetingHello: {
-    ...typography.h1, fontSize: 28, lineHeight: 34, color: COLORS.ink,
-    marginBottom: 4,
-  },
-  greetingSub: { fontSize: 15, color: COLORS.brand, fontFamily: fonts.sansSemi },
+  preview: { width: '100%', aspectRatio: 1, borderRadius: radius.card, marginTop: spacing.lg },
 
-  // ── Mission "ticket" — the one signature visual moment on this screen ──
-  ticketCard: {
-    backgroundColor: COLORS.surface, borderRadius: 22,
-    padding: 20, width: '100%', marginBottom: 12,
-    shadowColor: '#0B2E31', shadowOpacity: 0.06,
-    shadowRadius: 22, shadowOffset: { width: 0, height: 10 }, elevation: 3,
+  result: {
+    flexDirection: 'row', alignItems: 'center', gap: spacing.sm,
+    borderRadius: radius.card, paddingHorizontal: spacing.md, paddingVertical: 12,
+    marginTop: spacing.md,
   },
-  ticketMain: { flexDirection: 'row', alignItems: 'center', gap: 14 },
-  iconWrap: {
-    width: 50, height: 50, borderRadius: 14,
-    alignItems: 'center', justifyContent: 'center',
-  },
-  ticketCategory: {
-    fontSize: 12, color: COLORS.inkMuted, fontFamily: fonts.sansSemi, marginBottom: 3,
-  },
-  ticketTitle: { fontSize: 17, fontFamily: fonts.sansBold, color: COLORS.ink },
-  attemptsBadge: { alignItems: 'center', paddingLeft: 8 },
-  attemptsNum:   { fontSize: 20, fontFamily: fonts.sansBold, color: COLORS.brand },
-  attemptsLabel: { fontSize: 10, fontFamily: fonts.sansSemi, color: COLORS.inkMuted },
+  resultText: { flex: 1, fontSize: 14.5, lineHeight: 20, fontFamily: fonts.sansSemi },
+  match:      { marginTop: spacing.sm, textAlign: 'center' },
 
-  ticketDividerRow: { position: 'relative', marginVertical: 16 },
-  ticketDividerLine: {
-    borderBottomWidth: 1.5, borderColor: COLORS.border, borderStyle: 'dashed',
+  footer: {
+    paddingHorizontal: H_PAD, paddingTop: spacing.md, paddingBottom: spacing.md,
+    borderTopWidth: StyleSheet.hairlineWidth,
   },
-  ticketNotch: {
-    position: 'absolute', top: -10, width: 20, height: 20, borderRadius: 10,
-    backgroundColor: COLORS.bg,
-  },
-  ticketNotchLeft:  { left: -32 },
-  ticketNotchRight: { right: -32 },
-
-  ticketBrief: { fontSize: 14.5, fontFamily: fonts.sans, color: COLORS.inkSub, lineHeight: 21 },
-  ticketBriefStrong: { color: COLORS.ink, fontFamily: fonts.sansBold },
-
-  spotRow: {
-    flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: 12,
-  },
-  spotRowText: { fontSize: 12.5, color: COLORS.inkSub, fontFamily: fonts.sansMedium },
-
-  loadingRow: {
-    flexDirection: 'row', alignItems: 'center',
-    alignSelf: 'flex-start', marginBottom: 10, gap: 8,
-  },
-  loadingText: { fontSize: 13, fontFamily: fonts.sansMedium, color: COLORS.inkMuted },
-
-  card: {
-    backgroundColor: COLORS.surface, borderRadius: 22,
-    padding: 20, width: '100%', marginBottom: 12,
-    shadowColor: '#0B2E31', shadowOpacity: 0.05,
-    shadowRadius: 18, shadowOffset: { width: 0, height: 8 }, elevation: 2,
-  },
-  cardLabel: {
-    fontSize: 13, fontFamily: fonts.sansBold, color: COLORS.ink, marginBottom: 20,
-  },
-
-  hintBox: {
-    flexDirection: 'row', alignItems: 'flex-start',
-    backgroundColor: COLORS.brandTint, borderRadius: 14, padding: 14, marginTop: 4,
-  },
-  hintText: { fontSize: 12.5, fontFamily: fonts.sans, color: COLORS.brandDeep, lineHeight: 18, flex: 1 },
-
-  statusInner:    { alignItems: 'center', width: '100%' },
-  statusIconCircle: {
-    width: 72, height: 72, borderRadius: 36,
-    backgroundColor: COLORS.brandTint,
-    alignItems: 'center', justifyContent: 'center', marginBottom: 16,
-  },
-  statusTitle: {
-    ...typography.h2, fontSize: 22, lineHeight: 28, color: COLORS.ink,
-    marginBottom: 8, textAlign: 'center',
-  },
-  statusDesc: {
-    fontSize: 13.5, fontFamily: fonts.sans, color: COLORS.inkSub, textAlign: 'center',
-    marginBottom: 24, lineHeight: 21, maxWidth: 260,
-  },
-
-  // Square to match the (square) scan-frame crop, so the preview shows exactly
-  // what was captured rather than a cover-cropped slice of it.
-  preview: {
-    width: '100%', aspectRatio: 1, borderRadius: 18,
-    marginBottom: 16, backgroundColor: COLORS.border,
-  },
-
-  statusBanner: {
-    flexDirection: 'row', alignItems: 'center',
-    borderRadius: 14, paddingHorizontal: 16, paddingVertical: 11,
-    marginBottom: 18, width: '100%', justifyContent: 'center',
-  },
-  statusBannerText: { fontSize: 15, fontFamily: fonts.sansBold },
-
-  failedTip: {
-    fontSize: 13, fontFamily: fonts.sans, color: COLORS.inkSub,
-    textAlign: 'center', marginBottom: 20, lineHeight: 20,
-  },
-
-  scanningRow: {
-    flexDirection: 'row', alignItems: 'center', marginTop: 12,
-    backgroundColor: COLORS.brandTint, paddingHorizontal: 16,
-    paddingVertical: 11, borderRadius: 14, width: '100%', justifyContent: 'center',
-  },
-  scanningText: { fontSize: 14, color: COLORS.brandDeep, fontFamily: fonts.sansSemi },
-
-  primaryBtn: {
-    backgroundColor: COLORS.gold, paddingVertical: 14,
-    paddingHorizontal: 28, borderRadius: 16, marginBottom: 12,
-    width: '100%', alignItems: 'center', justifyContent: 'center', flexDirection: 'row',
-  },
-  disabledBtn:     { backgroundColor: COLORS.border },
-  primaryBtnText:  { color: COLORS.onGold, fontSize: 15, fontFamily: fonts.sansBold, letterSpacing: 0.2 },
-  outlineBtn: {
-    borderWidth: 1.5, borderColor: COLORS.border,
-    paddingVertical: 13, paddingHorizontal: 28, borderRadius: 16,
-    width: '100%', alignItems: 'center', flexDirection: 'row', justifyContent: 'center',
-  },
-  outlineBtnText: { color: COLORS.brand, fontSize: 14, fontFamily: fonts.sansSemi },
 
   cameraContainer: { flex: 1, backgroundColor: '#000' },
-  camera:          { flex: 1 },
   noCamera:        { alignItems: 'center', justifyContent: 'center', gap: 10 },
   noCameraText:    { color: 'rgba(255,255,255,0.7)', fontSize: 14, fontFamily: fonts.sansMedium },
 
   cameraTopBar: {
-    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
+    flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12,
     paddingHorizontal: 16, paddingTop: 8, paddingBottom: 12,
     backgroundColor: 'rgba(0,0,0,0.6)',
   },
@@ -1017,63 +572,31 @@ const makeStyles = (COLORS) => StyleSheet.create({
     backgroundColor: 'rgba(255,255,255,0.12)',
     alignItems: 'center', justifyContent: 'center',
   },
-  cameraTitleWrap: { alignItems: 'center' },
-  cameraLabel: {
-    fontSize: 11, color: 'rgba(255,255,255,0.65)', fontFamily: fonts.sansSemi, marginBottom: 2,
-  },
-  cameraTitle: { color: 'white', fontSize: 15, fontFamily: fonts.sansBold },
+  cameraTitle: { flex: 1, textAlign: 'center', color: 'white', fontSize: 15, fontFamily: fonts.sansBold },
 
   scanFrame: {
     position: 'absolute', top: height * 0.22,
     left: width * 0.1, width: width * 0.8, height: width * 0.8,
-    justifyContent: 'center', alignItems: 'center',
   },
-  corner:      { position: 'absolute', width: 26, height: 26, borderColor: COLORS.gold },
+  corner:      { position: 'absolute', width: 26, height: 26 },
   topLeft:     { top: 0,    left: 0,  borderTopWidth: 3,    borderLeftWidth: 3,  borderTopLeftRadius: 6 },
   topRight:    { top: 0,    right: 0, borderTopWidth: 3,    borderRightWidth: 3, borderTopRightRadius: 6 },
   bottomLeft:  { bottom: 0, left: 0,  borderBottomWidth: 3, borderLeftWidth: 3,  borderBottomLeftRadius: 6 },
   bottomRight: { bottom: 0, right: 0, borderBottomWidth: 3, borderRightWidth: 3, borderBottomRightRadius: 6 },
-  scanLineWrapper: { width: '88%', alignItems: 'center' },
-  scanLine: { width: '100%', height: 1.5, backgroundColor: 'rgba(255,255,255,0.35)', borderRadius: 1 },
 
   focusReticle: {
-    position: 'absolute', width: 64, height: 64, borderRadius: 8,
-    borderWidth: 2, borderColor: COLORS.gold,
+    position: 'absolute', width: 64, height: 64, borderRadius: 8, borderWidth: 2,
   },
 
-  shutterFlash: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: COLORS.brand,
-  },
+  shutterFlash: { ...StyleSheet.absoluteFillObject },
 
   scanHintWrap: {
     position: 'absolute', bottom: height * 0.21, alignSelf: 'center',
-    flexDirection: 'row', alignItems: 'center',
     backgroundColor: 'rgba(0,0,0,0.55)',
     paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20,
     maxWidth: '80%',
   },
-  scanHint: { color: 'rgba(255,255,255,0.9)', fontSize: 12.5, fontFamily: fonts.sansMedium },
-
-  zoomTrackWrap: {
-    position: 'absolute', right: 16, top: '30%',
-    alignItems: 'center', gap: 8,
-  },
-  zoomTrack: {
-    width: 4, height: ZOOM_TRACK_HEIGHT, borderRadius: 2,
-    backgroundColor: 'rgba(255,255,255,0.25)',
-    justifyContent: 'flex-end',
-  },
-  zoomFill: {
-    width: '100%', borderRadius: 2,
-    backgroundColor: '#FFFFFF',
-  },
-  zoomThumb: {
-    position: 'absolute', alignSelf: 'center',
-    width: ZOOM_THUMB_SIZE, height: ZOOM_THUMB_SIZE, borderRadius: ZOOM_THUMB_SIZE / 2,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 2, borderColor: COLORS.brand,
-  },
+  scanHint: { color: 'rgba(255,255,255,0.9)', fontSize: 12.5, fontFamily: fonts.sansMedium, textAlign: 'center' },
 
   // `bottom` comes from the insets at render: clear of the navigation bar.
   cameraBottomBar: { position: 'absolute', width: '100%', alignItems: 'center' },
