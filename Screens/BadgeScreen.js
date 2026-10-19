@@ -39,6 +39,21 @@ const ICON_SIZE = 60; // the round badge in each grid card
 const columnsFor = (w) => (w >= 900 ? 6 : w >= 600 ? 4 : 3);
 const cardSizeFor = (w) => (w - H_GUTTER - GRID_GAP * (columnsFor(w) - 1)) / columnsFor(w);
 
+// Every card is one height: padding, the badge, a two-line name and the footer
+// chip, with the text parts grown by the phone's text size so large text
+// doesn't spill. Cards used to be as tall as their own text, so a one-line
+// name made a shorter card than its neighbours.
+const cardHeightFor = (fontScale) => Math.ceil(104 + 44 * fontScale);
+
+// The spot's name under a locked badge, only when it says something the
+// badge's name doesn't. A badge is named after its spot, so this was nearly
+// always the same name twice.
+const spotLine = (badge) => {
+  if (badge.claimed) return null;
+  const spot = badge.spotId?.name;
+  return spot === badge.name ? null : spot || "Unknown spot";
+};
+
 // Self-contained fade-in wrapper — safe with FlatList recycling since each
 // mounted cell owns its own Animated.Value instead of indexing into a shared
 // array (which would replay stale values onto recycled/filtered cells).
@@ -64,9 +79,10 @@ export default function BadgeScreen() {
   const { colors, isDark } = useTheme();
   const { allSpots } = useArrival();
   const hasLoaded    = useRef(false);
-  const { width: winWidth } = useWindowDimensions();
-  const columns  = columnsFor(winWidth);
-  const cardSize = cardSizeFor(winWidth);
+  const { width: winWidth, fontScale } = useWindowDimensions();
+  const columns    = columnsFor(winWidth);
+  const cardSize   = cardSizeFor(winWidth);
+  const cardHeight = cardHeightFor(fontScale);
 
   const [badges, setBadges]             = useState([]); // full catalog, each tagged with .claimed
   const [loading, setLoading]           = useState(true);
@@ -291,6 +307,7 @@ export default function BadgeScreen() {
             so the thing you earned looked flatter than the thing you hadn't. */}
         <View style={[
           styles.badgeCard,
+          { minHeight: cardHeight },
           badge.claimed
             ? { backgroundColor: colors.card, borderColor: colors.cardBorder, borderWidth: 1 }
             : { backgroundColor: colors.backgroundSoft },
@@ -322,36 +339,40 @@ export default function BadgeScreen() {
 
           <Text
             style={[styles.badgeName, { color: badge.claimed ? colors.textPrimary : colors.textSecondary }]}
-            numberOfLines={2}
+            numberOfLines={spotLine(badge) ? 1 : 2}
           >
             {badge.name}
           </Text>
+          {spotLine(badge) && (
+            <Text style={[styles.lockedSpot, { color: colors.textMuted }]} numberOfLines={1}>
+              {spotLine(badge)}
+            </Text>
+          )}
 
-          {badge.claimed ? (
-            badge.claimedAt && (
-              <Text style={[styles.claimedDate, { color: colors.textMuted }]}>
-                {new Date(badge.claimedAt).toLocaleDateString("en-PH", {
-                  month: "short", day: "numeric", year: "numeric",
-                })}
-              </Text>
-            )
-          ) : (
-            <>
-              <Text style={[styles.lockedSpot, { color: colors.textMuted }]} numberOfLines={1}>
-                {badge.spotId?.name || "Unknown spot"}
-              </Text>
-              {typeof badge.points === "number" && badge.points > 0 && (
+          {/* Pinned to the bottom, so it lines up across cards whatever the
+              length of the name above it. */}
+          <View style={styles.cardFooter}>
+            {badge.claimed ? (
+              badge.claimedAt && (
+                <Text style={[styles.claimedDate, { color: colors.textMuted }]}>
+                  {new Date(badge.claimedAt).toLocaleDateString("en-PH", {
+                    month: "short", day: "numeric", year: "numeric",
+                  })}
+                </Text>
+              )
+            ) : (
+              typeof badge.points === "number" && badge.points > 0 && (
                 <View style={[styles.ptsChip, { backgroundColor: colors.brandLight }]}>
                   <Icon name="star" size={9} color={colors.brand} />
                   <Text style={[styles.ptsChipText, { color: colors.brand }]}>+{badge.points}</Text>
                 </View>
-              )}
-            </>
-          )}
+              )
+            )}
+          </View>
         </View>
       </TouchableOpacity>
     </AnimatedCell>
-  ), [colors, cardSize]);
+  ), [colors, cardSize, cardHeight]);
 
   // The spot a badge belongs to, in full, so the detail modal can open it.
   const spotForBadge = (badge) => {
@@ -698,13 +719,20 @@ const styles = StyleSheet.create({
   filterBar: { marginBottom: 16 },
   errorBox:  { marginBottom: 16 },
 
-  badgeWrapper: {},
+  // flexGrow down the chain lets each card stretch to its row, so the cards in
+  // a row still match if a very large text size outgrows cardHeightFor.
+  badgeWrapper: { flexGrow: 1 },
   // Border, not a drop shadow — the same depth cue as every other card.
   badgeCard: {
+    flexGrow: 1,
     borderRadius: 16,
     padding: 10,
     alignItems: "center",
-    minHeight: 136,
+  },
+  cardFooter: {
+    marginTop: "auto",
+    paddingTop: 6,
+    alignItems: "center",
   },
   iconCircle: {
     width: ICON_SIZE,
@@ -747,12 +775,13 @@ const styles = StyleSheet.create({
   },
   claimedDate: {
     fontSize: 10.5,
+    lineHeight: 14,
     fontFamily: fonts.sansMedium,
-    marginTop: 4,
     textAlign: "center",
   },
   lockedSpot: {
     fontSize: 10.5,
+    lineHeight: 14,
     fontFamily: fonts.sansMedium,
     marginTop: 3,
     textAlign: "center",
@@ -764,9 +793,8 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     paddingHorizontal: 6,
     paddingVertical: 2,
-    marginTop: 4,
   },
-  ptsChipText: { fontSize: 10, fontFamily: fonts.sansBold },
+  ptsChipText: { fontSize: 10, lineHeight: 13, fontFamily: fonts.sansBold },
 
   modalOverlay: {
     flex: 1,
