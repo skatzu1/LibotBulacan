@@ -19,7 +19,10 @@
     },
     "updates": {
       "url": "https://u.expo.dev/ce019b8b-d9d3-49c7-be10-9f3624a80041",
-      "fallbackToCacheTimeout": 0
+      "fallbackToCacheTimeout": 0,
+      "requestHeaders": {
+        "expo-channel-name": "production"
+      }
     },
     "assetBundlePatterns": [
       "**/*"
