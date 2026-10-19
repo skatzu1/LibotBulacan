@@ -17,7 +17,6 @@ import {
 import { showAlert } from "../components/AppAlert";
 import { useNavigation } from "@react-navigation/native";
 import { useAuth } from "@clerk/clerk-expo";
-import { captureRef } from "react-native-view-shot";
 import RNShare from "react-native-share";
 import * as Haptics from "expo-haptics";
 import { useTheme, fonts, typography } from "../context/ThemeContext";
@@ -74,13 +73,11 @@ export default function BadgeScreen() {
   const [query, setQuery]               = useState("");
   const [selectedBadge, setSelectedBadge] = useState(null);
   const [modalVisible, setModalVisible]   = useState(false);
-  const [sharing, setSharing]             = useState(null); // "link" | "image" | null
+  const [sharing, setSharing]             = useState(false);
 
   const modalOpacity   = useRef(new Animated.Value(0)).current;
   const modalScale     = useRef(new Animated.Value(0.85)).current;
   const modalTranslate = useRef(new Animated.Value(40)).current;
-
-  const shareCardRef = useRef(null);
 
   const loadBadges = async () => {
     setError(null);
@@ -208,21 +205,21 @@ export default function BadgeScreen() {
     });
   };
 
-  const shareMessage = (badge) =>
-    `I just earned the "${badge.name}" badge on Libot Bulacan! Discover Bulacan's history!\n${badgeShareUrl(badge._id)}`;
-
-  // The main way to share: the link alone. Messenger and other chat apps keep
-  // only the picture OR only the text when given both, so a picture-with-link
-  // share arrived as a bare picture. A link on its own becomes a preview card
-  // showing the badge (the website writes per-badge preview tags), and tapping
-  // it opens the badge on the website, where the app can be downloaded.
-  const handleShareLink = async () => {
+  // A badge is shared as a link, never as a picture (2026-10-20, the user:
+  // "remove the share as image"). The link becomes a preview card showing the
+  // badge — libotbulacan.com/badge/<id> writes per-badge preview tags into its
+  // HTML, which chat apps' link crawlers read — and tapping it opens the badge
+  // on the website, where the app can be downloaded. The link goes as `url`,
+  // not inside the text: Android still sends "text link", but iOS then shares
+  // it as a real link, which is what gets the preview card there.
+  const handleShare = async () => {
     if (!selectedBadge?.claimed) return;
     try {
-      setSharing("link");
+      setSharing(true);
       await RNShare.open({
         title: `${selectedBadge.name} Badge`,
-        message: shareMessage(selectedBadge),
+        message: `I just earned the "${selectedBadge.name}" badge on Libot Bulacan! Discover Bulacan's history!`,
+        url: badgeShareUrl(selectedBadge._id),
         failOnCancel: false,
       });
     } catch (e) {
@@ -231,42 +228,7 @@ export default function BadgeScreen() {
         showAlert("Error", "Could not open sharing. Please try again.");
       }
     } finally {
-      setSharing(null);
-    }
-  };
-
-  // The badge as a picture, for places that want one (Instagram, stories).
-  // Most of those drop the text, so the link usually doesn't go with it.
-  const handleShareImage = async () => {
-    if (!selectedBadge?.claimed || !shareCardRef.current) return;
-    try {
-      setSharing("image");
-
-      // Give the hidden card a frame to render selectedBadge's image before
-      // capture — avoids the classic "captured blank" race on Android when
-      // the ref updates and captureRef fires in the same tick.
-      await new Promise((r) => setTimeout(r, 50));
-
-      const uri = await captureRef(shareCardRef, {
-        format: "png",
-        quality: 1,
-        result: "tmpfile",
-      });
-
-      await RNShare.open({
-        title: `${selectedBadge.name} Badge`,
-        url: uri,
-        type: "image/png",
-        message: shareMessage(selectedBadge),
-        failOnCancel: false,
-      });
-    } catch (e) {
-      if (e?.message !== "User did not share") {
-        console.warn("[Share] Failed:", e);
-        showAlert("Error", "Could not prepare the badge image to share.");
-      }
-    } finally {
-      setSharing(null);
+      setSharing(false);
     }
   };
 
@@ -395,26 +357,6 @@ export default function BadgeScreen() {
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={colors.background} />
-
-      {/* ── Hidden shareable badge card, captured as PNG ──
-          Kept inside normal document bounds (top:0/left:0) rather than
-          thousands of px offscreen — large negative offsets risk being
-          culled or producing a blank/cropped capture on some Android
-          renderers. opacity:0 + zIndex:-1 keeps it invisible and inert
-          without moving it out of the measured viewport. */}
-      <View style={styles.offscreen} pointerEvents="none">
-        <View ref={shareCardRef} style={styles.shareCard} collapsable={false}>
-          {selectedBadge?.image && (
-            <Image
-              source={{ uri: badgeImage(selectedBadge.image, 200) }}
-              style={styles.shareCardImage}
-              resizeMode="cover"
-            />
-          )}
-          <Text style={[styles.shareCardName, { color: colors.textPrimary }]}>{selectedBadge?.name}</Text>
-          <Text style={[styles.shareCardSub, { color: colors.brand }]}>Libot Bulacan · Heritage Explorer</Text>
-        </View>
-      </View>
 
       {header}
 
@@ -612,26 +554,14 @@ export default function BadgeScreen() {
             <View style={[styles.divider, { backgroundColor: colors.divider }]} />
 
             {selectedBadge?.claimed ? (
-              <>
-                <PrimaryButton
-                  title="Share badge"
-                  icon="share-2"
-                  onPress={handleShareLink}
-                  loading={sharing === "link"}
-                  disabled={!!sharing}
-                  style={styles.modalButton}
-                  accessibilityLabel="Share a link to this badge"
-                />
-                <PrimaryButton
-                  title="Share as image"
-                  icon="image"
-                  variant="secondary"
-                  onPress={handleShareImage}
-                  loading={sharing === "image"}
-                  disabled={!!sharing}
-                  style={[styles.modalButton, styles.modalButtonGap]}
-                />
-              </>
+              <PrimaryButton
+                title="Share badge"
+                icon="share-2"
+                onPress={handleShare}
+                loading={sharing}
+                style={styles.modalButton}
+                accessibilityLabel="Share a link to this badge"
+              />
             ) : selectedSpot ? (
               // "Go Explore" used to just close the modal. It now opens the
               // spot the badge is earned at.
@@ -654,42 +584,6 @@ export default function BadgeScreen() {
 
 const styles = StyleSheet.create({
   container:   { flex: 1 },
-
-  offscreen: {
-    position: "absolute",
-    top: 0,
-    left: 0,
-    opacity: 0,
-    zIndex: -1,
-  },
-  shareCard: {
-    width: 400,
-    alignItems: "center",
-    paddingVertical: 40,
-    paddingHorizontal: 40,
-    backgroundColor: "transparent",
-  },
-  shareCardImage: {
-    width: 200,
-    height: 200,
-    borderRadius: 100,
-    backgroundColor: "transparent",
-  },
-  // The shared image is the app's billboard — it goes out to Facebook and
-  // Messenger, so it carries the serif.
-  shareCardName: {
-    ...typography.display,
-    fontSize: 27,
-    textAlign: "center",
-    marginTop: 16,
-    lineHeight: 33,
-  },
-  shareCardSub: {
-    fontSize: 14,
-    marginTop: 8,
-    fontFamily: fonts.sansSemi,
-    letterSpacing: 0.3,
-  },
 
   countBadge:  { borderRadius: 999, paddingHorizontal: 12, paddingVertical: 5 },
   countText:   { fontFamily: fonts.sansBold, fontSize: 13 },
@@ -887,5 +781,4 @@ const styles = StyleSheet.create({
     marginVertical: 20,
   },
   modalButton: { alignSelf: "stretch" },
-  modalButtonGap: { marginTop: 10 },
 });
