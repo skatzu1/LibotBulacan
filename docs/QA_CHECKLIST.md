@@ -25,6 +25,7 @@ https://developers.google.com/ar/devices). Add an iPhone when iOS is in scope.
 - [ ] Deny camera: missions explain what is needed instead of crashing.
 - [ ] Camera prompt (fresh install, Android and iPhone): the phone's own "Allow camera" prompt appears before the photo-mission camera, the profile photo camera, the review photo camera and AR View. "Don't allow" → an explanation with Open Settings, no crash.
 - [ ] Sign-up asks first and last name (no middle name), municipality, email, password, then date of birth (typed or from the calendar). Under 13 is refused. "Continue with Google" needs the municipality and date of birth first. In the municipality list, "I don't live in Bulacan" says the app is for residents only and picks nothing.
+- [ ] An account with no municipality (made before sign-up asked it) gets "Where in Bulacan do you live?" once after signing in; Continue saves it and opens the app, and it shows in the admin panel's Traveler Progress. Edit Profile shows the municipality and can change it.
 
 **Core journeys**
 - [ ] Arrive at a spot (or test at the spot's coordinates): arrival alert, +10 points once. Leave and return: no second award.

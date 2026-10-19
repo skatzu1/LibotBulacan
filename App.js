@@ -17,7 +17,7 @@ import { AuthProvider }         from './context/AuthContext';
 import { BookmarkProvider }     from './context/BookmarkContext';
 import { ArrivalProvider }      from './context/ArrivalContext';
 import { tokenCache }           from './utils/tokenCache';
-import { setupClerkInterceptor, appealAPI, moderationAPI, BASE_URL } from './api';
+import api, { setupClerkInterceptor, appealAPI, moderationAPI, BASE_URL } from './api';
 import { ProfileImageProvider } from "./context/ProfileImageContext";
 import { navigationRef }        from './navigation/navigationRef';
 import { MissionProvider }      from "./context/MissionContext";
@@ -74,6 +74,7 @@ import EditProfile        from './Screens/EditProfile';
 import ProfileScreen      from './Screens/Profilescreen';
 import BannedScreen       from './Screens/BannedScreen';
 import SuspendedScreen    from './Screens/SuspendedScreen';
+import MunicipalityScreen from './Screens/MunicipalityScreen';
 import LoginSecurity       from './Screens/LoginSecurity';
 import ReportProblem      from './Screens/ReportProblem';
 
@@ -157,6 +158,9 @@ function AppNavigator() {
   const wasArchivedRef = useRef(false);
   // The same for a suspension (SuspendedScreen).
   const wasSuspendedRef = useRef(false);
+  // An account with no home municipality (made before sign-up asked it) is
+  // asked once, by MunicipalityScreen in place of the app.
+  const [needsMunicipality, setNeedsMunicipality] = useState(false);
 
   // IMPORTANT: runs during render, not inside a useEffect. React always fires
   // child effects before parent effects in the same commit, so if this lived
@@ -285,6 +289,20 @@ function AppNavigator() {
     };
   }, [isSignedIn, userId]);
 
+  // Once per sign-in. Offline, or no account row yet (a sign-up still being
+  // saved): no screen, and the next sign-in asks again.
+  useEffect(() => {
+    setNeedsMunicipality(false);
+    if (!(isSignedIn && userId)) return;
+    let cancelled = false;
+    api.get('/api/users/me')
+      .then(({ data }) => {
+        if (!cancelled && data?.user && !data.user.municipality) setNeedsMunicipality(true);
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [isSignedIn, userId]);
+
   if (!isLoaded || hasSeenWelcome === null || isCheckingBan) {
     return <StartupWait />;
   }
@@ -303,6 +321,8 @@ function AppNavigator() {
                     <BannedScreen banInfo={banInfo} />
                   ) : isSignedIn && suspensionInfo?.isSuspended ? (
                     <SuspendedScreen suspensionInfo={suspensionInfo} />
+                  ) : isSignedIn && needsMunicipality ? (
+                    <MunicipalityScreen onDone={() => setNeedsMunicipality(false)} />
                   ) : (
                     <ArrivalProvider>
                       <Stack.Navigator screenOptions={{ headerShown: false }}>

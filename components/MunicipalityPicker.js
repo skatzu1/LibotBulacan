@@ -19,6 +19,9 @@ import { showAlert } from "./AppAlert";
  *
  * `ref.current.focus()` opens it, so the form's "jump to the first problem"
  * works here the same as on a text field.
+ *
+ * The sheet on its own is MunicipalitySheet, for screens with their own field
+ * style (Edit Profile).
  */
 const ROW_H = 52;
 // Long enough for the sheet's slide-down (animationType "slide").
@@ -30,28 +33,11 @@ const MunicipalityPicker = forwardRef(function MunicipalityPicker(
 ) {
   const a = useAuthStyles();
   const { colors } = useTheme();
-  const insets = useSafeAreaInsets();
   const [open, setOpen] = useState(false);
 
   useImperativeHandle(ref, () => ({ focus: () => !disabled && setOpen(true) }), [disabled]);
 
   const close = () => { setOpen(false); onClose?.(); };
-  const pick = (m) => { onChange(m); close(); };
-
-  // The sheet goes first: an iPhone won't show the popup (its own Modal) over
-  // a sheet that is still open, so it waits for the slide-down to finish.
-  const notResident = () => {
-    close();
-    setTimeout(() => {
-      showAlert(
-        "For Bulacan residents only",
-        "Sorry, Libot Bulacan is for residents of Bulacan only.",
-        [{ text: "OK" }],
-        { tone: "info", icon: "map-pin" },
-      );
-    }, SHEET_CLOSE_MS);
-  };
-  const initialIndex = Math.max(0, BULACAN_MUNICIPALITIES.indexOf(value) - 3);
 
   return (
     <>
@@ -73,69 +59,97 @@ const MunicipalityPicker = forwardRef(function MunicipalityPicker(
         <Icon name="chevron-down" size={20} color={colors.textMuted} />
       </TouchableOpacity>
 
-      <Modal transparent visible={open} animationType="slide" statusBarTranslucent onRequestClose={close}>
-        <Pressable
-          style={[StyleSheet.absoluteFill, { backgroundColor: colors.overlay }]}
-          onPress={close}
-          accessibilityRole="button"
-          accessibilityLabel="Close the list"
-        />
-        <View style={[styles.sheet, { backgroundColor: colors.card, paddingBottom: insets.bottom + 12 }]}>
-          <View style={styles.sheetHead}>
-            <Text style={[styles.sheetTitle, { color: colors.textPrimary }]} accessibilityRole="header" maxFontSizeMultiplier={MAX_FONT_SCALE}>
-              Where in Bulacan do you live?
-            </Text>
-            <TouchableOpacity onPress={close} hitSlop={12} accessibilityRole="button" accessibilityLabel="Close">
-              <Icon name="x" size={22} color={colors.textSecondary} />
-            </TouchableOpacity>
-          </View>
-          <FlatList
-            data={BULACAN_MUNICIPALITIES}
-            keyExtractor={(m) => m}
-            initialScrollIndex={initialIndex}
-            getItemLayout={(_, index) => ({ length: ROW_H, offset: ROW_H * index, index })}
-            renderItem={({ item }) => {
-              const selected = item === value;
-              return (
-                <TouchableOpacity
-                  style={[styles.row, { borderBottomColor: colors.divider }, selected && { backgroundColor: colors.brandSoft }]}
-                  onPress={() => pick(item)}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected }}
-                  accessibilityLabel={item}
-                >
-                  <Text
-                    style={[styles.rowText, { color: selected ? colors.brand : colors.textPrimary }, selected && styles.rowTextSelected]}
-                    maxFontSizeMultiplier={MAX_FONT_SCALE}
-                  >
-                    {item}
-                  </Text>
-                  {selected && <Icon name="check" size={18} color={colors.brand} />}
-                </TouchableOpacity>
-              );
-            }}
-            ListFooterComponent={
-              <View style={[styles.outside, { borderTopColor: colors.divider }]}>
-                <TouchableOpacity
-                  style={styles.outsideRow}
-                  onPress={notResident}
-                  accessibilityRole="button"
-                  accessibilityLabel="I don't live in Bulacan"
-                >
-                  <Text style={[styles.outsideText, { color: colors.danger }]} maxFontSizeMultiplier={MAX_FONT_SCALE}>
-                    I don't live in Bulacan
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            }
-          />
-        </View>
-      </Modal>
+      <MunicipalitySheet visible={open} value={value} onPick={onChange} onClose={close} />
     </>
   );
 });
 
 export default MunicipalityPicker;
+
+/** The list of Bulacan's 24, as a sheet from the bottom. `onPick` gets the name; it closes either way. */
+export function MunicipalitySheet({ visible, value, onPick, onClose }) {
+  const { colors } = useTheme();
+  const insets = useSafeAreaInsets();
+
+  const close = () => onClose?.();
+  const pick = (m) => { onPick(m); close(); };
+
+  // The sheet goes first: an iPhone won't show the popup (its own Modal) over
+  // a sheet that is still open, so it waits for the slide-down to finish.
+  const notResident = () => {
+    close();
+    setTimeout(() => {
+      showAlert(
+        "For Bulacan residents only",
+        "Sorry, Libot Bulacan is for residents of Bulacan only.",
+        [{ text: "OK" }],
+        { tone: "info", icon: "map-pin" },
+      );
+    }, SHEET_CLOSE_MS);
+  };
+  const initialIndex = Math.max(0, BULACAN_MUNICIPALITIES.indexOf(value) - 3);
+
+  return (
+    <Modal transparent visible={visible} animationType="slide" statusBarTranslucent onRequestClose={close}>
+      <Pressable
+        style={[StyleSheet.absoluteFill, { backgroundColor: colors.overlay }]}
+        onPress={close}
+        accessibilityRole="button"
+        accessibilityLabel="Close the list"
+      />
+      <View style={[styles.sheet, { backgroundColor: colors.card, paddingBottom: insets.bottom + 12 }]}>
+        <View style={styles.sheetHead}>
+          <Text style={[styles.sheetTitle, { color: colors.textPrimary }]} accessibilityRole="header" maxFontSizeMultiplier={MAX_FONT_SCALE}>
+            Where in Bulacan do you live?
+          </Text>
+          <TouchableOpacity onPress={close} hitSlop={12} accessibilityRole="button" accessibilityLabel="Close">
+            <Icon name="x" size={22} color={colors.textSecondary} />
+          </TouchableOpacity>
+        </View>
+        <FlatList
+          data={BULACAN_MUNICIPALITIES}
+          keyExtractor={(m) => m}
+          initialScrollIndex={initialIndex}
+          getItemLayout={(_, index) => ({ length: ROW_H, offset: ROW_H * index, index })}
+          renderItem={({ item }) => {
+            const selected = item === value;
+            return (
+              <TouchableOpacity
+                style={[styles.row, { borderBottomColor: colors.divider }, selected && { backgroundColor: colors.brandSoft }]}
+                onPress={() => pick(item)}
+                accessibilityRole="button"
+                accessibilityState={{ selected }}
+                accessibilityLabel={item}
+              >
+                <Text
+                  style={[styles.rowText, { color: selected ? colors.brand : colors.textPrimary }, selected && styles.rowTextSelected]}
+                  maxFontSizeMultiplier={MAX_FONT_SCALE}
+                >
+                  {item}
+                </Text>
+                {selected && <Icon name="check" size={18} color={colors.brand} />}
+              </TouchableOpacity>
+            );
+          }}
+          ListFooterComponent={
+            <View style={[styles.outside, { borderTopColor: colors.divider }]}>
+              <TouchableOpacity
+                style={styles.outsideRow}
+                onPress={notResident}
+                accessibilityRole="button"
+                accessibilityLabel="I don't live in Bulacan"
+              >
+                <Text style={[styles.outsideText, { color: colors.danger }]} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+                  I don't live in Bulacan
+                </Text>
+              </TouchableOpacity>
+            </View>
+          }
+        />
+      </View>
+    </Modal>
+  );
+}
 
 const styles = StyleSheet.create({
   trigger:     { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },

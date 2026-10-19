@@ -603,6 +603,43 @@ export function FormField({
   );
 }
 
+/* ── FormField's twin for a choice from a list: tapping it calls onPress,
+   which opens the list (a sheet, e.g. MunicipalitySheet). ─────────────────── */
+export function SelectField({ label, icon, value, placeholder, onPress, hint, style }) {
+  const { colors } = useTheme();
+  return (
+    <View style={[s.field, style]}>
+      {!!label && (
+        <Text style={[s.fieldLabel, { color: colors.textSecondary }]} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+          {label}
+        </Text>
+      )}
+      <TouchableOpacity
+        style={[s.fieldRow, { backgroundColor: colors.inputBg, borderColor: colors.inputBorder }]}
+        onPress={onPress}
+        activeOpacity={0.7}
+        accessibilityRole="button"
+        accessibilityLabel={value ? `${label}, ${value}. Change` : `${label}, ${placeholder}`}
+      >
+        {!!icon && (
+          <View style={[s.fieldIcon, { backgroundColor: colors.brandLight }]}>
+            <Icon name={icon} size={16} color={colors.brand} />
+          </View>
+        )}
+        <Text
+          style={[s.fieldInput, { color: value ? colors.textPrimary : colors.placeholder }]}
+          numberOfLines={1}
+          maxFontSizeMultiplier={MAX_FONT_SCALE}
+        >
+          {value || placeholder}
+        </Text>
+        <Icon name="chevron-down" size={18} color={colors.textMuted} />
+      </TouchableOpacity>
+      {!!hint && <Text style={[s.fieldHint, { color: colors.textMuted }]}>{hint}</Text>}
+    </View>
+  );
+}
+
 /* ── Avatar: the photo, or initials on a brand fill ───────────────────────
    Reviews used to fall back to a random stock face from pravatar.cc, so a
    user with no photo was shown as a stranger. */

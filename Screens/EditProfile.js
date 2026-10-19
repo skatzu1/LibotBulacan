@@ -11,8 +11,9 @@ import { useAuth as useAppAuth } from "../context/AuthContext";
 import { useProfileImage } from "../context/ProfileImageContext";
 import { useTheme, fonts, typography } from "../context/ThemeContext";
 import {
-  ScreenHeader, HeaderAction, FormField, GroupLabel, ListRow, LoadingState, Avatar, H_PAD,
+  ScreenHeader, HeaderAction, FormField, SelectField, GroupLabel, ListRow, LoadingState, Avatar, H_PAD,
 } from "../components/ui";
+import { MunicipalitySheet } from "../components/MunicipalityPicker";
 import api, { BASE_URL } from "../api";
 import { cleanName, nameError } from "../utils/authValidation";
 import { afterAlertCloses, ensureCameraAccess, explainPickerError } from "../utils/cameraAccess";
@@ -66,6 +67,10 @@ export default function EditProfile({ navigation }) {
 
   const [firstName, setFirstName]           = useState("");
   const [lastName, setLastName]             = useState("");
+  // Home municipality. Kept on our server, not Clerk, so it comes from
+  // /api/users/me; "" for an account made before sign-up asked it.
+  const [municipality, setMunicipality]     = useState("");
+  const [pickingTown, setPickingTown]       = useState(false);
   const [avatar, setAvatar]                 = useState(null);
   const [newLocalAvatar, setNewLocalAvatar] = useState(null);
   // "Remove photo" was chosen; applied on Save like any other change.
@@ -76,6 +81,7 @@ export default function EditProfile({ navigation }) {
 
   const [originalFirstName, setOriginalFirstName] = useState("");
   const [originalLastName, setOriginalLastName]   = useState("");
+  const [originalMunicipality, setOriginalMunicipality] = useState("");
 
   const isGoogleUser = !(clerkUser?.passwordEnabled ?? false);
 
@@ -94,12 +100,26 @@ export default function EditProfile({ navigation }) {
     if (profileImage && !removeAvatar && !newLocalAvatar) setAvatar(profileImage);
   }, [profileImage]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  useEffect(() => {
+    let cancelled = false;
+    api.get("/api/users/me")
+      .then(({ data }) => {
+        const town = data?.user?.municipality || "";
+        if (cancelled) return;
+        setMunicipality(town);
+        setOriginalMunicipality(town);
+      })
+      .catch(() => {}); // Offline: the field stays empty, and Save leaves it alone.
+    return () => { cancelled = true; };
+  }, []);
+
   const hasChanges = useMemo(() => {
     const nameChanged   = firstName.trim() !== originalFirstName.trim() ||
                           lastName.trim()  !== originalLastName.trim();
+    const townChanged   = municipality !== originalMunicipality;
     const avatarChanged = !!newLocalAvatar || removeAvatar;
-    return nameChanged || avatarChanged;
-  }, [firstName, lastName, originalFirstName, originalLastName, newLocalAvatar, removeAvatar]);
+    return nameChanged || townChanged || avatarChanged;
+  }, [firstName, lastName, municipality, originalFirstName, originalLastName, originalMunicipality, newLocalAvatar, removeAvatar]);
 
   useEffect(() => {
     const unsubscribe = navigation.addListener("beforeRemove", (e) => {
@@ -216,6 +236,8 @@ export default function EditProfile({ navigation }) {
         body: JSON.stringify({
           firstName:    firstName.trim(),
           lastName:     lastName.trim(),
+          // Can be changed, not cleared: left out while none is chosen.
+          ...(municipality ? { municipality } : {}),
           profileImage: imageToSave,
         }),
       });
@@ -238,6 +260,7 @@ export default function EditProfile({ navigation }) {
       setLastName(lastName.trim());
       setOriginalFirstName(firstName.trim());
       setOriginalLastName(lastName.trim());
+      setOriginalMunicipality(municipality);
       // Stays on this screen with a toast (QA 2026-10-16); it used to jump
       // back to the profile, so the change couldn't be checked here.
       showToast("Profile updated", { type: "success" });
@@ -350,6 +373,20 @@ export default function EditProfile({ navigation }) {
             <GroupLabel>Personal info</GroupLabel>
             <FormField label="First name" icon="user" value={firstName} onChangeText={(v) => setFirstName(cleanName(v))} placeholder="First name" autoCapitalize="words" />
             <FormField label="Last name"  icon="user" value={lastName}  onChangeText={(v) => setLastName(cleanName(v))}  placeholder="Last name"  autoCapitalize="words" />
+            <SelectField
+              label="Municipality"
+              icon="map-pin"
+              value={municipality}
+              placeholder="Choose where you live"
+              onPress={() => setPickingTown(true)}
+              hint="Where in Bulacan you live. Other travelers don't see it."
+            />
+            <MunicipalitySheet
+              visible={pickingTown}
+              value={municipality}
+              onPick={setMunicipality}
+              onClose={() => setPickingTown(false)}
+            />
             <FormField
               label="Email"
               icon="mail"
