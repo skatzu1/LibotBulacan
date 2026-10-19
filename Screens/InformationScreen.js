@@ -1439,19 +1439,12 @@ export default function InformationScreen({ route, navigation }) {
 
           {/* The model itself is in the hero, where the photo was. */}
           {activeTab === "Model3D" && spot.modelUrl && (
-            <>
-              <View style={styles.modelHintRow}>
-                <Icon name="rotate-3d-variant" size={16} color={colors.textMuted} />
-                <Text style={[styles.modelHint, { color: colors.textSecondary }]}>
-                  Drag the model above to turn it around. Pinch or use the buttons to zoom.
-                </Text>
-              </View>
-              {hasAR && (
-                <Text style={[styles.modelHint, styles.modelArNote, { color: colors.textMuted }]}>
-                  At {spot.name} itself, AR View puts the models around you, life-size.
-                </Text>
-              )}
-            </>
+            <View style={styles.modelHintRow}>
+              <Icon name="rotate-3d-variant" size={16} color={colors.textMuted} />
+              <Text style={[styles.modelHint, { color: colors.textSecondary }]}>
+                Drag the model above to turn it around. Pinch or use the buttons to zoom.
+              </Text>
+            </View>
           )}
 
           {/* One checklist (user, 2026-10-20: "make it simple"). It used to be
@@ -1594,7 +1587,6 @@ const styles = StyleSheet.create({
   // The 3D Model tab's words under the buttons; the model is in the hero.
   modelHintRow:    { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 2 },
   modelHint:       { flex: 1, fontSize: 13, lineHeight: 19, fontFamily: fonts.sansMedium },
-  modelArNote:     { marginTop: 6, paddingHorizontal: 2 },
   heroRating:     { position: "absolute", top: 12, left: 12, flexDirection: "row", alignItems: "center", gap: 3, backgroundColor: "rgba(11,30,32,0.62)", paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999 },
   heroRatingText:  { color: "#fff", fontSize: 12.5, fontFamily: fonts.sansBold },
   heroRatingCount: { color: "rgba(255,255,255,0.75)", fontSize: 11, fontFamily: fonts.sansSemi },

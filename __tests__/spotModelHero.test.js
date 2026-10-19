@@ -86,6 +86,8 @@ it("shows the model in the hero, above the tabs, in place of the photo", async (
   expect(all.indexOf(viewer)).toBeGreaterThan(-1);
   expect(all.indexOf(viewer)).toBeLessThan(all.indexOf(tab));
   expect(all.indexOf(tree.getByText(/Drag the model above/))).toBeGreaterThan(all.indexOf(tab));
+  // Only the hint; the AR View note under it was removed (user, 2026-10-20).
+  expect(tree.queryByText(/AR View puts the models around you/)).toBeNull();
 });
 
 it("puts the photo back on the other tabs", async () => {
