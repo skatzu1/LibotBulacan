@@ -8,9 +8,9 @@ import { ScreenHeader, EmptyState, ErrorState, SearchField, H_PAD } from "./ui";
 import ListsSkeleton from "./ListsSkeleton";
 import usePullToRefresh from "../hooks/usePullToRefresh";
 
-// About the height of a SpotStatusCard (components/SpotProgress.js) with a row
-// of steps, for the loading placeholders.
-const CARD_H = 124;
+// About the height of a SpotStatusCard (components/SpotProgress.js), for the
+// loading placeholders.
+const CARD_H = 78;
 
 // A spot matches when the search is in its name or its town.
 const matches = (spot, q) =>
@@ -21,9 +21,9 @@ const matches = (spot, q) =>
  * quick actions. Props: title, subtitle, onPick(spot, navigation),
  *   renderCard(spot, onPress) -> the spot's card (a SpotStatusCard),
  *   filter(spot) -> optional; only spots it returns true for are listed,
- *   header -> optional node above the search field (a ProgressSummary),
+ *   header -> optional node above the search field,
  *   sections(spots) -> optional; divides the list under headings:
- *     [{ key, title, sub?, data: spots }], empty ones left out.
+ *     [{ key, title, data: spots }], empty ones left out.
  *
  * The cards used to be Home's big Featured photo cards with a chip in the
  * corner; each list now says where the traveler stands (user, 2026-10-20).
@@ -92,7 +92,7 @@ export default function SpotPicker({ title, subtitle, onPick, renderCard, filter
       <ScreenHeader title={title} onBack={() => navigation.goBack()} />
 
       {loading ? (
-        <ListsSkeleton cardCount={6} cardHeight={CARD_H} />
+        <ListsSkeleton cardCount={7} cardHeight={CARD_H} />
       ) : failed ? (
         <View style={styles.pad}>
           <ErrorState text="Couldn't load the spots. Check your connection." onRetry={reloadSpots} />
@@ -108,7 +108,6 @@ export default function SpotPicker({ title, subtitle, onPick, renderCard, filter
                 {section.title}
                 <Text style={[styles.sectionCount, { color: colors.textMuted }]}>  {section.data.length}</Text>
               </Text>
-              {!!section.sub && <Text style={[styles.sectionSub, { color: colors.textMuted }]}>{section.sub}</Text>}
             </View>
           )}
         />
@@ -126,9 +125,8 @@ const styles = StyleSheet.create({
   subtitle:    { fontSize: 13.5, fontFamily: fonts.sansMedium, marginBottom: 14 },
   search:      { marginBottom: 14 },
   resultCount: { fontSize: 12.5, fontFamily: fonts.sansMedium, marginTop: -4, marginBottom: 12 },
-  card:        { marginBottom: 12 },
-  section:      { marginTop: 10, marginBottom: 12 },
-  sectionTitle: { ...typography.h3 },
+  card:        { marginBottom: 10 },
+  section:      { marginTop: 8, marginBottom: 10 },
+  sectionTitle: { ...typography.title },
   sectionCount: { fontFamily: fonts.sansBold, fontSize: 14 },
-  sectionSub:   { fontSize: 12.5, fontFamily: fonts.sansMedium, marginTop: 2 },
 });

@@ -1,6 +1,6 @@
 import React, { useCallback, useMemo } from "react";
 import SpotPicker from "../components/SpotPicker";
-import { ProgressSummary, SpotStatusCard } from "../components/SpotProgress";
+import { SpotStatusCard } from "../components/SpotProgress";
 import { useArrival } from "../context/ArrivalContext";
 import { useMissions } from "../context/MissionContext";
 import { usePoints } from "../context/PointsContext";
@@ -9,15 +9,15 @@ import { spotSteps } from "../utils/missionTiers";
 // The Bakit List quick action: where the traveler stands on every spot's list
 // (QA 2026-10-16: "a way to see Bakit List progress from the quick action").
 // It used to be a "2/5 done" chip on each photo, which didn't say what the 5
-// were (user, 2026-10-20: "the ui is so confusing"). Now: a summary, the spots
-// divided into In progress / Not started / Finished, and each spot's items by
-// name, ticked off — the same items, in the same order, as its spot page
-// (utils/missionTiers.js spotSteps). AR View and Navigate have the same layout
-// (components/SpotProgress.js).
+// were (user, 2026-10-20: "the ui is so confusing", then "make it simple").
+// Now the spots are divided into In progress / Not started / Finished, and
+// each says "2 of 4 done" next to one small icon per item, ticked when done:
+// the same items, in the same order, as its spot page (spotSteps). AR View and
+// Navigate have the same layout (components/SpotProgress.js).
 const SECTIONS = [
-  { key: "started",  title: "In progress", sub: "Pick up where you left off." },
-  { key: "todo",     title: "Not started", sub: "Arriving at the spot ticks the first item." },
-  { key: "finished", title: "Finished",    sub: "Every item done." },
+  { key: "started",  title: "In progress" },
+  { key: "todo",     title: "Not started" },
+  { key: "finished", title: "Finished" },
 ];
 
 const stateOf = ({ done, total }) => (done === 0 ? "todo" : done === total ? "finished" : "started");
@@ -38,19 +38,6 @@ export default function MissionsSpotSelect() {
   }, [allSpots, getMissionsForSpot, completedMissions, hasVisited]);
   const progressOf = useCallback((spot) => progress.get(String(spot._id)) || { steps: [], done: 0, total: 0 }, [progress]);
 
-  const summary = useMemo(() => {
-    const all = [...progress.values()];
-    const count = (state) => all.filter((p) => stateOf(p) === state).length;
-    return {
-      spots:    all.length,
-      done:     all.reduce((n, p) => n + p.done, 0),
-      total:    all.reduce((n, p) => n + p.total, 0),
-      started:  count("started"),
-      todo:     count("todo"),
-      finished: count("finished"),
-    };
-  }, [progress]);
-
   // In progress first, furthest along on top; the rest keep the list's order.
   const sections = useCallback((spots) => SECTIONS.map((sec) => {
     const data = spots.filter((s) => stateOf(progressOf(s)) === sec.key);
@@ -63,33 +50,21 @@ export default function MissionsSpotSelect() {
     return { ...sec, data };
   }), [progressOf]);
 
-  const header = summary.spots > 0 ? (
-    <ProgressSummary
-      kicker="YOUR BAKIT LIST"
-      title={`${summary.done} of ${summary.total} things done`}
-      done={summary.done}
-      total={summary.total}
-      counts={[
-        { n: summary.started,  label: "In progress", tone: "brand" },
-        { n: summary.todo,     label: "Not started", tone: "muted" },
-        { n: summary.finished, label: "Finished",    tone: "success" },
-      ]}
-    />
-  ) : null;
-
   const renderCard = (spot, onPress) => {
     const { steps, done, total } = progressOf(spot);
-    const finished = total > 0 && done === total;
+    const state = stateOf({ done, total });
     return (
       <SpotStatusCard
         spot={spot}
         onPress={onPress}
-        done={finished}
-        bar={{ done, total }}
         steps={steps}
+        status={{
+          text: state === "finished" ? "All done" : `${done} of ${total} done`,
+          tone: state === "finished" ? "done" : state === "started" ? "progress" : "todo",
+        }}
         accessibilityLabel={[
           spot.name, spot.city,
-          finished ? "Bakit List finished" : `${done} of ${total} done`,
+          state === "finished" ? "Bakit List finished" : `${done} of ${total} done`,
           ...steps.map((st) => `${st.label} ${st.done ? "done" : "not done"}`),
         ].filter(Boolean).join(", ")}
         accessibilityHint="Opens this spot's Bakit List"
@@ -100,8 +75,7 @@ export default function MissionsSpotSelect() {
   return (
     <SpotPicker
       title="Bakit List"
-      subtitle="Every spot's list of things to do there. Tap a spot to see its list and start one."
-      header={header}
+      subtitle="Things to do at each spot. Tap one to see its list."
       sections={sections}
       renderCard={renderCard}
       // The Mission screen needs both a spot AND a chosen activity, so route

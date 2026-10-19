@@ -4,8 +4,7 @@ import { SafeAreaProvider } from "react-native-safe-area-context";
 import { ThemeProvider } from "../context/ThemeContext";
 
 // AR View and Navigate's spot lists, laid out like the Bakit List's (user,
-// 2026-10-20): a summary, the spots divided by done / not done, and each card
-// saying which in words.
+// 2026-10-20): the spots divided by done / not done, each card saying which.
 
 jest.mock("@react-native-async-storage/async-storage", () =>
   require("@react-native-async-storage/async-storage/jest/async-storage-mock"),
@@ -60,17 +59,14 @@ beforeEach(() => jest.clearAllMocks());
 describe("AR View", () => {
   const ARSpotSelect = require("../Screens/ARspotSelect").default;
 
-  it("counts the AR experiences done and divides the spots by it", async () => {
+  it("divides the spots by whether their AR is done", async () => {
     const tree = wrap(<ARSpotSelect />);
-    expect(await tree.findByText("1 of 2 AR experiences done")).toBeTruthy();
     // AI scan done at Meyto doesn't count: only its AR activity does.
-    expect(tree.getByLabelText("Meyto Shrine, Calumpit, AR not done yet")).toBeTruthy();
+    expect(await tree.findByLabelText("Meyto Shrine, Calumpit, AR not done yet")).toBeTruthy();
     expect(tree.getByLabelText("Barasoain Church, Malolos, AR done")).toBeTruthy();
     expect(tree.queryByText("Calumpit River")).toBeNull();
-    expect(inOrder(textsOf(tree), [
-      "Go to the spot, then start AR there.", "Meyto Shrine",
-      "Open it again any time you're there.", "Barasoain Church",
-    ])).toBe(true);
+    // Each heading comes before the cards under it.
+    expect(inOrder(textsOf(tree), ["Not done yet", "Meyto Shrine", "Done", "Barasoain Church"])).toBe(true);
   });
 
   it("still checks the traveler is at the spot before opening AR", async () => {
@@ -84,14 +80,12 @@ describe("AR View", () => {
 describe("Navigate", () => {
   const TrackSpotSelect = require("../Screens/TrackSpotSelect").default;
 
-  it("counts the spots visited and divides the list by it", async () => {
+  it("divides the spots by whether they were visited", async () => {
     const tree = wrap(<TrackSpotSelect />);
-    expect(await tree.findByText("2 of 3 spots visited")).toBeTruthy();
-    expect(tree.getByLabelText("Meyto Shrine, Calumpit, not visited yet")).toBeTruthy();
+    expect(await tree.findByLabelText("Meyto Shrine, Calumpit, not visited yet")).toBeTruthy();
     expect(tree.getByLabelText("Calumpit River, Calumpit, visited")).toBeTruthy();
     expect(inOrder(textsOf(tree), [
-      "Places you haven't reached yet.", "Meyto Shrine",
-      "You've been here. Directions back any time.", "Barasoain Church", "Calumpit River",
+      "Not visited yet", "Meyto Shrine", "Visited", "Barasoain Church", "Calumpit River",
     ])).toBe(true);
   });
 

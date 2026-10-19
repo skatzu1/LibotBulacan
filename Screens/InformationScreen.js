@@ -15,8 +15,8 @@ import { useReviews, MAX_REVIEW_PHOTOS } from "../context/ReviewContext";
 import { useMissions } from "../context/MissionContext";
 import { usePoints } from "../context/PointsContext";
 import { useProfileImage } from "../context/ProfileImageContext";
-// Icon + label per mission type (missionKind); colour is theme-driven (see MissionRow).
-import { splitByTier, missionKind, ARRIVAL_POINTS, TIER_LABELS } from "../utils/missionTiers";
+// Icon, label and how-to per mission type (missionKind); colour is theme-driven (see ChecklistRow).
+import { splitByTier, isMajor, missionKind, ARRIVAL_KIND, ARRIVAL_POINTS } from "../utils/missionTiers";
 import { useTheme, radius, shadow, fonts, typography, MAX_FONT_SCALE } from "../context/ThemeContext";
 import ModelViewer from "../utils/ModelViewer";
 import { ensureAtSpotForAR, spotHasAR } from "../utils/arLocationGate";
@@ -415,77 +415,34 @@ function ReviewCard({ review, spotId, clerkUser, profileImage, reactToReview, on
   );
 }
 
-// Major missions ("Must-Dos": arriving, AR) — full-width gold cards with a
-// clear next step. Minor ones ("Side Trips") use the compact MissionRow list
-// below, in teal. Labels live in utils/missionTiers.js.
-function MajorMissionCard({ icon, title, description, points, isDone, actionLabel, onPress, colors }) {
+// One item of the Bakit List tab's checklist: a ticked or to-do icon, the
+// title, one line (Done, or how to do it), the points. Must-dos (arriving, AR;
+// utils/missionTiers.js) say so on that line.
+function ChecklistRow({ item, colors }) {
+  const line = item.done ? "Done" : item.mustDo ? `Must-do · ${item.how}` : item.how;
   return (
     <TouchableOpacity
       accessibilityRole="button"
-      accessibilityLabel={`${TIER_LABELS.major.title}: ${title}, ${points} points${isDone ? ", completed" : `. ${actionLabel}`}`}
-      style={[styles.majorCard, { backgroundColor: colors.card, borderColor: isDone ? colors.success : colors.cardBorder }]}
-      onPress={onPress}
-      activeOpacity={0.85}
-    >
-      <View style={styles.majorTop}>
-        <View style={[styles.majorIcon, { backgroundColor: isDone ? colors.successBg : colors.accentSoft }]}>
-          <Icon name={isDone ? "check" : icon} size={22} color={isDone ? colors.success : colors.accentDark} />
-        </View>
-        <View style={styles.majorBody}>
-          <Text style={[styles.majorTitle, { color: colors.textPrimary }]} numberOfLines={2}>{title}</Text>
-          <Text style={[styles.majorDesc, { color: colors.textSecondary }]} numberOfLines={3}>{description}</Text>
-        </View>
-      </View>
-      <View style={styles.majorFooter}>
-        <View style={[styles.ptsPill, { backgroundColor: colors.accentSoft }]}>
-          <Icon name="star" size={11} color={colors.accentDark} weight="fill" />
-          <Text style={[styles.ptsText, { color: colors.accentDark }]}>{points} pts</Text>
-        </View>
-        {isDone ? (
-          <View style={styles.majorDone}>
-            <Icon name="check-circle" size={15} color={colors.success} weight="fill" />
-            <Text style={[styles.majorDoneText, { color: colors.success }]}>Done</Text>
-          </View>
-        ) : (
-          <View style={[styles.majorCta, { backgroundColor: colors.accent }]}>
-            <Text style={[styles.majorCtaText, { color: colors.onAccent }]}>{actionLabel}</Text>
-            <Icon name="chevron-right" size={15} color={colors.onAccent} />
-          </View>
-        )}
-      </View>
-    </TouchableOpacity>
-  );
-}
-
-function MissionRow({ mission, isDone, cityText, onPress, colors }) {
-  const config = missionKind(mission);
-  return (
-    <TouchableOpacity
-      accessibilityRole="button"
-      accessibilityLabel={`${mission.title}, ${config.label}, ${mission.points ?? 0} points${isDone ? ", completed" : ""}`}
-      style={styles.missionRow}
-      onPress={onPress}
+      accessibilityLabel={`${item.title}, ${item.points} points, ${line}`}
+      style={styles.checkRow}
+      onPress={item.onPress}
       activeOpacity={0.82}
     >
-      <View style={styles.missionThumbWrap}>
-        <View style={[styles.missionThumb, { backgroundColor: isDone ? colors.successBg : colors.brandLight }]}>
-          <Icon name={config.icon} size={19} color={isDone ? colors.success : colors.brand} />
-        </View>
-        {isDone && (
-          <View style={[styles.checkBadge, { backgroundColor: colors.success, borderColor: colors.card }]}>
-            <Icon name="check" size={10} color="#fff" />
-          </View>
-        )}
+      <View style={[styles.checkIcon, { backgroundColor: item.done ? colors.successBg : colors.brandLight }]}>
+        <Icon
+          name={item.done ? "check" : item.icon}
+          size={19}
+          color={item.done ? colors.success : colors.brand}
+          weight={item.done ? "bold" : "regular"}
+        />
       </View>
-      <View style={styles.missionRowBody}>
-        <Text style={[styles.missionRowTitle, { color: colors.textPrimary }, isDone && styles.missionRowTitleDone]} numberOfLines={2}>
-          {mission.title}
+      <View style={styles.checkBody}>
+        <Text style={[styles.checkTitle, { color: colors.textPrimary }]} numberOfLines={2}>{item.title}</Text>
+        <Text style={[styles.checkLine, { color: item.done ? colors.success : colors.textMuted }]} numberOfLines={1}>
+          {line}
         </Text>
-        <Text style={[styles.missionRowSub, { color: colors.textMuted }]} numberOfLines={1}>{config.label} · {cityText}</Text>
       </View>
-      <View style={[styles.ptsPill, { backgroundColor: colors.brandLight }]}>
-        <Text style={[styles.ptsText, { color: colors.brand }]}>+{mission.points ?? 0}</Text>
-      </View>
+      <Text style={[styles.checkPts, { color: item.done ? colors.textMuted : colors.brand }]}>+{item.points}</Text>
       <Icon name="chevron-right" size={18} color={colors.textMuted} />
     </TouchableOpacity>
   );
@@ -658,18 +615,15 @@ export default function InformationScreen({ route, navigation }) {
   // The review box opens up while in use or holding a draft.
   const composerOpen     = composerFocused || !!newReview || newRating > 0 || reviewPhotos.length > 0;
   const missions         = getMissionsForSpot(spot._id);
-  // Hierarchy: arriving + AR are major, AI + food are minor (utils/missionTiers).
-  // Arriving isn't a Mission document, so it's counted in by hand.
+  // Hierarchy: arriving + AR are must-dos and come first, then the AI scan and
+  // the eatery (utils/missionTiers). Arriving isn't a Mission document, so it's
+  // counted in by hand.
   const isDoneMission    = (m) => !!completedMissions?.includes(m._id);
   const arrived          = hasVisited(spot._id);
   const tiers            = splitByTier(missions);
-  const majorDone        = (arrived ? 1 : 0) + tiers.major.filter(isDoneMission).length;
-  const majorTotal       = 1 + tiers.major.length;
-  const minorDone        = tiers.minor.filter(isDoneMission).length;
-  const minorTotal       = tiers.minor.length;
-  const completedCount   = majorDone + minorDone;
-  const totalCount       = majorTotal + minorTotal;
-  const progressRatio    = totalCount > 0 ? completedCount / totalCount : 0;
+  const completedCount   = (arrived ? 1 : 0) + missions.filter(isDoneMission).length;
+  const totalCount       = 1 + missions.length;
+  const progressRatio    = completedCount / totalCount;
   const arMission        = missions.find((m) => m.type === "ar");
   const hasAR            = spotHasAR(spot);
 
@@ -865,6 +819,18 @@ export default function InformationScreen({ route, navigation }) {
     else if (mission.type === "location") navigation.navigate("LocationMission", { spot, mission });
     else navigation.navigate("Mission", { spot, mission });
   };
+
+  // The Bakit List tab: arriving, the must-dos, then the rest (ChecklistRow).
+  const checklist = [
+    {
+      key: "arrive", ...ARRIVAL_KIND, title: `Arrive at ${spot.name}`, points: ARRIVAL_POINTS,
+      done: arrived, mustDo: true, onPress: () => navigation.navigate("Track", { spot }),
+    },
+    ...[...tiers.major, ...tiers.minor].map((m) => ({
+      key: String(m._id), ...missionKind(m), title: m.title, points: m.points ?? 0,
+      done: isDoneMission(m), mustDo: isMajor(m), onPress: () => openMission(m),
+    })),
+  ];
 
   const openReportModal = (review) => {
     setReportTarget({ reviewId: review._id, reportedClerkUserId: review.clerkUserId || "", userName: review.userName || "this user" });
@@ -1481,61 +1447,41 @@ export default function InformationScreen({ route, navigation }) {
             </>
           )}
 
-          {/* Never empty any more: arriving at the spot is a major mission
-              every spot has, even one with no Mission documents yet. */}
+          {/* One checklist (user, 2026-10-20: "make it simple"). It used to be
+              a % card, then "Must-Dos" as big gold cards and "Side Trips" as a
+              separate list, each with its own heading and blurb. Must-dos still
+              come first and say so; arriving is always the first item, even
+              for a spot with no Mission documents yet. */}
           {activeTab === "BucketList" && (
               <>
-                {/* Counted once the missions are in; before that it would
-                    count the arrival alone. */}
+                <View style={styles.checkHead}>
+                  <Text style={[styles.sectionHeading, styles.checkHeading, { color: colors.textPrimary }]} accessibilityRole="header">
+                    Things to do here
+                  </Text>
+                  {/* Counted once the missions are in; before that it would
+                      count the arrival alone. */}
+                  {missionsLoaded && (
+                    <Text style={[styles.checkCount, { color: completedCount === totalCount ? colors.success : colors.brand }]}>
+                      {completedCount} of {totalCount} done
+                    </Text>
+                  )}
+                </View>
                 {missionsLoaded && (
-                <View style={[styles.progressCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
-                  <View style={styles.progressTop}>
-                    <Text style={[styles.progressLabel, { color: colors.textPrimary }]}>Your progress</Text>
-                    <Text style={[styles.progressPct, { color: colors.brand }]}>{Math.round(progressRatio * 100)}%</Text>
-                  </View>
                   <View
                     style={[styles.progressTrack, { backgroundColor: colors.brandLight }]}
                     accessibilityRole="progressbar"
                     accessibilityValue={{ min: 0, max: totalCount, now: completedCount }}
                   >
-                    <View style={[styles.progressFill, { width: `${progressRatio * 100}%`, backgroundColor: colors.brand }]} />
+                    <View style={[styles.progressFill, { width: `${progressRatio * 100}%`, backgroundColor: completedCount === totalCount ? colors.success : colors.brand }]} />
                   </View>
-                  <Text style={[styles.progressSub, { color: colors.textMuted }]}>
-                    {majorDone} of {majorTotal} {TIER_LABELS.major.title.toLowerCase()}
-                    {minorTotal > 0 ? ` · ${minorDone} of ${minorTotal} ${TIER_LABELS.minor.title.toLowerCase()}` : ""}
-                  </Text>
-                </View>
                 )}
 
-                <Text style={[styles.sectionHeading, styles.tierHeading, { color: colors.textPrimary }]} accessibilityRole="header">
-                  {TIER_LABELS.major.title}
-                </Text>
-                <Text style={[styles.tierSub, { color: colors.textMuted }]}>{TIER_LABELS.major.sub}</Text>
-                <View style={styles.majorList}>
-                  <MajorMissionCard
-                    icon="map-pin"
-                    title={`Arrive at ${spot.name}`}
-                    description={arrived
-                      ? "You've been here. Your visit is logged."
-                      : "Go there in person. Your phone's location confirms you arrived."}
-                    points={ARRIVAL_POINTS}
-                    isDone={arrived}
-                    actionLabel="Navigate"
-                    onPress={() => navigation.navigate("Track", { spot })}
-                    colors={colors}
-                  />
-                  {tiers.major.map((mission) => (
-                    <MajorMissionCard
-                      key={mission._id}
-                      icon={missionKind(mission).icon}
-                      title={mission.title}
-                      description={mission.description}
-                      points={mission.points ?? 0}
-                      isDone={isDoneMission(mission)}
-                      actionLabel="Open AR"
-                      onPress={() => openMission(mission)}
-                      colors={colors}
-                    />
+                <View style={[styles.checkList, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
+                  {checklist.map((item, i) => (
+                    <React.Fragment key={item.key}>
+                      {i > 0 && <View style={[styles.checkDivider, { backgroundColor: colors.cardBorder }]} />}
+                      <ChecklistRow item={item} colors={colors} />
+                    </React.Fragment>
                   ))}
                 </View>
 
@@ -1546,32 +1492,9 @@ export default function InformationScreen({ route, navigation }) {
                 ) : (
                   <View style={styles.missionsLoading} accessible accessibilityLabel="Loading missions">
                     <ActivityIndicator color={colors.brand} />
-                    <Text style={[styles.tierSub, styles.missionsLoadingText, { color: colors.textMuted }]}>Loading missions…</Text>
+                    <Text style={[styles.missionsLoadingText, { color: colors.textMuted }]}>Loading missions…</Text>
                   </View>
                 ))}
-
-                {tiers.minor.length > 0 && (
-                  <>
-                    <Text style={[styles.sectionHeading, styles.tierHeading, { color: colors.textPrimary }]} accessibilityRole="header">
-                      {TIER_LABELS.minor.title}
-                    </Text>
-                    <Text style={[styles.tierSub, { color: colors.textMuted }]}>{TIER_LABELS.minor.sub}</Text>
-                    <View style={[styles.missionList, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
-                      {tiers.minor.map((mission, i) => (
-                        <React.Fragment key={mission._id}>
-                          <MissionRow
-                            mission={mission}
-                            isDone={isDoneMission(mission)}
-                            cityText={cityText}
-                            onPress={() => openMission(mission)}
-                            colors={colors}
-                          />
-                          {i < tiers.minor.length - 1 && <View style={[styles.missionDivider, { backgroundColor: colors.cardBorder }]} />}
-                        </React.Fragment>
-                      ))}
-                    </View>
-                  </>
-                )}
               </>
           )}
 
@@ -1697,48 +1620,24 @@ const styles = StyleSheet.create({
   infoValueStacked: { flex: 0, textAlign: "left", lineHeight: 19 },
   infoDivider:     { height: 1 },
 
-  progressCard:    { borderRadius: radius.card, borderWidth: 1, padding: 16, marginBottom: 20, marginTop: 2 },
-  progressTop:     { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 10 },
-  progressLabel:   { fontSize: 14, fontFamily: fonts.sansBold, letterSpacing: -0.2 },
-  progressPct:     { fontSize: 15, fontFamily: fonts.sansBold },
-  progressTrack:   { height: 8, borderRadius: 4, overflow: "hidden" },
-  progressFill:    { height: "100%", borderRadius: 4 },
-  progressSub:     { fontSize: 12, fontFamily: fonts.sansSemi, marginTop: 8 },
-
-  missionList:     { borderRadius: radius.card, borderWidth: 1, overflow: "hidden" },
-  missionRow:      { flexDirection: "row", alignItems: "center", paddingHorizontal: 14, paddingVertical: 13, gap: 12, minHeight: 72 },
-  missionDivider:  { height: 1, marginLeft: 72 },
-  missionThumbWrap:{ position: "relative" },
-  missionThumb:    { width: 46, height: 46, borderRadius: 14, justifyContent: "center", alignItems: "center" },
-  checkBadge:      { position: "absolute", bottom: -3, right: -3, width: 18, height: 18, borderRadius: 9, justifyContent: "center", alignItems: "center", borderWidth: 2 },
-  missionRowBody:  { flex: 1, gap: 3 },
-  missionRowTitle: { fontSize: 14, fontFamily: fonts.sansBold, lineHeight: 19 },
-  // No strikethrough. The green tick on the thumbnail already says "done", and
-  // a line through the title says something different — crossed-out text reads
-  // as cancelled or no longer available, which is the opposite of an
-  // achievement the user just earned. The tick is the only completion marker.
-  missionRowTitleDone: { opacity: 0.72 },
-  missionRowSub:   { fontSize: 11.5, fontFamily: fonts.sansMedium },
-
-  // ── Mission hierarchy ──
-  tierHeading:     { marginBottom: 2, marginTop: 4 },
-  tierSub:         { ...typography.caption, marginBottom: 12 },
-  majorList:       { gap: 12, marginBottom: 24 },
-  missionsLoading: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 8 },
-  missionsLoadingText: { marginBottom: 0 },
-  majorCard:       { borderRadius: radius.card, borderWidth: 1.5, padding: 16, gap: 14 },
-  majorTop:        { flexDirection: "row", alignItems: "flex-start", gap: 14 },
-  majorIcon:       { width: 50, height: 50, borderRadius: 16, alignItems: "center", justifyContent: "center" },
-  majorBody:       { flex: 1, gap: 4 },
-  majorTitle:      { ...typography.h3, fontSize: 17, lineHeight: 22 },
-  majorDesc:       { ...typography.body, fontSize: 13.5, lineHeight: 19 },
-  majorFooter:     { flexDirection: "row", alignItems: "center", justifyContent: "space-between" },
-  majorCta:        { flexDirection: "row", alignItems: "center", gap: 4, minHeight: 40, paddingLeft: 16, paddingRight: 12, borderRadius: radius.pill },
-  majorCtaText:    { fontFamily: fonts.sansBold, fontSize: 13.5 },
-  majorDone:       { flexDirection: "row", alignItems: "center", gap: 5, minHeight: 40 },
-  majorDoneText:   { fontFamily: fonts.sansBold, fontSize: 13.5 },
-  ptsPill:         { flexDirection: "row", alignItems: "center", gap: 4, borderRadius: radius.pill, paddingHorizontal: 9, paddingVertical: 4 },
-  ptsText:         { fontFamily: fonts.sansBold, fontSize: 12 },
+  // ── Bakit List tab: one checklist ──
+  checkHead:       { flexDirection: "row", alignItems: "baseline", justifyContent: "space-between", gap: 12, marginTop: 4 },
+  checkHeading:    { marginBottom: 8, marginTop: 0 },
+  checkCount:      { fontSize: 13.5, fontFamily: fonts.sansBold },
+  progressTrack:   { height: 6, borderRadius: 3, overflow: "hidden", marginBottom: 14 },
+  progressFill:    { height: "100%", borderRadius: 3 },
+  checkList:       { borderRadius: radius.card, borderWidth: 1, overflow: "hidden" },
+  checkRow:        { flexDirection: "row", alignItems: "center", paddingHorizontal: 14, paddingVertical: 13, gap: 12, minHeight: 72 },
+  checkDivider:    { height: 1, marginLeft: 72 },
+  checkIcon:       { width: 44, height: 44, borderRadius: 22, justifyContent: "center", alignItems: "center" },
+  checkBody:       { flex: 1, gap: 3 },
+  // No strikethrough on a done item: crossed-out text reads as cancelled. The
+  // green tick and "Done" say it.
+  checkTitle:      { fontSize: 14.5, fontFamily: fonts.sansBold, lineHeight: 19 },
+  checkLine:       { fontSize: 12, fontFamily: fonts.sansMedium },
+  checkPts:        { fontSize: 13, fontFamily: fonts.sansBold },
+  missionsLoading: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 14 },
+  missionsLoadingText: { ...typography.caption },
 
   // ── Ratings & Reviews (after the reference review UI) ──
   rrHeading:       { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 28, marginBottom: 10 },

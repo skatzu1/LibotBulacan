@@ -9,16 +9,12 @@
 // arrival engine already detects (ArrivalContext), which logs the visit and
 // awards POINTS_PER_VISIT on the backend. The Bakit List shows it as the first
 // major mission and ticks it from the user's visit logs (PointsContext).
+//
+// What users see: one checklist per spot, major items first, each marked
+// "Must-do" (2026-10-20, simplified from separate "Must-Dos" and "Side Trips"
+// sections).
 
 export const MAJOR_TYPES = new Set(["ar"]);
-
-// What users see. Travel-guide words rather than "major/minor":
-//   Must-Dos   — what you came for (major).
-//   Side Trips — small detours while you're nearby, like the eatery (minor).
-export const TIER_LABELS = {
-  major: { title: "Must-Dos",   sub: "What you came here for. Worth the most points." },
-  minor: { title: "Side Trips", sub: "Little extras while you're nearby." },
-};
 
 // Mirrors POINTS_PER_VISIT in LibotBackend/controllers/userController.js —
 // the server awards it; this copy is only for display.
@@ -29,20 +25,21 @@ export const isMajor = (mission) => MAJOR_TYPES.has(mission?.type);
 // Each kind of Bakit List item's icon and short name, for the spot page and the
 // Bakit List quick action. Every spot has an AI scan, a nearby eatery and an AR
 // mission (2026-10); the rest are older kinds kept for any mission still using them.
+// `how` is the one line the spot page's checklist shows under an item not yet done.
 export const MISSION_KINDS = {
-  checkin:  { icon: "map-pin",     label: "Check In" },
-  photo:    { icon: "camera",      label: "Photo"    },
-  ar:       { icon: "aperture",    label: "AR"       },
-  quiz:     { icon: "help-circle", label: "Quiz"     },
+  checkin:  { icon: "map-pin",     label: "Check In",    how: "Check in at the spot" },
+  photo:    { icon: "camera",      label: "Photo",       how: "Take a photo there" },
+  ar:       { icon: "aperture",    label: "AR",          how: "Opens when you're at the spot" },
+  quiz:     { icon: "help-circle", label: "Quiz",        how: "Answer the question" },
   // Camera capture verified by an on-spot AI classifier (which model runs
   // depends on the spot's category).
-  ai:       { icon: "cpu",         label: "AI Scan"  },
+  ai:       { icon: "cpu",         label: "AI Scan",     how: "Take a photo of it there" },
   // A geofenced food recommendation the traveler must physically visit (see
   // Screens/LocationMission.js). Not the map pin: that is arriving at the spot.
-  location: { icon: "utensils",    label: "Nearby Eats" },
+  location: { icon: "utensils",    label: "Nearby Eats", how: "Visit the recommended eatery" },
 };
 
-export const ARRIVAL_KIND = { icon: "map-pin", label: "Arrive" };
+export const ARRIVAL_KIND = { icon: "map-pin", label: "Arrive", how: "Go there in person" };
 
 export const missionKind = (mission) => MISSION_KINDS[mission?.type] || MISSION_KINDS.checkin;
 
