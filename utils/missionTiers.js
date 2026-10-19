@@ -26,15 +26,39 @@ export const ARRIVAL_POINTS = 10;
 
 export const isMajor = (mission) => MAJOR_TYPES.has(mission?.type);
 
+// Each kind of Bakit List item's icon and short name, for the spot page and the
+// Bakit List quick action. Every spot has an AI scan, a nearby eatery and an AR
+// mission (2026-10); the rest are older kinds kept for any mission still using them.
+export const MISSION_KINDS = {
+  checkin:  { icon: "map-pin",     label: "Check In" },
+  photo:    { icon: "camera",      label: "Photo"    },
+  ar:       { icon: "aperture",    label: "AR"       },
+  quiz:     { icon: "help-circle", label: "Quiz"     },
+  // Camera capture verified by an on-spot AI classifier (which model runs
+  // depends on the spot's category).
+  ai:       { icon: "cpu",         label: "AI Scan"  },
+  // A geofenced food recommendation the traveler must physically visit (see
+  // Screens/LocationMission.js). Not the map pin: that is arriving at the spot.
+  location: { icon: "utensils",    label: "Nearby Eats" },
+};
+
+export const ARRIVAL_KIND = { icon: "map-pin", label: "Arrive" };
+
+export const missionKind = (mission) => MISSION_KINDS[mission?.type] || MISSION_KINDS.checkin;
+
 /**
- * How far along a spot's Bakit List is: { done, total }. Arriving counts as
- * the first item (it isn't a Mission document), then each mission. The spot
- * page's progress bar and the Bakit List quick action's "2/5" both use this.
+ * A spot's Bakit List as named steps, in the order the spot page lists them:
+ * arriving, the must-dos, then the side trips. [{ key, icon, label, done }]
+ * Arriving counts as the first item (it isn't a Mission document). The Bakit
+ * List quick action (Screens/MissionsSpotSelect.js) shows these.
  */
-export function spotProgress(missions = [], completedMissionIds = [], arrived = false) {
+export function spotSteps(missions = [], completedMissionIds = [], arrived = false) {
   const completed = new Set((completedMissionIds || []).map(String));
-  const done = (arrived ? 1 : 0) + missions.filter((m) => completed.has(String(m._id))).length;
-  return { done, total: 1 + missions.length };
+  const { major, minor } = splitByTier(missions);
+  return [
+    { key: "arrive", ...ARRIVAL_KIND, done: !!arrived },
+    ...[...major, ...minor].map((m) => ({ key: String(m._id), ...missionKind(m), done: completed.has(String(m._id)) })),
+  ];
 }
 
 /** Splits a spot's missions into { major, minor }, each in `order` order. */

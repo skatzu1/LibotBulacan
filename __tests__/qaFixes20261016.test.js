@@ -1,7 +1,7 @@
 import {
   strongPasswordError, passwordLevel, dobError, dobToDate, formatDob,
 } from "../utils/authValidation";
-import { spotProgress } from "../utils/missionTiers";
+import { spotSteps } from "../utils/missionTiers";
 import { ensureAtSpotForAR } from "../utils/arLocationGate";
 import { showAlert } from "../components/AppAlert";
 
@@ -60,12 +60,26 @@ describe("registration: separate names and a date of birth", () => {
 });
 
 describe("Bakit List progress", () => {
-  const missions = [{ _id: "m1" }, { _id: "m2" }, { _id: "m3" }];
+  // A spot's three, stored in the order the admin made them.
+  const missions = [
+    { _id: "m1", type: "ai", order: 1 }, { _id: "m2", type: "location", order: 2 }, { _id: "m3", type: "ar", order: 3 },
+  ];
+  const doneOf = (steps) => ({ done: steps.filter((s) => s.done).length, total: steps.length });
+
   it("counts arriving as the first item, then each completed activity", () => {
-    expect(spotProgress(missions, [], false)).toEqual({ done: 0, total: 4 });
-    expect(spotProgress(missions, ["m2"], true)).toEqual({ done: 2, total: 4 });
-    expect(spotProgress(missions, ["m1", "m2", "m3", "other"], true)).toEqual({ done: 4, total: 4 });
-    expect(spotProgress([], [], true)).toEqual({ done: 1, total: 1 });
+    expect(doneOf(spotSteps(missions, [], false))).toEqual({ done: 0, total: 4 });
+    expect(doneOf(spotSteps(missions, ["m2"], true))).toEqual({ done: 2, total: 4 });
+    expect(doneOf(spotSteps(missions, ["m1", "m2", "m3", "other"], true))).toEqual({ done: 4, total: 4 });
+    expect(doneOf(spotSteps([], [], true))).toEqual({ done: 1, total: 1 });
+  });
+
+  it("names each item, in the spot page's order: arrive, must-dos, side trips", () => {
+    const steps = spotSteps(missions, ["m3"], true);
+    expect(steps.map((s) => [s.label, s.done])).toEqual([
+      ["Arrive", true], ["AR", true], ["AI Scan", false], ["Nearby Eats", false],
+    ]);
+    // The eatery has its own icon, not arriving's map pin.
+    expect(steps[3].icon).not.toBe(steps[0].icon);
   });
 });
 

@@ -73,6 +73,7 @@ import { EyeIcon } from "phosphor-react-native/src/icons/Eye";
 import { EyeSlashIcon } from "phosphor-react-native/src/icons/EyeSlash";
 import { FileTextIcon } from "phosphor-react-native/src/icons/FileText";
 import { FlagIcon } from "phosphor-react-native/src/icons/Flag";
+import { ForkKnifeIcon } from "phosphor-react-native/src/icons/ForkKnife";
 import { GearIcon } from "phosphor-react-native/src/icons/Gear";
 import { GlobeIcon } from "phosphor-react-native/src/icons/Globe";
 import { GridFourIcon } from "phosphor-react-native/src/icons/GridFour";
@@ -164,6 +165,7 @@ const PH = {
   EyeSlash: EyeSlashIcon,
   FileText: FileTextIcon,
   Flag: FlagIcon,
+  ForkKnife: ForkKnifeIcon,
   Gear: GearIcon,
   Globe: GlobeIcon,
   GridFour: GridFourIcon,
@@ -249,6 +251,7 @@ const MAP = {
   "globe":             "Globe",
   "truck":             "Truck",
   "crosshair":         "Crosshair",
+  "utensils":          "ForkKnife",         // Nearby Eats missions (not Feather)
 
   // content
   "book":              "Book",

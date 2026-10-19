@@ -1,10 +1,10 @@
 import React, { useMemo, useState } from "react";
-import { View, Text, StyleSheet, StatusBar, FlatList } from "react-native";
+import { View, Text, StyleSheet, StatusBar, FlatList, SectionList } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useArrival } from "../context/ArrivalContext";
 import { useReviews } from "../context/ReviewContext";
-import { useTheme, fonts } from "../context/ThemeContext";
+import { useTheme, fonts, typography } from "../context/ThemeContext";
 import { ScreenHeader, FeatureCard, EmptyState, ErrorState, SearchField, H_PAD } from "./ui";
 import ListsSkeleton from "./ListsSkeleton";
 import usePullToRefresh from "../hooks/usePullToRefresh";
@@ -23,12 +23,15 @@ const matches = (spot, q) =>
  *        cta -> the card's yellow pill ("Explore" by default),
  *        renderRight(spot) -> optional node for the card's top-right corner,
  *        filter(spot) -> optional; only spots it returns true for are listed,
- *        header -> optional node above the search field (e.g. a summary).
+ *        header -> optional node above the search field (e.g. a summary),
+ *        sections(spots) -> optional; divides the list under headings:
+ *          [{ key, title, sub?, data: spots }], empty ones left out,
+ *        renderCard(spot, onPress) -> optional; replaces the photo card.
  *
  * Every one of these lists has a search field (QA 2026-10-16): with 20-odd
  * spots, scrolling for one by photo was slow.
  */
-export default function SpotPicker({ title, subtitle, onPick, cta, renderRight, filter, header }) {
+export default function SpotPicker({ title, subtitle, onPick, cta, renderRight, filter, header, sections, renderCard }) {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const { allSpots, spotsStatus, reloadSpots } = useArrival();
@@ -44,6 +47,62 @@ export default function SpotPicker({ title, subtitle, onPick, cta, renderRight, 
   // list: a filter that matches nothing is "no spots", not "still loading".)
   const loading = allSpots.length === 0 && spotsStatus === "loading" && !refreshing;
   const failed  = allSpots.length === 0 && spotsStatus === "error";
+  const grouped = useMemo(
+    () => (sections ? sections(spots).filter((sec) => sec.data.length > 0) : null),
+    [sections, spots],
+  );
+
+  const renderItem = ({ item }) => {
+    const onPress = () => onPick(item, navigation);
+    return renderCard ? (
+      <View style={styles.card}>{renderCard(item, onPress)}</View>
+    ) : (
+      <FeatureCard
+        spot={item}
+        height={CARD_H}
+        rating={getAverageRating(item._id, item.ratingAvg)}
+        cta={cta}
+        onPress={onPress}
+        right={renderRight?.(item)}
+        style={styles.card}
+      />
+    );
+  };
+
+  const listHeader = (
+    <>
+      {subtitle ? (
+        <Text style={[styles.subtitle, { color: colors.textSecondary }]}>{subtitle}</Text>
+      ) : null}
+      {header}
+      <SearchField
+        value={query}
+        onChangeText={setQuery}
+        onClear={() => setQuery("")}
+        placeholder="Search by spot or town"
+        style={styles.search}
+      />
+      {!!q && (
+        <Text style={[styles.resultCount, { color: colors.textMuted }]}>
+          {spots.length} {spots.length === 1 ? "spot" : "spots"} for “{query.trim()}”
+        </Text>
+      )}
+    </>
+  );
+  const listEmpty = q
+    ? <EmptyState icon="search" text="Nothing matched that. Try a town or a landmark name." />
+    : <EmptyState icon="map-pin" text="No spots available yet." />;
+  const listProps = {
+    keyExtractor: (item) => String(item._id),
+    refreshControl,
+    showsVerticalScrollIndicator: false,
+    keyboardShouldPersistTaps: "handled",
+    keyboardDismissMode: "on-drag",
+    contentContainerStyle: [styles.list, { paddingBottom: insets.bottom + 40 }],
+    ListHeaderComponent: listHeader,
+    ListEmptyComponent: listEmpty,
+    renderItem,
+  };
 
   return (
     <View style={[styles.screen, { backgroundColor: colors.background }]}>
@@ -57,52 +116,23 @@ export default function SpotPicker({ title, subtitle, onPick, cta, renderRight, 
         <View style={styles.pad}>
           <ErrorState text="Couldn't load the spots. Check your connection." onRetry={reloadSpots} />
         </View>
-      ) : (
-        <FlatList
-          data={spots}
-          keyExtractor={(item) => String(item._id)}
-          refreshControl={refreshControl}
-          showsVerticalScrollIndicator={false}
-          keyboardShouldPersistTaps="handled"
-          keyboardDismissMode="on-drag"
-          contentContainerStyle={[styles.list, { paddingBottom: insets.bottom + 40 }]}
-          ListHeaderComponent={
-            <>
-              {subtitle ? (
-                <Text style={[styles.subtitle, { color: colors.textSecondary }]}>{subtitle}</Text>
-              ) : null}
-              {header}
-              <SearchField
-                value={query}
-                onChangeText={setQuery}
-                onClear={() => setQuery("")}
-                placeholder="Search by spot or town"
-                style={styles.search}
-              />
-              {!!q && (
-                <Text style={[styles.resultCount, { color: colors.textMuted }]}>
-                  {spots.length} {spots.length === 1 ? "spot" : "spots"} for “{query.trim()}”
-                </Text>
-              )}
-            </>
-          }
-          ListEmptyComponent={
-            q
-              ? <EmptyState icon="search" text="Nothing matched that. Try a town or a landmark name." />
-              : <EmptyState icon="map-pin" text="No spots available yet." />
-          }
-          renderItem={({ item }) => (
-            <FeatureCard
-              spot={item}
-              height={CARD_H}
-              rating={getAverageRating(item._id, item.ratingAvg)}
-              cta={cta}
-              onPress={() => onPick(item, navigation)}
-              right={renderRight?.(item)}
-              style={styles.card}
-            />
+      ) : grouped ? (
+        <SectionList
+          {...listProps}
+          sections={grouped}
+          stickySectionHeadersEnabled={false}
+          renderSectionHeader={({ section }) => (
+            <View style={styles.section} accessibilityRole="header">
+              <Text style={[styles.sectionTitle, { color: colors.textPrimary }]}>
+                {section.title}
+                <Text style={[styles.sectionCount, { color: colors.textMuted }]}>  {section.data.length}</Text>
+              </Text>
+              {!!section.sub && <Text style={[styles.sectionSub, { color: colors.textMuted }]}>{section.sub}</Text>}
+            </View>
           )}
         />
+      ) : (
+        <FlatList {...listProps} data={spots} />
       )}
     </View>
   );
@@ -116,4 +146,8 @@ const styles = StyleSheet.create({
   search:      { marginBottom: 14 },
   resultCount: { fontSize: 12.5, fontFamily: fonts.sansMedium, marginTop: -4, marginBottom: 12 },
   card:        { marginBottom: 14 },
+  section:      { marginTop: 10, marginBottom: 12 },
+  sectionTitle: { ...typography.h3 },
+  sectionCount: { fontFamily: fonts.sansBold, fontSize: 14 },
+  sectionSub:   { fontSize: 12.5, fontFamily: fonts.sansMedium, marginTop: 2 },
 });

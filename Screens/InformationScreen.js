@@ -15,7 +15,8 @@ import { useReviews, MAX_REVIEW_PHOTOS } from "../context/ReviewContext";
 import { useMissions } from "../context/MissionContext";
 import { usePoints } from "../context/PointsContext";
 import { useProfileImage } from "../context/ProfileImageContext";
-import { splitByTier, ARRIVAL_POINTS, TIER_LABELS } from "../utils/missionTiers";
+// Icon + label per mission type (missionKind); colour is theme-driven (see MissionRow).
+import { splitByTier, missionKind, ARRIVAL_POINTS, TIER_LABELS } from "../utils/missionTiers";
 import { useTheme, radius, shadow, fonts, typography, MAX_FONT_SCALE } from "../context/ThemeContext";
 import ModelViewer from "../utils/ModelViewer";
 import { ensureAtSpotForAR, spotHasAR } from "../utils/arLocationGate";
@@ -33,19 +34,6 @@ import {
 } from "../utils/reviewList";
 import Icon from "../components/Icon";
 
-// Icon + label per mission type. Colour is theme-driven (see MissionRow).
-const MISSION_CONFIG = {
-  checkin: { icon: "map-pin",     label: "Check In" },
-  photo:   { icon: "camera",      label: "Photo"    },
-  ar:      { icon: "aperture",    label: "AR"       },
-  quiz:    { icon: "help-circle", label: "Quiz"     },
-  // The first mission of every spot — camera capture verified by an on-spot
-  // AI classifier (which model runs depends on the spot's category).
-  ai:      { icon: "cpu",         label: "AI Scan"  },
-  // The second mission of every spot — a geofenced food recommendation the
-  // user must physically visit (see Screens/LocationMission.js).
-  location: { icon: "map-pin",    label: "Nearby Eats" },
-};
 
 // Spot facts up to this many characters fit beside their label ("Malolos",
 // "₱50", "0917 123 4567"); longer ones go on their own line under it.
@@ -470,7 +458,7 @@ function MajorMissionCard({ icon, title, description, points, isDone, actionLabe
 }
 
 function MissionRow({ mission, isDone, cityText, onPress, colors }) {
-  const config = MISSION_CONFIG[mission.type] || MISSION_CONFIG.checkin;
+  const config = missionKind(mission);
   return (
     <TouchableOpacity
       accessibilityRole="button"
@@ -1539,7 +1527,7 @@ export default function InformationScreen({ route, navigation }) {
                   {tiers.major.map((mission) => (
                     <MajorMissionCard
                       key={mission._id}
-                      icon={(MISSION_CONFIG[mission.type] || MISSION_CONFIG.checkin).icon}
+                      icon={missionKind(mission).icon}
                       title={mission.title}
                       description={mission.description}
                       points={mission.points ?? 0}
