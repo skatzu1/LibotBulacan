@@ -141,8 +141,8 @@ export const appealAPI = {
 };
 
 // ─── Moderation API ───────────────────────────────────────────────────────────
-// Mute / suspension / ban status for the signed-in user — powers the
-// SuspendedNotice popup and the comment-bar notice in InformationScreen.
+// Mute / suspension / ban status for the signed-in user — powers
+// SuspendedScreen and the comment-bar notice in InformationScreen.
 export const moderationAPI = {
   getStatus: async () => {
     try {

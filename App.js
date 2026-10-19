@@ -73,7 +73,7 @@ import TrackSpotSelect    from './Screens/TrackSpotSelect';
 import EditProfile        from './Screens/EditProfile';
 import ProfileScreen      from './Screens/Profilescreen';
 import BannedScreen       from './Screens/BannedScreen';
-import SuspendedNotice    from './Screens/SuspendedNotice';
+import SuspendedScreen    from './Screens/SuspendedScreen';
 import LoginSecurity       from './Screens/LoginSecurity';
 import ReportProblem      from './Screens/ReportProblem';
 
@@ -149,13 +149,14 @@ function AppNavigator() {
   const [hasSeenWelcome, setHasSeenWelcome] = useState(null);
   const [banInfo,        setBanInfo]        = useState(null);
   const [suspensionInfo, setSuspensionInfo] = useState(null);
-  const [showSuspensionNotice, setShowSuspensionNotice] = useState(false);
   const [isCheckingBan,  setIsCheckingBan]  = useState(true);
   // Tracks whether the signed-in user was archived (banned) on the *previous*
   // status check, so a re-check while the app is already open can tell "was
   // already banned at sign-in" (no popup — BannedScreen just renders) apart
   // from "got banned just now, mid-session" (show the heads-up popup below).
   const wasArchivedRef = useRef(false);
+  // The same for a suspension (SuspendedScreen).
+  const wasSuspendedRef = useRef(false);
 
   // IMPORTANT: runs during render, not inside a useEffect. React always fires
   // child effects before parent effects in the same commit, so if this lived
@@ -184,6 +185,7 @@ function AppNavigator() {
       setSuspensionInfo(null);
       setIsCheckingBan(false);
       wasArchivedRef.current = false;
+      wasSuspendedRef.current = false;
       return;
     }
 
@@ -227,12 +229,29 @@ function AppNavigator() {
         }
         wasArchivedRef.current = isArchivedNow;
 
-        if (moderationData?.isSuspended) {
-          setSuspensionInfo(moderationData);
-          setShowSuspensionNotice(true); // popup once per sign-in/app open, dismissible
-        } else {
+        // A suspension locks the account until it ends: SuspendedScreen takes
+        // the place of the app, and the server refuses the account's requests
+        // (the backend's middleware/rejectBanned.js). Suspended at sign-in, or
+        // already known: the screen shows. Suspended mid-session: the same
+        // one-time popup as a ban first, never a screen swap on its own. Once
+        // a check finds it ended, the app opens again.
+        const isSuspendedNow = !!moderationData?.isSuspended;
+        if (!isSuspendedNow) {
           setSuspensionInfo(null);
+        } else if (!isRecheck || wasSuspendedRef.current) {
+          setSuspensionInfo(moderationData);
+        } else {
+          showAlert(
+            "Account Suspended",
+            `An admin has suspended your account until ${new Date(moderationData.suspendedUntil).toDateString()}. You can't use it until then.`,
+            [
+              { text: "Sign Out", style: "destructive", onPress: () => signOut() },
+              { text: "OK", onPress: () => setSuspensionInfo(moderationData) },
+            ],
+            { tone: "warning", icon: "pause", cancelable: false },
+          );
         }
+        wasSuspendedRef.current = isSuspendedNow;
       } catch (error) {
         console.warn("Status check failed:", error);
       } finally {
@@ -282,6 +301,8 @@ function AppNavigator() {
                 <NavigationContainer ref={navigationRef} theme={navTheme}>
                   {isSignedIn && banInfo?.archived ? (
                     <BannedScreen banInfo={banInfo} />
+                  ) : isSignedIn && suspensionInfo?.isSuspended ? (
+                    <SuspendedScreen suspensionInfo={suspensionInfo} />
                   ) : (
                     <ArrivalProvider>
                       <Stack.Navigator screenOptions={{ headerShown: false }}>
@@ -326,12 +347,6 @@ function AppNavigator() {
                     </ArrivalProvider>
                   )}
                 </NavigationContainer>
-
-                <SuspendedNotice
-                  visible={isSignedIn && !banInfo?.archived && !!suspensionInfo?.isSuspended && showSuspensionNotice}
-                  suspensionInfo={suspensionInfo}
-                  onDismiss={() => setShowSuspensionNotice(false)}
-                />
 
                 <OfflineBanner />
               </>
