@@ -194,9 +194,9 @@ export function SpotCard({
 }
 
 /* ── Featured card: photo, scrim, name, town · rating, yellow action ───────
-   The layout of Home's Featured slides, shared so a spot looks the same
-   wherever it's picked: Featured, and the spot lists behind AR View, Bakit
-   List, Navigate and My Trips. The whole card is the button; the yellow
+   The layout of Home's Featured slides, shared with My Trips. (The AR View,
+   Bakit List and Navigate lists use SpotStatusCard from SpotProgress.js, which
+   says where the traveler stands.) The whole card is the button; the yellow
    pill only says what it does. `meta` replaces the town · rating line,
    `badge` sits top-left and `right` top-right (e.g. a "Done" chip). */
 export function FeatureCard({

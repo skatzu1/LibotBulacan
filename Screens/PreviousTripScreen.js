@@ -19,7 +19,7 @@ import { BASE_URL } from "../api";
 import { useArrival } from "../context/ArrivalContext";
 import { useReviews } from "../context/ReviewContext";
 
-// Same height as the cards in the AR / Bakit List / Navigate spot lists.
+// Home's Featured card, a little shorter so three still show at a time.
 const CARD_H = 220;
 
 export default function PreviousTripsScreen() {

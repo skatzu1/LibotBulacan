@@ -3,39 +3,36 @@ import { View, Text, StyleSheet, StatusBar, FlatList, SectionList } from "react-
 import { useNavigation } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useArrival } from "../context/ArrivalContext";
-import { useReviews } from "../context/ReviewContext";
 import { useTheme, fonts, typography } from "../context/ThemeContext";
-import { ScreenHeader, FeatureCard, EmptyState, ErrorState, SearchField, H_PAD } from "./ui";
+import { ScreenHeader, EmptyState, ErrorState, SearchField, H_PAD } from "./ui";
 import ListsSkeleton from "./ListsSkeleton";
 import usePullToRefresh from "../hooks/usePullToRefresh";
 
-// The card is Home's Featured card (FeatureCard), a little shorter so a list
-// of them still shows three at a time.
-const CARD_H = 220;
+// About the height of a SpotStatusCard (components/SpotProgress.js) with a row
+// of steps, for the loading placeholders.
+const CARD_H = 124;
 
 // A spot matches when the search is in its name or its town.
 const matches = (spot, q) =>
   [spot.name, spot.city].filter(Boolean).some((f) => String(f).toLowerCase().includes(q));
 
 /**
- * Shared "pick a spot" list screen used by the AR / Missions / Navigate flows.
- * Props: title, subtitle, onPick(spot) -> navigation action,
- *        cta -> the card's yellow pill ("Explore" by default),
- *        renderRight(spot) -> optional node for the card's top-right corner,
- *        filter(spot) -> optional; only spots it returns true for are listed,
- *        header -> optional node above the search field (e.g. a summary),
- *        sections(spots) -> optional; divides the list under headings:
- *          [{ key, title, sub?, data: spots }], empty ones left out,
- *        renderCard(spot, onPress) -> optional; replaces the photo card.
+ * Shared "pick a spot" list screen used by the AR / Bakit List / Navigate
+ * quick actions. Props: title, subtitle, onPick(spot, navigation),
+ *   renderCard(spot, onPress) -> the spot's card (a SpotStatusCard),
+ *   filter(spot) -> optional; only spots it returns true for are listed,
+ *   header -> optional node above the search field (a ProgressSummary),
+ *   sections(spots) -> optional; divides the list under headings:
+ *     [{ key, title, sub?, data: spots }], empty ones left out.
  *
- * Every one of these lists has a search field (QA 2026-10-16): with 20-odd
- * spots, scrolling for one by photo was slow.
+ * The cards used to be Home's big Featured photo cards with a chip in the
+ * corner; each list now says where the traveler stands (user, 2026-10-20).
+ * Every list has a search field (QA 2026-10-16).
  */
-export default function SpotPicker({ title, subtitle, onPick, cta, renderRight, filter, header, sections, renderCard }) {
+export default function SpotPicker({ title, subtitle, onPick, renderCard, filter, header, sections }) {
   const navigation = useNavigation();
   const insets = useSafeAreaInsets();
   const { allSpots, spotsStatus, reloadSpots } = useArrival();
-  const { getAverageRating } = useReviews();
   const { colors, isDark } = useTheme();
   const [query, setQuery] = useState("");
   const listed = useMemo(() => (filter ? allSpots.filter(filter) : allSpots), [allSpots, filter]);
@@ -51,23 +48,6 @@ export default function SpotPicker({ title, subtitle, onPick, cta, renderRight, 
     () => (sections ? sections(spots).filter((sec) => sec.data.length > 0) : null),
     [sections, spots],
   );
-
-  const renderItem = ({ item }) => {
-    const onPress = () => onPick(item, navigation);
-    return renderCard ? (
-      <View style={styles.card}>{renderCard(item, onPress)}</View>
-    ) : (
-      <FeatureCard
-        spot={item}
-        height={CARD_H}
-        rating={getAverageRating(item._id, item.ratingAvg)}
-        cta={cta}
-        onPress={onPress}
-        right={renderRight?.(item)}
-        style={styles.card}
-      />
-    );
-  };
 
   const listHeader = (
     <>
@@ -89,9 +69,6 @@ export default function SpotPicker({ title, subtitle, onPick, cta, renderRight, 
       )}
     </>
   );
-  const listEmpty = q
-    ? <EmptyState icon="search" text="Nothing matched that. Try a town or a landmark name." />
-    : <EmptyState icon="map-pin" text="No spots available yet." />;
   const listProps = {
     keyExtractor: (item) => String(item._id),
     refreshControl,
@@ -100,8 +77,12 @@ export default function SpotPicker({ title, subtitle, onPick, cta, renderRight, 
     keyboardDismissMode: "on-drag",
     contentContainerStyle: [styles.list, { paddingBottom: insets.bottom + 40 }],
     ListHeaderComponent: listHeader,
-    ListEmptyComponent: listEmpty,
-    renderItem,
+    ListEmptyComponent: q
+      ? <EmptyState icon="search" text="Nothing matched that. Try a town or a landmark name." />
+      : <EmptyState icon="map-pin" text="No spots available yet." />,
+    renderItem: ({ item }) => (
+      <View style={styles.card}>{renderCard(item, () => onPick(item, navigation))}</View>
+    ),
   };
 
   return (
@@ -111,7 +92,7 @@ export default function SpotPicker({ title, subtitle, onPick, cta, renderRight, 
       <ScreenHeader title={title} onBack={() => navigation.goBack()} />
 
       {loading ? (
-        <ListsSkeleton cardCount={4} cardHeight={CARD_H} />
+        <ListsSkeleton cardCount={6} cardHeight={CARD_H} />
       ) : failed ? (
         <View style={styles.pad}>
           <ErrorState text="Couldn't load the spots. Check your connection." onRetry={reloadSpots} />
@@ -145,7 +126,7 @@ const styles = StyleSheet.create({
   subtitle:    { fontSize: 13.5, fontFamily: fonts.sansMedium, marginBottom: 14 },
   search:      { marginBottom: 14 },
   resultCount: { fontSize: 12.5, fontFamily: fonts.sansMedium, marginTop: -4, marginBottom: 12 },
-  card:        { marginBottom: 14 },
+  card:        { marginBottom: 12 },
   section:      { marginTop: 10, marginBottom: 12 },
   sectionTitle: { ...typography.h3 },
   sectionCount: { fontFamily: fonts.sansBold, fontSize: 14 },
