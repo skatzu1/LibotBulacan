@@ -533,6 +533,14 @@ export function ArrivalProvider({ children }) {
   // a notification; leaving (in set -> not in set) clears it silently so
   // the *next* arrival notifies again.
   const insideSpotsRef = useRef(new Set());
+  // The set above starts empty and is filled from storage. Until it is, every
+  // spot looks "not inside", so the first fix — which comes within a second of
+  // starting — made each start-up at a spot an arrival: another "Welcome
+  // back!" every time the app opened there (three for three quick reloads).
+  // The watcher waits for this load, and checkArrival skips fixes until the
+  // set belongs to the signed-in user.
+  const insideLoadRef      = useRef(Promise.resolve());
+  const insideLoadedForRef = useRef(null);
   // Spots with an arrival awaiting a confirming fix (utils/arrivalEngine.js).
   const arrivalPendingRef = useRef(new Map());
   // Replays rewards that never reached the server (see PENDING_REWARDS).
@@ -579,12 +587,14 @@ export function ArrivalProvider({ children }) {
   // the background task updated it while this provider was inactive.
   // ─────────────────────────────────────────
   const loadInsideSpots = useCallback(async (userId) => {
+    let inside = [];
     try {
       const raw = await AsyncStorage.getItem(`${INSIDE_SPOTS_KEY_PREFIX}${userId}`);
-      insideSpotsRef.current = new Set(raw ? JSON.parse(raw) : []);
-    } catch (_) {
-      insideSpotsRef.current = new Set();
-    }
+      if (raw) inside = JSON.parse(raw);
+    } catch (_) {}
+    if (userId !== currentUserIdRef.current) return; // signed out or switched meanwhile
+    insideSpotsRef.current = new Set(inside);
+    insideLoadedForRef.current = userId;
   }, []);
 
   const persistInsideSpots = useCallback(() => {
@@ -659,7 +669,6 @@ export function ArrivalProvider({ children }) {
       if (token && userId) {
         await syncClaimedCache(userId, token);
         flushPendingRef.current?.(); // rewards earned offline last session
-        await loadInsideSpots(userId);
       }
     };
 
@@ -785,13 +794,15 @@ export function ArrivalProvider({ children }) {
     if (newUserId) AsyncStorage.setItem("currentUserId", newUserId);
 
     insideSpotsRef.current   = new Set();
+    insideLoadedForRef.current = null;
     arrivalPendingRef.current = new Map();
     setActiveSpotState(null);
     activeSpotRef.current    = null;
     allSpotsRef.current      = [];
     spotsFetchedAt.current   = 0;
     currentUserIdRef.current = newUserId;
-  }, [clerkUser?.id]);
+    insideLoadRef.current    = newUserId ? loadInsideSpots(newUserId) : Promise.resolve();
+  }, [clerkUser?.id, loadInsideSpots]);
 
   // ─────────────────────────────────────────
   // Fetch spots
@@ -1096,6 +1107,10 @@ export function ArrivalProvider({ children }) {
 
   // Returns the distance to the nearest spot, which sets the GPS rate.
   const checkArrival = useCallback((fix) => {
+    // Not until the saved "inside" set is in (see insideLoadRef).
+    const userId = currentUserIdRef.current;
+    if (!userId || insideLoadedForRef.current !== userId) return null;
+
     const byId = new Map();
     const targets = [];
     for (const spot of allSpotsRef.current) {
@@ -1180,6 +1195,10 @@ export function ArrivalProvider({ children }) {
     const start = async () => {
       const { status } = await Location.getForegroundPermissionsAsync();
       if (status !== "granted" || cancelled) return;
+      // The saved "inside" set first, so the first fix isn't mistaken for an
+      // arrival. (A fix the OS sends only after moving 5 m wouldn't come again.)
+      await insideLoadRef.current;
+      if (cancelled) return;
       // Distance unknown until the first fix, so start in the middle tier.
       await watchWith(watchTierFor(null));
     };

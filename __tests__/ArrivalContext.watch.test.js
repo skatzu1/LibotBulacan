@@ -64,7 +64,10 @@ const body = (url) => {
 };
 // `offline` makes every reward call fail the way fetch does with no signal.
 let offline = false;
+// A test can hold sign-in's visited-spots sync open, like a slow network.
+let syncGate = null;
 global.fetch = jest.fn(async (url) => {
+  if (syncGate && String(url).endsWith("/api/users/visitedSpots")) await syncGate;
   if (offline && !String(url).endsWith("/api/spots")) throw new TypeError("Network request failed");
   return {
     ok: true,
@@ -91,6 +94,7 @@ const AsyncStorage = require("@react-native-async-storage/async-storage");
 beforeEach(async () => {
   mockWatches.length = 0;
   offline = false;
+  syncGate = null;
   arrivalAnswer = FIRST_ARRIVAL;
   await AsyncStorage.clear();
   jest.spyOn(console, "log").mockImplementation(() => {});
@@ -254,6 +258,23 @@ describe("nearby alerts (500 m), with the app closed or open", () => {
     await settle();
     expect(nearbyCalls()).toHaveLength(1);
   });
+});
+
+it("opening the app at a spot it already knows you're at doesn't say you arrived again", async () => {
+  // Saved by the last session (or the background task): already inside.
+  await AsyncStorage.setItem("insideSpots_user_test", JSON.stringify(["spot1"]));
+  let release;
+  syncGate = new Promise((r) => { release = r; });
+  render(app());
+  // On a phone the first fix comes within a second of starting, before
+  // sign-in's network calls are done.
+  for (let i = 0; i < 20 && live().length === 0; i++) await act(async () => {});
+  global.fetch.mockClear();
+  await feed(10, 6);
+  await settle();
+  release();
+  await settle();
+  expect(global.fetch.mock.calls.filter(([u]) => String(u).endsWith("/api/arrivals"))).toHaveLength(0);
 });
 
 it("a visit that reaches the server is not queued", async () => {
