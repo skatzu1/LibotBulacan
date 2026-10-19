@@ -249,7 +249,11 @@ export default function LocationMission({ navigation, route }) {
     <SafeAreaView style={[styles.screen, { backgroundColor: colors.background }]} edges={["bottom"]}>
       <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={colors.background} />
 
-      <ScreenHeader title={mission.title} onBack={() => navigation.goBack()} />
+      {/* The step's name from the Bakit List, not the mission title: titles
+          like "Try a Recommended Eatery Near The Cathedral-Basilica Minore
+          and Parish of…" never fit the one-line header. The eatery and the
+          spot it's near are named in full below. */}
+      <ScreenHeader title="Nearby Eats" onBack={() => navigation.goBack()} />
 
       {/* Outside the ScrollView on purpose: a map inside one fights it for
           every drag. */}
@@ -278,7 +282,7 @@ export default function LocationMission({ navigation, route }) {
         </MissionMap>
       )}
 
-      {/* Scrolls so a long description or large font setting can't push
+      {/* Scrolls so long eatery info or a large font setting can't push
           anything off a small screen. */}
       <ScrollView contentContainerStyle={styles.body} showsVerticalScrollIndicator={false}>
         <View style={styles.placeRow}>
@@ -295,21 +299,17 @@ export default function LocationMission({ navigation, route }) {
             </View>
           )}
           <View style={styles.placeText}>
-            <Text style={[typography.label, styles.kicker, { color: colors.textMuted }]}>NEARBY EATS</Text>
+            <Text style={[typography.label, styles.kicker, { color: colors.textMuted }]}>RECOMMENDED EATERY</Text>
             <Text style={[typography.h2, { color: colors.brandDark }]} numberOfLines={2}>
               {placeName}
             </Text>
-            {fromSpot != null && (
-              <Text style={[typography.caption, { color: colors.textMuted, marginTop: 2 }]} numberOfLines={1}>
-                {fmtDistance(fromSpot)} from {spotName}
+            {!!spotName && (
+              <Text style={[typography.caption, { color: colors.textMuted, marginTop: 2 }]} numberOfLines={2}>
+                {fromSpot != null ? `${fmtDistance(fromSpot)} from ${spotName}` : `Near ${spotName}`}
               </Text>
             )}
           </View>
         </View>
-
-        <Text style={[typography.body, { color: colors.textSecondary, marginTop: spacing.lg }]}>
-          {mission.description}
-        </Text>
 
         {!!mission.locationInfo && (
           <View style={[styles.infoCard, { backgroundColor: colors.brandSoft }]}>
@@ -390,7 +390,7 @@ const styles = StyleSheet.create({
 
   infoCard: {
     borderRadius: radius.card, padding: spacing.md,
-    marginTop: spacing.md,
+    marginTop: spacing.lg,
   },
 
   statusCard: {
