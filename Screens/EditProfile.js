@@ -14,7 +14,7 @@ import {
   ScreenHeader, HeaderAction, FormField, GroupLabel, ListRow, LoadingState, Avatar, H_PAD,
 } from "../components/ui";
 import api, { BASE_URL } from "../api";
-import { cleanName, nameError, middleNameError } from "../utils/authValidation";
+import { cleanName, nameError } from "../utils/authValidation";
 import { afterAlertCloses, ensureCameraAccess, explainPickerError } from "../utils/cameraAccess";
 import Icon from "../components/Icon";
 import KeyboardAvoider from "../components/KeyboardAvoider";
@@ -65,9 +65,6 @@ export default function EditProfile({ navigation }) {
   const leavingRef = useRef(false);
 
   const [firstName, setFirstName]           = useState("");
-  // Optional. Clerk has no field for it, so it lives in the account's unsafe
-  // metadata (the server copies it), like the municipality from sign-up.
-  const [middleName, setMiddleName]         = useState("");
   const [lastName, setLastName]             = useState("");
   const [avatar, setAvatar]                 = useState(null);
   const [newLocalAvatar, setNewLocalAvatar] = useState(null);
@@ -77,22 +74,18 @@ export default function EditProfile({ navigation }) {
   const [pickingImage, setPickingImage]     = useState(false);
   const [deleting, setDeleting]             = useState(false);
 
-  const [originalFirstName, setOriginalFirstName]   = useState("");
-  const [originalMiddleName, setOriginalMiddleName] = useState("");
-  const [originalLastName, setOriginalLastName]     = useState("");
+  const [originalFirstName, setOriginalFirstName] = useState("");
+  const [originalLastName, setOriginalLastName]   = useState("");
 
   const isGoogleUser = !(clerkUser?.passwordEnabled ?? false);
 
   useEffect(() => {
     if (!isLoaded || !clerkUser) return;
     const fn = clerkUser.firstName || "";
-    const mn = typeof clerkUser.unsafeMetadata?.middleName === "string" ? clerkUser.unsafeMetadata.middleName : "";
     const ln = clerkUser.lastName  || "";
     setFirstName(fn);
-    setMiddleName(mn);
     setLastName(ln);
     setOriginalFirstName(fn);
-    setOriginalMiddleName(mn);
     setOriginalLastName(ln);
     setAvatar(profileImage || clerkPhoto(clerkUser));
   }, [isLoaded, clerkUser]);
@@ -102,12 +95,11 @@ export default function EditProfile({ navigation }) {
   }, [profileImage]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const hasChanges = useMemo(() => {
-    const nameChanged   = firstName.trim()  !== originalFirstName.trim() ||
-                          middleName.trim() !== originalMiddleName.trim() ||
-                          lastName.trim()   !== originalLastName.trim();
+    const nameChanged   = firstName.trim() !== originalFirstName.trim() ||
+                          lastName.trim()  !== originalLastName.trim();
     const avatarChanged = !!newLocalAvatar || removeAvatar;
     return nameChanged || avatarChanged;
-  }, [firstName, middleName, lastName, originalFirstName, originalMiddleName, originalLastName, newLocalAvatar, removeAvatar]);
+  }, [firstName, lastName, originalFirstName, originalLastName, newLocalAvatar, removeAvatar]);
 
   useEffect(() => {
     const unsubscribe = navigation.addListener("beforeRemove", (e) => {
@@ -179,11 +171,10 @@ export default function EditProfile({ navigation }) {
     }
   };
 
-  // Same name rules as sign-up. The middle and last name may be left blank.
+  // Same name rules as sign-up. The last name may be left blank.
   const validate = () => {
     const problem =
       nameError(firstName, "your first name") ||
-      middleNameError(middleName) ||
       (lastName.trim() ? nameError(lastName, "your last name") : null);
     if (problem) {
       showAlert("Check your name", problem);
@@ -206,7 +197,6 @@ export default function EditProfile({ navigation }) {
       await clerkUser.update({
         firstName: firstName.trim(),
         lastName: lastName.trim(),
-        unsafeMetadata: { ...(clerkUser.unsafeMetadata || {}), middleName: middleName.trim() },
       });
 
       // Removing has to clear Clerk's copy too (for a Google sign-in that's the
@@ -225,7 +215,6 @@ export default function EditProfile({ navigation }) {
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
         body: JSON.stringify({
           firstName:    firstName.trim(),
-          middleName:   middleName.trim(),
           lastName:     lastName.trim(),
           profileImage: imageToSave,
         }),
@@ -246,10 +235,8 @@ export default function EditProfile({ navigation }) {
       // The saved values are the new baseline, so Save greys out again and
       // leaving afterwards doesn't ask "Discard changes?".
       setFirstName(firstName.trim());
-      setMiddleName(middleName.trim());
       setLastName(lastName.trim());
       setOriginalFirstName(firstName.trim());
-      setOriginalMiddleName(middleName.trim());
       setOriginalLastName(lastName.trim());
       // Stays on this screen with a toast (QA 2026-10-16); it used to jump
       // back to the profile, so the change couldn't be checked here.
@@ -361,9 +348,8 @@ export default function EditProfile({ navigation }) {
 
           <View style={styles.section}>
             <GroupLabel>Personal info</GroupLabel>
-            <FormField label="First name"  icon="user" value={firstName}  onChangeText={(v) => setFirstName(cleanName(v))}  placeholder="First name" autoCapitalize="words" />
-            <FormField label="Middle name" icon="user" value={middleName} onChangeText={(v) => setMiddleName(cleanName(v))} placeholder="Optional"   autoCapitalize="words" />
-            <FormField label="Last name"   icon="user" value={lastName}   onChangeText={(v) => setLastName(cleanName(v))}   placeholder="Last name"  autoCapitalize="words" />
+            <FormField label="First name" icon="user" value={firstName} onChangeText={(v) => setFirstName(cleanName(v))} placeholder="First name" autoCapitalize="words" />
+            <FormField label="Last name"  icon="user" value={lastName}  onChangeText={(v) => setLastName(cleanName(v))}  placeholder="Last name"  autoCapitalize="words" />
             <FormField
               label="Email"
               icon="mail"

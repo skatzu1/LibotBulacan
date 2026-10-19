@@ -19,7 +19,7 @@ import { useTheme, fonts, MAX_FONT_SCALE } from "../context/ThemeContext";
 import { TERMS_URL as TERMS_OF_SERVICE_URL, PRIVACY_URL as PRIVACY_POLICY_URL } from "../utils/legalLinks";
 import AuthScaffold, { useAuthStyles, FieldError, FormError } from "../components/AuthScaffold";
 import {
-  nameError, middleNameError, emailError, dobError, strongPasswordError, confirmPasswordError,
+  nameError, emailError, dobError, strongPasswordError, confirmPasswordError,
   clerkErrorToField, DISPOSABLE_EMAIL_ERROR,
   cleanName, cleanEmail, NAME_MAX, EMAIL_MAX,
   GOOGLE_BUSY, googleWindowBusy, googleWindowClosed, googleErrorMessage,
@@ -75,10 +75,9 @@ function TermsNotice({ action }) {
 // Rules and wording are shared with the other auth screens
 // (utils/authValidation). The password has to reach "Good" on the strength
 // meter, i.e. meet 3 of the 4 rules.
-function validateRegister({ firstName, middleName, lastName, municipality, email, password, confirm, dob }) {
+function validateRegister({ firstName, lastName, municipality, email, password, confirm, dob }) {
   const e = {};
   const f = nameError(firstName, "your first name"); if (f) e.firstName = f;
-  const mi = middleNameError(middleName);           if (mi) e.middleName = mi;
   const l = nameError(lastName, "your last name");   if (l) e.lastName = l;
   const h = municipalityError(municipality);        if (h) e.municipality = h;
   const m = emailError(email);                      if (m) e.email = m;
@@ -88,9 +87,9 @@ function validateRegister({ firstName, middleName, lastName, municipality, email
   return e;
 }
 
-// The QA's order (2026-10-16): first, middle and last name, municipality,
-// email; then the password and date of birth.
-const FIELD_ORDER = ["firstName", "middleName", "lastName", "municipality", "email", "password", "confirm", "dob"];
+// The QA's order (2026-10-16): first and last name, municipality, email; then
+// the password and date of birth.
+const FIELD_ORDER = ["firstName", "lastName", "municipality", "email", "password", "confirm", "dob"];
 // Google fills in the name and email, but not where the traveler lives or
 // how old they are, so those two are checked before it opens.
 const GOOGLE_FIELDS = ["municipality", "dob"];
@@ -103,7 +102,6 @@ export default function Register({ navigation }) {
   const { startOAuthFlow }              = useOAuth({ strategy: "oauth_google" });
 
   const [firstName, setFirstName]         = useState("");
-  const [middleName, setMiddleName]       = useState("");
   const [lastName, setLastName]           = useState("");
   const [municipality, setMunicipality]   = useState("");
   const [email, setEmail]                 = useState("");
@@ -125,13 +123,13 @@ export default function Register({ navigation }) {
   const [formError, setFormError]       = useState("");
 
   const inputRefs = {
-    firstName: useRef(null), middleName: useRef(null), lastName: useRef(null),
+    firstName: useRef(null), lastName: useRef(null),
     municipality: useRef(null), email: useRef(null), password: useRef(null), confirm: useRef(null), dob: useRef(null),
   };
 
   const clientErrors = useMemo(
-    () => validateRegister({ firstName, middleName, lastName, municipality, email, password, confirm, dob }),
-    [firstName, middleName, lastName, municipality, email, password, confirm, dob]
+    () => validateRegister({ firstName, lastName, municipality, email, password, confirm, dob }),
+    [firstName, lastName, municipality, email, password, confirm, dob]
   );
   const errorFor = (field) => serverErrors[field] || (touched[field] ? clientErrors[field] : null);
 
@@ -169,10 +167,7 @@ export default function Register({ navigation }) {
   // backend's utils/signUpDetails.js). Not the date of birth: it is only for
   // the age check here on the phone, and the Privacy Policy says it is not
   // sent to us or stored.
-  const signUpDetails = () => ({
-    municipality,
-    ...(middleName.trim() ? { middleName: middleName.trim() } : {}),
-  });
+  const signUpDetails = () => ({ municipality });
 
   // ── Google signup ──
   const handleGoogleSignUp = async () => {
@@ -271,7 +266,7 @@ export default function Register({ navigation }) {
     !!errorFor(key) && a.fieldInvalid,
   ];
 
-  // A plain one-line text field: first, middle and last name, email.
+  // A plain one-line text field: first and last name, email.
   const textField = (key, { value, onChange, placeholder, label, next, ...props }) => (
     <View>
       <View style={a.fieldRow}>
@@ -310,9 +305,7 @@ export default function Register({ navigation }) {
       subtitle="Fill in the form to continue"
     >
       {nameField("firstName", firstName, setFirstName, "FIRST NAME", "First name",
-        () => inputRefs.middleName.current?.focus(), "name-given")}
-      {nameField("middleName", middleName, setMiddleName, "MIDDLE NAME (OPTIONAL)", "Middle name, optional",
-        () => inputRefs.lastName.current?.focus(), "name-middle")}
+        () => inputRefs.lastName.current?.focus(), "name-given")}
       {nameField("lastName", lastName, setLastName, "LAST NAME", "Last name",
         () => inputRefs.municipality.current?.focus(), "name-family")}
 

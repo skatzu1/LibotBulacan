@@ -50,15 +50,16 @@ beforeEach(async () => {
 describe("Register", () => {
   const Register = require("../Screens/Register").default;
 
-  it("asks first, middle and last name, municipality and email, in that order", async () => {
+  it("asks first and last name, municipality and email, in that order", async () => {
     const tree = wrap(<Register navigation={{ navigate: jest.fn() }} />);
     await tree.findByText("Create an Account", {}, { timeout: 8000 }); // the first render loads the screen's modules
     const labels = tree.UNSAFE_root
       .findAll((n) => typeof n.props?.accessibilityLabel === "string" && n.type !== "View")
       .map((n) => n.props.accessibilityLabel);
-    const order = ["First name", "Middle name, optional", "Last name", "Choose your municipality", "Email address"]
+    const order = ["First name", "Last name", "Choose your municipality", "Email address"]
       .map((l) => labels.indexOf(l));
     expect(order.every((i) => i >= 0)).toBe(true);
+    expect(labels.some((l) => /middle name/i.test(l))).toBe(false);
     expect([...order].sort((a, b) => a - b)).toEqual(order);
     // The date of birth can be typed or picked from a calendar.
     expect(tree.getByLabelText("Date of birth, month slash day slash year")).toBeTruthy();

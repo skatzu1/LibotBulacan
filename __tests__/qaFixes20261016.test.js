@@ -1,5 +1,5 @@
 import {
-  strongPasswordError, passwordLevel, middleNameError, dobError, dobToDate, formatDob,
+  strongPasswordError, passwordLevel, dobError, dobToDate, formatDob,
 } from "../utils/authValidation";
 import { spotProgress } from "../utils/missionTiers";
 import { ensureAtSpotForAR } from "../utils/arLocationGate";
@@ -44,14 +44,6 @@ describe("new passwords follow sign-up's rules everywhere", () => {
 });
 
 describe("registration: separate names and a date of birth", () => {
-  it("the middle name is optional and may be an initial", () => {
-    expect(middleNameError("")).toBeNull();
-    expect(middleNameError("D.")).toBeNull();
-    expect(middleNameError("Dela Cruz")).toBeNull();
-    expect(middleNameError("R2")).toMatch(/letters only/);
-    expect(middleNameError(".D")).toBe("Start with a letter.");
-  });
-
   it("the calendar's date and the typed date are the same text", () => {
     const picked = new Date(2004, 1, 29);
     expect(formatDob(picked)).toBe("02/29/2004");

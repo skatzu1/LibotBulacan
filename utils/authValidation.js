@@ -35,16 +35,6 @@ export const nameError = (name, what = "your full name") => {
   return null;
 };
 
-// A middle name is optional, and a lone initial ("D.") is a common way to
-// write one, so a single letter is enough here.
-export const middleNameError = (name) => {
-  const v = String(name || "").trim();
-  if (!v) return null;
-  if (!NAME_ONLY_ALLOWED.test(v)) return "Use letters only. Spaces, hyphens (-), apostrophes (') and periods (.) are fine.";
-  if (!STARTS_WITH_LETTER.test(v)) return "Start with a letter.";
-  return null;
-};
-
 // ── Email ──
 export const EMAIL_MAX = 254;
 
