@@ -1,19 +1,19 @@
 // Live map for the "Nearby Eats" location mission (Screens/LocationMission.js):
-// the eatery's pin inside the radius it has to be completed in, and the
-// user's own position as they walk. (The parent spot is left off: it sits a
-// few dozen metres away and its marker kept landing under the pin or its
-// label. The screen names it in text instead.)
+// the eatery's pin inside the radius it has to be completed in, the user's own
+// position as they walk, and the road route between them. (The parent spot is
+// left off: it sits a few dozen metres away and its marker kept landing under
+// the pin or its label. The screen names it in text instead.)
 //
-// Same stack as the Track screen — Leaflet in a WebView — but deliberately
-// WITHOUT Track's route line. The eateries sit a short walk from their
-// spot (Emotea is 83 m from Barasoain), and the route line follows car
-// rules, so it would send a walker round one-way streets.
-// A dotted straight line to the pin is the honest shape at this scale, and it
-// is the same straight-line distance the server checks on completion.
-import React, { useCallback, useEffect, useMemo, useRef } from "react";
+// It works like the navigation map (Screens/Track.js): Leaflet in a WebView,
+// the road route from GET /api/route (fetched by the screen with
+// hooks/useRoadRoute.js) drawn by the same code (utils/routeLine.js) and
+// trimmed as the user walks, and the same follow-me button. Once the user is
+// inside the ring the route is put away: there is nowhere left to go.
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { View, StyleSheet, TouchableOpacity } from "react-native";
 import { WebView } from "react-native-webview";
 import { useTheme, radius, shadow } from "../context/ThemeContext";
+import { ROUTE_LINE_JS } from "../utils/routeLine";
 import Icon from "./Icon";
 
 // A JS string literal that is also safe inside an inline <script> block —
@@ -59,7 +59,7 @@ function buildHtml({ target, radiusMeters, placeName, colors, isDark }) {
         font-family:'Schibsted Grotesk',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
         background:${colors.background};
       }
-      path.leaflet-interactive { stroke-linecap:round; stroke-linejoin:round; }
+      path.leaflet-interactive, path.route-line { stroke-linecap:round; stroke-linejoin:round; }
       ${isDark
         // OSM only publishes a light style. Invert + hue-rotate turns it into
         // a dark map while keeping water blue and parks green; only the tile
@@ -143,6 +143,9 @@ function buildHtml({ target, radiusMeters, placeName, colors, isDark }) {
         var PLACE  = ${jsString(placeName)};
         var BRAND  = '${colors.brand}';
         var OK     = '${colors.success}';
+        // The route's outline, as on the navigation map: white on the light
+        // map, the page colour on the dark one, where a white halo glared.
+        var CASING = '${isDark ? colors.background : "#FFFFFF"}';
 
         var map = L.map('map', {
           zoomControl:false, attributionControl:false, minZoom:9, maxZoom:19,
@@ -167,10 +170,12 @@ function buildHtml({ target, radiusMeters, placeName, colors, isDark }) {
           fillColor:BRAND, fillOpacity:0.12, interactive:false,
         }).addTo(map);
 
-        // Dotted line from the user to the pin, hidden once they're inside.
-        var trail = L.polyline([], {
-          color:BRAND, weight:3, opacity:0.85, dashArray:'2 9', interactive:false,
-        }).addTo(map);
+        // The road route, drawn as on the navigation map (utils/routeLine.js).
+        ${ROUTE_LINE_JS}
+        var route = makeRouteLine(map, T, { color:BRAND, casing:CASING });
+        // Called from React Native with the route the screen fetched; null
+        // clears it.
+        window.drawRoute = function (latlngs) { route.draw(latlngs); };
 
         var pin = L.marker(T, {
           icon: L.divIcon({ html:${jsString(pinSvg)}, className:'', iconSize:[36,46], iconAnchor:[18,45] }),
@@ -200,8 +205,9 @@ function buildHtml({ target, radiusMeters, placeName, colors, isDark }) {
           });
         };
 
-        // Called from React Native on every filtered GPS fix.
-        window.updateUser = function (lat, lng, inRange) {
+        // Called from React Native on every filtered GPS fix. "follow" keeps
+        // the user in the middle of the map, as on the navigation map.
+        window.updateUser = function (lat, lng, inRange, follow) {
           youAt = L.latLng(lat, lng);
           if (!you) {
             you = L.marker(youAt, {
@@ -211,13 +217,20 @@ function buildHtml({ target, radiusMeters, placeName, colors, isDark }) {
           } else {
             you.setLatLng(youAt);
           }
-          trail.setLatLngs(inRange ? [] : [youAt, T]);
+          route.place(youAt);
+          route.show(!inRange);
           ring.setStyle(inRange
             ? { color:OK, fillColor:OK, fillOpacity:0.22 }
             : { color:BRAND, fillColor:BRAND, fillOpacity:0.12 });
           // Frame both once, on the first fix. After that the map stays where
-          // the user pans it; the recenter button re-frames on demand.
+          // the user pans it, unless they've turned on following.
           if (!fitted) { fitted = true; window.fitAll(false); }
+          else if (follow) map.panTo(youAt, { animate:true });
+        };
+
+        // The follow-me button, as on the navigation map: the user, close up.
+        window.centerOnUser = function () {
+          if (youAt) map.setView(youAt, 17, { animate:true });
         };
 
         if (window.ReactNativeWebView) {
@@ -234,14 +247,20 @@ function buildHtml({ target, radiusMeters, placeName, colors, isDark }) {
  * placeName     eatery name, shown as a label on the pin
  * user          latest { latitude, longitude }, or null while locating
  * inRange       whether `user` is inside the ring (turns it green)
+ * route         the road route to the eatery ([[lat, lng], …] from
+ *               hooks/useRoadRoute.js), or null
  * children      overlays floated over the map (status chip, buttons)
  */
 export default function MissionMap({
-  target, radiusMeters, placeName, user, inRange, height, children, style,
+  target, radiusMeters, placeName, user, inRange, route, height, children, style,
 }) {
   const { colors, isDark } = useTheme();
   const webRef = useRef(null);
   const ready = useRef(false);
+  // State for the button, a ref for the GPS updates: turning following on or
+  // off must not re-send the last fix.
+  const [follow, setFollow] = useState(false);
+  const followRef = useRef(false);
 
   const html = useMemo(
     () => buildHtml({ target, radiusMeters, placeName, colors, isDark }),
@@ -253,25 +272,44 @@ export default function MissionMap({
   const pushUser = useCallback(() => {
     if (!ready.current || !user) return;
     webRef.current?.injectJavaScript(
-      `try { window.updateUser(${user.latitude}, ${user.longitude}, ${!!inRange}); } catch (e) {} true;`,
+      `try { window.updateUser(${user.latitude}, ${user.longitude}, ${!!inRange}, ${followRef.current}); } catch (e) {} true;`,
     );
   }, [user, inRange]);
 
-  useEffect(() => { pushUser(); }, [pushUser]);
+  const pushRoute = useCallback(() => {
+    if (!ready.current) return;
+    webRef.current?.injectJavaScript(
+      `try { window.drawRoute(${JSON.stringify(route ?? null)}); } catch (e) {} true;`,
+    );
+  }, [route]);
 
-  // The page says when its functions exist; flush the latest fix then (and
-  // again after a theme change reloads the page).
+  useEffect(() => { pushUser(); }, [pushUser]);
+  useEffect(() => { pushRoute(); }, [pushRoute]);
+
+  // The page says when its functions exist; flush the latest fix and route
+  // then (and again after a theme change reloads the page).
   const onMessage = useCallback((event) => {
     let data;
     try { data = JSON.parse(event.nativeEvent.data); } catch { return; }
     if (data?.type === "ready") {
       ready.current = true;
       pushUser();
+      pushRoute();
     }
-  }, [pushUser]);
+  }, [pushUser, pushRoute]);
 
-  const recenter = () => {
-    webRef.current?.injectJavaScript("try { window.fitAll(true); } catch (e) {} true;");
+  // As on the navigation map: the first tap centres on the user and follows
+  // them as they walk, the second stops following. Before the first fix there
+  // is no one to centre on, so it shows the whole ring.
+  const toggleFollow = () => {
+    if (!user) {
+      webRef.current?.injectJavaScript("try { window.fitAll(true); } catch (e) {} true;");
+      return;
+    }
+    const next = !followRef.current;
+    followRef.current = next;
+    setFollow(next);
+    if (next) webRef.current?.injectJavaScript("try { window.centerOnUser(); } catch (e) {} true;");
   };
 
   return (
@@ -299,13 +337,14 @@ export default function MissionMap({
 
       <TouchableOpacity
         accessibilityRole="button"
-        accessibilityLabel={`Show you and ${placeName || "the eatery"} on the map`}
-        onPress={recenter}
-        style={[styles.recenter, { backgroundColor: colors.card }, shadow.md]}
+        accessibilityLabel={follow ? "Stop following my location" : "Centre the map on my location"}
+        accessibilityState={{ selected: follow }}
+        onPress={toggleFollow}
+        style={[styles.recenter, { backgroundColor: follow ? colors.brand : colors.card }, shadow.md]}
         activeOpacity={0.8}
         hitSlop={6}
       >
-        <Icon name="crosshair" size={19} color={colors.brand} />
+        <Icon name="navigation" size={19} color={follow ? colors.onBrand : colors.brand} />
       </TouchableOpacity>
 
       {children}

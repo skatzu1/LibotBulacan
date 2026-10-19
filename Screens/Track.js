@@ -22,19 +22,8 @@ import { BULACAN_BOUNDARY, BULACAN_BBOX } from "../utils/bulacanBoundary";
 import { GpsSmoother, isBetterFix, MAX_USABLE_ACCURACY_M } from "../utils/gpsFilter";
 import { BASE_URL } from "../api";
 import Icon from "../components/Icon";
-
-/* ── Human-readable distance / duration ───────────────────────────── */
-function fmtDistance(m) {
-  if (m == null) return "";
-  return m >= 1000 ? `${(m / 1000).toFixed(m >= 10000 ? 0 : 1)} km` : `${Math.round(m / 10) * 10} m`;
-}
-function fmtDuration(s) {
-  if (s == null) return "";
-  const mins = Math.round(s / 60);
-  if (mins < 60) return `${mins} min`;
-  const h = Math.floor(mins / 60);
-  return `${h} hr ${mins % 60} min`;
-}
+import useRoadRoute, { fmtDistance, fmtDuration } from "../hooks/useRoadRoute";
+import { ROUTE_LINE_JS } from "../utils/routeLine";
 
 const { width, height } = Dimensions.get("window");
 // Single source of truth for the backend host — see api.js.
@@ -770,10 +759,6 @@ export default function Track({ route, navigation }) {
   const [locationError, setLocationError] = useState(null);
   const [followMode, setFollowMode]       = useState(false);
   const [selectedTerminal, setSelectedTerminal] = useState(null);
-  const [routeInfo, setRouteInfo]         = useState(null); // { distance, time }
-  // Said instead of the distance when no road route can be drawn (e.g. the
-  // traveler is outside Bulacan, beyond the roads the server knows).
-  const [routeNote, setRouteNote]         = useState(null);
 
   // Bottom sheet animation
   const sheetAnim = useRef(new Animated.Value(0)).current;
@@ -906,12 +891,12 @@ export default function Track({ route, navigation }) {
 
   /* ── Route line ── */
   // Directions come from the backend's own road router (GET /api/route,
-  // which searches Bulacan's road network itself). The line used to come
-  // from the public OSRM demo server, an outside API with no uptime promise.
-  // Fetched at most every 15 s, and again only once the traveler has moved
-  // ~45 m; the last line is kept so a map reload can redraw it at once.
-  const routeReq = useRef({ at: 0, pt: null, busy: false });
-  const lastRoute = useRef(null);
+  // which searches Bulacan's road network itself), fetched and drawn by the
+  // same code as the Nearby Eats map: hooks/useRoadRoute.js and
+  // utils/routeLine.js. The line used to come from the public OSRM demo
+  // server, an outside API with no uptime promise.
+  const { route: roadRoute, info: routeInfo, note: routeNote, update: requestRoute } =
+    useRoadRoute(spotData?._id ? { spotId: spotData._id } : null);
 
   const drawRouteOnMap = useCallback((coordinates) => {
     webViewRef.current?.injectJavaScript(`
@@ -919,40 +904,10 @@ export default function Track({ route, navigation }) {
     `);
   }, []);
 
-  const requestRoute = useCallback(async (coords) => {
-    if (!spotData?._id) return;
-    const st = routeReq.current;
-    const now = Date.now();
-    if (st.busy || now - st.at < 15000) return;
-    if (st.pt && haversineDistance(st.pt.latitude, st.pt.longitude, coords.latitude, coords.longitude) <= 45) return;
-    st.busy = true;
-    st.at = now;
-    try {
-      const heading = coords.heading != null ? `&heading=${Math.round(coords.heading)}` : "";
-      const res = await fetch(`${BASE_URL}/api/route?from=${coords.latitude},${coords.longitude}&spotId=${spotData._id}${heading}`);
-      const data = await res.json().catch(() => null);
-      if (!isMounted.current) return;
-      if (res.ok && data?.coordinates?.length >= 2) {
-        st.pt = coords;
-        lastRoute.current = data.coordinates;
-        setRouteInfo({ distance: data.distance, time: data.duration });
-        setRouteNote(null);
-        drawRouteOnMap(data.coordinates);
-      } else if (res.status === 422) {
-        st.pt = coords;
-        lastRoute.current = null;
-        setRouteInfo(null);
-        setRouteNote(data?.message || "No road route was found.");
-        drawRouteOnMap(null);
-      }
-      // Anything else (no signal, a busy server): the line already drawn
-      // stays, and the next fix after 15 s tries again.
-    } catch {
-      // Offline — as above.
-    } finally {
-      st.busy = false;
-    }
-  }, [spotData, drawRouteOnMap]);
+  // Before the page is up, onLoadEnd draws it instead.
+  useEffect(() => {
+    if (webViewReady.current) drawRouteOnMap(roadRoute);
+  }, [roadRoute, drawRouteOnMap]);
 
   /* ── Update marker + proximity via injectJavaScript ── */
   const updateMarkerRef = useRef(null);
@@ -1514,76 +1469,11 @@ window.updateSpotProximity = function(active) {
 
         // ── Route line ──
         // Drawn from the route the app fetched from the backend
-        // (GET /api/route); null clears it. A wide casing under the line.
-        // The route runs on the roads, from the road point nearest the
-        // traveler (who may be in a house, a yard, or off the roads the
-        // server knows) to the one nearest the spot, so dotted links join it
-        // to the blue dot and to the pin. As the traveler moves, the part
-        // already passed is cut off, so the line always starts at them.
-        window.routePts = null;  // the route as fetched
-        window.routeFrom = 0;    // the segment the traveler was last nearest
-        window.routeLayers = [];
-        window.routeLinks = [];
-
-        // [lat, lng] to metres on a flat map around latitude lat0.
-        function metresAround(lat0) {
-          var kx = Math.cos(lat0 * Math.PI / 180) * 111320;
-          return function(p) { return [p[1] * kx, p[0] * 110540]; };
-        }
-
-        // The point of the route nearest (lat, lng), looking from segment
-        // number "from" on: { i: segment, pt: [lat, lng], d: metres away }.
-        function nearestOnRoute(lat, lng, from) {
-          var pts = window.routePts, xy = metresAround(lat), u = xy([lat, lng]), best = null;
-          for (var i = Math.max(0, from); i < pts.length - 1; i++) {
-            var a = xy(pts[i]), b = xy(pts[i + 1]);
-            var dx = b[0] - a[0], dy = b[1] - a[1], len2 = dx * dx + dy * dy;
-            var t = len2 ? Math.max(0, Math.min(1, ((u[0] - a[0]) * dx + (u[1] - a[1]) * dy) / len2)) : 0;
-            var d = Math.hypot(a[0] + t * dx - u[0], a[1] + t * dy - u[1]);
-            if (!best || d < best.d) {
-              best = { i: i, d: d, pt: [pts[i][0] + t * (pts[i + 1][0] - pts[i][0]), pts[i][1] + t * (pts[i + 1][1] - pts[i][1])] };
-            }
-          }
-          return best;
-        }
-
-        window.drawRoute = function(latlngs) {
-          window.routeLayers.concat(window.routeLinks).forEach(function(l) { window.map.removeLayer(l); });
-          window.routeLayers = [];
-          window.routeLinks = [];
-          window.routePts = latlngs && latlngs.length >= 2 ? latlngs : null;
-          window.routeFrom = 0;
-          if (!window.routePts) return;
-          var dots = { color:'${destColor}', weight:4, opacity:0.8, dashArray:'1 9', lineCap:'round', interactive:false };
-          window.routeLinks = [L.polyline([], dots).addTo(window.map), L.polyline([], dots).addTo(window.map)];
-          window.routeLayers = [
-            L.polyline(latlngs, { color:'${routeCasing}', weight:10, opacity:0.95, interactive:false, className:'route-line' }).addTo(window.map),
-            L.polyline(latlngs, { color:'${destColor}', weight:5.5, opacity:1, interactive:false, className:'route-line' }).addTo(window.map),
-          ];
-          window.placeRoute();
-        };
-
-        // Fits the route to where the traveler is now: trims what they have
-        // passed and redraws the two dotted links.
-        window.placeRoute = function() {
-          var pts = window.routePts;
-          if (!pts) return;
-          var line = pts, start = null;
-          var here = window.userMarker ? window.userMarker.getLatLng() : null;
-          if (here) {
-            // From one segment back, so GPS jitter can't skip ahead and a
-            // route that doubles back near itself isn't cut short.
-            var near = nearestOnRoute(here.lat, here.lng, window.routeFrom - 1);
-            window.routeFrom = near.i;
-            line = [near.pt].concat(pts.slice(near.i + 1));
-            if (near.d > 3) start = [[here.lat, here.lng], near.pt];
-          }
-          window.routeLayers.forEach(function(l) { l.setLatLngs(line); });
-          window.routeLinks[0].setLatLngs(start || []);
-          var end = pts[pts.length - 1];
-          var gap = window.map.distance(end, [DEST_LAT, DEST_LNG]);
-          window.routeLinks[1].setLatLngs(gap > 3 ? [end, [DEST_LAT, DEST_LNG]] : []);
-        };
+        // (GET /api/route); null clears it. The same code draws the route on
+        // the Nearby Eats map: see utils/routeLine.js.
+        ${ROUTE_LINE_JS}
+        var routeLine = makeRouteLine(window.map, [DEST_LAT, DEST_LNG], { color:'${destColor}', casing:'${routeCasing}' });
+        window.drawRoute = function(latlngs) { routeLine.draw(latlngs); };
 
         // ── User location ──
         window.userMarker     = null;
@@ -1612,7 +1502,7 @@ window.updateSpotProximity = function(active) {
           }
 
           window.mapReady = true;
-          window.placeRoute();
+          routeLine.place([lat, lng]);
         };
 
         // The route itself is fetched by the app, which calls drawRoute.
@@ -1622,7 +1512,7 @@ window.updateSpotProximity = function(active) {
             return;
           }
           if (window.userMarker) window.userMarker.setLatLng([lat, lng]);
-          window.placeRoute();
+          routeLine.place([lat, lng]);
           if (follow && window.map) window.map.panTo([lat, lng], { animate:true });
         };
       </script>
@@ -1694,7 +1584,7 @@ window.updateSpotProximity = function(active) {
             updateMarkerRef.current?.(userLocation);
           }
           // A reload (e.g. a theme change) starts with a bare map.
-          if (lastRoute.current) drawRouteOnMap(lastRoute.current);
+          if (roadRoute) drawRouteOnMap(roadRoute);
         }}
       />
 

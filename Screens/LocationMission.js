@@ -2,16 +2,17 @@
 // (set by a moderator/admin in the spot's edit form, subject to admin review).
 // Unlike the AI/photo missions, there's no camera step: the user just needs
 // to physically be within the pinned radius, verified server-side on
-// completion. A live map (components/MissionMap.js) shows them and the eatery
-// so they can walk there.
+// completion. A live map (components/MissionMap.js) gives directions to the
+// eatery the way the navigation map gives them to a spot: the road route from
+// the backend's own router, with its distance and time.
 import React, { useEffect, useRef, useState } from "react";
 import {
   View, Text, Image, StyleSheet, ActivityIndicator, StatusBar, ScrollView,
-  TouchableOpacity, Linking, useWindowDimensions,
+  useWindowDimensions,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import * as Location from "expo-location";
-import { showAlert, showToast } from "../components/AppAlert";
+import { showAlert } from "../components/AppAlert";
 import { useMissions } from "../context/MissionContext";
 import {
   useTheme, spacing, radius, typography, shadow, fonts, MAX_FONT_SCALE,
@@ -19,6 +20,7 @@ import {
 import { ScreenHeader, PrimaryButton, H_PAD } from "../components/ui";
 import Icon from "../components/Icon";
 import MissionMap from "../components/MissionMap";
+import useRoadRoute, { fmtDistance as fmtRoadDistance, fmtDuration } from "../hooks/useRoadRoute";
 import { spotImage } from "../utils/image";
 import { getSpotCoords } from "../utils/arLocationGate";
 import { GpsSmoother, isBetterFix, MAX_USABLE_ACCURACY_M } from "../utils/gpsFilter";
@@ -40,12 +42,20 @@ function fmtDistance(m) {
   return `${(m / 1000).toFixed(m >= 10000 ? 0 : 1)} km`;
 }
 
-// Live distance readout floated over the map's bottom-left corner.
-function MapStatus({ distance, inRange, radiusMeters }) {
+// Live readout floated over the map's bottom-left corner. On the way it gives
+// the road route's distance and time, like the navigation map's card; before a
+// route has come (or when there is none) the straight-line distance, which is
+// what the server checks on completion.
+function MapStatus({ distance, inRange, radiusMeters, routeInfo, routeNote }) {
   const { colors } = useTheme();
   const locating = distance == null;
-  const primary = locating ? "Finding you…" : inRange ? "You're here!" : `${fmtDistance(distance)} away`;
-  const secondary = locating ? "Checking your location" : `Get within ${radiusMeters} m`;
+  const primary = locating ? "Finding you…"
+    : inRange ? "You're here!"
+    : routeInfo ? `${fmtRoadDistance(routeInfo.distance)} · ${fmtDuration(routeInfo.time)}`
+    : `${fmtDistance(distance)} away`;
+  const secondary = locating ? "Checking your location"
+    : !inRange && routeNote ? routeNote
+    : `Get within ${radiusMeters} m`;
   return (
     <View
       style={[styles.statusChip, { backgroundColor: colors.card }, shadow.md]}
@@ -75,7 +85,7 @@ function MapStatus({ distance, inRange, radiusMeters }) {
         </Text>
         <Text
           style={[styles.statusSecondary, { color: colors.textMuted }]}
-          numberOfLines={1}
+          numberOfLines={2}
           maxFontSizeMultiplier={MAX_FONT_SCALE}
         >
           {secondary}
@@ -158,7 +168,13 @@ export default function LocationMission({ navigation, route }) {
             if (!isBetterFix(best, next)) return;
             best = next;
             const s = smoother.push(next);
-            setCoords({ latitude: s.latitude, longitude: s.longitude });
+            const c = { latitude: s.latitude, longitude: s.longitude };
+            // Direction of travel for the route, as on the navigation map:
+            // only once actually moving (~9 km/h), since standing still the
+            // GPS heading is noise.
+            const { heading, speed } = loc.coords;
+            if (speed > 2.5 && Number.isFinite(heading) && heading >= 0) c.heading = heading;
+            setCoords(c);
           }
         );
         // Left the screen while the watch was starting: the cleanup already ran.
@@ -182,15 +198,13 @@ export default function LocationMission({ navigation, route }) {
     : null;
   const inRange = distance != null && distance <= radiusMeters;
 
-  // Turn-by-turn is handed to Google Maps (app if installed, else browser).
-  const openDirections = async () => {
-    const url = `https://www.google.com/maps/dir/?api=1&destination=${target.lat},${target.lng}&travelmode=walking`;
-    try {
-      await Linking.openURL(url);
-    } catch {
-      showToast("Couldn't open directions on this device.", { type: "error" });
-    }
-  };
+  // The road route to the eatery, fetched like the navigation map's
+  // (hooks/useRoadRoute.js). Inside the ring there is nowhere left to go.
+  const { route: roadRoute, info: routeInfo, note: routeNote, update: updateRoute } =
+    useRoadRoute(hasPin ? { missionId: mission._id } : null);
+  useEffect(() => {
+    if (coords && !inRange) updateRoute(coords);
+  }, [coords, inRange, updateRoute]);
 
   const handleComplete = async () => {
     if (!coords) {
@@ -246,29 +260,19 @@ export default function LocationMission({ navigation, route }) {
           placeName={mission.locationName}
           user={coords}
           inRange={inRange}
+          route={roadRoute}
           height={mapHeight}
           style={styles.map}
         >
           <View style={styles.mapFooter} pointerEvents="box-none">
             {!locError && (
-              <MapStatus distance={distance} inRange={inRange} radiusMeters={radiusMeters} />
-            )}
-            {!inRange && (
-              <TouchableOpacity
-                accessibilityRole="button"
-                accessibilityLabel={`Walking directions to ${placeName} in Google Maps`}
-                onPress={openDirections}
-                style={[styles.dirPill, { backgroundColor: colors.card }, shadow.md]}
-                activeOpacity={0.85}
-              >
-                <Icon name="arrow-up-right" size={15} color={colors.brand} weight="bold" />
-                <Text
-                  style={[styles.dirText, { color: colors.textPrimary }]}
-                  maxFontSizeMultiplier={MAX_FONT_SCALE}
-                >
-                  Directions
-                </Text>
-              </TouchableOpacity>
+              <MapStatus
+                distance={distance}
+                inRange={inRange}
+                radiusMeters={radiusMeters}
+                routeInfo={routeInfo}
+                routeNote={routeNote}
+              />
             )}
           </View>
         </MissionMap>
@@ -375,12 +379,6 @@ const styles = StyleSheet.create({
   statusText: { flexShrink: 1 },
   statusPrimary: { fontSize: 15, fontFamily: fonts.sansBold, letterSpacing: -0.2 },
   statusSecondary: { fontSize: 11.5, fontFamily: fonts.sansMedium, marginTop: 1 },
-  // marginLeft:auto keeps it right-aligned even when the status chip is hidden.
-  dirPill: {
-    marginLeft: "auto", flexDirection: "row", alignItems: "center", gap: 6,
-    height: 40, paddingHorizontal: 14, borderRadius: radius.pill,
-  },
-  dirText: { fontSize: 13.5, fontFamily: fonts.sansSemi },
 
   body: { flexGrow: 1, paddingHorizontal: H_PAD, paddingTop: spacing.lg, paddingBottom: spacing.xl },
 
