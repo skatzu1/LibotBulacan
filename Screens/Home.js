@@ -59,7 +59,9 @@ const QUICK_ACTIONS = [
   // user-visible benefit, and the backend collection is Mission.
   { key: "missions", label: "Bakit List", icon: "flag",     route: "MissionsSpotSelect" },
   { key: "navigate", label: "Navigate", icon: "navigation", route: "TrackSpotSelect" },
-  { key: "trips",    label: "My Trips", icon: "map",         route: "PreviousTrips" },
+  // Badges in place of My Trips (user, 2026-10-20); the trips stay one tap
+  // away under Profile → Previous Trips.
+  { key: "badges",   label: "Badges",   icon: "award",      route: "Badges" },
 ];
 
 // The Featured carousel only claims a drag once it has moved 12px sideways,

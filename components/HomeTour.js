@@ -40,7 +40,7 @@ const STEPS = [
   {
     key: "quick",
     title: "Start here",
-    body: "AR View, Bakit List and Navigate each ask which spot you want first. My Trips keeps the places you've reached.",
+    body: "AR View, Bakit List and Navigate each ask which spot you want first. Badges shows the ones you've collected.",
   },
   {
     key: "featured",
