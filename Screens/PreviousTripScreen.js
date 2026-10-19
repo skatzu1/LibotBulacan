@@ -101,9 +101,9 @@ export default function PreviousTripsScreen() {
     });
   };
 
-  // Each trip with its number (newest is the highest) and the spot as shown,
-  // worked out before the search so a trip keeps its number when filtered.
-  const trips = useMemo(() => visited.map((item, index) => {
+  // Each trip with the spot as shown. Trips aren't numbered (2026-10-20): the
+  // "#N" on each card was dropped.
+  const trips = useMemo(() => visited.map((item) => {
     const spot = item.spot;
     if (!spot) return null;
     // The visit log only populates a handful of fields. Open the detail page
@@ -112,7 +112,7 @@ export default function PreviousTripsScreen() {
     // The visit log only began carrying `city` on 2026-10-04, so fall back to
     // the full spot list for older trips.
     const shown = { ...fullSpot, name: spot.name, image: spot.image || fullSpot.image, city: spot.city || fullSpot.city };
-    return { item, spot, fullSpot, shown, trip: visited.length - index };
+    return { item, spot, fullSpot, shown };
   }).filter(Boolean), [visited, allSpots]);
 
   // Search by spot name, town, or the date ("October", "2026") — QA 2026-10-16.
@@ -125,19 +125,18 @@ export default function PreviousTripsScreen() {
     : trips), [trips, q]);
 
   const renderItem = useCallback(({ item: entry }) => {
-    const { item, spot, fullSpot, shown, trip } = entry;
+    const { item, spot, fullSpot, shown } = entry;
 
     // Home's Featured card, like the spot lists behind the other quick
-    // actions: the trip number top-left, when you were there top-right.
+    // actions, with when you were there top-right.
     return (
       <FeatureCard
         spot={shown}
         height={CARD_H}
         rating={getAverageRating(fullSpot._id, fullSpot.ratingAvg)}
-        badge={<PhotoChip>#{trip}</PhotoChip>}
         right={<PhotoChip>{formatShortDate(item.visitedAt)} · {formatTime(item.visitedAt)}</PhotoChip>}
         onPress={() => navigation.navigate("InformationScreen", { spot: fullSpot })}
-        accessibilityLabel={`Trip ${trip}: ${spot.name}, ${formatDate(item.visitedAt)}`}
+        accessibilityLabel={`${spot.name}, ${formatDate(item.visitedAt)}`}
         style={styles.card}
       />
     );
@@ -165,7 +164,7 @@ export default function PreviousTripsScreen() {
       ) : (
       <FlatList
         data={shownTrips}
-        keyExtractor={(entry) => entry.item._id?.toString() ?? `trip-${entry.trip}`}
+        keyExtractor={(entry, index) => entry.item._id?.toString() ?? `trip-${index}`}
         renderItem={renderItem}
         contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 40 }]}
         ListHeaderComponent={
