@@ -116,7 +116,8 @@ describe("AI Scan page", () => {
     const page = renderPage();
     await scan(page);
     expect(await page.findByText("Found it! +5 points")).toBeTruthy();
-    expect(page.getByText("AI match: 91%")).toBeTruthy();
+    // No score or percentage on the page (the user asked for the meter gone).
+    expect(page.queryByText(/AI match|%/)).toBeNull();
     expect(page.getByLabelText("The photo you took")).toBeTruthy();
     expect(page.getByRole("button", { name: "Back to Bakit List" })).toBeTruthy();
     expect(mockMarkCompleted).toHaveBeenCalledWith("m1");
@@ -127,7 +128,7 @@ describe("AI Scan page", () => {
     const page = renderPage();
     await scan(page);
     expect(await page.findByText("Couldn't find the Philippine flag. Get closer, in good light, and try again.")).toBeTruthy();
-    expect(page.getByText("AI match: 34%")).toBeTruthy();
+    expect(page.queryByText(/AI match|%/)).toBeNull();
     await waitFor(() => expect(page.getByRole("button", { name: "Try Again" })).toBeTruthy());
     expect(mockMarkCompleted).not.toHaveBeenCalled();
   });

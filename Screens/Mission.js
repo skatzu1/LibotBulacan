@@ -6,8 +6,9 @@
 // Kept simple on purpose (2026-10-20, "make the AI mission UI simple"): one
 // line saying what to photograph, the photo once taken, one status line, one
 // button. The greeting, the ticket card, the four-step guide, the confidence
-// meter, the zoom slider and the extra "Mark as Done" tap are gone — the
-// server has already completed the mission by the time the photo is accepted.
+// meter (and any "AI match" percentage — the user asked for it gone), the
+// zoom slider and the extra "Mark as Done" tap are gone — the server has
+// already completed the mission by the time the photo is accepted.
 import React, { useState, useRef, useMemo } from 'react';
 import {
   View,
@@ -140,7 +141,6 @@ export default function Mission({ navigation, route }) {
   const [checkingSpot, setCheckingSpot] = useState(false);
   // pending · scanning · approved · failed
   const [status, setStatus]             = useState('pending');
-  const [confidence, setConfidence]     = useState(null);
   const [pointsEarned, setPointsEarned] = useState(0);
   const [facing, setFacing]             = useState('back');
   const device = useCameraDevice(facing);
@@ -194,7 +194,6 @@ export default function Mission({ navigation, route }) {
 
     setCapturedImage(null);
     setStatus('pending');
-    setConfidence(null);
     applyZoom(0);
     setCameraOpen(true);
   };
@@ -284,7 +283,6 @@ export default function Mission({ navigation, route }) {
       setCameraOpen(false);
       setCapturedImage(croppedUri);
       setStatus('scanning');
-      setConfidence(null);
 
       const result = await runPrediction(croppedUri, mission._id, getToken, coords);
 
@@ -331,7 +329,6 @@ export default function Mission({ navigation, route }) {
         return;
       }
 
-      setConfidence(typeof result.confidence === 'number' ? result.confidence : null);
       setStatus(result.verified ? 'approved' : 'failed');
       if (result.verified) {
         setPointsEarned(result.pointsAwarded || 0);
@@ -522,13 +519,6 @@ export default function Mission({ navigation, route }) {
           </View>
         )}
 
-        {/* The classifier's score, for anyone curious why a photo passed or not. */}
-        {confidence != null && (status === 'approved' || status === 'failed') && (
-          <Text style={[typography.caption, styles.match, { color: colors.textMuted }]}>
-            AI match: {Math.round(Math.max(0, Math.min(100, confidence)))}%
-          </Text>
-        )}
-
         {/* What makes a photo count — the usual reasons one is turned down. */}
         {status !== 'approved' && (
           <View style={styles.tips}>
@@ -590,7 +580,6 @@ const styles = StyleSheet.create({
     marginTop: spacing.md,
   },
   resultText: { flex: 1, fontSize: 14.5, lineHeight: 20, fontFamily: fonts.sansSemi },
-  match:      { marginTop: spacing.sm, textAlign: 'center' },
 
   footer: {
     paddingHorizontal: H_PAD, paddingTop: spacing.md, paddingBottom: spacing.md,
