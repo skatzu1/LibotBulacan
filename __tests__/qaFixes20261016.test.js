@@ -8,14 +8,20 @@ import { showAlert } from "../components/AppAlert";
 // The app side of the certified QA's list (2026-10-16).
 
 let mockPosition = null;
+let mockPermission = "granted";
 jest.mock("expo-location", () => ({
   Accuracy: { Balanced: 3 },
-  getForegroundPermissionsAsync: jest.fn(async () => ({ status: "granted" })),
+  getForegroundPermissionsAsync: jest.fn(async () => ({ status: mockPermission })),
+  requestForegroundPermissionsAsync: jest.fn(async () => ({ status: mockPermission })),
+  getLastKnownPositionAsync: jest.fn(async () => null),
   getCurrentPositionAsync: jest.fn(async () => ({ coords: mockPosition })),
 }));
 jest.mock("../components/AppAlert", () => ({ showAlert: jest.fn() }));
 
-beforeEach(() => jest.clearAllMocks());
+beforeEach(() => {
+  jest.clearAllMocks();
+  mockPermission = "granted";
+});
 
 describe("new passwords follow sign-up's rules everywhere", () => {
   it("needs 8 characters and 3 of the 4 rules", () => {
@@ -89,5 +95,28 @@ describe("AR away from the spot", () => {
     mockPosition = north(30);
     await expect(ensureAtSpotForAR(SPOT)).resolves.toBe(true);
     expect(showAlert).not.toHaveBeenCalled();
+  });
+
+  // There used to be a "Start anyway" for these two, a way into AR from anywhere.
+  it("location off: asks for it, then doesn't open", async () => {
+    mockPermission = "denied";
+    await expect(ensureAtSpotForAR(SPOT)).resolves.toBe(false);
+    expect(require("expo-location").requestForegroundPermissionsAsync).toHaveBeenCalled();
+    const [title, , buttons] = showAlert.mock.calls[0];
+    expect(title).toBe("Location needed");
+    expect(buttons.map((b) => b.text)).toEqual(["Cancel", "Open Settings"]);
+  });
+
+  it("no GPS fix: says so and doesn't open", async () => {
+    mockPosition = null;
+    await expect(ensureAtSpotForAR(SPOT)).resolves.toBe(false);
+    const [title, , buttons] = showAlert.mock.calls[0];
+    expect(title).toBe("Couldn't find your location");
+    expect(buttons).toBeUndefined();
+  });
+
+  it("a spot with nothing pinned doesn't open", async () => {
+    await expect(ensureAtSpotForAR({ name: "New spot" })).resolves.toBe(false);
+    expect(showAlert.mock.calls[0][0]).toBe("AR isn't ready here yet");
   });
 });

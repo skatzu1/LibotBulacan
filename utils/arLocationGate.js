@@ -4,6 +4,7 @@
 // site, shows a themed warning. It resolves to `true` when the caller should
 // proceed to launch AR, `false` when it should not.
 import * as Location from "expo-location";
+import { Linking } from "react-native";
 import { showAlert } from "../components/AppAlert";
 
 // A little slack for GPS drift and large sites. The server uses the same
@@ -55,21 +56,12 @@ export function spotHasAR(spot) {
   return !categories.some((c) => NO_AR_CATEGORIES.includes(c));
 }
 
-function confirm(title, message, confirmText = "Start anyway") {
-  return new Promise((resolve) => {
-    showAlert(
-      title,
-      message,
-      [
-        { text: "Cancel", style: "cancel", onPress: () => resolve(false) },
-        { text: confirmText, onPress: () => resolve(true) },
-      ],
-      { tone: "warning", icon: "map-pin", cancelable: true }
-    );
-  });
-}
-
 /**
+ * AR opens only when the phone shows it is at the spot (QA 2026-10-16: "Cancel
+ * kapag wala sa location"). Location off, or no GPS fix, used to offer "Start
+ * anyway", which let AR open from anywhere; now, like a photo mission, it
+ * explains what's needed and doesn't open.
+ *
  * @param {object} spot  the spot the user wants to view in AR
  * @param {object} [opts]
  * @param {Function} [opts.onDirections]  offered as "Get directions" when the
@@ -80,31 +72,40 @@ export async function ensureAtSpotForAR(spot, { onDirections } = {}) {
   const name = spot?.name || "this spot";
   const dest = getSpotCoords(spot);
 
-  // No coordinates to compare against — warn generically.
+  // No pin and no AR anchors: there is nothing to place, wherever the user is.
   if (!dest) {
-    return confirm(
-      "Are you at the spot?",
-      `The AR experience for ${name} only works while you're standing at the location itself. Make sure you're there before you begin.`
+    showAlert(
+      "AR isn't ready here yet",
+      `${name} has no AR models pinned to it yet.`,
+      undefined,
+      { tone: "info", icon: "map-pin" }
     );
+    return false;
   }
 
-  let coords = null;
-  try {
-    const { status } = await Location.getForegroundPermissionsAsync();
-    if (status === "granted") {
-      const pos = await Location.getCurrentPositionAsync({
-        accuracy: Location.Accuracy.Balanced,
-      });
-      coords = pos.coords;
-    }
-  } catch (_) {}
-
-  // Couldn't read the user's location — can't confirm they're on site.
+  // Same wait as a photo mission: a fix from the last 30 s answers at once.
+  const coords = await currentCoords({ ask: true, maxAgeMs: 30000, timeoutMs: 12000 });
   if (!coords) {
-    return confirm(
-      "Can't confirm your location",
-      `AR for ${name} only works at the spot itself — the 3D models are pinned to real places there. If you're not on site yet, they won't appear.`
-    );
+    const { status } = await Location.getForegroundPermissionsAsync().catch(() => ({}));
+    if (status === "granted") {
+      showAlert(
+        "Couldn't find your location",
+        `AR for ${name} only opens at the spot itself, and your phone couldn't get a GPS fix just now. Step outside or near a window and try again.`,
+        undefined,
+        { tone: "warning", icon: "map-pin" }
+      );
+    } else {
+      showAlert(
+        "Location needed",
+        `AR for ${name} only opens at the spot itself, so the app needs your location to check you're there.`,
+        [
+          { text: "Cancel", style: "cancel" },
+          { text: "Open Settings", onPress: () => Linking.openSettings() },
+        ],
+        { tone: "warning", icon: "map-pin" }
+      );
+    }
+    return false;
   }
 
   const dist = distanceMeters(
@@ -170,8 +171,8 @@ export async function currentCoords({ ask = false, maxAgeMs = 0, timeoutMs = 0 }
 
 /**
  * Photo missions only count at the spot: the server checks the position sent
- * with the photo and awards nothing from anywhere else. So unlike the AR gate
- * there's no "start anyway" — better to say so before the photo than after.
+ * with the photo and awards nothing from anywhere else. So, as with AR, there's
+ * no "start anyway" — better to say so before the photo than after.
  * Resolves to the phone's coords when it's on site, otherwise explains why
  * not and resolves to null.
  */

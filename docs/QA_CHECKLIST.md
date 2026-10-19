@@ -43,7 +43,7 @@ https://developers.google.com/ar/devices). Add an iPhone when iOS is in scope.
 
 **AR**
 - [ ] ARCore phone: model places on a surface; trail order is respected. Each model's card reads "The story, part n of N".
-- [ ] Away from the spot, AR View doesn't open: only Cancel and Get directions.
+- [ ] Away from the spot, AR View doesn't open: only Cancel and Get directions. With location off, or no GPS fix, it doesn't open either: no "Start anyway".
 - [ ] Non-ARCore phone: "AR isn't available on this phone" card, with a way back.
 - [ ] Radar arrow is steady when still and follows a turn without lag; near a laptop or car the label shows the figure-8 calibration prompt.
 
