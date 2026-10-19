@@ -141,7 +141,9 @@ const warnFeel    = () => { Haptics.notificationAsync(Haptics.NotificationFeedba
 
 // The 3D model has its own tab, in the middle (QA 2026-10-16). It used to be
 // a small cube button in the header that swapped the photo for the model,
-// which testers missed. Spots without a model get the two outer tabs.
+// which testers missed. Spots without a model get the two outer tabs. The
+// tab shows the model where the photo is, in the hero (user, 2026-10-20),
+// not in a second card further down.
 const OVERVIEW_TAB = { key: "Overview",   label: "Overview",   icon: "book-open" };
 const MODEL_TAB    = { key: "Model3D",    label: "3D Model",   icon: "cube-scan" };
 const BUCKET_TAB   = { key: "BucketList", label: "Bakit List", icon: "flag"      };
@@ -506,6 +508,13 @@ export default function InformationScreen({ route, navigation }) {
   // The model only renders while its tab is open and this screen is in front:
   // a Viro scene left running behind another screen keeps the GPU busy.
   const showing3D = activeTab === "Model3D" && !!spot?.modelUrl && isFocused;
+
+  // The model is in the hero, at the top of the page; opening its tab from
+  // further down (the tabs stick under the header) brings it into view.
+  const selectTab = (key) => {
+    setActiveTab(key);
+    if (key === "Model3D") scrollRef.current?.scrollTo({ y: 0, animated: true });
+  };
 
   // The review box is the last thing on the page. When the keyboard opens
   // for it, scroll to the end so the box sits just above the keyboard
@@ -890,8 +899,16 @@ export default function InformationScreen({ route, navigation }) {
         {/* [0] Hero */}
         <View style={styles.heroWrap}>
           <View style={[styles.heroCard, { backgroundColor: colors.card }, shadow.md]}>
-            <Image source={{ uri: spotImage(spot.image, 400, 260) }} style={styles.heroImage} resizeMode="cover" />
-            <PhotoScrim from={0.5} />
+            {/* The 3D Model tab turns the photo into the model, in the same
+                place. It only mounts while that tab is open (see showing3D). */}
+            {showing3D ? (
+              <ModelViewer url={spot.modelUrl} style={styles.heroImage} />
+            ) : (
+              <Image source={{ uri: spotImage(spot.image, 400, 260) }} style={styles.heroImage} resizeMode="cover" />
+            )}
+            {/* Over the model the scrim only needs to back the caption; from
+                halfway down it would dim the lower half of the model. */}
+            <PhotoScrim from={showing3D ? 0.72 : 0.5} />
             {reviewCount > 0 && (
               <View style={styles.heroRating}>
                 <Icon name="star" size={13} color={colors.accent} weight="fill" />
@@ -911,7 +928,7 @@ export default function InformationScreen({ route, navigation }) {
           <Segmented
             options={tabs}
             value={activeTab}
-            onChange={setActiveTab}
+            onChange={selectTab}
           />
         </View>
 
@@ -1420,23 +1437,13 @@ export default function InformationScreen({ route, navigation }) {
             </>
           )}
 
-          {/* The model on its own tab, big enough to turn and zoom. It only
-              mounts while this tab is open (see showing3D). */}
+          {/* The model itself is in the hero, where the photo was. */}
           {activeTab === "Model3D" && spot.modelUrl && (
             <>
-              <View style={[styles.modelCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
-                {showing3D ? (
-                  <ModelViewer url={spot.modelUrl} style={styles.modelView} />
-                ) : (
-                  <View style={[styles.modelView, styles.modelPaused]}>
-                    <ActivityIndicator color={colors.brand} />
-                  </View>
-                )}
-              </View>
               <View style={styles.modelHintRow}>
                 <Icon name="rotate-3d-variant" size={16} color={colors.textMuted} />
                 <Text style={[styles.modelHint, { color: colors.textSecondary }]}>
-                  Drag to turn it around. Pinch or use the buttons to zoom.
+                  Drag the model above to turn it around. Pinch or use the buttons to zoom.
                 </Text>
               </View>
               {hasAR && (
@@ -1584,11 +1591,8 @@ const styles = StyleSheet.create({
   heroWrap:        { paddingHorizontal: H_PAD, paddingTop: 14, paddingBottom: 4 },
   heroCard:        { borderRadius: radius.xl, overflow: "hidden", height: 288 },
   heroImage:       { width: "100%", height: "100%" },
-  // The 3D Model tab: taller than the hero, so the model has room to turn.
-  modelCard:       { borderRadius: radius.xl, borderWidth: 1, overflow: "hidden", height: 360 },
-  modelView:       { width: "100%", height: "100%" },
-  modelPaused:     { alignItems: "center", justifyContent: "center" },
-  modelHintRow:    { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 12, paddingHorizontal: 2 },
+  // The 3D Model tab's words under the buttons; the model is in the hero.
+  modelHintRow:    { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 2 },
   modelHint:       { flex: 1, fontSize: 13, lineHeight: 19, fontFamily: fonts.sansMedium },
   modelArNote:     { marginTop: 6, paddingHorizontal: 2 },
   heroRating:     { position: "absolute", top: 12, left: 12, flexDirection: "row", alignItems: "center", gap: 3, backgroundColor: "rgba(11,30,32,0.62)", paddingHorizontal: 10, paddingVertical: 5, borderRadius: 999 },
