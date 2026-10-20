@@ -33,6 +33,7 @@ import * as ImageManipulator from 'expo-image-manipulator';
 import { useIsFocused } from '@react-navigation/native';
 import { useAuth } from '@clerk/clerk-expo';
 import { runPrediction } from '../utils/missionAI';
+import { celebrateResult } from '../utils/rewards';
 import { ensureAtSpotForPhoto, currentCoords } from '../utils/arLocationGate';
 import { ensureCameraAccess } from '../utils/cameraAccess';
 import { missionKind } from '../utils/missionTiers';
@@ -358,6 +359,9 @@ export default function Mission({ navigation, route }) {
       // The server completed the mission and awarded its points along with the
       // verification — reflect that straight away.
       if (result.completed) markCompleted(mission._id);
+      // The spot's badge (and more) if that was the last step; otherwise how
+      // far along the spot is.
+      if (result.verified) celebrateResult(result);
     } catch (error) {
       console.error('Camera error:', error);
       setStatus('failed');

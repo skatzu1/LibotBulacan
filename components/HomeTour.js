@@ -40,7 +40,7 @@ const STEPS = [
   {
     key: "quick",
     title: "Start here",
-    body: "AR View, Bakit List and Navigate each ask which spot you want first. Badges shows the ones you've collected.",
+    body: "AR View, Bakit List and Navigate each ask which spot you want first. Achievements shows your badges and titles: finish every mission at a spot for its badge, and a whole town for more.",
   },
   {
     key: "featured",

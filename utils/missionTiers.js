@@ -44,14 +44,32 @@ export const ARRIVAL_KIND = { icon: "map-pin", label: "Arrive", how: "Go there i
 export const missionKind = (mission) => MISSION_KINDS[mission?.type] || MISSION_KINDS.checkin;
 
 /**
+ * Whether a traveler can do this mission today. Only those count toward the
+ * spot's badge, which takes every one of them (the thesis panel, 2026-10-21) —
+ * the same rule as the server's (LibotBackend utils/achievements.js isDoable).
+ * A food mission no moderator has pinned yet (`locationConfigured: false`), a
+ * photo scan for a category with no model (`aiTarget: null`), or AR at a spot
+ * without a model or positions would otherwise make the badge impossible.
+ */
+export function isDoable(mission, spot) {
+  switch (mission?.type) {
+    case "ai":       return mission.aiTarget !== null;
+    case "location": return mission.locationConfigured ?? (mission.coordinates?.lat != null && mission.coordinates?.lng != null);
+    case "ar":       return !spot || (!!spot.AR3DModelURL && (spot.modelsCoordinates || []).length > 0);
+    default:         return false;
+  }
+}
+
+/**
  * A spot's Bakit List as named steps, in the order the spot page lists them:
  * arriving, the must-dos, then the side trips. [{ key, icon, label, done }]
- * Arriving counts as the first item (it isn't a Mission document). The Bakit
+ * Arriving counts as the first item (it isn't a Mission document). Missions
+ * that can't be done yet (isDoable) are left out: they don't count. The Bakit
  * List quick action (Screens/MissionsSpotSelect.js) shows these.
  */
-export function spotSteps(missions = [], completedMissionIds = [], arrived = false) {
+export function spotSteps(missions = [], completedMissionIds = [], arrived = false, spot = null) {
   const completed = new Set((completedMissionIds || []).map(String));
-  const { major, minor } = splitByTier(missions);
+  const { major, minor } = splitByTier(missions.filter((m) => isDoable(m, spot)));
   return [
     { key: "arrive", ...ARRIVAL_KIND, done: !!arrived },
     ...[...major, ...minor].map((m) => ({ key: String(m._id), ...missionKind(m), done: completed.has(String(m._id)) })),

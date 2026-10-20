@@ -18,6 +18,7 @@ jest.mock("../components/AppAlert", () => ({ showAlert: jest.fn(), showToast: je
 jest.mock("@clerk/clerk-expo", () => ({ useAuth: () => ({ getToken: async () => "token" }) }));
 jest.mock("@react-navigation/native", () => ({
   useNavigation: () => ({ addListener: () => () => {}, navigate: jest.fn(), goBack: jest.fn() }),
+  useRoute: () => ({ params: {} }),
 }));
 jest.mock("../context/ArrivalContext", () => ({ useArrival: () => ({ allSpots: [] }) }));
 jest.mock("expo-haptics", () => ({
@@ -27,12 +28,19 @@ jest.mock("expo-haptics", () => ({
 }));
 jest.mock("react-native-share", () => ({ __esModule: true, default: { open: jest.fn(async () => ({})) } }));
 
-const badge = {
-  _id: "b1",
-  name: "Barasoain Church",
-  description: "",
-  image: "https://res.cloudinary.com/demo/image/upload/v1/badge.png",
-  spotId: { _id: "s1", name: "Barasoain Church", city: "Malolos" },
+// The Achievements screen's data (GET /api/achievements/me): one earned spot badge.
+const achievements = {
+  title: null,
+  nextTitle: { key: "explorer", name: "Explorer", townsLeft: 1 },
+  titles: [{ key: "explorer", name: "Explorer", towns: 1, all: false, earned: false }],
+  spots: [{
+    spotId: "s1", name: "Barasoain Church", town: "Malolos",
+    badge: { badgeId: "b1", name: "Barasoain Church", image: "https://res.cloudinary.com/demo/image/upload/v1/badge.png" },
+    steps: [{ key: "arrive", type: "arrive", done: true }], done: 1, total: 1, complete: true,
+    earned: true, earnedAt: "2026-10-18T02:00:00.000Z",
+  }],
+  towns: [{ municipality: "Malolos", name: "Malolos", description: "", image: null, spotsDone: 1, spotsTotal: 1, earned: false }],
+  unlocked: { spotBadges: [], townBadges: [], title: null },
 };
 
 const reply = (body, ok = true) => Promise.resolve({ ok, json: async () => body });
@@ -40,9 +48,9 @@ const reply = (body, ok = true) => Promise.resolve({ ok, json: async () => body 
 let shareReply = () => reply({ success: true, token: "abcDEF123456" });
 global.fetch = jest.fn((url, init) => {
   const u = String(url);
-  if (u.endsWith("/api/badges")) return reply({ badges: [badge] });
+  if (u.endsWith("/api/achievements/me")) return reply({ success: true, ...achievements });
   if (u.endsWith("/api/users/me/badges/b1/share") && init?.method === "POST") return shareReply();
-  return reply({ user: { badges: [{ spotId: "s1", claimedAt: "2026-10-18T02:00:00.000Z" }] } });
+  return reply({});
 });
 
 const metrics = { frame: { x: 0, y: 0, width: 390, height: 844 }, insets: { top: 47, left: 0, right: 0, bottom: 34 } };

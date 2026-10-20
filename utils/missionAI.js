@@ -87,6 +87,10 @@ export async function runPrediction(imageUri, missionId, getToken, coords) {
       completed:  !!data.verified && (data.alreadyCompleted === true || data.alreadyCompleted === false),
       // 0 when it was already completed on an earlier attempt.
       pointsAwarded: Number(data.pointsAwarded) || 0,
+      // What finishing it earned (a spot's badge, a town's, a title) and how
+      // far toward the spot's badge (utils/rewards.js celebrateResult).
+      unlocked: data.unlocked || null,
+      progress: data.progress || null,
     };
 
   } catch (err) {

@@ -12,8 +12,9 @@ import {
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import * as Location from "expo-location";
-import { showAlert } from "../components/AppAlert";
+import { showAlert, showToast } from "../components/AppAlert";
 import { useMissions } from "../context/MissionContext";
+import { celebrateResult } from "../utils/rewards";
 import {
   useTheme, spacing, radius, typography, shadow, fonts, MAX_FONT_SCALE,
 } from "../context/ThemeContext";
@@ -235,13 +236,18 @@ export default function LocationMission({ navigation, route }) {
       );
       return;
     }
-    showAlert(
-      "Nice work!",
-      data.alreadyCompleted
-        ? "You've already completed this activity."
-        : `"${mission.title}" is confirmed and logged as complete.`,
-      [{ text: "Back to Bakit List", onPress: () => navigation.goBack() }],
-    );
+    if (data.alreadyCompleted) {
+      showToast("You've already completed this activity.", { type: "info" });
+      return;
+    }
+    // Back to the spot's Bakit List, with the reward over it: the badge (and
+    // more) if this was the last step, else "+5 points · 2 of 3 done" — both
+    // drawn above the navigator, so they carry over (utils/rewards.js). An
+    // older server sends neither; then it says so plainly.
+    if (!celebrateResult(data, { points: mission.points })) {
+      showToast(`"${mission.title}" is done.`, { type: "success" });
+    }
+    navigation.goBack();
   };
 
   return (

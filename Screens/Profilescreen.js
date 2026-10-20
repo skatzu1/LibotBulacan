@@ -22,6 +22,7 @@ import { ScreenHeader, ListRow, LoadingState, Avatar, H_PAD, TAP } from "../comp
 import { BASE_URL } from "../api";
 import { clerkPhoto, avatarImage } from "../utils/image";
 import Icon from "../components/Icon";
+import TitleChip from "../components/TitleChip";
 
 // Was a hardcoded "https://libotbackend.onrender.com" — the only place in the
 // app not reading the shared base URL, so an environment change would have
@@ -43,6 +44,9 @@ export default function ProfileScreen() {
   const [points, setPoints]         = useState(0);
   const [badgeCount, setBadgeCount] = useState(0);
   const [tripCount, setTripCount]   = useState(0);
+  // From our server: Clerk has no middle name, and titles are ours.
+  const [middleName, setMiddleName] = useState("");
+  const [title, setTitle]           = useState(null);
 
   const [photoModalVisible, setPhotoModalVisible] = useState(false);
   const scaleAnim   = useState(new Animated.Value(0))[0];
@@ -70,8 +74,10 @@ export default function ProfileScreen() {
       const data = await res.json();
       const user = data?.user;
       if (typeof user?.points === "number") setPoints(user.points);
-      setBadgeCount(Array.isArray(user?.badges)      ? user.badges.length      : 0);
+      setBadgeCount((Array.isArray(user?.badges) ? user.badges.length : 0) + (user?.townBadges || 0));
       setTripCount(Array.isArray(user?.visitedSpots) ? user.visitedSpots.length : 0);
+      setMiddleName(user?.middleName || "");
+      setTitle(user?.title || null);
     } catch (e) {
       console.warn("ProfileScreen loadStats error:", e);
     }
@@ -148,14 +154,17 @@ export default function ProfileScreen() {
 
   const displayPhoto = profileImage || userInfo.profilePhoto;
 
-  const fullName = userInfo.fullName;
+  // The full name here, middle name included; reviews and the leaderboard
+  // keep first + last.
+  const fullName = [userInfo.firstName, middleName, userInfo.lastName].map((p) => p.trim()).filter(Boolean).join(" ")
+    || userInfo.fullName;
 
   // "Deactivate" used to head this list. It did nothing but open a "Not
   // available yet" popup — a destructive-sounding dead end as the first thing
   // on the page. Deleting the account is real and lives in Edit Profile.
   const menuItems = [
     { id: "trips",    icon: "map-pin",  title: "Previous Trips", onPress: () => navigation.navigate("PreviousTrips") },
-    { id: "badges",   icon: "award",    title: "Badges",         onPress: () => navigation.navigate("Badges") },
+    { id: "badges",   icon: "award",    title: "Achievements", subtitle: "Spot badges, town badges and titles", onPress: () => navigation.navigate("Badges") },
     { id: "settings", icon: "settings", title: "Settings",       onPress: () => navigation.navigate("Settings") },
   ];
 
@@ -225,6 +234,7 @@ export default function ProfileScreen() {
         {fullName ? (
           <Text style={[styles.userName, { color: colors.textPrimary }]}>{fullName}</Text>
         ) : null}
+        {title && <TitleChip title={title} style={styles.title} />}
         <Text style={[styles.email, { color: colors.textSecondary }]}>{userInfo.email || "No email available"}</Text>
 
         {/* Each stat is grouped into a single accessibility node — otherwise a
@@ -333,6 +343,7 @@ const styles = StyleSheet.create({
   },
 
   userName: { ...typography.display, fontSize: 26, lineHeight: 32, textAlign: "center", marginBottom: 4 },
+  title:    { alignSelf: "center", marginBottom: 8 },
   email:    { fontSize: 13, fontFamily: fonts.sansMedium, textAlign: "center", marginBottom: 26 },
 
   statsRow: {

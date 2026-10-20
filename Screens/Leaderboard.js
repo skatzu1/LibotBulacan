@@ -20,6 +20,8 @@ import { showToast } from "../components/AppAlert";
 import { BASE_URL } from "../api";
 import { clerkPhoto } from "../utils/image";
 import Icon from "../components/Icon";
+import TitleChip from "../components/TitleChip";
+import { titleName } from "../utils/titles";
 
 // Was a hardcoded "https://libotbackend.onrender.com".
 
@@ -81,10 +83,29 @@ const ROW_H = 66;
 
 const fmtPts = (n) => (n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n));
 
-// The board shows the top 50; anyone below that still sees their own rank in
-// the bar at the bottom (the server sends it as `me`). It used to download
-// every registered user on each visit to this tab.
-const BOARD_SIZE = 50;
+// The board comes a page at a time (the thesis panel, 2026-10-21: pagination),
+// and your own standing is pinned first, above the rankings, on every page:
+// the server sends it as `me`, with the page it is on. It used to be the top 50
+// in one list, with your rank in a bar at the bottom.
+export const PAGE_SIZE = 20;
+
+/**
+ * The page buttons to show: the first, the last, and the ones either side of
+ * the current page, with "…" for the gaps. [1, "…", 4, 5, 6, "…", 12]
+ */
+export function pageButtons(page, pages) {
+  if (pages <= 1) return [];
+  const keep = new Set([1, pages, page - 1, page, page + 1].filter((p) => p >= 1 && p <= pages));
+  const out = [];
+  let last = 0;
+  for (const p of [...keep].sort((a, b) => a - b)) {
+    if (p - last === 2) out.push(last + 1);
+    else if (p - last > 2) out.push("…");
+    out.push(p);
+    last = p;
+  }
+  return out;
+}
 
 // The board refreshes itself this often while it is on screen and the app is
 // in front, so it stays current without a pull-down (the specification asks
@@ -117,6 +138,8 @@ const toEntry = (u) => ({
   points:  typeof u.points === "number" ? u.points : 0,
   visited: typeof u.spotsVisited === "number" ? u.spotsVisited : 0,
   avatar:  u.profileImage || null,
+  // The title from finishing towns (utils/titles.js); null without one.
+  title:   u.title || null,
   isMe:    false,
 });
 
@@ -147,25 +170,34 @@ export default function Leaderboard() {
   const { profileImage, loading: photoLoading } = useProfileImage();
   const { colors }                    = useTheme();
 
-  const [allUsers, setAllUsers]     = useState([]);
-  // You, when you're below the top BOARD_SIZE: your entry plus `rank`.
-  const [meBelow, setMeBelow]       = useState(null);
+  const [allUsers, setAllUsers]     = useState([]); // this page's travelers
+  // You, wherever you are on the board: your entry, `rank` and `page`.
+  const [me, setMe]                 = useState(null);
   const [total, setTotal]           = useState(0);
+  const [page, setPage]             = useState(1);
+  const [pages, setPages]           = useState(1);
   const [loading, setLoading]       = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  const [paging, setPaging]         = useState(false);
   const [error, setError]           = useState(null);
   const isFetching                  = useRef(false);
   const hasLoaded                   = useRef(false);
+  // The page on screen, for the focus reload and the live refresh.
+  const pageRef                     = useRef(1);
+  const listRef                     = useRef(null);
 
   // Only the FIRST load shows the loading state. This is a tab, so the focus
   // listener below fires on every switch back to it — each of those used to
   // blank the whole board behind a spinner. Later loads refresh in place.
-  const buildLeaderboard = async (isRefresh = false) => {
+  // `toPage` opens another page; without it, the one on screen reloads.
+  const buildLeaderboard = async (isRefresh = false, toPage = null) => {
     if (isFetching.current) return;
     isFetching.current = true;
     if (isRefresh) setRefreshing(true);
     else if (!hasLoaded.current) setLoading(true);
+    else if (toPage) setPaging(true);
     setError(null);
+    const want = toPage || pageRef.current;
 
     // A board already on screen stays when a later load fails. The focus
     // reload and the live refresh used to swap it for the full-screen error
@@ -173,12 +205,12 @@ export default function Leaderboard() {
     // vanishing. Only a pull, which the user asked for, says it didn't work.
     const fail = (message) => {
       if (!hasLoaded.current) setError(message);
-      else if (isRefresh) showToast("Couldn't refresh the leaderboard. Check your connection.", { type: "error" });
+      else if (isRefresh || toPage) showToast("Couldn't load the leaderboard. Check your connection.", { type: "error" });
     };
 
     try {
       const token = await getToken();
-      const res   = await fetch(`${BASE_URL}/api/users?limit=${BOARD_SIZE}`, {
+      const res   = await fetch(`${BASE_URL}/api/users?page=${want}&limit=${PAGE_SIZE}`, {
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
       });
       const ct = res.headers.get("content-type") ?? "";
@@ -188,24 +220,25 @@ export default function Leaderboard() {
       const list = Array.isArray(data) ? data : Array.isArray(data.users) ? data.users : null;
       if (!list) { fail("Unexpected response."); return; }
 
-      let users = withRanks(list.map(toEntry));
-      let below = null;
-
-      if (clerkUser?.id) {
-        const idx = users.findIndex((u) => u.clerkUserId === clerkUser.id);
-        if (idx >= 0) {
-          users[idx] = { ...users[idx], isMe: true };
-        } else if (data.me) {
-          below = { ...toEntry(data.me), isMe: true, rank: data.me.rank };
-        }
-        const mine = idx >= 0 ? users[idx] : below;
-        if (mine) AsyncStorage.setItem("userPoints", String(mine.points)).catch(() => {});
-      }
+      // A server from before pages answers with page 1 only.
+      const onPage = typeof data.page === "number" ? data.page : 1;
+      const users = withRanks(list.map(toEntry)).map((u) => (u.clerkUserId === clerkUser?.id ? { ...u, isMe: true } : u));
+      const mine = data.me
+        ? { ...toEntry(data.me), isMe: true, rank: data.me.rank, page: data.me.page ?? null }
+        : (() => {
+          const i = users.findIndex((u) => u.isMe);
+          return i >= 0 ? { ...users[i], page: onPage } : null;
+        })();
+      if (mine) AsyncStorage.setItem("userPoints", String(mine.points)).catch(() => {});
 
       // No re-sort here: the server's order is the ranking.
       setAllUsers(users);
-      setMeBelow(below);
+      setMe(mine);
       setTotal(typeof data.total === "number" ? data.total : users.length);
+      setPage(onPage);
+      setPages(typeof data.pages === "number" ? data.pages : 1);
+      if (onPage !== pageRef.current) listRef.current?.scrollToOffset?.({ offset: 0, animated: false });
+      pageRef.current = onPage;
       hasLoaded.current = true;
     } catch (e) {
       console.warn("Leaderboard error:", e);
@@ -213,9 +246,11 @@ export default function Leaderboard() {
     } finally {
       setLoading(false);
       setRefreshing(false);
+      setPaging(false);
       isFetching.current = false;
     }
   };
+  const goToPage = (p) => { if (p !== page && p >= 1 && p <= pages) buildLeaderboard(false, p); };
 
   useEffect(() => { if (!isLoaded) return; buildLeaderboard(); }, [isLoaded]);
   useEffect(() => {
@@ -321,7 +356,7 @@ export default function Leaderboard() {
           user.isMe && { backgroundColor: colors.brandSoft, borderColor: colors.brand },
         ]}
         accessible
-        accessibilityLabel={`Rank ${rank}${tied ? ", tied" : ""}, ${user.isMe ? "you" : user.name}, ${user.points} points, ${spotsLabel(user.visited)} visited`}
+        accessibilityLabel={`Rank ${rank}${tied ? ", tied" : ""}, ${user.isMe ? "you" : user.name}, ${user.points} points, ${spotsLabel(user.visited)} visited${user.title ? `, ${titleName(user.title)}` : ""}`}
       >
         <View style={[styles.rankCoin, { backgroundColor: colors.brandSoft }]}>
           <Text style={[styles.rankCoinText, { color: colors.brand }]}>{rank}</Text>
@@ -338,9 +373,13 @@ export default function Leaderboard() {
           >
             {user.name}{user.isMe ? " · You" : ""}
           </Text>
-          <Text style={[styles.rowSub, { color: colors.textMuted }]} numberOfLines={1}>
-            {spotsLabel(user.visited)} visited{tied ? " · Tied" : ""}
-          </Text>
+          <View style={styles.rowSubLine}>
+            {user.title && <TitleChip title={user.title} size="sm" />}
+            {/* "visited" goes when a title takes the room. */}
+            <Text style={[styles.rowSub, { color: colors.textMuted }]} numberOfLines={1}>
+              {spotsLabel(user.visited)}{user.title ? "" : " visited"}{tied ? " · Tied" : ""}
+            </Text>
+          </View>
         </View>
 
         {/* Points, with the sparkle the points pill on Home uses. */}
@@ -352,29 +391,110 @@ export default function Leaderboard() {
     );
   };
 
-  const steps     = podiumSteps(allUsers);
+  // The podium is the top of the board, so only page 1 has it.
+  const steps     = page === 1 ? podiumSteps(allUsers) : {};
   const onPodium  = new Set(Object.values(steps).flatMap((step) => step.shown));
   const restUsers = allUsers.filter((u) => !onPodium.has(u));
+  const firstRank = (page - 1) * PAGE_SIZE + 1;
+  const lastRank  = Math.min(page * PAGE_SIZE, total || allUsers.length);
 
-  const myIndex = allUsers.findIndex((u) => u.isMe);
-  const myEntry = myIndex >= 0 ? allUsers[myIndex] : meBelow;
-  const myRank  = myEntry?.rank ?? (myIndex >= 0 ? myIndex + 1 : null);
-  // Shown whenever your face isn't on the podium — in a tie too big for its
-  // step, you're still on it (podiumSteps puts you first).
-  const showMyRankBar = myRank != null && !onPodium.has(myEntry);
+  // You, first: your standing, pinned above the rankings on every page (the
+  // thesis panel, 2026-10-21). Tapping it opens the page you're on.
+  const meOnOtherPage = !!me?.page && me.page !== page;
+  const youCard = me && (
+    <TouchableOpacity
+      activeOpacity={meOnOtherPage ? 0.85 : 1}
+      disabled={!meOnOtherPage || paging}
+      onPress={() => goToPage(me.page)}
+      style={[styles.youCard, { backgroundColor: colors.card, borderColor: colors.brand }, shadow.md]}
+      accessibilityRole={meOnOtherPage ? "button" : undefined}
+      accessibilityLabel={
+        `Your standing: rank ${me.rank} of ${total}, ${me.points} points, ${spotsLabel(me.visited)} visited` +
+        `${me.title ? `, ${titleName(me.title)}` : ""}${meOnOtherPage ? `. Opens page ${me.page}` : ""}`
+      }
+    >
+      <View style={styles.youRankCol}>
+        <Text style={[styles.youEyebrow, { color: colors.brand }]} maxFontSizeMultiplier={MAX_FONT_SCALE}>YOU</Text>
+        <Text style={[styles.youRank, { color: colors.textPrimary }]} maxFontSizeMultiplier={MAX_FONT_SCALE}>#{me.rank}</Text>
+        <Text style={[styles.youOf, { color: colors.textMuted }]} maxFontSizeMultiplier={MAX_FONT_SCALE}>of {total}</Text>
+      </View>
+      <View style={[styles.youDivider, { backgroundColor: colors.divider }]} />
+      <View style={[styles.rowAvatarWrap, { borderColor: colors.brand }]}>{personAvatar(me, 44)}</View>
+      <View style={styles.youInfo}>
+        <Text style={[styles.youName, { color: colors.textPrimary }]} numberOfLines={1} maxFontSizeMultiplier={MAX_FONT_SCALE}>{me.name}</Text>
+        {me.title ? <TitleChip title={me.title} size="sm" style={styles.youChip} /> : null}
+        <Text style={[styles.youStats, { color: colors.textSecondary }]} numberOfLines={1} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+          {ptsLabel(me.points)} · {spotsLabel(me.visited)}
+        </Text>
+      </View>
+      {meOnOtherPage ? (
+        <View style={[styles.youGo, { backgroundColor: colors.brand }]}>
+          <Text style={[styles.youGoText, { color: colors.onBrand }]} maxFontSizeMultiplier={MAX_FONT_SCALE}>Page {me.page}</Text>
+          <Icon name="chevron-right" size={14} color={colors.onBrand} />
+        </View>
+      ) : null}
+    </TouchableOpacity>
+  );
+
+  const pager = pages > 1 && (
+    <View style={styles.pager} accessibilityRole="toolbar" accessibilityLabel={`Page ${page} of ${pages}`}>
+      <TouchableOpacity
+        onPress={() => goToPage(page - 1)}
+        disabled={page <= 1 || paging}
+        style={[styles.pageBtn, { borderColor: colors.divider, opacity: page <= 1 ? 0.4 : 1 }]}
+        accessibilityRole="button"
+        accessibilityLabel="Previous page"
+      >
+        <Icon name="chevron-left" size={18} color={colors.textPrimary} />
+      </TouchableOpacity>
+      {pageButtons(page, pages).map((p, i) => (p === "…" ? (
+        <Text key={`gap${i}`} style={[styles.pageGap, { color: colors.textMuted }]}>…</Text>
+      ) : (
+        <TouchableOpacity
+          key={p}
+          onPress={() => goToPage(p)}
+          disabled={paging}
+          style={[
+            styles.pageBtn,
+            { borderColor: colors.divider },
+            p === page && { backgroundColor: colors.brand, borderColor: colors.brand },
+          ]}
+          accessibilityRole="button"
+          accessibilityState={{ selected: p === page }}
+          accessibilityLabel={`Page ${p}${me?.page === p ? ", your page" : ""}`}
+        >
+          <Text style={[styles.pageNum, { color: p === page ? colors.onBrand : colors.textPrimary }]}>{p}</Text>
+          {me?.page === p && p !== page && <View style={[styles.pageMeDot, { backgroundColor: colors.brand }]} />}
+        </TouchableOpacity>
+      )))}
+      <TouchableOpacity
+        onPress={() => goToPage(page + 1)}
+        disabled={page >= pages || paging}
+        style={[styles.pageBtn, { borderColor: colors.divider, opacity: page >= pages ? 0.4 : 1 }]}
+        accessibilityRole="button"
+        accessibilityLabel="Next page"
+      >
+        <Icon name="chevron-right" size={18} color={colors.textPrimary} />
+      </TouchableOpacity>
+    </View>
+  );
 
   return (
     <View style={[styles.fullScreen, { backgroundColor: colors.background }]}>
 
       {/* ─── Hero ─── */}
-      <View style={[styles.hero, { backgroundColor: colors.backgroundHero, paddingTop: insets.top + 8 }]}>
+      <View style={[styles.hero, page !== 1 && styles.heroShort, { backgroundColor: colors.backgroundHero, paddingTop: insets.top + 8 }]}>
         <View style={[styles.heroBlob, blob, { backgroundColor: "rgba(255,255,255,0.22)" }]} pointerEvents="none" />
 
         {heroNav}
 
-        <Text style={[styles.heroSub, { color: colors.textSecondary }]}>Top explorers of Bulacan, by points</Text>
+        {youCard}
 
-        <View style={styles.podiumRow}>
+        <Text style={[styles.heroSub, { color: colors.textSecondary }]}>
+          {page === 1 ? "Top explorers of Bulacan, by points" : `Ranks ${firstRank}–${lastRank} of ${total}`}
+        </Text>
+
+        {page === 1 && <View style={styles.podiumRow}>
           {PLACES_LEFT_TO_RIGHT.map((place) => {
             const step = steps[place];
             if (!step) return <View key={place} style={{ flex: 1 }} />;
@@ -437,22 +557,24 @@ export default function Leaderboard() {
               </View>
             );
           })}
-        </View>
+        </View>}
       </View>
 
       {/* ─── Sheet ─── */}
       <View style={[styles.card, { backgroundColor: colors.background }]}>
         <View style={styles.sheetHeaderRow}>
           <Text style={[styles.sheetTitle, { color: colors.brandDark }]}>Rankings</Text>
-          <Text style={[styles.sheetCount, { color: colors.textMuted }]}>{total || allUsers.length} explorers</Text>
+          <Text style={[styles.sheetCount, { color: colors.textMuted }]}>
+            {pages > 1 ? `Page ${page} of ${pages} · ` : ""}{total || allUsers.length} explorers
+          </Text>
         </View>
 
-        {/* FlatList, not ScrollView + .map — this list is the top BOARD_SIZE
-            explorers (it was every registered user). A .map rendered all of them (plus an
-            <Avatar> image each) on every render. `getItemLayout` is safe to give
-            because every row is a fixed ROW_H, and it lets the list jump
-            straight to an offset without measuring. */}
+        {/* FlatList, not ScrollView + .map — one page of PAGE_SIZE. `getItemLayout`
+            is safe to give because every row is a fixed ROW_H, and it lets the
+            list jump straight to an offset without measuring. */}
         <FlatList
+          ref={listRef}
+          style={paging && styles.paging}
           data={restUsers}
           keyExtractor={(user) => String(user.id)}
           renderItem={renderRow}
@@ -463,10 +585,8 @@ export default function Leaderboard() {
           windowSize={7}
           removeClippedSubviews
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={[
-            styles.listContent,
-            { paddingBottom: (showMyRankBar ? 172 : 116) + insets.bottom },
-          ]}
+          contentContainerStyle={[styles.listContent, { paddingBottom: 116 + insets.bottom }]}
+          ListFooterComponent={pager || null}
           refreshControl={
             <RefreshControl
               refreshing={refreshing}
@@ -486,24 +606,6 @@ export default function Leaderboard() {
             </>
           }
         />
-
-        {showMyRankBar && (
-          <View style={[styles.myRankBar, { backgroundColor: colors.brand, bottom: insets.bottom + 92 }, shadow.lg]}>
-            <View style={[styles.myRankCoin, { backgroundColor: "rgba(255,255,255,0.2)" }]}>
-              <Text style={[styles.myRankCoinText, { color: colors.onBrand }]}>{myRank}</Text>
-            </View>
-            <View style={styles.rowAvatarWrap}>
-              {personAvatar(myEntry, 36)}
-            </View>
-            <Text style={[styles.myRankName, { color: colors.onBrand }]} numberOfLines={1}>
-              You
-            </Text>
-            <View style={styles.rowPtsWrap}>
-              <Icon name="stars" size={13} color={colors.onBrand} weight="fill" />
-              <Text style={[styles.myRankPts, { color: colors.onBrand }]}>{ptsLabel(myEntry.points)}</Text>
-            </View>
-          </View>
-        )}
       </View>
     </View>
   );
@@ -517,6 +619,40 @@ const styles = StyleSheet.create({
     paddingBottom: 0,
   },
   heroStateOnly: { paddingBottom: 14 },
+  heroShort:     { paddingBottom: 10 },
+
+  // You, pinned first: a white card on the cyan, outlined in brand teal.
+  youCard: {
+    flexDirection: "row", alignItems: "center", gap: 10,
+    marginHorizontal: H_PAD, marginTop: 6, marginBottom: 6,
+    paddingVertical: 10, paddingHorizontal: 12,
+    borderRadius: radius.lg, borderWidth: 1.5,
+  },
+  youRankCol: { alignItems: "center", minWidth: 46 },
+  youEyebrow: { fontFamily: fonts.sansBold, fontSize: 10, letterSpacing: 1.4 },
+  youRank:    { fontFamily: fonts.display, fontSize: 26, lineHeight: 30, letterSpacing: -0.4 },
+  youOf:      { fontFamily: fonts.sansMedium, fontSize: 10.5 },
+  youDivider: { width: 1, alignSelf: "stretch", marginVertical: 4 },
+  youInfo:    { flex: 1, minWidth: 0, gap: 2 },
+  youName:    { fontFamily: fonts.sansBold, fontSize: 15 },
+  youChip:    { marginVertical: 1 },
+  youStats:   { fontFamily: fonts.sansMedium, fontSize: 12 },
+  youGo: {
+    flexDirection: "row", alignItems: "center", gap: 2,
+    paddingLeft: 10, paddingRight: 6, paddingVertical: 6, borderRadius: 999,
+  },
+  youGoText: { fontFamily: fonts.sansBold, fontSize: 12 },
+
+  pager: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingTop: 10, paddingBottom: 6, flexWrap: "wrap" },
+  pageBtn: {
+    minWidth: 40, height: 40, paddingHorizontal: 8, borderRadius: 12, borderWidth: 1,
+    alignItems: "center", justifyContent: "center",
+  },
+  pageNum:   { fontFamily: fonts.sansBold, fontSize: 14 },
+  pageGap:   { fontFamily: fonts.sansBold, fontSize: 14, paddingHorizontal: 2 },
+  // Under the number of the page you're on.
+  pageMeDot: { position: "absolute", bottom: 5, width: 5, height: 5, borderRadius: 3 },
+  paging:    { opacity: 0.5 },
   stateBody:     { flex: 1, paddingHorizontal: H_PAD, paddingTop: 24 },
   // Sized inline from useWindowDimensions — see `blob` in the component.
   heroBlob: { position: "absolute" },
@@ -648,7 +784,8 @@ const styles = StyleSheet.create({
   },
   rowNameCol: { flex: 1, marginRight: 8 },
   rowName: { fontSize: 14.5, fontFamily: fonts.sansSemi },
-  rowSub:  { fontSize: 11.5, fontFamily: fonts.sansMedium, marginTop: 1 },
+  rowSubLine: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 2 },
+  rowSub:  { fontSize: 11.5, fontFamily: fonts.sansMedium, flexShrink: 1 },
   rowPtsPill: {
     flexDirection: "row",
     alignItems: "center",
@@ -658,27 +795,7 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     borderWidth: 1,
   },
-  rowPtsWrap: { flexDirection: "row", alignItems: "center", gap: 4 },
   rowPts:     { fontSize: 12.5, fontFamily: fonts.sansBold },
-
-  myRankBar: {
-    position: "absolute",
-    left: 18,
-    right: 18,
-    flexDirection: "row",
-    alignItems: "center",
-    paddingVertical: 10,
-    paddingHorizontal: 12,
-    borderRadius: radius.lg,
-  },
-  myRankCoin: {
-    width: 30, height: 30, borderRadius: 15,
-    justifyContent: "center", alignItems: "center",
-    marginRight: 10,
-  },
-  myRankCoinText: { fontSize: 13, fontFamily: fonts.sansBold },
-  myRankName: { flex: 1, fontSize: 14.5, fontFamily: fonts.sansBold },
-  myRankPts:  { fontSize: 13, fontFamily: fonts.sansBold },
 
   topThreeOnly: { textAlign: "center", fontSize: 13, marginTop: 12, fontFamily: fonts.sansMedium },
 

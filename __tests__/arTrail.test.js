@@ -45,3 +45,33 @@ describe("resolveTrail", () => {
     expect(resolveTrail(anchors, new Set([0]), true).focus).toBeNull();
   });
 });
+
+// Each AR position's own fact (the thesis panel, 2026-10-21: the fact should
+// be about the place the model stands at).
+describe("factForModel / placeName", () => {
+  const { factForModel, placeName } = require("../utils/arTrail");
+  const spot = {
+    name: "Barasoain Church",
+    trivia: ["list fact 1", "list fact 2"],
+    modelsCoordinates: [
+      { label: "Bell tower", trivia: "The bell tower fact." },
+      { label: "Model" },
+      { label: "Facade", trivia: "  " },
+    ],
+  };
+
+  it("shows the position's own fact, else the list's fact for that model", () => {
+    expect(factForModel(spot, 0)).toBe("The bell tower fact.");
+    expect(factForModel(spot, 1)).toBe("list fact 2");
+    expect(factForModel(spot, 2)).toBe("list fact 1"); // blank own fact: the list, wrapping
+    expect(factForModel({ name: "X", modelsCoordinates: [{}] }, 0)).toBe("X is a remarkable place worth exploring!");
+  });
+
+  it("names the place, but not the old placeholder", () => {
+    expect(placeName("Bell tower")).toBe("Bell tower");
+    expect(placeName("Model")).toBeNull();
+    expect(placeName("Model 3")).toBeNull();
+    expect(placeName("  ")).toBeNull();
+    expect(placeName(undefined)).toBeNull();
+  });
+});

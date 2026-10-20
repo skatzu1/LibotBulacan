@@ -72,3 +72,24 @@ export function triviaForModel(trivia, index, spotName) {
   const i = Number.isInteger(index) && index >= 0 ? index : 0;
   return facts[i % facts.length];
 }
+
+/**
+ * The fact the model at AR position `index` shows. Since 2026-10-21 each
+ * position carries its own (the thesis panel: the fact should be about the
+ * place the model stands at), written by the moderator for what is there; a
+ * spot whose positions don't have one yet falls back to triviaForModel.
+ */
+export function factForModel(spot, index) {
+  const own = spot?.modelsCoordinates?.[index]?.trivia;
+  if (typeof own === "string" && own.trim()) return own.trim();
+  return triviaForModel(spot?.trivia, index, spot?.name);
+}
+
+/**
+ * What stands at an AR position ("Bell tower"), or null for the placeholder
+ * every position had before positions were named ("Model", "Model 2").
+ */
+export function placeName(label) {
+  const v = typeof label === "string" ? label.trim() : "";
+  return v && !/^model( \d+)?$/i.test(v) ? v : null;
+}

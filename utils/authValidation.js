@@ -35,6 +35,17 @@ export const nameError = (name, what = "your full name") => {
   return null;
 };
 
+// An optional name (the middle name, asked again since 2026-10-21): blank is
+// fine; otherwise the same letters and punctuation as the others, and an
+// initial ("D.") is enough.
+export const optionalNameError = (name) => {
+  const v = String(name || "").trim();
+  if (!v) return null;
+  if (!NAME_ONLY_ALLOWED.test(v)) return "Use letters only. Spaces, hyphens (-), apostrophes (') and periods (.) are fine.";
+  if (!STARTS_WITH_LETTER.test(v)) return "Start with a letter.";
+  return null;
+};
+
 // ── Email ──
 export const EMAIL_MAX = 254;
 

@@ -16,7 +16,7 @@ import { useMissions } from "../context/MissionContext";
 import { usePoints } from "../context/PointsContext";
 import { useProfileImage } from "../context/ProfileImageContext";
 // Icon, label and how-to per mission type (missionKind); colour is theme-driven (see ChecklistRow).
-import { splitByTier, isMajor, missionKind, ARRIVAL_KIND, ARRIVAL_POINTS } from "../utils/missionTiers";
+import { splitByTier, isMajor, isDoable, missionKind, ARRIVAL_KIND, ARRIVAL_POINTS } from "../utils/missionTiers";
 import { useTheme, radius, shadow, fonts, typography, MAX_FONT_SCALE } from "../context/ThemeContext";
 import ModelViewer from "../utils/ModelViewer";
 import { ensureAtSpotForAR, spotHasAR } from "../utils/arLocationGate";
@@ -28,7 +28,7 @@ import api from "../api";
 import {
   PhotoScrim, Segmented, EmptyState, ErrorState, PrimaryButton, Avatar, SearchField, H_PAD, TAP,
 } from "../components/ui";
-import { spotImage, cdn, clerkPhoto } from "../utils/image";
+import { spotImage, cdn, clerkPhoto, badgeImage } from "../utils/image";
 import {
   REVIEW_SORTS, ratingBreakdown, filterAndSortReviews, pageOf, pageNumbers, timeAgo,
 } from "../utils/reviewList";
@@ -421,20 +421,24 @@ function ReviewCard({ review, spotId, clerkUser, profileImage, reactToReview, on
 // title, one line (Done, or how to do it), the points. Must-dos (arriving, AR;
 // utils/missionTiers.js) say so on that line.
 function ChecklistRow({ item, colors }) {
-  const line = item.done ? "Done" : item.mustDo ? `Must-do · ${item.how}` : item.how;
+  // `soon`: can't be done yet (a food spot nobody has pinned), so it doesn't
+  // count toward the badge until it can.
+  const line = item.done ? "Done"
+    : item.soon ? "Coming soon · doesn't count yet"
+    : item.mustDo ? `Must-do · ${item.how}` : item.how;
   return (
     <TouchableOpacity
       accessibilityRole="button"
       accessibilityLabel={`${item.title}, ${item.points} points, ${line}`}
-      style={styles.checkRow}
+      style={[styles.checkRow, item.soon && !item.done && styles.checkRowSoon]}
       onPress={item.onPress}
       activeOpacity={0.82}
     >
-      <View style={[styles.checkIcon, { backgroundColor: item.done ? colors.successBg : colors.brandLight }]}>
+      <View style={[styles.checkIcon, { backgroundColor: item.done ? colors.successBg : item.soon ? colors.backgroundSoft : colors.brandLight }]}>
         <Icon
           name={item.done ? "check" : item.icon}
           size={19}
-          color={item.done ? colors.success : colors.brand}
+          color={item.done ? colors.success : item.soon ? colors.textMuted : colors.brand}
           weight={item.done ? "bold" : "regular"}
         />
       </View>
@@ -630,8 +634,12 @@ export default function InformationScreen({ route, navigation }) {
   const isDoneMission    = (m) => !!completedMissions?.includes(m._id);
   const arrived          = hasVisited(spot._id);
   const tiers            = splitByTier(missions);
-  const completedCount   = (arrived ? 1 : 0) + missions.filter(isDoneMission).length;
-  const totalCount       = 1 + missions.length;
+  // Finishing every mission here earns the spot's badge (2026-10-21); one that
+  // can't be done yet — a food spot nobody has pinned — is listed but doesn't
+  // count (utils/missionTiers.js isDoable, the server's rule).
+  const countedMissions  = missions.filter((m) => isDoable(m, spot));
+  const completedCount   = (arrived ? 1 : 0) + countedMissions.filter(isDoneMission).length;
+  const totalCount       = 1 + countedMissions.length;
   const progressRatio    = completedCount / totalCount;
   const arMission        = missions.find((m) => m.type === "ar");
   const hasAR            = spotHasAR(spot);
@@ -837,9 +845,10 @@ export default function InformationScreen({ route, navigation }) {
     },
     ...[...tiers.major, ...tiers.minor].map((m) => ({
       key: String(m._id), ...missionKind(m), title: m.title, points: m.points ?? 0,
-      done: isDoneMission(m), mustDo: isMajor(m), onPress: () => openMission(m),
+      done: isDoneMission(m), mustDo: isMajor(m), soon: !isDoable(m, spot), onPress: () => openMission(m),
     })),
   ];
+  const allDone = missionsLoaded && completedCount === totalCount;
 
   const openReportModal = (review) => {
     setReportTarget({ reviewId: review._id, reportedClerkUserId: review.clerkUserId || "", userName: review.userName || "this user" });
@@ -1485,6 +1494,34 @@ export default function InformationScreen({ route, navigation }) {
                   ))}
                 </View>
 
+                {/* What the list is for: the spot's badge, for finishing all of it. */}
+                {missionsLoaded && !!spot.Badge && (
+                  <TouchableOpacity
+                    style={[styles.badgeTeaser, { backgroundColor: allDone ? colors.accentSoft : colors.card, borderColor: allDone ? colors.accent : colors.cardBorder }]}
+                    onPress={() => navigation.navigate("Badges")}
+                    activeOpacity={0.85}
+                    accessibilityRole="button"
+                    accessibilityLabel={allDone
+                      ? `${spot.name} badge earned. Opens your achievements`
+                      : `Finish all ${totalCount} to unlock the ${spot.name} badge. ${completedCount} done. Opens your achievements`}
+                  >
+                    <Image
+                      source={{ uri: badgeImage(spot.Badge, 56, { locked: !allDone }) }}
+                      style={[styles.badgeTeaserImg, !allDone && styles.badgeTeaserLocked]}
+                      resizeMode="contain"
+                    />
+                    <View style={{ flex: 1 }}>
+                      <Text style={[styles.badgeTeaserTitle, { color: allDone ? colors.accentDark : colors.textPrimary }]}>
+                        {allDone ? "Badge earned" : `Finish all ${totalCount} to unlock the badge`}
+                      </Text>
+                      <Text style={[styles.badgeTeaserSub, { color: colors.textMuted }]} numberOfLines={1}>
+                        {allDone ? `${spot.name} · in your achievements` : `${spot.name} · ${totalCount - completedCount} to go`}
+                      </Text>
+                    </View>
+                    <Icon name={allDone ? "award" : "lock"} size={18} color={allDone ? colors.accentDark : colors.textMuted} />
+                  </TouchableOpacity>
+                )}
+
                 {/* The arrival is always there; the spot's own missions come
                     from the server. */}
                 {!missionsLoaded && (missionsFailed ? (
@@ -1632,6 +1669,12 @@ const styles = StyleSheet.create({
   checkTitle:      { fontSize: 14.5, fontFamily: fonts.sansBold, lineHeight: 19 },
   checkLine:       { fontSize: 12, fontFamily: fonts.sansMedium },
   checkPts:        { fontSize: 13, fontFamily: fonts.sansBold },
+  checkRowSoon:    { opacity: 0.7 },
+  badgeTeaser:     { flexDirection: "row", alignItems: "center", gap: 12, marginTop: 12, padding: 12, borderRadius: radius.card, borderWidth: 1 },
+  badgeTeaserImg:  { width: 52, height: 52, borderRadius: 26 },
+  badgeTeaserLocked: { opacity: 0.55 },
+  badgeTeaserTitle: { fontSize: 14, fontFamily: fonts.sansBold },
+  badgeTeaserSub:  { fontSize: 12, fontFamily: fonts.sansMedium, marginTop: 2 },
   missionsLoading: { flexDirection: "row", alignItems: "center", gap: 10, paddingVertical: 14 },
   missionsLoadingText: { ...typography.caption },
 

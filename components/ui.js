@@ -111,6 +111,10 @@ export function IconTile({ icon, label, onPress, size = 58, style }) {
         <Text
           style={[s.tileLabel, { color: colors.textSecondary }]}
           numberOfLines={1}
+          // "Achievements" on a narrow phone shrinks a little rather than
+          // losing its last letters.
+          adjustsFontSizeToFit
+          minimumFontScale={0.8}
           maxFontSizeMultiplier={MAX_FONT_SCALE}
         >
           {label}

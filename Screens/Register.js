@@ -7,7 +7,6 @@ import {
   ActivityIndicator,
   Platform,
   Image,
-  Linking,
 } from "react-native";
 import { showAlert, showToast } from "../components/AppAlert";
 import { useState, useEffect, useRef, useMemo } from "react";
@@ -16,11 +15,10 @@ import * as AuthSession from "expo-auth-session";
 import * as WebBrowser from "expo-web-browser";
 import { authAPI } from "../api";
 import { captureError } from "../utils/crashReporter";
-import { useTheme, fonts, MAX_FONT_SCALE } from "../context/ThemeContext";
-import { TERMS_URL as TERMS_OF_SERVICE_URL, PRIVACY_URL as PRIVACY_POLICY_URL } from "../utils/legalLinks";
+import { useTheme, fonts, radius, MAX_FONT_SCALE } from "../context/ThemeContext";
 import AuthScaffold, { useAuthStyles, FieldError, FormError } from "../components/AuthScaffold";
 import {
-  nameError, emailError, dobError, strongPasswordError, confirmPasswordError,
+  nameError, optionalNameError, emailError, dobError, strongPasswordError, confirmPasswordError,
   clerkErrorToField, DISPOSABLE_EMAIL_ERROR,
   cleanName, cleanEmail, NAME_MAX, EMAIL_MAX,
   GOOGLE_BUSY, googleWindowBusy, googleWindowClosed, googleErrorMessage,
@@ -29,46 +27,49 @@ import Icon from "../components/Icon";
 import MunicipalityPicker from "../components/MunicipalityPicker";
 import PasswordStrength from "../components/PasswordStrength";
 import DobField from "../components/DobField";
+import LegalConsentModal from "../components/LegalConsentModal";
 import { municipalityError } from "../utils/municipalities";
+import { LEGAL_VERSION } from "../utils/legalText";
 
 // Same full-screen background as sign-in; it carries its own cyan→yellow wash.
 const REGISTER_BG = require("../assets/bg.png");
 
 WebBrowser.maybeCompleteAuthSession();
 
-async function openLink(url) {
-  try {
-    const supported = await Linking.canOpenURL(url);
-    if (supported) {
-      await Linking.openURL(url);
-    } else {
-      showAlert("Unable to Open Link", "Please check your internet connection and try again.");
-    }
-  } catch (err) {
-    console.error("openLink error:", err);
-    showAlert("Unable to Open Link", "Something went wrong opening that page.");
-  }
-}
+// ── Terms agreement ───────────────────────────────────────────────
+// The thesis panel (2026-10-21): the Terms and Privacy Policy open in a
+// pop-up that has to be read to the end before sign-up goes through. This box
+// only ticks from that pop-up's "I agree" (components/LegalConsentModal.js);
+// both Sign up and Continue with Google need it. It replaced a line of fine
+// print under each button ("By signing up, you agree…").
+export const CONSENT_ERROR = "Read the Terms and Privacy Policy to the end and agree first.";
 
-// ── Terms notice ──────────────────────────────────────────────────
-// Sits right under each sign-up button: pressing the button is the
-// agreement, as on most sign-up screens. This replaced a checkbox at the
-// bottom of the form that the Google button at the top silently waited on.
-function TermsNotice({ action }) {
+function ConsentRow({ agreed, onPress, invalid, disabled }) {
   const { colors } = useTheme();
-  const link = [styles.noticeLink, { color: colors.brand }];
+  const link = { color: colors.brand, fontFamily: fonts.sansSemi };
   return (
-    <Text style={[styles.notice, { color: colors.textSecondary }]} maxFontSizeMultiplier={MAX_FONT_SCALE}>
-      By {action}, you agree to the{" "}
-      <Text style={link} onPress={() => openLink(TERMS_OF_SERVICE_URL)} accessibilityRole="link">
-        Terms and Conditions
+    <TouchableOpacity
+      onPress={onPress}
+      disabled={disabled}
+      activeOpacity={0.8}
+      style={[styles.consent, { borderColor: invalid ? colors.danger : agreed ? colors.success : colors.inputBorder, backgroundColor: colors.inputBg }]}
+      accessibilityRole="checkbox"
+      accessibilityState={{ checked: agreed, disabled }}
+      accessibilityLabel="I've read and agree to the Terms and Conditions and Privacy Policy"
+      accessibilityHint={agreed ? "Opens them again" : "Opens them to read; agree at the end"}
+    >
+      <View style={[styles.box, agreed
+        ? { backgroundColor: colors.success, borderColor: colors.success }
+        : { borderColor: invalid ? colors.danger : colors.textMuted }]}
+      >
+        {agreed && <Icon name="check" size={15} color={colors.card} />}
+      </View>
+      <Text style={[styles.consentText, { color: colors.textSecondary }]} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+        I've read and agree to the <Text style={link}>Terms and Conditions</Text> and{" "}
+        <Text style={link}>Privacy Policy</Text>
+        {!agreed && <Text style={{ color: colors.textMuted }}> · tap to read</Text>}
       </Text>
-      {" "}and{" "}
-      <Text style={link} onPress={() => openLink(PRIVACY_POLICY_URL)} accessibilityRole="link">
-        Privacy Policy
-      </Text>
-      .
-    </Text>
+    </TouchableOpacity>
   );
 }
 
@@ -76,9 +77,10 @@ function TermsNotice({ action }) {
 // Rules and wording are shared with the other auth screens
 // (utils/authValidation). The password has to reach "Good" on the strength
 // meter, i.e. meet 3 of the 4 rules.
-function validateRegister({ firstName, lastName, municipality, email, password, confirm, dob }) {
+function validateRegister({ firstName, middleName, lastName, municipality, email, password, confirm, dob }) {
   const e = {};
   const f = nameError(firstName, "your first name"); if (f) e.firstName = f;
+  const mi = optionalNameError(middleName);          if (mi) e.middleName = mi;
   const l = nameError(lastName, "your last name");   if (l) e.lastName = l;
   const h = municipalityError(municipality);        if (h) e.municipality = h;
   const m = emailError(email);                      if (m) e.email = m;
@@ -89,8 +91,9 @@ function validateRegister({ firstName, lastName, municipality, email, password, 
 }
 
 // The QA's order (2026-10-16): first and last name, municipality, email; then
-// the password and date of birth.
-const FIELD_ORDER = ["firstName", "lastName", "municipality", "email", "password", "confirm", "dob"];
+// the password and date of birth. The optional middle name (2026-10-21) sits
+// between the first and last name.
+const FIELD_ORDER = ["firstName", "middleName", "lastName", "municipality", "email", "password", "confirm", "dob"];
 // Google fills in the name and email, but not where the traveler lives or
 // how old they are, so those two are checked before it opens.
 const GOOGLE_FIELDS = ["municipality", "dob"];
@@ -105,6 +108,7 @@ export default function Register({ navigation }) {
   const isLoaded = signUpLoaded && signInLoaded;
 
   const [firstName, setFirstName]         = useState("");
+  const [middleName, setMiddleName]       = useState("");
   const [lastName, setLastName]           = useState("");
   const [municipality, setMunicipality]   = useState("");
   const [email, setEmail]                 = useState("");
@@ -116,6 +120,13 @@ export default function Register({ navigation }) {
   const [isLoading, setIsLoading]         = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
 
+  // When the traveler agreed in the Terms pop-up (null = not yet), and what
+  // they pressed that opened it, so agreeing carries straight on with it.
+  const [agreedAt, setAgreedAt]           = useState(null);
+  const [consentOpen, setConsentOpen]     = useState(false);
+  const [consentMissing, setConsentMissing] = useState(false);
+  const pendingAction = useRef(null);
+
   // A field's error shows once the user has left it (or pressed Sign up), and
   // from then on it's recomputed on every keystroke — so it disappears the
   // moment the value is fixed, instead of waiting for the next blur.
@@ -126,13 +137,13 @@ export default function Register({ navigation }) {
   const [formError, setFormError]       = useState("");
 
   const inputRefs = {
-    firstName: useRef(null), lastName: useRef(null),
+    firstName: useRef(null), middleName: useRef(null), lastName: useRef(null),
     municipality: useRef(null), email: useRef(null), password: useRef(null), confirm: useRef(null), dob: useRef(null),
   };
 
   const clientErrors = useMemo(
-    () => validateRegister({ firstName, lastName, municipality, email, password, confirm, dob }),
-    [firstName, lastName, municipality, email, password, confirm, dob]
+    () => validateRegister({ firstName, middleName, lastName, municipality, email, password, confirm, dob }),
+    [firstName, middleName, lastName, municipality, email, password, confirm, dob]
   );
   const errorFor = (field) => serverErrors[field] || (touched[field] ? clientErrors[field] : null);
 
@@ -167,10 +178,38 @@ export default function Register({ navigation }) {
   };
 
   // What the server copies onto the account (Clerk unsafe metadata → the
-  // backend's utils/signUpDetails.js). Not the date of birth: it is only for
-  // the age check here on the phone, and the Privacy Policy says it is not
-  // sent to us or stored.
-  const signUpDetails = () => ({ municipality });
+  // backend's utils/signUpDetails.js): the municipality, the optional middle
+  // name (Clerk has no field for one), and which Terms were agreed to and
+  // when. Not the date of birth: it is only for the age check here on the
+  // phone, and the Privacy Policy says it is not sent to us or stored.
+  const signUpDetails = (acceptedAt) => ({
+    municipality,
+    middleName: middleName.trim(),
+    termsVersion: LEGAL_VERSION,
+    termsAcceptedAt: acceptedAt,
+  });
+
+  // Sign up and Continue with Google both stop here until the Terms are
+  // agreed; agreeing in the pop-up then carries on with the one pressed. The
+  // time is passed along rather than read from state, because the handler
+  // that carries on is the one from the render before the agreement.
+  const needsConsent = (action, acceptedAt) => {
+    if (acceptedAt) return false;
+    pendingAction.current = action;
+    setConsentMissing(true);
+    setConsentOpen(true);
+    return true;
+  };
+  const onAgree = () => {
+    const at = new Date().toISOString();
+    setAgreedAt(at);
+    setConsentMissing(false);
+    setConsentOpen(false);
+    const next = pendingAction.current;
+    pendingAction.current = null;
+    // After the pop-up has closed (the Google window can't open over it).
+    if (next) setTimeout(() => next(at), 450);
+  };
 
   // The Google account picked here already has a Libot account, and Google
   // has just signed it in (`sessionId`). Signing up again would only make a
@@ -212,7 +251,7 @@ export default function Register({ navigation }) {
   // (promptToLogIn), and only a Google account with no Libot account goes on
   // to sign up — the same steps the helper took (Login.js runs them by hand
   // too, for the opposite case).
-  const handleGoogleSignUp = async () => {
+  const handleGoogleSignUp = async (acceptedAt = agreedAt) => {
     if (isGoogleLoading || !isLoaded) return;
     setFormError("");
     const missing = GOOGLE_FIELDS.find((f) => clientErrors[f]);
@@ -222,6 +261,7 @@ export default function Register({ navigation }) {
       inputRefs[missing].current?.focus();
       return;
     }
+    if (needsConsent(handleGoogleSignUp, acceptedAt)) return;
     setIsGoogleLoading(true);
     try {
       // Same callback path useOAuth uses, so the redirect Clerk allows is unchanged.
@@ -256,7 +296,7 @@ export default function Register({ navigation }) {
 
       // A new account. unsafeMetadata rides on it; the backend copies it
       // (webhook and /register).
-      const created = await signUp.create({ transfer: true, unsafeMetadata: signUpDetails() });
+      const created = await signUp.create({ transfer: true, unsafeMetadata: signUpDetails(acceptedAt) });
       const createdSessionId = created?.createdSessionId;
       if (!createdSessionId) throw new Error("No session returned from Google sign-up");
       await setActive({ session: createdSessionId });
@@ -279,7 +319,7 @@ export default function Register({ navigation }) {
   };
 
   // ── Email signup ──
-  const handleRegister = async () => {
+  const handleRegister = async (acceptedAt = agreedAt) => {
     setFormError("");
     setTouched(Object.fromEntries(FIELD_ORDER.map((f) => [f, true])));
 
@@ -289,6 +329,7 @@ export default function Register({ navigation }) {
       inputRefs[firstBad].current?.focus();
       return;
     }
+    if (needsConsent(handleRegister, acceptedAt)) return;
     if (!isLoaded) return setFormError("Still getting ready. Try again in a moment.");
 
     setIsLoading(true);
@@ -305,7 +346,7 @@ export default function Register({ navigation }) {
       const last = lastName.trim();
       const signUpResult = await signUp.create({
         emailAddress: email.trim(), password, firstName: first, lastName: last,
-        unsafeMetadata: signUpDetails(),
+        unsafeMetadata: signUpDetails(acceptedAt),
       });
       await signUp.prepareEmailAddressVerification({ strategy: "email_code" });
       navigation.navigate("EmailVerification", {
@@ -366,7 +407,9 @@ export default function Register({ navigation }) {
       subtitle="Fill in the form to continue"
     >
       {nameField("firstName", firstName, setFirstName, "FIRST NAME", "First name",
-        () => inputRefs.lastName.current?.focus(), "name-given")}
+        () => inputRefs.middleName.current?.focus(), "name-given")}
+      {nameField("middleName", middleName, setMiddleName, "MIDDLE NAME (OPTIONAL)", "Middle name, optional",
+        () => inputRefs.lastName.current?.focus(), "name-middle")}
       {nameField("lastName", lastName, setLastName, "LAST NAME", "Last name",
         () => inputRefs.municipality.current?.focus(), "name-family")}
 
@@ -472,12 +515,23 @@ export default function Register({ navigation }) {
         <FieldError>{errorFor("dob")}</FieldError>
       </View>
 
+      {/* For both ways of signing up below. */}
+      <View>
+        <ConsentRow
+          agreed={!!agreedAt}
+          onPress={() => setConsentOpen(true)}
+          invalid={consentMissing && !agreedAt}
+          disabled={anyLoading}
+        />
+        <FieldError>{consentMissing && !agreedAt ? CONSENT_ERROR : null}</FieldError>
+      </View>
+
       <FormError>{formError}</FormError>
 
       {/* The same yellow primary button as every other screen. */}
       <TouchableOpacity
         style={[a.cta, styles.signupSpace, disabled && styles.disabled]}
-        onPress={handleRegister}
+        onPress={() => handleRegister()}
         disabled={disabled}
         activeOpacity={0.88}
         accessibilityRole="button"
@@ -485,7 +539,6 @@ export default function Register({ navigation }) {
       >
         {isLoading ? <ActivityIndicator color={colors.onAccent} /> : <Text style={a.ctaText}>Sign up</Text>}
       </TouchableOpacity>
-      <TermsNotice action="signing up" />
 
       {/* Divider */}
       <View style={a.dividerRow}>
@@ -497,7 +550,7 @@ export default function Register({ navigation }) {
       {/* Google: uses the municipality and date of birth from the form above. */}
       <TouchableOpacity
         style={[a.googleBtn, disabled && styles.disabled]}
-        onPress={handleGoogleSignUp}
+        onPress={() => handleGoogleSignUp()}
         disabled={disabled}
         activeOpacity={0.88}
         accessibilityRole="button"
@@ -513,7 +566,12 @@ export default function Register({ navigation }) {
           </>
         )}
       </TouchableOpacity>
-      <TermsNotice action="continuing with Google" />
+
+      <LegalConsentModal
+        visible={consentOpen}
+        onAgree={onAgree}
+        onClose={() => { pendingAction.current = null; setConsentOpen(false); }}
+      />
 
       <View style={a.linkRow}>
         <Text style={a.linkMuted}>Already Registered? </Text>
@@ -533,11 +591,9 @@ export default function Register({ navigation }) {
 const styles = StyleSheet.create({
   disabled:   { opacity: 0.6 },
 
-  // Tucked closer to its button than the body's 16px gap, so it reads as
-  // that button's fine print.
-  notice:     { fontFamily: fonts.sans, fontSize: 13, lineHeight: 19, textAlign: "center", marginTop: -6, paddingHorizontal: 8 },
-  noticeLink: { fontFamily: fonts.sansSemi, textDecorationLine: "underline" },
-  googleNote: { fontFamily: fonts.sansMedium, fontSize: 12.5, lineHeight: 18, textAlign: "center", marginTop: -6, paddingHorizontal: 8 },
+  consent:     { flexDirection: "row", alignItems: "center", gap: 12, borderWidth: 1.5, borderRadius: radius.md, paddingVertical: 12, paddingHorizontal: 14 },
+  box:         { width: 24, height: 24, borderRadius: 7, borderWidth: 2, alignItems: "center", justifyContent: "center" },
+  consentText: { flex: 1, fontFamily: fonts.sans, fontSize: 13.5, lineHeight: 19 },
 
   signupSpace: { marginTop: 4 },
 });

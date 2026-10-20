@@ -17,14 +17,16 @@ jest.mock("@react-navigation/native", () => ({
 
 const trio = (id) => [
   { _id: `${id}-ai`, type: "ai", order: 1 },
-  { _id: `${id}-eat`, type: "location", order: 2 },
+  { _id: `${id}-eat`, type: "location", order: 2, locationConfigured: true },
   { _id: `${id}-ar`, type: "ar", order: 3 },
 ];
+// Spots with AR set up, as every mission spot has.
+const AR = { AR3DModelURL: "https://res.cloudinary.com/demo/raw/upload/m.glb", modelsCoordinates: [{ lat: 14.8, lng: 120.8 }] };
 const mockSpots = [
-  { _id: "c", name: "Casa Real", city: "Malolos" },          // nothing yet
-  { _id: "a", name: "Barasoain Church", city: "Malolos" },   // all done
+  { _id: "c", name: "Casa Real", city: "Malolos", ...AR },          // nothing yet
+  { _id: "a", name: "Barasoain Church", city: "Malolos", ...AR },   // all done
   { _id: "d", name: "Bagbag Bridge", city: "Calumpit" },     // no missions yet, not arrived
-  { _id: "b", name: "Meyto Shrine", city: "Calumpit" },      // arrived only
+  { _id: "b", name: "Meyto Shrine", city: "Calumpit", ...AR },      // arrived only
 ];
 const mockMissions = { a: trio("a"), b: trio("b"), c: trio("c"), d: [] };
 jest.mock("../context/ArrivalContext", () => ({

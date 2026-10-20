@@ -69,8 +69,8 @@ it("counts the rest of a big tie as +N and lists them below, with you always on 
   expect(tree.getByText("You, Ana, Ben +2")).toBeTruthy();
   expect(tree.getByLabelText(/^Rank 1, tied, Cy Lopez/)).toBeTruthy();
   expect(tree.getByLabelText(/^Rank 1, tied, Dee Santos/)).toBeTruthy();
-  // You're on the podium, so the "your rank" bar at the bottom stays away.
-  expect(tree.queryByText("You")).toBeNull();
+  // Your own standing is pinned first too (2026-10-21), with nowhere to jump: it's this page.
+  expect(tree.getByLabelText("Your standing: rank 1 of 5, 80 points, 2 spots visited")).toBeTruthy();
 }, 15000);
 
 it("gives each place its own step when nobody is tied", () => {

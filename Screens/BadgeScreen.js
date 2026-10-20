@@ -1,4 +1,4 @@
-// screens/BadgeScreen.js
+// screens/BadgeScreen.js — "Achievements" (the stack route keeps its name, Badges)
 import React, { useEffect, useState, useRef, useMemo, useCallback } from "react";
 import {
   View,
@@ -13,53 +13,80 @@ import {
   Modal,
   StatusBar,
   Pressable,
+  ScrollView,
 } from "react-native";
 import { showAlert } from "../components/AppAlert";
-import { useNavigation } from "@react-navigation/native";
+import { useNavigation, useRoute } from "@react-navigation/native";
 import { useAuth } from "@clerk/clerk-expo";
-import RNShare from "react-native-share";
 import * as Haptics from "expo-haptics";
-import { useTheme, fonts, typography } from "../context/ThemeContext";
+import Svg, { Path, Circle } from "react-native-svg";
+import { useTheme, fonts, typography, radius } from "../context/ThemeContext";
 import {
   ScreenHeader, Segmented, EmptyState, ErrorState, LoadingState, PrimaryButton, SearchField,
 } from "../components/ui";
 import { useArrival } from "../context/ArrivalContext";
 import { BASE_URL } from "../api";
-import { badgeShareUrl } from "../utils/legalLinks";
 import { badgeImage } from "../utils/image";
+import { shareBadge } from "../utils/badgeShare";
+import { celebrate } from "../utils/rewards";
+import { MISSION_KINDS, ARRIVAL_KIND } from "../utils/missionTiers";
+import { nextTitleLine } from "../utils/titles";
+import { starPath } from "../utils/townEmblem";
 import Icon from "../components/Icon";
+import TitleChip from "../components/TitleChip";
+import TownEmblem from "../components/TownEmblem";
+import ProgressRing from "../components/ProgressRing";
 // The grid is shared with the Bakit List, AR View and Navigate spot lists.
 import { GRID_GAP, H_GUTTER, columnsFor, cardSizeFor, AnimatedCell } from "../components/Grid";
 
-const ICON_SIZE = 60; // the round badge in each grid card
+/*
+ * Achievements (the thesis panel, 2026-10-21), from GET /api/achievements/me:
+ *
+ *   Spots   every spot's badge — earned for finishing every mission there —
+ *           with a ring that fills as its steps are done
+ *   Towns   a badge per town, for finishing every spot in it (the admin's art,
+ *           or a drawn seal until there is some)
+ *   Titles  Explorer, Voyager, GOAT Traveler — by the number of towns finished
+ *
+ * Until then this was "Badges", one per spot, given on arrival.
+ */
 
-// How long Share waits for the sharer's link code before sending the link
-// without it — the share sheet shouldn't hang on a slow connection.
-const SHARE_CODE_TIMEOUT_MS = 4000;
+const RING = 72;    // the progress ring round each spot badge
+const ICON_SIZE = 54;
 
-// Every card is one height: padding, the badge, a two-line name and the footer
-// chip, with the text parts grown by the phone's text size so large text
-// doesn't spill. Cards used to be as tall as their own text, so a one-line
-// name made a shorter card than its neighbours.
-const cardHeightFor = (fontScale) => Math.ceil(104 + 44 * fontScale);
+const cardHeightFor = (fontScale) => Math.ceil(118 + 44 * fontScale);
 
-// The spot's name under a locked badge, only when it says something the
-// badge's name doesn't. A badge is named after its spot, so this was nearly
-// always the same name twice.
-const spotLine = (badge) => {
-  if (badge.claimed) return null;
-  const spot = badge.spotId?.name;
-  return spot === badge.name ? null : spot || "Unknown spot";
-};
-
-const FILTERS = [
-  { key: "all",     label: "All" },
-  { key: "claimed",  label: "Claimed" },
-  { key: "locked",   label: "Locked" },
+const TABS = [
+  { key: "spots",  label: "Spots" },
+  { key: "towns",  label: "Towns" },
+  { key: "titles", label: "Titles" },
 ];
+
+const fmtDate = (d, month = "short") =>
+  new Date(d).toLocaleDateString("en-PH", { month, day: "numeric", year: "numeric" });
+
+const stepKind = (step) => (step.type === "arrive" ? ARRIVAL_KIND : MISSION_KINDS[step.type] || MISSION_KINDS.checkin);
+
+// Earned first (newest first), then furthest along, then the rest.
+const byProgress = (a, b) =>
+  (b.earned - a.earned) ||
+  (a.earned && b.earned ? new Date(b.earnedAt || 0) - new Date(a.earnedAt || 0) : 0) ||
+  (b.done / Math.max(1, b.total) - a.done / Math.max(1, a.total)) ||
+  a.name.localeCompare(b.name);
+
+function TitleMedal({ earned, size = 56, colors }) {
+  return (
+    <Svg width={size} height={size} viewBox="0 0 100 100">
+      <Circle cx="50" cy="50" r="47" fill={earned ? colors.accentSoft : colors.backgroundSoft} stroke={earned ? colors.accent : colors.cardBorder} strokeWidth={3} />
+      <Path d={starPath(50, 50, 36, 21, 9.5)} fill={earned ? colors.accent : colors.starEmpty} />
+      <Path d={starPath(50, 50, 20, 12, 5.5)} fill={earned ? colors.accentDark : colors.cardBorder} opacity={earned ? 0.35 : 0.6} />
+    </Svg>
+  );
+}
 
 export default function BadgeScreen() {
   const navigation   = useNavigation();
+  const route        = useRoute();
   const { getToken } = useAuth();
   const { colors, isDark } = useTheme();
   const { allSpots } = useArrival();
@@ -68,309 +95,233 @@ export default function BadgeScreen() {
   const columns    = columnsFor(winWidth);
   const cardSize   = cardSizeFor(winWidth);
   const cardHeight = cardHeightFor(fontScale);
+  const townCols   = Math.max(2, columns - 1);
+  const townSize   = (winWidth - H_GUTTER - GRID_GAP * (townCols - 1)) / townCols;
 
-  const [badges, setBadges]             = useState([]); // full catalog, each tagged with .claimed
-  const [loading, setLoading]           = useState(true);
-  const [refreshing, setRefreshing]     = useState(false);
-  const [error, setError]               = useState(null);
-  const [filter, setFilter]             = useState("all");
-  const [query, setQuery]               = useState("");
-  const [selectedBadge, setSelectedBadge] = useState(null);
-  const [modalVisible, setModalVisible]   = useState(false);
-  const [sharing, setSharing]             = useState(false);
+  const [data, setData]               = useState(null);
+  const [loading, setLoading]         = useState(true);
+  const [refreshing, setRefreshing]   = useState(false);
+  const [error, setError]             = useState(null);
+  const [tab, setTab]                 = useState(route?.params?.tab || "spots");
+  const [query, setQuery]             = useState("");
+  const [selected, setSelected]       = useState(null); // { kind: "spot" | "town", item }
+  const [modalVisible, setModalVisible] = useState(false);
+  const [sharing, setSharing]         = useState(false);
 
   const modalOpacity   = useRef(new Animated.Value(0)).current;
   const modalScale     = useRef(new Animated.Value(0.85)).current;
   const modalTranslate = useRef(new Animated.Value(40)).current;
 
-  const loadBadges = async () => {
+  // A reward moment's "View achievements" opens a particular tab.
+  useEffect(() => { if (route?.params?.tab) setTab(route.params.tab); }, [route?.params?.tab]);
+
+  const load = async () => {
     setError(null);
     try {
       const token = await getToken();
-
-      const [catalogRes, userRes] = await Promise.all([
-        fetch(`${BASE_URL}/api/badges`, {
-          headers: { Authorization: `Bearer ${token}` },
-        }),
-        fetch(`${BASE_URL}/api/users/me`, {
-          headers: { Authorization: `Bearer ${token}` },
-        }),
-      ]);
-
-      if (!catalogRes.ok) throw new Error("Failed to fetch badge catalog");
-      if (!userRes.ok) throw new Error("Failed to fetch profile");
-
-      const catalogData = await catalogRes.json();
-      const userData     = await userRes.json();
-
-      const catalog = catalogData?.badges ?? [];
-      const earned  = userData?.user?.badges ?? [];
-
-      const earnedMap = new Map(
-        earned.map((b) => [String(b.spotId?._id ?? b.spotId), b])
-      );
-
-      const combined = catalog.map((b) => {
-        const spotKey = String(b.spotId?._id ?? b.spotId);
-        const earnedBadge = earnedMap.get(spotKey);
-        return {
-          ...b,
-          claimed:   !!earnedBadge,
-          claimedAt: earnedBadge?.claimedAt ?? null,
-        };
-      });
-
-      combined.sort((a, b) => (b.claimed === a.claimed ? 0 : b.claimed ? 1 : -1));
-      setBadges(combined);
+      const res = await fetch(`${BASE_URL}/api/achievements/me`, { headers: { Authorization: `Bearer ${token}` } });
+      if (!res.ok) throw new Error(`achievements ${res.status}`);
+      const body = await res.json();
+      setData(body);
       hasLoaded.current = true;
+      // Anything owed from before — a mission that stopped counting, say —
+      // is awarded by that request; celebrate it here.
+      celebrate(body.unlocked);
     } catch (e) {
-      console.warn("BadgeScreen load error:", e);
-      setError("Couldn't load your badges. Check your connection.");
+      console.warn("Achievements load error:", e);
+      setError("Couldn't load your achievements. Check your connection.");
     }
   };
 
-  // Only the first load shows the loading state. The focus listener re-runs
-  // this every time the screen comes back into view (e.g. closing a spot you
-  // opened from a badge), and each of those used to blank the grid.
+  // Only the first load shows the loading state; coming back to the screen
+  // refreshes in place.
   const initialLoad = async () => {
     if (!hasLoaded.current) setLoading(true);
-    await loadBadges();
+    await load();
     setLoading(false);
   };
-
   const onRefresh = async () => {
     setRefreshing(true);
-    await loadBadges();
+    await load();
     setRefreshing(false);
   };
-
   useEffect(() => {
     initialLoad();
     const unsub = navigation.addListener("focus", initialLoad);
     return unsub;
-  }, [navigation]);
+  }, [navigation]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const claimedCount = useMemo(() => badges.filter((b) => b.claimed).length, [badges]);
-  const lockedCount  = badges.length - claimedCount;
+  const spots = useMemo(() => (data?.spots || []).filter((s) => s.badge).sort(byProgress), [data]);
+  const towns = useMemo(() => (data?.towns || []).map((t) => ({ ...t, name: t.name || t.municipality, done: t.spotsDone, total: t.spotsTotal })).sort(byProgress), [data]);
+  const titles = data?.titles || [];
+  const spotsEarned = spots.filter((s) => s.earned).length;
+  const townsEarned = towns.filter((t) => t.earned).length;
 
-  // The filter, then the search (QA 2026-10-16): a badge matches on its own
-  // name, its description, or the name or town of its spot.
   const q = query.trim().toLowerCase();
-  const visibleBadges = useMemo(() => {
-    const byFilter =
-      filter === "claimed" ? badges.filter((b) => b.claimed)
-      : filter === "locked" ? badges.filter((b) => !b.claimed)
-      : badges;
-    if (!q) return byFilter;
-    return byFilter.filter((b) =>
-      [b.name, b.description, b.spotId?.name, b.spotId?.city]
-        .filter(Boolean)
-        .some((f) => String(f).toLowerCase().includes(q))
-    );
-  }, [badges, filter, q]);
+  const matches = (fields) => !q || fields.filter(Boolean).some((f) => String(f).toLowerCase().includes(q));
+  const visible = tab === "spots"
+    ? spots.filter((s) => matches([s.name, s.badge?.name, s.town]))
+    : tab === "towns" ? towns.filter((t) => matches([t.name, t.municipality])) : titles;
 
-  const openBadge = (badge) => {
-    // Opening a badge you actually earned is the reward moment of the whole
-    // points system — it should feel like something. A locked badge gets the
-    // lighter selection tick instead, so the two are distinguishable by touch.
-    if (badge.claimed) {
-      Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-    } else {
-      Haptics.selectionAsync().catch(() => {});
-    }
-
-    setSelectedBadge(badge);
+  // ── Detail ──
+  const open = (kind, item) => {
+    if (item.earned) Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+    else Haptics.selectionAsync().catch(() => {});
+    setSelected({ kind, item });
     setModalVisible(true);
     modalOpacity.setValue(0);
-    modalScale.setValue(badge.claimed ? 0.7 : 0.85);
+    modalScale.setValue(item.earned ? 0.7 : 0.85);
     modalTranslate.setValue(40);
-
     Animated.parallel([
       Animated.timing(modalOpacity, { toValue: 1, duration: 300, useNativeDriver: true }),
-      // A claimed badge overshoots on the way in; a locked one just settles.
-      Animated.spring(modalScale, {
-        toValue: 1,
-        tension: badge.claimed ? 90 : 120,
-        friction: badge.claimed ? 6 : 9,
-        useNativeDriver: true,
-      }),
+      // An earned badge overshoots on the way in; a locked one just settles.
+      Animated.spring(modalScale, { toValue: 1, tension: item.earned ? 90 : 120, friction: item.earned ? 6 : 9, useNativeDriver: true }),
       Animated.timing(modalTranslate, { toValue: 0, duration: 300, useNativeDriver: true }),
     ]).start();
   };
-
-  const closeBadge = () => {
+  const close = (then) => {
     Animated.parallel([
       Animated.timing(modalOpacity, { toValue: 0, duration: 200, useNativeDriver: true }),
       Animated.timing(modalScale, { toValue: 0.9, duration: 200, useNativeDriver: true }),
       Animated.timing(modalTranslate, { toValue: 30, duration: 200, useNativeDriver: true }),
     ]).start(() => {
       setModalVisible(false);
-      setSelectedBadge(null);
+      setSelected(null);
+      if (typeof then === "function") then();
     });
   };
 
-  // The link carries a code the server hands out for this traveler and badge,
-  // so the badge page on the website can say who shared it ("Shared by …").
-  // Asked for when Share is tapped; if that fails (offline, a slow server) the
-  // plain link still goes, and the page just names no one.
-  const shareCodeFor = async (badgeId) => {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), SHARE_CODE_TIMEOUT_MS);
-    try {
-      const token = await getToken();
-      const res = await fetch(`${BASE_URL}/api/users/me/badges/${badgeId}/share`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}` },
-        signal: controller.signal,
-      });
-      if (!res.ok) return null;
-      const data = await res.json();
-      return typeof data?.token === "string" ? data.token : null;
-    } catch {
-      return null;
-    } finally {
-      clearTimeout(timer);
-    }
-  };
-
-  // A badge is shared as a link, never as a picture (2026-10-20, the user:
-  // "remove the share as image"). The link becomes a preview card showing the
-  // badge — libotbulacan.com/badge/<id> writes per-badge preview tags into its
-  // HTML, which chat apps' link crawlers read — and tapping it opens the badge
-  // on the website, where the app can be downloaded. The link goes as `url`,
-  // not inside the text: Android still sends "text link", but iOS then shares
-  // it as a real link, which is what gets the preview card there.
   const handleShare = async () => {
-    if (!selectedBadge?.claimed) return;
-    try {
-      setSharing(true);
-      const code = await shareCodeFor(selectedBadge._id);
-      await RNShare.open({
-        title: `${selectedBadge.name} Badge`,
-        message: `I just earned the "${selectedBadge.name}" badge on Libot Bulacan! Discover Bulacan's history!`,
-        url: badgeShareUrl(selectedBadge._id, code),
-        failOnCancel: false,
-      });
-    } catch (e) {
-      if (e?.message !== "User did not share") {
-        console.warn("[Share] Failed:", e);
-        showAlert("Error", "Could not open sharing. Please try again.");
-      }
-    } finally {
-      setSharing(false);
-    }
+    const spot = selected?.item;
+    if (!spot?.earned || !spot.badge) return;
+    setSharing(true);
+    const ok = await shareBadge({ _id: spot.badge.badgeId, name: spot.badge.name }, getToken);
+    setSharing(false);
+    if (!ok) showAlert("Error", "Could not open sharing. Please try again.");
   };
 
-  const renderBadge = useCallback(({ item: badge, index }) => (
+  const fullSpot = (spotId) => allSpots.find((s) => String(s._id) === String(spotId));
+  const openSpot = (spotId) => {
+    const spot = fullSpot(spotId);
+    close(() => { if (spot) navigation.navigate("InformationScreen", { spot, tab: "BucketList" }); });
+  };
+
+  // ── Cards ──
+  const renderSpot = useCallback(({ item: s, index }) => (
     <AnimatedCell delay={Math.min(index, 12) * 40}>
       <TouchableOpacity
         activeOpacity={0.75}
-        onPress={() => openBadge(badge)}
-        style={[styles.badgeWrapper, { width: cardSize }]}
+        onPress={() => open("spot", s)}
+        style={[styles.cellWrap, { width: cardSize }]}
         accessibilityRole="button"
-        accessibilityLabel={
-          badge.claimed
-            ? `${badge.name} badge, earned${badge.claimedAt ? ` on ${new Date(badge.claimedAt).toLocaleDateString("en-PH", { month: "long", day: "numeric", year: "numeric" })}` : ""}`
-            : `${badge.name} badge, locked`
-        }
+        accessibilityLabel={s.earned
+          ? `${s.badge.name} badge, earned${s.earnedAt ? ` on ${fmtDate(s.earnedAt, "long")}` : ""}`
+          : `${s.badge.name} badge, locked, ${s.done} of ${s.total} done`}
         accessibilityHint="Opens the badge details"
       >
-        {/* Claimed badges sit on a white card so they LIFT off the warm page;
-            locked ones recede into the page tint. Previously this was inverted,
-            so the thing you earned looked flatter than the thing you hadn't. */}
+        {/* Earned badges lift off the page on a white card; the rest recede. */}
         <View style={[
-          styles.badgeCard,
-          { minHeight: cardHeight },
-          badge.claimed
-            ? { backgroundColor: colors.card, borderColor: colors.cardBorder, borderWidth: 1 }
-            : { backgroundColor: colors.backgroundSoft },
+          styles.card, { minHeight: cardHeight },
+          s.earned ? { backgroundColor: colors.card, borderColor: colors.cardBorder, borderWidth: 1 } : { backgroundColor: colors.backgroundSoft },
         ]}>
-          {/* A locked badge shows its own art in grayscale with a lock chip.
-              It used to sit at 30% under a dark overlay that covered it, so
-              every locked badge looked like the same dark seal. */}
-          <View style={styles.iconCircle}>
-            {badge.image ? (
+          <ProgressRing done={s.done} total={s.total} size={RING} stroke={4}>
+            {s.badge.image ? (
               <Image
-                source={{ uri: badgeImage(badge.image, ICON_SIZE, { locked: !badge.claimed }) }}
-                style={[styles.badgeImage, !badge.claimed && styles.badgeImageLocked]}
+                source={{ uri: badgeImage(s.badge.image, ICON_SIZE, { locked: !s.earned }) }}
+                style={[styles.badgeImg, !s.earned && styles.locked]}
                 resizeMode="cover"
               />
             ) : (
-              <Icon name="award" size={26} color={badge.claimed ? colors.brand : colors.textMuted} />
+              <Icon name="award" size={26} color={s.earned ? colors.brand : colors.textMuted} />
             )}
-            {!badge.claimed && (
-              <View style={[styles.lockChip, { backgroundColor: colors.background }]}>
-                <Icon name="lock" size={11} color={colors.textMuted} />
-              </View>
-            )}
-            {badge.claimed && (
-              <View style={[styles.checkOverlay, { backgroundColor: colors.background }]}>
-                <Icon name="check-circle" size={16} color={colors.brand} />
-              </View>
-            )}
-          </View>
-
-          <Text
-            style={[styles.badgeName, { color: badge.claimed ? colors.textPrimary : colors.textSecondary }]}
-            numberOfLines={spotLine(badge) ? 1 : 2}
-          >
-            {badge.name}
+          </ProgressRing>
+          <Text style={[styles.cardName, { color: s.earned ? colors.textPrimary : colors.textSecondary }]} numberOfLines={2}>
+            {s.badge.name}
           </Text>
-          {spotLine(badge) && (
-            <Text style={[styles.lockedSpot, { color: colors.textMuted }]} numberOfLines={1}>
-              {spotLine(badge)}
-            </Text>
-          )}
-
-          {/* Pinned to the bottom, so it lines up across cards whatever the
-              length of the name above it. */}
           <View style={styles.cardFooter}>
-            {badge.claimed ? (
-              badge.claimedAt && (
-                <Text style={[styles.claimedDate, { color: colors.textMuted }]}>
-                  {new Date(badge.claimedAt).toLocaleDateString("en-PH", {
-                    month: "short", day: "numeric", year: "numeric",
-                  })}
-                </Text>
-              )
+            {s.earned ? (
+              <View style={[styles.chip, { backgroundColor: colors.accentSoft }]}>
+                <Icon name="check" size={10} color={colors.accentDark} />
+                <Text style={[styles.chipText, { color: colors.accentDark }]}>{s.earnedAt ? fmtDate(s.earnedAt) : "Earned"}</Text>
+              </View>
             ) : (
-              typeof badge.points === "number" && badge.points > 0 && (
-                <View style={[styles.ptsChip, { backgroundColor: colors.brandLight }]}>
-                  <Icon name="star" size={9} color={colors.brand} />
-                  <Text style={[styles.ptsChipText, { color: colors.brand }]}>+{badge.points}</Text>
-                </View>
-              )
+              <Text style={[styles.footerText, { color: s.done ? colors.brand : colors.textMuted }]}>{s.done} of {s.total}</Text>
             )}
           </View>
         </View>
       </TouchableOpacity>
     </AnimatedCell>
-  ), [colors, cardSize, cardHeight]);
+  ), [colors, cardSize, cardHeight]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // The spot a badge belongs to, in full, so the detail modal can open it.
-  const spotForBadge = (badge) => {
-    const id = badge?.spotId?._id ?? badge?.spotId;
-    return id ? allSpots.find((s) => String(s._id) === String(id)) : null;
-  };
-  const selectedSpot = spotForBadge(selectedBadge);
+  const renderTown = useCallback(({ item: t, index }) => (
+    <AnimatedCell delay={Math.min(index, 8) * 50}>
+      <TouchableOpacity
+        activeOpacity={0.8}
+        onPress={() => open("town", t)}
+        style={[styles.cellWrap, { width: townSize }]}
+        accessibilityRole="button"
+        accessibilityLabel={t.earned
+          ? `${t.name} town badge, earned${t.earnedAt ? ` on ${fmtDate(t.earnedAt, "long")}` : ""}`
+          : `${t.name} town badge, locked, ${t.spotsDone} of ${t.spotsTotal} spots done`}
+        accessibilityHint="Opens the town's badge"
+      >
+        <View style={[
+          styles.townCard,
+          t.earned ? { backgroundColor: colors.card, borderColor: colors.accent, borderWidth: 1.5 } : { backgroundColor: colors.backgroundSoft },
+        ]}>
+          <ProgressRing done={t.spotsDone} total={t.spotsTotal} size={104} stroke={5}>
+            <View style={!t.earned && styles.locked}>
+              <TownEmblem town={t.municipality} image={t.image} size={84} />
+            </View>
+          </ProgressRing>
+          <Text style={[styles.townName, { color: colors.textPrimary }]} numberOfLines={1}>{t.name}</Text>
+          {t.earned ? (
+            <Text style={[styles.footerText, { color: colors.accentDark }]}>Finished{t.earnedAt ? ` · ${fmtDate(t.earnedAt)}` : ""}</Text>
+          ) : (
+            <Text style={[styles.footerText, { color: t.spotsDone ? colors.brand : colors.textMuted }]}>
+              {t.spotsDone} of {t.spotsTotal} spot{t.spotsTotal === 1 ? "" : "s"}
+            </Text>
+          )}
+        </View>
+      </TouchableOpacity>
+    </AnimatedCell>
+  ), [colors, townSize]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const openSelectedSpot = () => {
-    const spot = selectedSpot;
-    closeBadge();
-    if (spot) navigation.navigate("InformationScreen", { spot });
+  const renderTitle = ({ item: t, index }) => {
+    const need = t.all ? `Finish every town with spots (${t.towns})` : `Finish ${t.towns} town${t.towns === 1 ? "" : "s"}`;
+    const have = Math.min(townsEarned, t.towns);
+    return (
+      <AnimatedCell delay={index * 60}>
+        <View
+          style={[styles.titleRow, { backgroundColor: t.earned ? colors.card : colors.backgroundSoft, borderColor: t.earned ? colors.accent : colors.cardBorder }]}
+          accessible
+          accessibilityLabel={`${t.name}: ${need}. ${t.earned ? "Earned" : `${have} of ${t.towns} towns`}`}
+        >
+          <TitleMedal earned={t.earned} colors={colors} />
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.titleName, { color: t.earned ? colors.textPrimary : colors.textSecondary }]}>{t.name}</Text>
+            <Text style={[styles.titleNeed, { color: colors.textMuted }]}>{need}</Text>
+            {!t.earned && (
+              <View style={[styles.bar, { backgroundColor: colors.divider }]}>
+                <View style={[styles.barFill, { backgroundColor: colors.brand, width: `${(have / Math.max(1, t.towns)) * 100}%` }]} />
+              </View>
+            )}
+          </View>
+          {t.earned ? <Icon name="check-circle" size={20} color={colors.accentDark} /> : <Text style={[styles.footerText, { color: colors.textMuted }]}>{have}/{t.towns}</Text>}
+        </View>
+      </AnimatedCell>
+    );
   };
 
   const header = (
     <ScreenHeader
-      title="Badges"
+      title="Achievements"
       onBack={() => navigation.goBack()}
-      right={
-        badges.length > 0 ? (
-          <View style={[styles.countBadge, { backgroundColor: colors.brandLight }]}>
-            <Text style={[styles.countText, { color: colors.brandDark }]}>{claimedCount}/{badges.length}</Text>
-          </View>
-        ) : null
-      }
+      right={spots.length > 0 ? (
+        <View style={[styles.countBadge, { backgroundColor: colors.brandLight }]} accessible accessibilityLabel={`${spotsEarned} of ${spots.length} spot badges`}>
+          <Text style={[styles.countText, { color: colors.brandDark }]}>{spotsEarned}/{spots.length}</Text>
+        </View>
+      ) : null}
     />
   );
 
@@ -378,436 +329,286 @@ export default function BadgeScreen() {
     return (
       <View style={[styles.container, { backgroundColor: colors.background }]}>
         {header}
-        <LoadingState label="Loading badges…" />
+        <LoadingState label="Loading achievements…" />
       </View>
     );
   }
 
+  // Your title and the next one up: the top of the screen.
+  const next = data?.nextTitle;
+  const nextShare = next && Number.isFinite(next.townsLeft) ? townsEarned / Math.max(1, townsEarned + next.townsLeft) : 1;
+  const summary = data && (
+    <View style={[styles.summary, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
+      <View style={styles.summaryTop}>
+        <View style={{ flex: 1 }}>
+          {data.title ? <TitleChip title={data.title} /> : (
+            <Text style={[styles.summaryEyebrow, { color: colors.textMuted }]}>NO TITLE YET</Text>
+          )}
+          <Text style={[styles.summaryHeadline, { color: colors.textPrimary }]}>
+            {data.title ? data.title.name : "Finish a town for your first title"}
+          </Text>
+          <Text style={[styles.summaryNext, { color: colors.textSecondary }]}>{nextTitleLine(next)}</Text>
+        </View>
+        <TitleMedal earned={!!data.title} size={64} colors={colors} />
+      </View>
+      {next && (
+        <View style={[styles.bar, styles.summaryBar, { backgroundColor: colors.divider }]} accessibilityRole="progressbar" accessibilityValue={{ min: 0, max: 100, now: Math.round(nextShare * 100) }}>
+          <View style={[styles.barFill, { backgroundColor: colors.accent, width: `${nextShare * 100}%` }]} />
+        </View>
+      )}
+      <View style={styles.summaryStats}>
+        <Text style={[styles.summaryStat, { color: colors.textSecondary }]}><Text style={[styles.summaryNum, { color: colors.textPrimary }]}>{spotsEarned}</Text>/{spots.length} spot badges</Text>
+        <Text style={[styles.summaryStat, { color: colors.textSecondary }]}><Text style={[styles.summaryNum, { color: colors.textPrimary }]}>{townsEarned}</Text>/{towns.length} towns</Text>
+      </View>
+    </View>
+  );
+
+  const counts = { spots: `${spotsEarned}/${spots.length}`, towns: `${townsEarned}/${towns.length}`, titles: `${titles.filter((t) => t.earned).length}/${titles.length}` };
+  const listKey = tab === "spots" ? `spots-${columns}` : tab === "towns" ? `towns-${townCols}` : "titles";
+  const numColumns = tab === "spots" ? columns : tab === "towns" ? townCols : 1;
+
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
       <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={colors.background} />
-
       {header}
 
       <FlatList
-        data={visibleBadges}
-        keyExtractor={(item) => item._id}
-        renderItem={renderBadge}
-        // FlatList cannot change numColumns in place, so the key forces a
-        // remount when the viewport crosses a breakpoint.
-        key={columns}
-        numColumns={columns}
-        columnWrapperStyle={styles.row}
+        key={listKey}
+        data={visible}
+        keyExtractor={(item) => String(item.spotId || item.municipality || item.key)}
+        renderItem={tab === "spots" ? renderSpot : tab === "towns" ? renderTown : renderTitle}
+        numColumns={numColumns}
+        {...(numColumns > 1 && { columnWrapperStyle: styles.row })}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
         keyboardDismissMode="on-drag"
-        // Virtualization tuning — grid cells are small/cheap, so a modest
-        // window keeps memory bounded even if the catalog grows past 50+.
         windowSize={7}
         initialNumToRender={12}
         maxToRenderPerBatch={9}
-        removeClippedSubviews={true}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={onRefresh}
-            tintColor={colors.brand}
-            colors={[colors.brand]}
-          />
-        }
+        removeClippedSubviews
+        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} tintColor={colors.brand} colors={[colors.brand]} />}
         ListHeaderComponent={
           <>
             {error && <ErrorState text={error} onRetry={onRefresh} style={styles.errorBox} />}
-
-            {badges.length > 0 && (
+            {summary}
+            {data && (
+              <Segmented
+                style={styles.filterBar}
+                value={tab}
+                onChange={(k) => { setTab(k); setQuery(""); }}
+                options={TABS.map((t) => ({ key: t.key, label: `${t.label} ${counts[t.key]}`, a11y: `${t.label}, ${counts[t.key]} earned` }))}
+              />
+            )}
+            {data && tab !== "titles" && (
               <SearchField
                 value={query}
                 onChangeText={setQuery}
                 onClear={() => setQuery("")}
-                placeholder="Search badges or spots"
+                placeholder={tab === "spots" ? "Search badges or spots" : "Search towns"}
                 style={styles.search}
               />
             )}
-
-            {badges.length > 0 && (
-              <Segmented
-                style={styles.filterBar}
-                value={filter}
-                onChange={setFilter}
-                options={FILTERS.map((f) => {
-                  const count = f.key === "all" ? badges.length : f.key === "claimed" ? claimedCount : lockedCount;
-                  return { key: f.key, label: `${f.label} (${count})`, a11y: `${f.label}, ${count} badges` };
-                })}
-              />
+            {tab === "titles" && data && (
+              <Text style={[styles.titlesIntro, { color: colors.textSecondary }]}>
+                A town is finished when every mission at every spot in it is done. Titles stay once earned.
+              </Text>
             )}
           </>
         }
         ListEmptyComponent={
-          !error && badges.length === 0 ? (
-            <EmptyState
-              icon="award"
-              title="No badges yet"
-              text="Arrive at a spot in person to earn its badge."
-            />
-          ) : !error && q && visibleBadges.length === 0 ? (
-            <EmptyState icon="search" text="No badge matches that. Try a spot or town name." />
-          ) : !error && visibleBadges.length === 0 ? (
-            <EmptyState
-              icon={filter === "claimed" ? "target" : "check-circle"}
-              title={filter === "claimed" ? "Nothing claimed yet" : "All badges unlocked!"}
-            />
-          ) : null
+          !data ? null
+            : q ? <EmptyState icon="search" text={tab === "spots" ? "No badge matches that. Try a spot or town name." : "No town matches that."} />
+            : <EmptyState icon="award" title="Nothing here yet" text="Finish every mission at a spot to earn its badge." />
         }
         ListFooterComponent={<View style={{ height: 40 }} />}
       />
 
-      {/* ── Badge Detail Modal ── */}
-      <Modal
-        visible={modalVisible}
-        transparent
-        animationType="none"
-        statusBarTranslucent
-        onRequestClose={closeBadge}
-      >
+      {/* ── Detail ── */}
+      <Modal visible={modalVisible} transparent animationType="none" statusBarTranslucent onRequestClose={() => close()}>
         <Animated.View style={[styles.modalOverlay, { opacity: modalOpacity, backgroundColor: colors.overlay }]}>
-          <Pressable
-            accessibilityRole="button" style={styles.modalBackdrop} onPress={closeBadge} />
-
-          <Animated.View
-            style={[
-              styles.modalCard,
-              // Width comes from the live viewport, capped so the card doesn't
-              // stretch edge-to-edge on a tablet. It used to read a module-scope
-              // `Dimensions.get("window")` that no longer exists.
-              { width: Math.min(winWidth - 48, 420), backgroundColor: colors.background },
-              {
-                opacity: modalOpacity,
-                transform: [{ scale: modalScale }, { translateY: modalTranslate }],
-              },
-            ]}
-          >
-            <TouchableOpacity
-              accessibilityRole="button" accessibilityLabel="Close badge details" style={[styles.modalClose, { backgroundColor: colors.card }]} onPress={closeBadge}>
-              <Icon name="x" size={20} color={colors.textSecondary} />
-            </TouchableOpacity>
-
-            <View style={styles.modalIconRing}>
-              <View style={styles.modalIconInner}>
-                {selectedBadge?.image ? (
-                  <Image
-                    source={{ uri: badgeImage(selectedBadge.image, 110, { locked: !selectedBadge?.claimed }) }}
-                    style={[styles.modalBadgeImage, !selectedBadge?.claimed && styles.badgeImageLocked]}
-                    resizeMode="cover"
-                  />
-                ) : (
-                  <Icon name="award" size={52} color={selectedBadge?.claimed ? colors.brand : colors.textMuted} />
-                )}
-                {!selectedBadge?.claimed && (
-                  <View style={[styles.modalLockChip, { backgroundColor: colors.background }]}>
-                    <Icon name="lock" size={16} color={colors.textMuted} />
-                  </View>
-                )}
-              </View>
-
-              {selectedBadge?.claimed && [...Array(6)].map((_, i) => {
-                const angle = (i / 6) * 2 * Math.PI;
-                const r = 68;
-                return (
-                  <View
-                    key={i}
-                    style={[
-                      styles.sparkleDot,
-                      { backgroundColor: colors.brandLight },
-                      { left: 70 + r * Math.cos(angle) - 4, top: 70 + r * Math.sin(angle) - 4 },
-                    ]}
-                  />
-                );
-              })}
-            </View>
-
-            <View style={[
-              styles.earnedPill,
-              { backgroundColor: selectedBadge?.claimed ? colors.brand : colors.textMuted },
-            ]}>
-              <Icon
-                name={selectedBadge?.claimed ? "check-circle" : "lock"}
-                size={11}
-                color={colors.textInverse}
-                style={{ marginRight: 4 }}
-              />
-              <Text style={[styles.earnedPillText, { color: colors.textInverse }]}>
-                {selectedBadge?.claimed ? "Badge Earned" : "Not Yet Earned"}
-              </Text>
-            </View>
-
-            <Text style={[styles.modalBadgeName, { color: colors.textPrimary }]}>{selectedBadge?.name}</Text>
-
-            {!selectedBadge?.claimed && (
-              <View style={styles.modalSpotRow}>
-                <Icon name="map-pin" size={12} color={colors.brand} />
-                <Text style={[styles.modalSpotText, { color: colors.brand }]}>
-                  {" "}{selectedBadge?.spotId?.name || "Unknown spot"}
-                  {typeof selectedBadge?.points === "number" && selectedBadge.points > 0
-                    ? ` · +${selectedBadge.points} pts` : ""}
-                </Text>
-              </View>
-            )}
-
-            {selectedBadge?.claimed ? (
-              selectedBadge?.description ? (
-                <Text style={[styles.modalDescription, { color: colors.textSecondary }]}>{selectedBadge.description}</Text>
-              ) : (
-                <Text style={[styles.modalDescriptionFallback, { color: colors.textMuted }]}>
-                  You visited this historical spot and claimed your badge. Keep exploring to discover more!
-                </Text>
-              )
-            ) : (
-              <Text style={[styles.modalDescriptionFallback, { color: colors.textMuted }]}>
-                {selectedBadge?.description || "Visit this spot in person to unlock this badge."}
-              </Text>
-            )}
-
-            {selectedBadge?.claimed && selectedBadge?.claimedAt && (
-              <View style={styles.modalDateRow}>
-                <Icon name="calendar" size={12} color={colors.textMuted} />
-                <Text style={[styles.modalDate, { color: colors.textMuted }]}>
-                  {" "}Claimed on{" "}
-                  {new Date(selectedBadge.claimedAt).toLocaleDateString("en-PH", {
-                    month: "long", day: "numeric", year: "numeric",
-                  })}
-                </Text>
-              </View>
-            )}
-
-            <View style={[styles.divider, { backgroundColor: colors.divider }]} />
-
-            {selectedBadge?.claimed ? (
-              <PrimaryButton
-                title="Share badge"
-                icon="share-2"
-                onPress={handleShare}
-                loading={sharing}
-                style={styles.modalButton}
-                accessibilityLabel="Share a link to this badge"
-              />
-            ) : selectedSpot ? (
-              // "Go Explore" used to just close the modal. It now opens the
-              // spot the badge is earned at.
-              <PrimaryButton
-                title="View this spot"
-                icon="map-pin"
-                variant="secondary"
-                onPress={openSelectedSpot}
-                style={styles.modalButton}
-              />
-            ) : (
-              <PrimaryButton title="Close" variant="secondary" onPress={closeBadge} style={styles.modalButton} />
-            )}
-          </Animated.View>
+          <Pressable accessibilityRole="button" accessibilityLabel="Close" style={StyleSheet.absoluteFill} onPress={() => close()} />
+          {selected && (
+            <Animated.View
+              style={[
+                styles.modalCard,
+                { width: Math.min(winWidth - 48, 420), backgroundColor: colors.background },
+                { opacity: modalOpacity, transform: [{ scale: modalScale }, { translateY: modalTranslate }] },
+              ]}
+            >
+              <TouchableOpacity accessibilityRole="button" accessibilityLabel="Close details" style={[styles.modalClose, { backgroundColor: colors.card }]} onPress={() => close()}>
+                <Icon name="x" size={20} color={colors.textSecondary} />
+              </TouchableOpacity>
+              <ScrollView contentContainerStyle={styles.modalBody} showsVerticalScrollIndicator={false}>
+                {selected.kind === "spot" ? renderSpotDetail(selected.item) : renderTownDetail(selected.item)}
+              </ScrollView>
+            </Animated.View>
+          )}
         </Animated.View>
       </Modal>
     </View>
   );
+
+  function renderSpotDetail(s) {
+    return (
+      <>
+        <ProgressRing done={s.done} total={s.total} size={136} stroke={6}>
+          {s.badge.image ? (
+            <Image source={{ uri: badgeImage(s.badge.image, 110, { locked: !s.earned }) }} style={[styles.modalBadgeImg, !s.earned && styles.locked]} resizeMode="cover" />
+          ) : <Icon name="award" size={52} color={s.earned ? colors.brand : colors.textMuted} />}
+        </ProgressRing>
+        <View style={[styles.earnedPill, { backgroundColor: s.earned ? colors.accent : colors.textMuted }]}>
+          <Icon name={s.earned ? "check-circle" : "lock"} size={11} color={s.earned ? colors.onAccent : colors.textInverse} style={{ marginRight: 4 }} />
+          <Text style={[styles.earnedPillText, { color: s.earned ? colors.onAccent : colors.textInverse }]}>
+            {s.earned ? "Badge earned" : `${s.done} of ${s.total} done`}
+          </Text>
+        </View>
+        <Text style={[styles.modalName, { color: colors.textPrimary }]}>{s.badge.name}</Text>
+        {s.town && <Text style={[styles.modalSub, { color: colors.textMuted }]}>{s.town}</Text>}
+
+        {s.earned ? (
+          <>
+            <Text style={[styles.modalText, { color: colors.textSecondary }]}>
+              {s.badge.description || "You finished every mission here."}
+            </Text>
+            {s.earnedAt && <Text style={[styles.modalSub, { color: colors.textMuted }]}>Earned on {fmtDate(s.earnedAt, "long")}</Text>}
+          </>
+        ) : (
+          <Text style={[styles.modalText, { color: colors.textSecondary }]}>Finish every one of these to earn it:</Text>
+        )}
+
+        {/* The steps, ticked as they're done. */}
+        <View style={[styles.steps, { borderColor: colors.cardBorder, backgroundColor: colors.card }]}>
+          {s.steps.map((st) => {
+            const kind = stepKind(st);
+            return (
+              <View key={st.key} style={styles.stepRow} accessible accessibilityLabel={`${kind.label}, ${st.done ? "done" : "not done"}`}>
+                <View style={[styles.stepIcon, { backgroundColor: st.done ? colors.successBg : colors.brandLight }]}>
+                  <Icon name={st.done ? "check" : kind.icon} size={15} color={st.done ? colors.success : colors.brand} />
+                </View>
+                <Text style={[styles.stepLabel, { color: colors.textPrimary }]}>{kind.label}</Text>
+                <Text style={[styles.stepState, { color: st.done ? colors.success : colors.textMuted }]}>{st.done ? "Done" : "To do"}</Text>
+              </View>
+            );
+          })}
+        </View>
+
+        {s.earned ? (
+          <PrimaryButton title="Share badge" icon="share-2" onPress={handleShare} loading={sharing} style={styles.modalButton} accessibilityLabel="Share a link to this badge" />
+        ) : fullSpot(s.spotId) ? (
+          <PrimaryButton title="Go to this spot's Bakit List" icon="map-pin" variant="secondary" onPress={() => openSpot(s.spotId)} style={styles.modalButton} />
+        ) : (
+          <PrimaryButton title="Close" variant="secondary" onPress={() => close()} style={styles.modalButton} />
+        )}
+      </>
+    );
+  }
+
+  function renderTownDetail(t) {
+    const townSpots = spots.filter((s) => s.town === t.municipality);
+    return (
+      <>
+        <View style={!t.earned && styles.locked}>
+          <TownEmblem town={t.municipality} image={t.image} size={132} />
+        </View>
+        <View style={[styles.earnedPill, { backgroundColor: t.earned ? colors.accent : colors.textMuted }]}>
+          <Icon name={t.earned ? "check-circle" : "lock"} size={11} color={t.earned ? colors.onAccent : colors.textInverse} style={{ marginRight: 4 }} />
+          <Text style={[styles.earnedPillText, { color: t.earned ? colors.onAccent : colors.textInverse }]}>
+            {t.earned ? "Town finished" : `${t.spotsDone} of ${t.spotsTotal} spots`}
+          </Text>
+        </View>
+        <Text style={[styles.modalName, { color: colors.textPrimary }]}>{t.name}</Text>
+        <Text style={[styles.modalText, { color: colors.textSecondary }]}>
+          {t.earned ? t.description : `Finish every mission at every spot in ${t.municipality} to earn it.`}
+        </Text>
+        {t.earned && t.earnedAt && <Text style={[styles.modalSub, { color: colors.textMuted }]}>Finished on {fmtDate(t.earnedAt, "long")}</Text>}
+        {t.earned && t.spotsDone < t.spotsTotal && (
+          <Text style={[styles.modalSub, { color: colors.textMuted }]}>New spot added since · {t.spotsDone} of {t.spotsTotal}</Text>
+        )}
+
+        <View style={[styles.steps, { borderColor: colors.cardBorder, backgroundColor: colors.card }]}>
+          {townSpots.map((s) => (
+            <TouchableOpacity
+              key={s.spotId}
+              style={styles.stepRow}
+              onPress={() => openSpot(s.spotId)}
+              accessibilityRole="button"
+              accessibilityLabel={`${s.name}, ${s.earned ? "badge earned" : `${s.done} of ${s.total} done`}`}
+            >
+              <View style={[styles.stepIcon, { backgroundColor: s.earned ? colors.accentSoft : colors.brandLight }]}>
+                <Icon name={s.earned ? "award" : "map-pin"} size={15} color={s.earned ? colors.accentDark : colors.brand} />
+              </View>
+              <Text style={[styles.stepLabel, { color: colors.textPrimary }]} numberOfLines={1}>{s.name}</Text>
+              <Text style={[styles.stepState, { color: s.earned ? colors.accentDark : colors.textMuted }]}>{s.earned ? "Done" : `${s.done}/${s.total}`}</Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+        <PrimaryButton title="Close" variant="secondary" onPress={() => close()} style={styles.modalButton} />
+      </>
+    );
+  }
 }
 
 const styles = StyleSheet.create({
   container:   { flex: 1 },
-
   countBadge:  { borderRadius: 999, paddingHorizontal: 12, paddingVertical: 5 },
   countText:   { fontFamily: fonts.sansBold, fontSize: 13 },
 
   scrollContent: { paddingHorizontal: H_GUTTER / 2, paddingTop: 8, flexGrow: 1 },
   row: { justifyContent: "flex-start", gap: GRID_GAP, marginBottom: GRID_GAP },
 
-  search:    { marginBottom: 12 },
-  filterBar: { marginBottom: 16 },
-  errorBox:  { marginBottom: 16 },
+  summary:         { borderRadius: radius.card, borderWidth: 1, padding: 16, marginBottom: 16 },
+  summaryTop:      { flexDirection: "row", alignItems: "center", gap: 12 },
+  summaryEyebrow:  { fontFamily: fonts.sansBold, fontSize: 11, letterSpacing: 1.2 },
+  summaryHeadline: { ...typography.display, fontSize: 24, lineHeight: 29, marginTop: 6 },
+  summaryNext:     { fontFamily: fonts.sansMedium, fontSize: 13, marginTop: 3 },
+  summaryBar:      { marginTop: 14 },
+  summaryStats:    { flexDirection: "row", gap: 18, marginTop: 12 },
+  summaryStat:     { fontFamily: fonts.sansMedium, fontSize: 12.5 },
+  summaryNum:      { fontFamily: fonts.sansBold, fontSize: 14 },
 
-  // flexGrow down the chain lets each card stretch to its row, so the cards in
-  // a row still match if a very large text size outgrows cardHeightFor.
-  badgeWrapper: { flexGrow: 1 },
-  // Border, not a drop shadow — the same depth cue as every other card.
-  badgeCard: {
-    flexGrow: 1,
-    borderRadius: 16,
-    padding: 10,
-    alignItems: "center",
-  },
-  cardFooter: {
-    marginTop: "auto",
-    paddingTop: 6,
-    alignItems: "center",
-  },
-  iconCircle: {
-    width: ICON_SIZE,
-    height: ICON_SIZE,
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 8,
-    position: "relative",
-    backgroundColor: "transparent",
-  },
-  badgeImage: {
-    width: ICON_SIZE,
-    height: ICON_SIZE,
-    borderRadius: ICON_SIZE / 2,
-    backgroundColor: "transparent",
-  },
-  badgeImageLocked: { opacity: 0.55 },
-  lockChip: {
-    position: "absolute",
-    bottom: -4,
-    right: -4,
-    width: 20,
-    height: 20,
-    borderRadius: 10,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  checkOverlay: {
-    position: "absolute",
-    bottom: -4,
-    right: -4,
-    borderRadius: 10,
-  },
-  // These were 9–10pt, below comfortable reading size on a phone.
-  badgeName: {
-    fontSize: 11.5,
-    fontFamily: fonts.sansSemi,
-    textAlign: "center",
-    lineHeight: 15,
-  },
-  claimedDate: {
-    fontSize: 10.5,
-    lineHeight: 14,
-    fontFamily: fonts.sansMedium,
-    textAlign: "center",
-  },
-  lockedSpot: {
-    fontSize: 10.5,
-    lineHeight: 14,
-    fontFamily: fonts.sansMedium,
-    marginTop: 3,
-    textAlign: "center",
-  },
-  ptsChip: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 3,
-    borderRadius: 8,
-    paddingHorizontal: 6,
-    paddingVertical: 2,
-  },
-  ptsChipText: { fontSize: 10, lineHeight: 13, fontFamily: fonts.sansBold },
+  bar:      { height: 6, borderRadius: 3, overflow: "hidden", marginTop: 8 },
+  barFill:  { height: "100%", borderRadius: 3 },
 
-  modalOverlay: {
-    flex: 1,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  modalBackdrop: { ...StyleSheet.absoluteFillObject },
+  search:      { marginBottom: 14 },
+  filterBar:   { marginBottom: 12 },
+  errorBox:    { marginBottom: 16 },
+  titlesIntro: { fontFamily: fonts.sans, fontSize: 13, lineHeight: 19, marginBottom: 12 },
+
+  cellWrap: { flexGrow: 1 },
+  card:     { flexGrow: 1, borderRadius: 16, padding: 10, alignItems: "center" },
+  badgeImg: { width: ICON_SIZE, height: ICON_SIZE, borderRadius: ICON_SIZE / 2 },
+  locked:   { opacity: 0.5 },
+  cardName: { fontSize: 11.5, fontFamily: fonts.sansSemi, textAlign: "center", lineHeight: 15, marginTop: 8 },
+  cardFooter: { marginTop: "auto", paddingTop: 6, alignItems: "center" },
+  footerText: { fontSize: 11.5, fontFamily: fonts.sansBold },
+  chip:     { flexDirection: "row", alignItems: "center", gap: 3, borderRadius: 8, paddingHorizontal: 6, paddingVertical: 2 },
+  chipText: { fontSize: 10, lineHeight: 13, fontFamily: fonts.sansBold },
+
+  townCard: { borderRadius: 20, paddingVertical: 14, paddingHorizontal: 10, alignItems: "center", gap: 6 },
+  townName: { ...typography.display, fontSize: 18, lineHeight: 23, marginTop: 4 },
+
+  titleRow:  { flexDirection: "row", alignItems: "center", gap: 14, padding: 14, borderRadius: radius.card, borderWidth: 1, marginBottom: 12 },
+  titleName: { ...typography.display, fontSize: 21, lineHeight: 26 },
+  titleNeed: { fontFamily: fonts.sansMedium, fontSize: 12.5, marginTop: 2 },
+
+  modalOverlay: { flex: 1, justifyContent: "center", alignItems: "center" },
   modalCard: {
-    borderRadius: 28,
-    paddingTop: 36,
-    paddingBottom: 28,
-    paddingHorizontal: 28,
-    alignItems: "center",
-    // Was a brown #2c1210 left over from the old terracotta palette.
-    shadowColor: "#0B2E31",
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.22,
-    shadowRadius: 28,
-    elevation: 18,
+    borderRadius: 28, maxHeight: "86%",
+    shadowColor: "#0B2E31", shadowOffset: { width: 0, height: 12 }, shadowOpacity: 0.22, shadowRadius: 28, elevation: 18,
   },
-  modalClose: {
-    position: "absolute",
-    top: 16,
-    right: 16,
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  modalIconRing: {
-    width: 140,
-    height: 140,
-    justifyContent: "center",
-    alignItems: "center",
-    marginBottom: 16,
-    position: "relative",
-  },
-  modalIconInner: {
-    width: 110,
-    height: 110,
-    justifyContent: "center",
-    alignItems: "center",
-    backgroundColor: "transparent",
-    position: "relative",
-  },
-  modalBadgeImage: {
-    width: 110,
-    height: 110,
-    borderRadius: 55,
-    backgroundColor: "transparent",
-  },
-  modalLockChip: {
-    position: "absolute",
-    bottom: 2,
-    right: 2,
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    justifyContent: "center",
-    alignItems: "center",
-  },
-  sparkleDot: {
-    position: "absolute",
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    opacity: 0.7,
-  },
-  earnedPill: {
-    flexDirection: "row",
-    alignItems: "center",
-    borderRadius: 20,
-    paddingHorizontal: 12,
-    paddingVertical: 5,
-    marginBottom: 12,
-  },
+  modalBody:  { alignItems: "center", paddingTop: 36, paddingBottom: 26, paddingHorizontal: 26 },
+  modalClose: { position: "absolute", top: 16, right: 16, width: 32, height: 32, borderRadius: 16, justifyContent: "center", alignItems: "center", zIndex: 2 },
+  modalBadgeImg: { width: 110, height: 110, borderRadius: 55 },
+  earnedPill:  { flexDirection: "row", alignItems: "center", borderRadius: 20, paddingHorizontal: 12, paddingVertical: 5, marginTop: 14, marginBottom: 10 },
   earnedPillText: { fontSize: 11, fontFamily: fonts.sansBold, letterSpacing: 0.3 },
-  modalBadgeName: {
-    ...typography.display,
-    fontSize: 22,
-    textAlign: "center",
-    marginBottom: 4,
-    lineHeight: 28,
-  },
-  modalSpotRow: { flexDirection: "row", alignItems: "center", marginBottom: 8 },
-  modalSpotText: { fontSize: 12, fontFamily: fonts.sansBold },
-  modalDescription: {
-    fontSize: 13,
-    fontFamily: fonts.sans,
-    textAlign: "center",
-    lineHeight: 20,
-    marginBottom: 10,
-  },
-  modalDescriptionFallback: {
-    fontSize: 13,
-    fontFamily: fonts.sans,
-    textAlign: "center",
-    lineHeight: 20,
-    fontStyle: "italic",
-    marginBottom: 10,
-  },
-  modalDateRow: { flexDirection: "row", alignItems: "center", marginTop: 2, marginBottom: 4 },
-  modalDate:    { fontSize: 11, fontFamily: fonts.sansMedium },
-  divider: {
-    width: "100%",
-    height: 1,
-    marginVertical: 20,
-  },
-  modalButton: { alignSelf: "stretch" },
+  modalName:  { ...typography.display, fontSize: 22, textAlign: "center", lineHeight: 28 },
+  modalSub:   { fontSize: 12, fontFamily: fonts.sansMedium, textAlign: "center", marginTop: 4 },
+  modalText:  { fontSize: 13.5, fontFamily: fonts.sans, textAlign: "center", lineHeight: 20, marginTop: 10 },
+  steps:      { alignSelf: "stretch", borderRadius: 16, borderWidth: 1, marginTop: 14, paddingVertical: 4 },
+  stepRow:    { flexDirection: "row", alignItems: "center", gap: 10, paddingHorizontal: 12, paddingVertical: 9 },
+  stepIcon:   { width: 30, height: 30, borderRadius: 15, alignItems: "center", justifyContent: "center" },
+  stepLabel:  { flex: 1, fontFamily: fonts.sansSemi, fontSize: 14 },
+  stepState:  { fontFamily: fonts.sansBold, fontSize: 12 },
+  modalButton: { alignSelf: "stretch", marginTop: 18 },
 });

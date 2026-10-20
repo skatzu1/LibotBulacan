@@ -15,7 +15,7 @@ import {
 } from "../components/ui";
 import { MunicipalitySheet } from "../components/MunicipalityPicker";
 import api, { BASE_URL } from "../api";
-import { cleanName, nameError } from "../utils/authValidation";
+import { cleanName, nameError, optionalNameError } from "../utils/authValidation";
 import { afterAlertCloses, ensureCameraAccess, explainPickerError } from "../utils/cameraAccess";
 import Icon from "../components/Icon";
 import KeyboardAvoider from "../components/KeyboardAvoider";
@@ -66,6 +66,9 @@ export default function EditProfile({ navigation }) {
   const leavingRef = useRef(false);
 
   const [firstName, setFirstName]           = useState("");
+  // Optional (2026-10-21). Clerk has no middle name, so like the
+  // municipality it lives on our server and comes from /api/users/me.
+  const [middleName, setMiddleName]         = useState("");
   const [lastName, setLastName]             = useState("");
   // Home municipality. Kept on our server, not Clerk, so it comes from
   // /api/users/me; "" for an account made before sign-up asked it.
@@ -80,6 +83,7 @@ export default function EditProfile({ navigation }) {
   const [deleting, setDeleting]             = useState(false);
 
   const [originalFirstName, setOriginalFirstName] = useState("");
+  const [originalMiddleName, setOriginalMiddleName] = useState("");
   const [originalLastName, setOriginalLastName]   = useState("");
   const [originalMunicipality, setOriginalMunicipality] = useState("");
 
@@ -105,9 +109,12 @@ export default function EditProfile({ navigation }) {
     api.get("/api/users/me")
       .then(({ data }) => {
         const town = data?.user?.municipality || "";
+        const middle = data?.user?.middleName || "";
         if (cancelled) return;
         setMunicipality(town);
         setOriginalMunicipality(town);
+        setMiddleName(middle);
+        setOriginalMiddleName(middle);
       })
       .catch(() => {}); // Offline: the field stays empty, and Save leaves it alone.
     return () => { cancelled = true; };
@@ -115,11 +122,12 @@ export default function EditProfile({ navigation }) {
 
   const hasChanges = useMemo(() => {
     const nameChanged   = firstName.trim() !== originalFirstName.trim() ||
+                          middleName.trim() !== originalMiddleName.trim() ||
                           lastName.trim()  !== originalLastName.trim();
     const townChanged   = municipality !== originalMunicipality;
     const avatarChanged = !!newLocalAvatar || removeAvatar;
     return nameChanged || townChanged || avatarChanged;
-  }, [firstName, lastName, municipality, originalFirstName, originalLastName, originalMunicipality, newLocalAvatar, removeAvatar]);
+  }, [firstName, middleName, lastName, municipality, originalFirstName, originalMiddleName, originalLastName, originalMunicipality, newLocalAvatar, removeAvatar]);
 
   useEffect(() => {
     const unsubscribe = navigation.addListener("beforeRemove", (e) => {
@@ -191,10 +199,11 @@ export default function EditProfile({ navigation }) {
     }
   };
 
-  // Same name rules as sign-up. The last name may be left blank.
+  // Same name rules as sign-up. The middle and last name may be left blank.
   const validate = () => {
     const problem =
       nameError(firstName, "your first name") ||
+      optionalNameError(middleName) ||
       (lastName.trim() ? nameError(lastName, "your last name") : null);
     if (problem) {
       showAlert("Check your name", problem);
@@ -235,6 +244,8 @@ export default function EditProfile({ navigation }) {
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
         body: JSON.stringify({
           firstName:    firstName.trim(),
+          // "" clears it, and it stays cleared.
+          middleName:   middleName.trim(),
           lastName:     lastName.trim(),
           // Can be changed, not cleared: left out while none is chosen.
           ...(municipality ? { municipality } : {}),
@@ -257,8 +268,10 @@ export default function EditProfile({ navigation }) {
       // The saved values are the new baseline, so Save greys out again and
       // leaving afterwards doesn't ask "Discard changes?".
       setFirstName(firstName.trim());
+      setMiddleName(middleName.trim());
       setLastName(lastName.trim());
       setOriginalFirstName(firstName.trim());
+      setOriginalMiddleName(middleName.trim());
       setOriginalLastName(lastName.trim());
       setOriginalMunicipality(municipality);
       // Stays on this screen with a toast (QA 2026-10-16); it used to jump
@@ -372,6 +385,7 @@ export default function EditProfile({ navigation }) {
           <View style={styles.section}>
             <GroupLabel>Personal info</GroupLabel>
             <FormField label="First name" icon="user" value={firstName} onChangeText={(v) => setFirstName(cleanName(v))} placeholder="First name" autoCapitalize="words" />
+            <FormField label="Middle name (optional)" icon="user" value={middleName} onChangeText={(v) => setMiddleName(cleanName(v))} placeholder="Middle name" autoCapitalize="words" />
             <FormField label="Last name"  icon="user" value={lastName}  onChangeText={(v) => setLastName(cleanName(v))}  placeholder="Last name"  autoCapitalize="words" />
             <SelectField
               label="Municipality"

@@ -22,7 +22,7 @@ export default function MissionsSpotSelect() {
   const progress = useMemo(() => {
     const out = new Map();
     for (const spot of allSpots) {
-      const steps = spotSteps(getMissionsForSpot(spot._id), completedMissions, hasVisited(spot._id));
+      const steps = spotSteps(getMissionsForSpot(spot._id), completedMissions, hasVisited(spot._id), spot);
       out.set(String(spot._id), { steps, done: steps.filter((st) => st.done).length, total: steps.length });
     }
     return out;

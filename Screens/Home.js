@@ -60,8 +60,9 @@ const QUICK_ACTIONS = [
   { key: "missions", label: "Bakit List", icon: "flag",     route: "MissionsSpotSelect" },
   { key: "navigate", label: "Navigate", icon: "navigation", route: "TrackSpotSelect" },
   // Badges in place of My Trips (user, 2026-10-20); the trips stay one tap
-  // away under Profile → Previous Trips.
-  { key: "badges",   label: "Badges",   icon: "award",      route: "Badges" },
+  // away under Profile → Previous Trips. Achievements since 2026-10-21: spot
+  // badges, town badges and titles.
+  { key: "badges",   label: "Achievements", icon: "award",  route: "Badges" },
 ];
 
 // The Featured carousel only claims a drag once it has moved 12px sideways,

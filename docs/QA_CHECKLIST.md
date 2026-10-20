@@ -24,14 +24,18 @@ https://developers.google.com/ar/devices). Add an iPhone when iOS is in scope.
 - [ ] Deny location: the app still works; spots list, reviews and profile load.
 - [ ] Deny camera: missions explain what is needed instead of crashing.
 - [ ] Camera prompt (fresh install, Android and iPhone): the phone's own "Allow camera" prompt appears before the photo-mission camera, the profile photo camera, the review photo camera and AR View. "Don't allow" → an explanation with Open Settings, no crash.
-- [ ] Sign-up asks first and last name (no middle name), municipality, email, password, then date of birth (typed or from the calendar). Under 13 is refused. "Continue with Google" needs the municipality and date of birth first. In the municipality list, "I don't live in Bulacan" says the app is for residents only and picks nothing.
+- [ ] Sign-up asks first, middle (optional) and last name, municipality, email, password, then date of birth (typed or from the calendar). Under 13 is refused. "Continue with Google" needs the municipality and date of birth first. In the municipality list, "I don't live in Bulacan" says the app is for residents only and picks nothing.
+- [ ] Sign up and Continue with Google both open the Terms and Privacy pop-up first: "I agree" stays off ("Scroll to the end") until the bottom; ✕ leaves the box unticked; after agreeing, the sign-up carries on. Edit Profile shows the middle name and can clear it.
 - [ ] An account with no municipality (made before sign-up asked it) gets "Where in Bulacan do you live?" once after signing in; Continue saves it and opens the app, and it shows in the admin panel's Traveler Progress. Edit Profile shows the municipality and can change it.
 
 **Core journeys**
-- [ ] Arrive at a spot (or test at the spot's coordinates): arrival alert, +10 points once. Leave and return: no second award.
-- [ ] Complete each mission type (photo, location, AR) at one spot.
+- [ ] Arrive at a spot (or test at the spot's coordinates): arrival alert, +10 points once, "1 of 3 done for the badge". Leave and return: no second award.
+- [ ] Complete each mission type (photo, location, AR) at one spot: each shows "+N points · n of m done"; the last one shows the full "Badge unlocked" moment (confetti, sunburst). A festival spot gives its badge on arrival. An unpinned Nearby Eats shows "Coming soon" and isn't counted.
+- [ ] Finishing every spot in a town: "Town finished" (with banderitas), then the title (1 town Explorer). Achievements shows Spots / Towns / Titles; Profile and the leaderboard show the title.
+- [ ] Leaderboard: your card is pinned at the top on every page; "Page n" on it jumps to your page; page buttons at the bottom; the podium only on page 1.
+- [ ] AR: a position with a name shows it on the fact card; each model shows its own position's fact.
 - [ ] Post, react to, report and delete a review. A muted account cannot post. Before visiting a spot its reviews can be read but the box says "Visit to write a review"; a review is at most 250 characters.
-- [ ] Leaderboard, badges, previous trips, bookmarks all load. Equal points show the same rank. Badges and Previous Trips can be searched.
+- [ ] Leaderboard, achievements, previous trips, bookmarks all load. Equal points show the same rank. Achievements and Previous Trips can be searched.
 - [ ] Bookmarking or un-bookmarking a spot shows a toast.
 - [ ] Directions on the Track screen draw a route.
 - [ ] Settings → Privacy / Terms / Help open the web pages. Report a Problem sends from the app (a toast names the account email); About Libot Bulacan is the last row.

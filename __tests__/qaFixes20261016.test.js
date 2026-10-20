@@ -61,8 +61,11 @@ describe("registration: separate names and a date of birth", () => {
 
 describe("Bakit List progress", () => {
   // A spot's three, stored in the order the admin made them.
+  // The server marks a food mission whose eatery is pinned (locationConfigured).
   const missions = [
-    { _id: "m1", type: "ai", order: 1 }, { _id: "m2", type: "location", order: 2 }, { _id: "m3", type: "ar", order: 3 },
+    { _id: "m1", type: "ai", order: 1, aiTarget: "cross" },
+    { _id: "m2", type: "location", order: 2, locationConfigured: true },
+    { _id: "m3", type: "ar", order: 3 },
   ];
   const doneOf = (steps) => ({ done: steps.filter((s) => s.done).length, total: steps.length });
 
@@ -80,6 +83,18 @@ describe("Bakit List progress", () => {
     ]);
     // The eatery has its own icon, not arriving's map pin.
     expect(steps[3].icon).not.toBe(steps[0].icon);
+  });
+
+  // 2026-10-21: the spot's badge takes every mission, so one that can't be
+  // done yet doesn't count — the server's rule (utils/achievements.js isDoable).
+  it("leaves out a food mission nobody has pinned, and AR at a spot without it", () => {
+    const unpinned = missions.map((m) => (m.type === "location" ? { ...m, locationConfigured: false } : m));
+    expect(spotSteps(unpinned, ["m1", "m3"], true).map((s) => s.label)).toEqual(["Arrive", "AR", "AI Scan"]);
+    expect(doneOf(spotSteps(unpinned, ["m1", "m3"], true))).toEqual({ done: 3, total: 3 });
+    const noArModel = { AR3DModelURL: null, modelsCoordinates: [] };
+    expect(spotSteps(missions, [], true, noArModel).map((s) => s.label)).toEqual(["Arrive", "AI Scan", "Nearby Eats"]);
+    const noScan = missions.map((m) => (m.type === "ai" ? { ...m, aiTarget: null } : m));
+    expect(spotSteps(noScan, [], false).length).toBe(3);
   });
 });
 

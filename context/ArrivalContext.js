@@ -37,6 +37,7 @@ import { usePoints } from "./PointsContext";
 import { arrivalNoticeContent } from "../utils/arrivalNotice";
 import { nearbyToAnnounce, nearbyNoticeContent, NEARBY_CHANNEL_ID } from "../utils/nearbyAlerts";
 import { arrivalRadiusOf } from "../utils/spotRadii";
+import { celebrate, itemsFrom } from "../utils/rewards";
 
 // One "you arrived" notification for arrivals that come together (spots a
 // few dozen metres apart — see utils/arrivalNotice.js). The foreground awards
@@ -910,8 +911,8 @@ export function ArrivalProvider({ children }) {
   // ─────────────────────────────────────────
   // Points popup
   // ─────────────────────────────────────────
-  const triggerPointsPopup = useCallback((earned, total) => {
-    setPopupPoints({ earned, total });
+  const triggerPointsPopup = useCallback((earned, total, progress = null) => {
+    setPopupPoints({ earned, total, progress });
     pointsOpacity.setValue(0);
     pointsTranslateY.setValue(60);
     pointsScale.setValue(0.8);
@@ -1018,10 +1019,14 @@ export function ArrivalProvider({ children }) {
     }
 
     const pointsJustEarned = (result?.pointsEarned ?? 0) > 0;
+    // Arriving was the last thing left here (or at a festival / nature spot,
+    // the only thing): the badge — maybe the town's and a title too — get
+    // their full moment instead of the points popup (2026-10-21).
+    const unlockedSomething = itemsFrom(result?.unlocked).length > 0;
     if (result) {
       if (pointsJustEarned) {
         await AsyncStorage.setItem("userPoints", String(result.points));
-        triggerPointsPopup(result.pointsEarned, result.points);
+        if (!unlockedSomething) triggerPointsPopup(result.pointsEarned, result.points, result.progress);
       }
       refreshPointsRef.current?.();
     }
@@ -1029,7 +1034,12 @@ export function ArrivalProvider({ children }) {
     // ── Notification (every fresh arrival; nearby ones share one) ──────────
     queueArrivalNotice({ spotId, spotName: spot.name, isFirstVisit });
 
-    // ── Badge (first visit only; the server gives it once) ─────────────────
+    // ── Rewards ─────────────────────────────────────────────────────────────
+    if (unlockedSomething) {
+      celebrate(result.unlocked);
+      return;
+    }
+    // A server from before achievements still sends the badge this way.
     const badge = result?.badge;
     if (badge?.claimed && !badge.alreadyOwned) {
       console.log("[Badge] Claimed:", badge.claimed.name);
@@ -1253,6 +1263,12 @@ export function ArrivalProvider({ children }) {
             <Text style={[styles.pointsTitle, { color: colors.textSecondary }]}>You arrived!</Text>
             <Text style={[styles.pointsEarned, { color: colors.brand }]}>+{String(popupPoints.earned)} Points</Text>
             <Text style={[styles.pointsTotal, { color: colors.textMuted }]}>Total: {String(popupPoints.total)} pts</Text>
+            {/* How far toward this spot's badge (every mission there earns it). */}
+            {popupPoints.progress?.total > 1 && (
+              <Text style={[styles.pointsTotal, { color: colors.textSecondary, marginTop: 6 }]}>
+                {popupPoints.progress.done} of {popupPoints.progress.total} done for the badge
+              </Text>
+            )}
           </Animated.View>
         </View>
       </Modal>

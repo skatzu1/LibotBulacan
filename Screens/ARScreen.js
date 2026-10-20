@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from "react";
+import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import {
   View,
   Text,
@@ -36,7 +36,8 @@ import {
 } from "@reactvision/react-viro";
 import { GpsSmoother, isBetterFix, MAX_USABLE_ACCURACY_M } from "../utils/gpsFilter";
 import useCompassHeading from "../hooks/useCompassHeading";
-import { resolveTrail, triviaForModel } from "../utils/arTrail";
+import { resolveTrail, factForModel, placeName } from "../utils/arTrail";
+import { celebrateResult } from "../utils/rewards";
 import { fonts, typography, radius, shadow, useTheme } from "../context/ThemeContext";
 import Icon from "../components/Icon";
 import { showAlert } from "../components/AppAlert";
@@ -1171,10 +1172,12 @@ const TriviaPopup = ({
   const fadeAnim  = useRef(new Animated.Value(0)).current;
   const [modalMounted, setModalMounted] = useState(false);
 
-  // One fact per model: finding model n reveals fact n, so the trivia is
-  // collected piece by piece along the trail rather than read all at once.
+  // One fact per model, about the place that model stands at (each AR
+  // position carries its own, utils/arTrail.js factForModel), collected piece
+  // by piece along the trail rather than read all at once.
   const modelNumber = (activeAnchor?.index ?? 0) + 1;
-  const fact = triviaForModel(spot?.trivia, modelNumber - 1, spot?.name);
+  const fact = factForModel(spot, modelNumber - 1);
+  const place = placeName(activeAnchor?.label);
 
   useEffect(() => {
     if (visible) {
@@ -1239,10 +1242,11 @@ const TriviaPopup = ({
 
         <Text style={popup.spotTitle} numberOfLines={2}>{spot?.name}</Text>
 
-        {activeAnchor?.label ? (
-          <View style={popup.anchorBadge}>
+        {/* Where this model stands, so the fact reads as being about it. */}
+        {place ? (
+          <View style={popup.anchorBadge} accessible accessibilityLabel={`Here: ${place}`}>
             <Icon name="map-pin" size={12} color={TOKEN.infoLight} style={{ marginRight: 5 }} />
-            <Text style={popup.anchorBadgeText}>{activeAnchor.label}</Text>
+            <Text style={popup.anchorBadgeText}>{place}</Text>
           </View>
         ) : null}
 
@@ -1457,6 +1461,17 @@ export default function ARScreen({ route, navigation }) {
   const [locationError, setLocationError]         = useState(null);
 
   const [triviaVisible, setTriviaVisible] = useState(false);
+  // For the AR mission's reward, held while the fact card is open (see below).
+  const triviaVisibleRef = useRef(false);
+  triviaVisibleRef.current = triviaVisible;
+  const pendingRewardRef = useRef(null);
+  const closeTrivia = useCallback(() => {
+    setTriviaVisible(false);
+    const reward = pendingRewardRef.current;
+    pendingRewardRef.current = null;
+    // Once the card's slide-out has finished.
+    if (reward) setTimeout(() => celebrateResult(reward), 350);
+  }, []);
   const [tappedAnchor, setTappedAnchor]   = useState(null);
 
   // ── Device AR capability ──────────────────────────────────────────────
@@ -1793,7 +1808,14 @@ export default function ARScreen({ route, navigation }) {
       lat: here.latitude, lng: here.longitude, accuracy: here.rawAccuracy ?? here.accuracy,
     }).then((data) => {
       const saved = data?.success && !data.tooFar && !data.noLocation;
-      if (saved) return;
+      if (saved) {
+        // The reward (the spot's badge if AR was the last step, or how far
+        // along it is) waits for the fact card to close: an iPhone won't
+        // show one pop-up over another.
+        if (triviaVisibleRef.current) pendingRewardRef.current = data;
+        else celebrateResult(data);
+        return;
+      }
       // Not saved (away from the spot, offline, server error): don't claim it
       // was, and let the next full run retry instead of it being lost.
       missionJustCompletedRef.current = false;
@@ -2288,7 +2310,7 @@ export default function ARScreen({ route, navigation }) {
         spot={spot}
         activeAnchor={tappedAnchor}
         visible={triviaVisible}
-        onClose={() => setTriviaVisible(false)}
+        onClose={closeTrivia}
         tappedCount={tappedIndices.size}
         totalCount={totalAnchors}
         missionJustCompleted={missionJustCompleted}

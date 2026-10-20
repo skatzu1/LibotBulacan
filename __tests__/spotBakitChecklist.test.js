@@ -37,7 +37,7 @@ jest.mock("../context/ReviewContext", () => ({
 // Stored in the admin's order: scan, eatery, AR. The AI scan is done.
 const mockMissions = [
   { _id: "m-ai", type: "ai", order: 1, title: "Scan the Philippine Flag", points: 20 },
-  { _id: "m-eat", type: "location", order: 2, title: "Try a Recommended Eatery", points: 15 },
+  { _id: "m-eat", type: "location", order: 2, title: "Try a Recommended Eatery", points: 15, locationConfigured: true },
   { _id: "m-ar", type: "ar", order: 3, title: "AR Experience at Barasoain Church", points: 50 },
 ];
 jest.mock("../context/MissionContext", () => ({
@@ -56,7 +56,10 @@ jest.mock("@react-navigation/native", () => {
 });
 
 const InformationScreen = require("../Screens/InformationScreen").default;
-const SPOT = { _id: "s1", name: "Barasoain Church", city: "Malolos", description: "Where the First Republic was born.", category: ["Historical"] };
+const SPOT = {
+  _id: "s1", name: "Barasoain Church", city: "Malolos", description: "Where the First Republic was born.", category: ["Historical"],
+  AR3DModelURL: "https://res.cloudinary.com/demo/raw/upload/m.glb", modelsCoordinates: [{ lat: 14.8466, lng: 120.8125 }],
+};
 
 const metrics = { frame: { x: 0, y: 0, width: 390, height: 844 }, insets: { top: 47, left: 0, right: 0, bottom: 34 } };
 const navigation = { navigate: jest.fn(), goBack: jest.fn() };
