@@ -1201,9 +1201,9 @@ const TriviaPopup = ({
   if (!modalMounted) return null;
 
   const remaining = totalCount - tappedCount;
-  // The facts are told as one story, a part per model, in trail order
-  // (QA 2026-10-16: "connected storytelling"). The trail is strictly in
-  // order (utils/arTrail.js), so model n is always part n.
+  // The facts come in parts, one per model, in trail order (QA 2026-10-16).
+  // The trail is strictly in order (utils/arTrail.js), so model n is
+  // always part n.
   const parts = Math.max(totalCount, modelNumber);
   const lastPart = remaining <= 0;
 
@@ -1228,7 +1228,7 @@ const TriviaPopup = ({
           <View style={popup.categoryBadge}>
             <Icon name="book-open" size={13} color={TOKEN.goldLight} style={{ marginRight: 6 }} />
             <Text style={popup.categoryText}>
-              {parts > 1 ? `The story, part ${modelNumber} of ${parts}` : "The story"}
+              {parts > 1 ? `Part ${modelNumber} of ${parts}` : "About this place"}
             </Text>
           </View>
           <TouchableOpacity
@@ -1284,22 +1284,22 @@ const TriviaPopup = ({
         {/* The thread: one mark per part, filled up to this one, and what
             comes next. */}
         {parts > 1 && (
-          <View style={popup.storyRow} accessible accessibilityLabel={`Part ${modelNumber} of ${parts}`}>
+          <View style={popup.partRow} accessible accessibilityLabel={`Part ${modelNumber} of ${parts}`}>
             {Array.from({ length: parts }, (_, i) => (
               <View
                 key={i}
-                style={[popup.storyMark, { backgroundColor: i < modelNumber ? TOKEN.gold : TOKEN.border }]}
+                style={[popup.partMark, { backgroundColor: i < modelNumber ? TOKEN.gold : TOKEN.border }]}
               />
             ))}
           </View>
         )}
-        <Text style={popup.storyNext}>
+        <Text style={popup.partNext}>
           {lastPart
-            ? `That's the whole story of ${spot?.name || "this place"}.`
-            : `The story goes on at the next object. Follow the radar to part ${modelNumber + 1}.`}
+            ? `You've seen everything about ${spot?.name || "this place"}.`
+            : `There's more at the next object. Follow the radar to part ${modelNumber + 1}.`}
         </Text>
 
-        <PrimaryButton title={lastPart ? "Return to AR View" : "Continue the story"} onPress={onClose} />
+        <PrimaryButton title={lastPart ? "Return to AR View" : "Continue"} onPress={onClose} />
       </Animated.View>
     </Modal>
   );
@@ -1319,9 +1319,9 @@ const makePopup = (TOKEN) => StyleSheet.create({
     borderColor:          TOKEN.border,
     ...shadow.lg,
   },
-  storyRow:  { flexDirection: "row", gap: 6 },
-  storyMark: { flex: 1, height: 4, borderRadius: 2 },
-  storyNext: { ...typography.body, fontSize: 13.5, lineHeight: 19, color: TOKEN.textSecond, marginTop: 10, marginBottom: 16 },
+  partRow:  { flexDirection: "row", gap: 6 },
+  partMark: { flex: 1, height: 4, borderRadius: 2 },
+  partNext: { ...typography.body, fontSize: 13.5, lineHeight: 19, color: TOKEN.textSecond, marginTop: 10, marginBottom: 16 },
   header:        { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 12 },
   // A pill, like the app's other chips. It used to be 9pt tracked capitals.
   categoryBadge: {
@@ -2105,7 +2105,7 @@ export default function ARScreen({ route, navigation }) {
                 one step along. */}
             <Text style={step.sub}>
               It is placed near you — turn slowly and look down until you see it,
-              then tap it to read the story behind this place
+              then tap it to learn about this place
               {totalAnchors > 1 ? ` — ${totalAnchors - tappedIndices.size} still to find here.` : "."}
             </Text>
           </View>
