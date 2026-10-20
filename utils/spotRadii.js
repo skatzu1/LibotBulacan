@@ -3,8 +3,8 @@
 // own in the admin panel, approved by an admin; a spot that never did has
 // neither field and uses the defaults, which every spot used before
 // 2026-10-20. The backend's utils/spotRadii.js falls back the same way and
-// keeps the values in range (arrival 30–200 m, nearby 100–2000 m and wider
-// than the arrival radius).
+// only takes values above 0, with the nearby radius wider than the arrival
+// one (no upper or lower limit).
 export const DEFAULT_ARRIVAL_RADIUS_M = 50;
 export const DEFAULT_NEARBY_RADIUS_M  = 500;
 
