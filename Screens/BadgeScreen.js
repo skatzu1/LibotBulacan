@@ -33,6 +33,10 @@ import { GRID_GAP, H_GUTTER, columnsFor, cardSizeFor, AnimatedCell } from "../co
 
 const ICON_SIZE = 60; // the round badge in each grid card
 
+// How long Share waits for the sharer's link code before sending the link
+// without it — the share sheet shouldn't hang on a slow connection.
+const SHARE_CODE_TIMEOUT_MS = 4000;
+
 // Every card is one height: padding, the badge, a two-line name and the footer
 // chip, with the text parts grown by the phone's text size so large text
 // doesn't spill. Cards used to be as tall as their own text, so a one-line
@@ -205,6 +209,30 @@ export default function BadgeScreen() {
     });
   };
 
+  // The link carries a code the server hands out for this traveler and badge,
+  // so the badge page on the website can say who shared it ("Shared by …").
+  // Asked for when Share is tapped; if that fails (offline, a slow server) the
+  // plain link still goes, and the page just names no one.
+  const shareCodeFor = async (badgeId) => {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), SHARE_CODE_TIMEOUT_MS);
+    try {
+      const token = await getToken();
+      const res = await fetch(`${BASE_URL}/api/users/me/badges/${badgeId}/share`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}` },
+        signal: controller.signal,
+      });
+      if (!res.ok) return null;
+      const data = await res.json();
+      return typeof data?.token === "string" ? data.token : null;
+    } catch {
+      return null;
+    } finally {
+      clearTimeout(timer);
+    }
+  };
+
   // A badge is shared as a link, never as a picture (2026-10-20, the user:
   // "remove the share as image"). The link becomes a preview card showing the
   // badge — libotbulacan.com/badge/<id> writes per-badge preview tags into its
@@ -216,10 +244,11 @@ export default function BadgeScreen() {
     if (!selectedBadge?.claimed) return;
     try {
       setSharing(true);
+      const code = await shareCodeFor(selectedBadge._id);
       await RNShare.open({
         title: `${selectedBadge.name} Badge`,
         message: `I just earned the "${selectedBadge.name}" badge on Libot Bulacan! Discover Bulacan's history!`,
-        url: badgeShareUrl(selectedBadge._id),
+        url: badgeShareUrl(selectedBadge._id, code),
         failOnCancel: false,
       });
     } catch (e) {

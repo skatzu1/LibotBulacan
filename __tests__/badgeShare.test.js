@@ -1,5 +1,5 @@
 import React from "react";
-import { render, fireEvent } from "@testing-library/react-native";
+import { render, fireEvent, waitFor } from "@testing-library/react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import RNShare from "react-native-share";
@@ -35,41 +35,68 @@ const badge = {
   spotId: { _id: "s1", name: "Barasoain Church", city: "Malolos" },
 };
 
-const reply = (body) => Promise.resolve({ ok: true, json: async () => body });
-global.fetch = jest.fn((url) => (String(url).endsWith("/api/badges")
-  ? reply({ badges: [badge] })
-  : reply({ user: { badges: [{ spotId: "s1", claimedAt: "2026-10-18T02:00:00.000Z" }] } })));
+const reply = (body, ok = true) => Promise.resolve({ ok, json: async () => body });
+// The share code request: answered with a code, or failing (offline, server error).
+let shareReply = () => reply({ success: true, token: "abcDEF123456" });
+global.fetch = jest.fn((url, init) => {
+  const u = String(url);
+  if (u.endsWith("/api/badges")) return reply({ badges: [badge] });
+  if (u.endsWith("/api/users/me/badges/b1/share") && init?.method === "POST") return shareReply();
+  return reply({ user: { badges: [{ spotId: "s1", claimedAt: "2026-10-18T02:00:00.000Z" }] } });
+});
 
 const metrics = { frame: { x: 0, y: 0, width: 390, height: 844 }, insets: { top: 47, left: 0, right: 0, bottom: 34 } };
 
 beforeEach(() => {
   jest.clearAllMocks();
+  shareReply = () => reply({ success: true, token: "abcDEF123456" });
   return AsyncStorage.clear();
 });
 
-describe("Sharing a badge", () => {
-  it("has one Share button, which sends the badge's link for a preview card", async () => {
-    const page = render(
-      <SafeAreaProvider initialMetrics={metrics}>
-        <ThemeProvider>
-          <BadgeScreen />
-        </ThemeProvider>
-      </SafeAreaProvider>,
-    );
+const openShare = async () => {
+  const page = render(
+    <SafeAreaProvider initialMetrics={metrics}>
+      <ThemeProvider>
+        <BadgeScreen />
+      </ThemeProvider>
+    </SafeAreaProvider>,
+  );
+  fireEvent.press(await page.findByLabelText(/^Barasoain Church badge, earned/));
+  const share = await page.findByRole("button", { name: "Share a link to this badge" });
+  return { page, share };
+};
 
-    fireEvent.press(await page.findByLabelText(/^Barasoain Church badge, earned/));
-    const share = await page.findByRole("button", { name: "Share a link to this badge" });
+describe("Sharing a badge", () => {
+  it("has one Share button, which sends the badge's link, with the sharer's code, for a preview card", async () => {
+    const { page, share } = await openShare();
     expect(page.queryByText("Share as image")).toBeNull();
 
     fireEvent.press(share);
-    expect(RNShare.open).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(RNShare.open).toHaveBeenCalledTimes(1));
     const options = RNShare.open.mock.calls[0][0];
-    expect(options.url).toBe(badgeShareUrl("b1"));
-    expect(options.url).toBe("https://libotbulacan.com/badge/b1");
+    // The code lets the badge page say who shared it.
+    expect(options.url).toBe(badgeShareUrl("b1", "abcDEF123456"));
+    expect(options.url).toBe("https://libotbulacan.com/badge/b1/abcDEF123456");
     // The link goes once, as the link — not also inside the text.
     expect(options.message).toContain("Barasoain Church");
     expect(options.message).not.toContain("http");
     // Never a picture.
     expect(options.type).toBeUndefined();
+  });
+
+  it("still shares the plain link when the code can't be had", async () => {
+    shareReply = () => reply({ success: false }, false);
+    const { share } = await openShare();
+    fireEvent.press(share);
+    await waitFor(() => expect(RNShare.open).toHaveBeenCalledTimes(1));
+    expect(RNShare.open.mock.calls[0][0].url).toBe("https://libotbulacan.com/badge/b1");
+  });
+
+  it("…and when the request fails outright", async () => {
+    shareReply = () => Promise.reject(new TypeError("Network request failed"));
+    const { share } = await openShare();
+    fireEvent.press(share);
+    await waitFor(() => expect(RNShare.open).toHaveBeenCalledTimes(1));
+    expect(RNShare.open.mock.calls[0][0].url).toBe("https://libotbulacan.com/badge/b1");
   });
 });

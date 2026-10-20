@@ -24,5 +24,7 @@ export const SUPPORT_EMAIL = "support@libotbulacan.com";
 
 // A shared badge links to its badge page, which shows the badge and the
 // download button: libot-download-site/badge.html, served at /badge/<id> by
-// its vercel.json.
-export const badgeShareUrl = (badgeId) => `${SITE_URL}/badge/${badgeId}`;
+// its vercel.json. With the sharer's code (POST /api/users/me/badges/:id/share)
+// the link is /badge/<id>/<code>, and the page says who shared it.
+export const badgeShareUrl = (badgeId, code) =>
+  `${SITE_URL}/badge/${badgeId}${code ? `/${code}` : ""}`;
