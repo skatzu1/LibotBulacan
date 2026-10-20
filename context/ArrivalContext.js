@@ -36,6 +36,7 @@ import { evaluateFix, watchTierFor } from "../utils/arrivalEngine";
 import { usePoints } from "./PointsContext";
 import { arrivalNoticeContent } from "../utils/arrivalNotice";
 import { nearbyToAnnounce, nearbyNoticeContent, NEARBY_CHANNEL_ID } from "../utils/nearbyAlerts";
+import { arrivalRadiusOf } from "../utils/spotRadii";
 
 // One "you arrived" notification for arrivals that come together (spots a
 // few dozen metres apart — see utils/arrivalNotice.js). The foreground awards
@@ -68,7 +69,8 @@ function queueArrivalNotice(arrival) {
 }
 
 // Single source of truth for the backend host — see api.js.
-const ARRIVAL_RADIUS_METERS    = 50;
+// How close counts as arriving is each spot's own (arrivalRadiusOf, 50 m
+// unless the spot sets one — utils/spotRadii.js).
 const ACTIVE_SPOT_KEY          = "activeSpot";
 const ALL_SPOTS_KEY            = "allSpots";
 const SPOTS_CACHE_TTL_MS       = 5 * 60 * 1000;
@@ -220,11 +222,10 @@ async function announceNearby(userId, spots, fix, alsoSkip = []) {
       readJson(`${INSIDE_SPOTS_KEY_PREFIX}${userId}`, []),
     ]);
     // Visited spots, spots being arrived at, and any the caller names (the
-    // one already being navigated to) are not news.
+    // one already being navigated to) are not news. Each spot's own radii
+    // decide what counts as nearby (utils/spotRadii.js).
     const skip = new Set([...claimed, ...inside, ...alsoSkip].map(String));
-    const { due, notifiedAt } = nearbyToAnnounce({
-      spots, fix, notifiedAt: notified, skip, innerMeters: ARRIVAL_RADIUS_METERS,
-    });
+    const { due, notifiedAt } = nearbyToAnnounce({ spots, fix, notifiedAt: notified, skip });
     if (!due.length) return;
     // Stamped before sending, so the other runner can't announce it twice.
     await AsyncStorage.setItem(key, JSON.stringify(notifiedAt));
@@ -264,7 +265,7 @@ async function handleBackgroundArrival(coords) {
       if (!dest) continue;
 
       const dist      = getDistanceMeters(coords.latitude, coords.longitude, dest.lat, dest.lng);
-      const isInside   = dist <= ARRIVAL_RADIUS_METERS;
+      const isInside   = dist <= arrivalRadiusOf(spot);
       const wasInside  = insideSet.has(spotId);
 
       if (isInside && !wasInside) {
@@ -298,7 +299,8 @@ async function handleBackgroundArrival(coords) {
     }
     // One notification for every spot entered on this fix.
     await sendArrivalNotice(arrivals);
-    // And one for unvisited spots within 500 m (after the "inside" set is
+    // And one for unvisited spots within their nearby radius, 500 m unless
+    // the spot sets its own (after the "inside" set is
     // saved, so a spot just arrived at isn't announced as nearby too).
     await announceNearby(currentUserId, spots, coords);
   } catch (e) {
@@ -529,7 +531,7 @@ export function ArrivalProvider({ children }) {
 
   // In-memory mirror of INSIDE_SPOTS_KEY_PREFIX for the current user.
   // A spotId is in this set exactly while the user is currently within
-  // ARRIVAL_RADIUS_METERS of it. Entering (not in set -> in set) triggers
+  // the spot's arrival radius. Entering (not in set -> in set) triggers
   // a notification; leaving (in set -> not in set) clears it silently so
   // the *next* arrival notifies again.
   const insideSpotsRef = useRef(new Set());
@@ -1118,7 +1120,7 @@ export function ArrivalProvider({ children }) {
       const dest = id && getSpotCoords(spot);
       if (!dest) continue;
       byId.set(id, spot);
-      targets.push({ id, lat: dest.lat, lng: dest.lng });
+      targets.push({ id, lat: dest.lat, lng: dest.lng, radius: arrivalRadiusOf(spot) });
     }
 
     // evaluateFix updates insideSpotsRef's Set in place — the entry is marked
@@ -1131,8 +1133,9 @@ export function ArrivalProvider({ children }) {
     for (const id of left) console.log("[Arrival] Left:", byId.get(id)?.name);
     if (entered.length || left.length) persistInsideSpots();
 
-    // Unvisited spots within 500 m. Not the spots being arrived at, nor the
-    // one the traveler is already being navigated to.
+    // Unvisited spots within their nearby radius (500 m unless the spot sets
+    // its own). Not the spots being arrived at, nor the one the traveler is
+    // already being navigated to.
     if (Date.now() - lastNearbyCheckRef.current > NEARBY_CHECK_EVERY_MS) {
       lastNearbyCheckRef.current = Date.now();
       const navigatingTo = activeSpotRef.current?._id;

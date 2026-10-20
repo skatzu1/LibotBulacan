@@ -72,6 +72,25 @@ describe("leaving (hysteresis)", () => {
   });
 });
 
+describe("a spot's own arrival radius", () => {
+  const WIDE = { ...SPOT, radius: 150 };
+  const TIGHT = { ...SPOT, radius: 30 };
+
+  it("a wider ring arrives farther out, and leaves 30 m past its own edge", () => {
+    const s = createArrivalState();
+    const [r] = [evaluateFix(s, fix(120, 10), [WIDE])];
+    expect(r.entered).toEqual(["barasoain"]);
+    expect(evaluateFix(s, fix(170, 10), [WIDE]).left).toEqual([]);
+    expect(evaluateFix(s, fix(185, 10), [WIDE]).left).toEqual(["barasoain"]);
+  });
+
+  it("a tighter ring doesn't arrive at 40 m", () => {
+    const s = createArrivalState();
+    expect(evaluateFix(s, fix(40, 10), [TIGHT]).entered).toEqual([]);
+    expect(evaluateFix(s, fix(20, 10), [TIGHT]).entered).toEqual(["barasoain"]);
+  });
+});
+
 describe("watchTierFor (adaptive GPS rate)", () => {
   it("works hard only near a spot", () => {
     expect(watchTierFor(100).key).toBe("near");

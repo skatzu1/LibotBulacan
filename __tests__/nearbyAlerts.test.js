@@ -50,6 +50,14 @@ describe("nearbyToAnnounce", () => {
     expect(nearbyToAnnounce({ spots, fix, now }).due).toEqual([]);
   });
 
+  it("follows a spot's own radii when it sets them", () => {
+    const wide = { ...BARASOAIN, nearbyRadiusMeters: 1000, arrivalRadiusMeters: 100 };
+    expect(nearbyToAnnounce({ spots: [wide], fix: north(BARASOAIN.coordinates, 800), now }).due).toHaveLength(1);
+    expect(nearbyToAnnounce({ spots: [wide], fix: north(BARASOAIN.coordinates, 80), now }).due).toEqual([]);
+    const tight = { ...BARASOAIN, nearbyRadiusMeters: 200 };
+    expect(nearbyToAnnounce({ spots: [tight], fix: north(BARASOAIN.coordinates, 300), now }).due).toEqual([]);
+  });
+
   it("lists several nearby spots nearest first", () => {
     // Between the two, closer to Casa Real.
     const fix = { latitude: 14.8440, longitude: 120.8112, accuracy: 10 };

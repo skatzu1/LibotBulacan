@@ -21,8 +21,11 @@
  *    arrival is actually possible soon.
  */
 
+// A spot can set its own arrival radius (utils/spotRadii.js); ENTER_M is the
+// default, and the exit line is always EXIT_MARGIN_M beyond the spot's radius.
 export const ENTER_M = 50;              // arrive inside this distance…
 export const EXIT_M = 80;               // …and only "leave" beyond this one
+const EXIT_MARGIN_M = EXIT_M - ENTER_M;
 export const MAX_ENTRY_ACCURACY_M = 75; // vaguer fixes can't cause an arrival
 export const MAX_EXIT_ACCURACY_M = 100; // or an exit
 export const PRECISE_FIX_M = 20;        // one fix this good is enough on its own
@@ -49,7 +52,7 @@ export const createArrivalState = (inside = []) => ({
  *
  * @param state  from createArrivalState; mutated in place
  * @param fix    { latitude, longitude, accuracy }  (accuracy in metres, may be missing)
- * @param spots  [{ id, lat, lng }]
+ * @param spots  [{ id, lat, lng, radius? }]  (radius: the spot's arrival radius, default ENTER_M)
  * @returns { entered: id[], left: id[], nearestM: number|null }
  */
 export function evaluateFix(state, fix, spots) {
@@ -64,16 +67,17 @@ export function evaluateFix(state, fix, spots) {
   for (const spot of spots) {
     const d = distanceMeters(fix.latitude, fix.longitude, spot.lat, spot.lng);
     if (nearestM === null || d < nearestM) nearestM = d;
+    const enterM = spot.radius > 0 ? spot.radius : ENTER_M;
 
     if (state.inside.has(spot.id)) {
-      if (d > EXIT_M && acc <= MAX_EXIT_ACCURACY_M) {
+      if (d > enterM + EXIT_MARGIN_M && acc <= MAX_EXIT_ACCURACY_M) {
         state.inside.delete(spot.id);
         left.push(spot.id);
       }
       continue;
     }
 
-    const qualifies = d <= ENTER_M && acc <= MAX_ENTRY_ACCURACY_M;
+    const qualifies = d <= enterM && acc <= MAX_ENTRY_ACCURACY_M;
     if (!qualifies) {
       state.pending.delete(spot.id);
       continue;

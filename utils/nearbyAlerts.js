@@ -7,9 +7,13 @@
 // NEARBY_RADIUS_METERS out, only for spots the traveler hasn't visited yet,
 // and its tap opens directions. It is worked out on the phone from the spot
 // list it already has; nothing about it is sent to the server.
+//
+// A spot can set both radii itself (utils/spotRadii.js); the ones here are
+// for spots that don't.
 import { joinNames } from "./arrivalNotice";
+import { arrivalRadiusOf, nearbyRadiusOf, DEFAULT_NEARBY_RADIUS_M } from "./spotRadii";
 
-export const NEARBY_RADIUS_METERS  = 500;
+export const NEARBY_RADIUS_METERS  = DEFAULT_NEARBY_RADIUS_M;
 // At most one alert per spot a day, so living or working near one doesn't
 // mean an alert on every trip past it.
 export const NEARBY_COOLDOWN_MS    = 24 * 60 * 60 * 1000;
@@ -36,12 +40,14 @@ const coordsOf = (spot) => {
 /**
  * Which spots to announce for one location fix.
  *
- * @param spots        the spot list ({ _id, name, coordinates })
+ * @param spots        the spot list ({ _id, name, coordinates, arrivalRadiusMeters?, nearbyRadiusMeters? })
  * @param fix          { latitude, longitude, accuracy? }
  * @param notifiedAt   { [spotId]: ms } — when each spot was last announced
  * @param skip         spotIds never to announce now: visited, being arrived
  *                     at, or the one the traveler is already navigating to
- * @param innerMeters  closer than this is an arrival, not "nearby"
+ * @param innerMeters  closer than this is an arrival, not "nearby" — for a
+ *                     spot without its own arrival radius
+ * @param radius       how far out "nearby" starts, for a spot without its own
  * @returns { due, notifiedAt } — `due` nearest first, each
  *          { spotId, spotName, lat, lng, distance }; `notifiedAt` with the due
  *          spots stamped and entries older than a day dropped
@@ -63,7 +69,7 @@ export function nearbyToAnnounce({
     const c = coordsOf(spot);
     if (!spotId || !c || skip.has(spotId) || kept[spotId]) continue;
     const distance = distanceMeters(fix.latitude, fix.longitude, c.lat, c.lng);
-    if (distance > innerMeters && distance <= radius) {
+    if (distance > arrivalRadiusOf(spot, innerMeters) && distance <= nearbyRadiusOf(spot, radius)) {
       due.push({ spotId, spotName: spot.name || "A tourist spot", lat: c.lat, lng: c.lng, distance });
     }
   }
