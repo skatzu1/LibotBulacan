@@ -60,12 +60,19 @@ const FRAME_SIZE_RATIO = 0.8;   // matches scanFrame.width/height: width * 0.8
 //     pixels. expo-image-manipulator bakes that rotation in before applying
 //     any op, so we must measure the image AFTER an orientation-normalising
 //     round-trip — never from the width/height vision-camera reports.
+//
+// The first pass also shrinks the photo to WORK_WIDTH_PX. A phone camera's full
+// 12–64 MP took seconds to re-encode, twice, and the AI only ever looks at a
+// 448-pixel copy (utils/missionAI.js) — 1280 is plenty for that and for the
+// preview, which is as wide as the phone.
+const WORK_WIDTH_PX = 1280;
+
 async function cropToScanFrame(uri) {
   try {
-    // Pass [] ops purely to normalise EXIF orientation, so width/height and
-    // the crop rect below are all in the same (upright) coordinate space.
+    // Normalises EXIF orientation as it shrinks, so width/height and the crop
+    // rect below are all in the same (upright) coordinate space.
     const normalized = await ImageManipulator.manipulateAsync(
-      uri, [], { compress: 1, format: ImageManipulator.SaveFormat.JPEG }
+      uri, [{ resize: { width: WORK_WIDTH_PX } }], { compress: 0.92, format: ImageManipulator.SaveFormat.JPEG }
     );
 
     const photoW = normalized.width;
@@ -102,7 +109,7 @@ async function cropToScanFrame(uri) {
     const result = await ImageManipulator.manipulateAsync(
       normalized.uri,
       [{ crop: { originX, originY, width: size, height: size } }],
-      { compress: 1, format: ImageManipulator.SaveFormat.JPEG }
+      { compress: 0.92, format: ImageManipulator.SaveFormat.JPEG }
     );
 
     return result.uri;
@@ -132,6 +139,8 @@ export default function Mission({ navigation, route }) {
   // Where the phone was when the camera opened — the fallback if a fresh fix
   // can't be had at the moment the photo is taken.
   const photoCoordsRef = useRef(null);
+  // True from the shutter until the photo's answer is in.
+  const shootingRef = useRef(false);
   const { hasPermission } = useCameraPermission();
   const isFocused = useIsFocused();
   const [cameraOpen, setCameraOpen]       = useState(false);
@@ -260,7 +269,9 @@ export default function Mission({ navigation, route }) {
   ).current;
 
   const takePhoto = async () => {
-    if (!cameraRef.current) return;
+    // A second tap while a photo is on its way does nothing.
+    if (!cameraRef.current || shootingRef.current) return;
+    shootingRef.current = true;
     try {
       // Custom (non-native) shutter flash
       Animated.sequence([
@@ -269,20 +280,28 @@ export default function Mission({ navigation, route }) {
       ]).start();
 
       const photo = await cameraRef.current.takePhoto({ enableShutterSound: false });
-      // Where the photo was taken — read alongside the crop, not after it.
-      const coordsNow = currentCoords();
       // vision-camera returns a bare filesystem path; <Image>, fetch() and
       // ImageManipulator all need the file:// scheme.
       const photoUri = photo.path.startsWith('file://') ? photo.path : `file://${photo.path}`;
 
-      // Crop down to exactly what the user saw inside the scan frame,
-      // so the AI analyzes the same region the guide shows.
-      const croppedUri = await cropToScanFrame(photoUri);
-      const coords = (await coordsNow) || photoCoordsRef.current;
-
+      // The photo is taken: leave the camera now. Cropping it, finding where
+      // the phone is and the server's check all happen behind "Checking your
+      // photo…". They used to happen first, on a frozen camera, and the wait
+      // for a brand-new GPS fix alone had no limit (2026-10-20, "a lag").
       setCameraOpen(false);
-      setCapturedImage(croppedUri);
+      setCapturedImage(null);
       setStatus('scanning');
+
+      const [croppedUri, coords] = await Promise.all([
+        // Exactly what the user saw inside the scan frame, so the AI analyzes
+        // the same region the guide shows.
+        cropToScanFrame(photoUri),
+        // Where the photo was taken: a reading from the last 15 s if the
+        // phone has one, else a fresh one for up to 4 s, else where it was
+        // when the camera opened (just checked to be at the spot).
+        currentCoords({ maxAgeMs: 15000, timeoutMs: 4000 }).then((c) => c || photoCoordsRef.current),
+      ]);
+      setCapturedImage(croppedUri);
 
       const result = await runPrediction(croppedUri, mission._id, getToken, coords);
 
@@ -342,6 +361,8 @@ export default function Mission({ navigation, route }) {
     } catch (error) {
       console.error('Camera error:', error);
       setStatus('failed');
+    } finally {
+      shootingRef.current = false;
     }
   };
 
@@ -367,7 +388,9 @@ export default function Mission({ navigation, route }) {
               isActive={isFocused}
               photo={true}
               zoom={zoomFactor}
-              photoQualityBalance="quality"
+              // The fastest capture. "quality" made the shutter slow, and the
+              // AI only looks at a 448-pixel copy of the photo anyway.
+              photoQualityBalance="speed"
               enableZoomGesture={false}
             />
           )}
@@ -496,10 +519,17 @@ export default function Mission({ navigation, route }) {
             <View style={[styles.slotCorner, styles.topRight,    { borderColor: colors.brand }]} />
             <View style={[styles.slotCorner, styles.bottomLeft,  { borderColor: colors.brand }]} />
             <View style={[styles.slotCorner, styles.bottomRight, { borderColor: colors.brand }]} />
-            <Icon name="camera" size={40} color={colors.brand} />
-            <Text style={[typography.body, styles.center, { color: colors.textSecondary, marginTop: spacing.sm }]}>
-              Your photo shows here
-            </Text>
+            {status === 'scanning' ? (
+              // The photo is taken and being cropped; it shows in a moment.
+              <ActivityIndicator size="large" color={colors.brand} />
+            ) : (
+              <>
+                <Icon name="camera" size={40} color={colors.brand} />
+                <Text style={[typography.body, styles.center, { color: colors.textSecondary, marginTop: spacing.sm }]}>
+                  Your photo shows here
+                </Text>
+              </>
+            )}
           </View>
         )}
 

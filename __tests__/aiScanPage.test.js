@@ -1,7 +1,8 @@
 import React from "react";
-import { render, fireEvent, waitFor } from "@testing-library/react-native";
+import { render, fireEvent, waitFor, act } from "@testing-library/react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import * as ImageManipulator from "expo-image-manipulator";
 import { ThemeProvider } from "../context/ThemeContext";
 import Mission from "../Screens/Mission";
 import { runPrediction } from "../utils/missionAI";
@@ -12,6 +13,10 @@ import { runPrediction } from "../utils/missionAI";
 // jest.mock factories may only reference variables prefixed `mock`.
 let mockCompleted = [];
 const mockMarkCompleted = jest.fn();
+const mockTakePhoto = jest.fn(async () => ({ path: "/photo.jpg" }));
+let mockCameraProps = null;
+const mockCurrentCoords = jest.fn(async () => ({ latitude: 14.8457, longitude: 120.8122, accuracy: 8 }));
+const AT_OPEN = { latitude: 14.8456, longitude: 120.8121, accuracy: 8 }; // where the camera opened
 
 jest.mock("@react-native-async-storage/async-storage", () =>
   require("@react-native-async-storage/async-storage/jest/async-storage-mock"),
@@ -34,8 +39,9 @@ jest.mock("react-native-vision-camera", () => {
   const React = require("react");
   const { View } = require("react-native");
   const Camera = React.forwardRef(function Camera(props, ref) {
+    mockCameraProps = props;
     React.useImperativeHandle(ref, () => ({
-      takePhoto: async () => ({ path: "/photo.jpg" }),
+      takePhoto: (...args) => mockTakePhoto(...args),
       focus: async () => {},
     }));
     return <View testID="camera" />;
@@ -49,7 +55,7 @@ jest.mock("react-native-vision-camera", () => {
 jest.mock("../utils/cameraAccess", () => ({ ensureCameraAccess: async () => true }));
 jest.mock("../utils/arLocationGate", () => ({
   ensureAtSpotForPhoto: async () => ({ latitude: 14.8456, longitude: 120.8121, accuracy: 8 }),
-  currentCoords: async () => ({ latitude: 14.8456, longitude: 120.8121, accuracy: 8 }),
+  currentCoords: (...args) => mockCurrentCoords(...args),
 }));
 jest.mock("../utils/missionAI", () => ({ runPrediction: jest.fn() }));
 
@@ -131,5 +137,57 @@ describe("AI Scan page", () => {
     expect(page.queryByText(/AI match|%/)).toBeNull();
     await waitFor(() => expect(page.getByRole("button", { name: "Try Again" })).toBeTruthy());
     expect(mockMarkCompleted).not.toHaveBeenCalled();
+  });
+});
+
+// The shutter used to leave the camera frozen while the full-size photo was
+// re-encoded twice and a brand-new GPS fix was awaited with no limit
+// (2026-10-20, "there is a lag").
+describe("Taking the photo", () => {
+  it("leaves the camera as soon as the photo is taken, in the fast capture mode", async () => {
+    // Cropping and finding the phone never finish here: the camera still has
+    // to close and say it's checking.
+    ImageManipulator.manipulateAsync.mockReturnValueOnce(new Promise(() => {}));
+    mockCurrentCoords.mockReturnValueOnce(new Promise(() => {}));
+    const page = renderPage();
+    fireEvent.press(await page.findByRole("button", { name: "Open Camera" }));
+    await page.findByTestId("camera");
+    expect(mockCameraProps.photoQualityBalance).toBe("speed");
+
+    fireEvent.press(page.getByRole("button", { name: "Take the photo" }));
+    expect(await page.findByText("Checking your photo…")).toBeTruthy();
+    expect(page.queryByTestId("camera")).toBeNull();
+    expect(mockTakePhoto).toHaveBeenCalledWith({ enableShutterSound: false });
+  });
+
+  it("shrinks the photo before cropping it", async () => {
+    runPrediction.mockResolvedValue({ verified: true, completed: true, pointsAwarded: 5 });
+    const page = renderPage();
+    await scan(page);
+    await page.findByText("Found it! +5 points");
+    expect(ImageManipulator.manipulateAsync.mock.calls[0][1]).toEqual([{ resize: { width: 1280 } }]);
+  });
+
+  it("waits at most 4 s for where the phone is, then uses where the camera opened", async () => {
+    mockCurrentCoords.mockResolvedValueOnce(null);
+    runPrediction.mockResolvedValue({ verified: true, completed: true, pointsAwarded: 5 });
+    const page = renderPage();
+    await scan(page);
+    await page.findByText("Found it! +5 points");
+    expect(mockCurrentCoords).toHaveBeenCalledWith({ maxAgeMs: 15000, timeoutMs: 4000 });
+    expect(runPrediction).toHaveBeenCalledWith("file:///cropped.jpg", "m1", expect.any(Function), AT_OPEN);
+  });
+
+  it("takes one photo for a double tap", async () => {
+    let finish;
+    mockTakePhoto.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
+    runPrediction.mockReturnValue(new Promise(() => {}));
+    const page = renderPage();
+    fireEvent.press(await page.findByRole("button", { name: "Open Camera" }));
+    const shutter = await page.findByRole("button", { name: "Take the photo" });
+    fireEvent.press(shutter);
+    fireEvent.press(shutter);
+    await act(async () => finish({ path: "/photo.jpg" }));
+    expect(mockTakePhoto).toHaveBeenCalledTimes(1);
   });
 });
