@@ -23,7 +23,8 @@ jest.mock("@react-native-community/datetimepicker", () => {
 });
 jest.mock("@clerk/clerk-expo", () => ({
   useSignUp: () => ({ isLoaded: true, signUp: { create: jest.fn() }, setActive: jest.fn() }),
-  useOAuth: () => ({ startOAuthFlow: jest.fn() }),
+  useSignIn: () => ({ isLoaded: true, signIn: { create: jest.fn() } }),
+  useClerk: () => ({ signOut: jest.fn(async () => {}) }),
   useUser: () => ({ user: { primaryEmailAddress: { emailAddress: "ana@test.local" } }, isLoaded: true }),
 }));
 const mockPost = jest.fn();

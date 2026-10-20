@@ -11,7 +11,8 @@ import {
 } from "react-native";
 import { showAlert, showToast } from "../components/AppAlert";
 import { useState, useEffect, useRef, useMemo } from "react";
-import { useSignUp, useOAuth } from "@clerk/clerk-expo";
+import { useSignUp, useSignIn, useClerk } from "@clerk/clerk-expo";
+import * as AuthSession from "expo-auth-session";
 import * as WebBrowser from "expo-web-browser";
 import { authAPI } from "../api";
 import { captureError } from "../utils/crashReporter";
@@ -98,8 +99,10 @@ const GOOGLE_FIELDS = ["municipality", "dob"];
 export default function Register({ navigation }) {
   const a = useAuthStyles();
   const { colors } = useTheme();
-  const { isLoaded, signUp, setActive } = useSignUp();
-  const { startOAuthFlow }              = useOAuth({ strategy: "oauth_google" });
+  const { isLoaded: signUpLoaded, signUp, setActive } = useSignUp();
+  const { isLoaded: signInLoaded, signIn }            = useSignIn();
+  const clerk = useClerk();
+  const isLoaded = signUpLoaded && signInLoaded;
 
   const [firstName, setFirstName]         = useState("");
   const [lastName, setLastName]           = useState("");
@@ -169,7 +172,46 @@ export default function Register({ navigation }) {
   // sent to us or stored.
   const signUpDetails = () => ({ municipality });
 
+  // The Google account picked here already has a Libot account, and Google
+  // has just signed it in (`sessionId`). Signing up again would only make a
+  // second account or fail, so ask to log in instead. Log in uses that sign-in
+  // (no second Google window); Cancel throws it away, so nobody is left
+  // signed in by a screen they backed out of. Back and taps outside don't
+  // close it — one of the two has to be chosen.
+  const promptToLogIn = (sessionId) => {
+    showAlert(
+      "You already have an account",
+      "This Google account is already registered with Libot Bulacan. Log in with it instead.",
+      [
+        {
+          text: "Cancel",
+          style: "cancel",
+          onPress: () => { clerk.signOut({ sessionId }).catch(() => {}); },
+        },
+        {
+          text: "Log in",
+          onPress: async () => {
+            try {
+              await setActive({ session: sessionId });
+            } catch (err) {
+              captureError(err, { where: "Register.promptToLogIn" });
+              setFormError(googleErrorMessage(err, "sign in"));
+            }
+          },
+        },
+      ],
+      { tone: "info", icon: "user", cancelable: false },
+    );
+  };
+
   // ── Google signup ──
+  // Clerk's OAuth steps run by hand rather than through useOAuth's
+  // startOAuthFlow(): that helper always starts as a sign-in, so a Google
+  // account that already had a Libot account was quietly signed in here and
+  // told "Account created with Google!". Now that case asks to log in
+  // (promptToLogIn), and only a Google account with no Libot account goes on
+  // to sign up — the same steps the helper took (Login.js runs them by hand
+  // too, for the opposite case).
   const handleGoogleSignUp = async () => {
     if (isGoogleLoading || !isLoaded) return;
     setFormError("");
@@ -182,22 +224,41 @@ export default function Register({ navigation }) {
     }
     setIsGoogleLoading(true);
     try {
-      // unsafeMetadata rides on the new Clerk account; the backend copies it
-      // (webhook and /register).
-      const { createdSessionId, authSessionResult } = await startOAuthFlow({ unsafeMetadata: signUpDetails() });
-      if (googleWindowBusy(authSessionResult)) {
+      // Same callback path useOAuth uses, so the redirect Clerk allows is unchanged.
+      const redirectUrl = AuthSession.makeRedirectUri({ path: "oauth-native-callback" });
+      const attempt = await signIn.create({ strategy: "oauth_google", redirectUrl });
+      const authUrl = attempt.firstFactorVerification.externalVerificationRedirectURL;
+      if (!authUrl) throw new Error("No Google sign-up URL returned");
+
+      const result = await WebBrowser.openAuthSessionAsync(authUrl.toString(), redirectUrl);
+      if (googleWindowBusy(result)) {
         setFormError(GOOGLE_BUSY);
         return;
       }
-      // Back button, the window's X, or a swipe away. startOAuthFlow returns
-      // an empty session for that rather than throwing, which used to surface
-      // as "Couldn't sign up with Google". Only checked when there IS a window
-      // result — without one, Clerk wasn't ready and it's a real failure.
-      if (authSessionResult && googleWindowClosed(authSessionResult)) {
+      // Back button, the window's X, or a swipe away — the user's choice, so a
+      // note rather than an error.
+      if (googleWindowClosed(result)) {
         showToast("Google sign-up cancelled. No account was created.", { type: "info" });
         return;
       }
-      if (!createdSessionId) throw new Error("No session returned from Google OAuth");
+
+      const nonce = new URL(result.url).searchParams.get("rotating_token_nonce") || "";
+      const done = await attempt.reload({ rotatingTokenNonce: nonce });
+
+      // Google signed in an account that already exists.
+      if (done.status === "complete") {
+        promptToLogIn(done.createdSessionId);
+        return;
+      }
+      if (done.firstFactorVerification?.status !== "transferable") {
+        throw new Error(`Google sign-up ended as "${done.status}"`);
+      }
+
+      // A new account. unsafeMetadata rides on it; the backend copies it
+      // (webhook and /register).
+      const created = await signUp.create({ transfer: true, unsafeMetadata: signUpDetails() });
+      const createdSessionId = created?.createdSessionId;
+      if (!createdSessionId) throw new Error("No session returned from Google sign-up");
       await setActive({ session: createdSessionId });
       const saveUserResult = await authAPI.register({ clerkSessionId: createdSessionId, isGoogle: true });
       if (!saveUserResult.success) {
