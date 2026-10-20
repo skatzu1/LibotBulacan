@@ -22,6 +22,7 @@ import { BULACAN_BOUNDARY, BULACAN_BBOX } from "../utils/bulacanBoundary";
 import { GpsSmoother, isBetterFix, MAX_USABLE_ACCURACY_M } from "../utils/gpsFilter";
 import { BASE_URL } from "../api";
 import Icon from "../components/Icon";
+import { ScreenHeader } from "../components/ui";
 import useRoadRoute, { fmtDistance, fmtDuration } from "../hooks/useRoadRoute";
 import { ROUTE_LINE_JS } from "../utils/routeLine";
 
@@ -1099,8 +1100,9 @@ export default function Track({ route, navigation }) {
     // Terminal chips are a card on the map, so they follow the theme too.
     const chipBg = colors.card;
     // OpenStreetMap's tile policy asks for visible credit. Every corner has a
-    // floating control over it, so it sits top-right, just under the top bar.
-    const attributionTop = insets.top + 10 + 46 + 8;
+    // floating control over it, so it sits top-right, just under the header
+    // (ScreenHeader: its top padding, a 44 pt row and 10 below).
+    const attributionTop = Math.max(insets.top, 12) + 6 + 44 + 10 + 6;
 
     const terminalsJson = JSON.stringify(
       TERMINALS.map(({ id, name, lat, lng }) => ({ id, name, lat, lng }))
@@ -1588,39 +1590,14 @@ window.updateSpotProximity = function(active) {
         }}
       />
 
-      {/* Floating top bar — back button + title chip */}
-      <View style={[styles.topBar, { top: insets.top + 10 }]} pointerEvents="box-none">
-        <TouchableOpacity
-          accessibilityRole="button"
-          accessibilityLabel="Go back"
-          onPress={() => navigation.goBack()}
-          style={[styles.circleBtn, { backgroundColor: colors.background }, shadow.md]}
-          activeOpacity={0.8}
-          hitSlop={8}
-        >
-          <Icon name="chevron-left" size={22} color={colors.brand} />
-        </TouchableOpacity>
-
-        {/* Says what the map is: the way TO this spot. A pin beside the name
-            read as "you are here" (QA 2026-10-16, the map's location header). */}
-        <View
-          style={[styles.titleChip, { backgroundColor: colors.background }, shadow.md]}
-          accessible
-          accessibilityRole="header"
-          accessibilityLabel={`Directions to ${spotData.name}${spotData.city ? `, ${spotData.city}` : ""}`}
-        >
-          <View style={[styles.titleIcon, { backgroundColor: colors.brandLight }]}>
-            <Icon name="flag" size={13} color={colors.brand} />
-          </View>
-          <View style={styles.titleTextCol}>
-            <Text style={[styles.titleChipLabel, { color: colors.textMuted }]} numberOfLines={1}>
-              Directions to{spotData.city ? ` · ${spotData.city}` : ""}
-            </Text>
-            <Text style={[styles.titleChipText, { color: colors.textPrimary }]} numberOfLines={1}>
-              {spotData.name}
-            </Text>
-          </View>
-        </View>
+      {/* A plain header, the same as every other screen's: back, and the
+          spot the map leads to. It used to float over the map as a rounded
+          chip with a shadow and a flag icon, which looked like something to
+          tap (user, 2026-10-20). The card at the bottom says "to <spot>" with
+          the distance and time. No icon beside the name: a pin there read as
+          "you are here" (QA 2026-10-16). */}
+      <View style={[styles.header, { backgroundColor: colors.background, borderBottomColor: colors.divider }]}>
+        <ScreenHeader title={spotData.name} onBack={() => navigation.goBack()} />
       </View>
 
       {/* Floating controls — ETA card (left) + recenter FAB (right) */}
@@ -1837,14 +1814,13 @@ const styles = StyleSheet.create({
     fontFamily: fonts.sansBold,
   },
 
-  // ── Floating top bar ──
-  topBar: {
+  // ── Header, over the top of the map ──
+  header: {
     position: "absolute",
-    left: 16,
-    right: 16,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 12,
+    top: 0,
+    left: 0,
+    right: 0,
+    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   circleBtn: {
     width: 46,
@@ -1852,32 +1828,6 @@ const styles = StyleSheet.create({
     borderRadius: 23,
     justifyContent: "center",
     alignItems: "center",
-  },
-  titleChip: {
-    flex: 1,
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 9,
-    height: 46,
-    paddingLeft: 6,
-    paddingRight: 16,
-    borderRadius: radius.pill,
-  },
-  titleIcon: {
-    width: 34, height: 34, borderRadius: 17,
-    alignItems: "center", justifyContent: "center",
-  },
-  titleTextCol: { flex: 1 },
-  titleChipLabel: {
-    fontSize: 11,
-    fontFamily: fonts.sansSemi,
-    letterSpacing: 0.1,
-  },
-  titleChipText: {
-    fontSize: 14.5,
-    fontFamily: fonts.sansBold,
-    letterSpacing: -0.2,
-    marginTop: -1,
   },
 
   // ── Floating bottom controls ──
