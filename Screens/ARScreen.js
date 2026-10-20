@@ -1029,13 +1029,8 @@ const ModelOnPlane = ({ spot, modelUri, anchorLabel, onModelClick, onModelError,
         materials={["hitTarget"]}
         onClickState={handleClickState}
       />
-      {/* Sits just above the model's head rather than through its middle. */}
-      <ViroText
-        text={`Tap to explore\n${anchorLabel}`}
-        position={[0, MODEL_HEIGHT_M + 0.25, MODEL_OFFSET_Z]}
-        scale={[0.32, 0.32, 0.32]}
-        style={arStyles.tapHint}
-      />
+      
+      
     </>
   );
 
