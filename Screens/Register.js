@@ -513,9 +513,6 @@ export default function Register({ navigation }) {
           </>
         )}
       </TouchableOpacity>
-      <Text style={[styles.googleNote, { color: colors.textSecondary }]} maxFontSizeMultiplier={MAX_FONT_SCALE}>
-        Fill in your municipality and date of birth above first. Google gives us your name and email.
-      </Text>
       <TermsNotice action="continuing with Google" />
 
       <View style={a.linkRow}>
