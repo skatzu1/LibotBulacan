@@ -36,6 +36,7 @@ import Icon from "../components/Icon";
 import TitleChip from "../components/TitleChip";
 import TownEmblem from "../components/TownEmblem";
 import ProgressRing from "../components/ProgressRing";
+import { BadgeShine, Sparkles, GlowPulse, HoloTilt } from "../components/BadgeEffects";
 // The grid is shared with the Bakit List, AR View and Navigate spot lists.
 import { GRID_GAP, H_GUTTER, columnsFor, cardSizeFor, AnimatedCell } from "../components/Grid";
 
@@ -224,17 +225,24 @@ export default function BadgeScreen() {
           styles.card, { minHeight: cardHeight },
           s.earned ? { backgroundColor: colors.card, borderColor: colors.cardBorder, borderWidth: 1 } : { backgroundColor: colors.backgroundSoft },
         ]}>
-          <ProgressRing done={s.done} total={s.total} size={RING} stroke={4}>
-            {s.badge.image ? (
-              <Image
-                source={{ uri: badgeImage(s.badge.image, ICON_SIZE, { locked: !s.earned }) }}
-                style={[styles.badgeImg, !s.earned && styles.locked]}
-                resizeMode="cover"
-              />
-            ) : (
-              <Icon name="award" size={26} color={s.earned ? colors.brand : colors.textMuted} />
-            )}
-          </ProgressRing>
+          <View>
+            <ProgressRing done={s.done} total={s.total} size={RING} stroke={4}>
+              {s.badge.image ? (
+                <View style={styles.badgeImgBox}>
+                  <Image
+                    source={{ uri: badgeImage(s.badge.image, ICON_SIZE, { locked: !s.earned }) }}
+                    style={[styles.badgeImg, !s.earned && styles.locked]}
+                    resizeMode="cover"
+                  />
+                  {/* Earned: a light sweeps across it now and then, each card in its own time. */}
+                  {s.earned && <BadgeShine size={ICON_SIZE} delay={(index % 6) * 560} />}
+                </View>
+              ) : (
+                <Icon name="award" size={26} color={s.earned ? colors.brand : colors.textMuted} />
+              )}
+            </ProgressRing>
+            {s.earned && <Sparkles size={RING} count={3} seed={index} />}
+          </View>
           <Text style={[styles.cardName, { color: s.earned ? colors.textPrimary : colors.textSecondary }]} numberOfLines={2}>
             {s.badge.name}
           </Text>
@@ -269,11 +277,17 @@ export default function BadgeScreen() {
           styles.townCard,
           t.earned ? { backgroundColor: colors.card, borderColor: colors.accent, borderWidth: 1.5 } : { backgroundColor: colors.backgroundSoft },
         ]}>
-          <ProgressRing done={t.spotsDone} total={t.spotsTotal} size={104} stroke={5}>
-            <View style={!t.earned && styles.locked}>
-              <TownEmblem town={t.municipality} image={t.image} size={84} />
-            </View>
-          </ProgressRing>
+          {/* A town badge is a tier up from a spot's: it also glows. */}
+          <View>
+            {t.earned && <GlowPulse size={96} />}
+            <ProgressRing done={t.spotsDone} total={t.spotsTotal} size={104} stroke={5}>
+              <View style={!t.earned && styles.locked}>
+                <TownEmblem town={t.municipality} image={t.image} size={84} />
+                {t.earned && <BadgeShine size={84} delay={(index % 4) * 700} every={3000} />}
+              </View>
+            </ProgressRing>
+            {t.earned && <Sparkles size={104} count={4} seed={index + 3} />}
+          </View>
           <Text style={[styles.townName, { color: colors.textPrimary }]} numberOfLines={1}>{t.name}</Text>
           {t.earned ? (
             <Text style={[styles.footerText, { color: colors.accentDark }]}>Finished{t.earnedAt ? ` · ${fmtDate(t.earnedAt)}` : ""}</Text>
@@ -297,7 +311,11 @@ export default function BadgeScreen() {
           accessible
           accessibilityLabel={`${t.name}: ${need}. ${t.earned ? "Earned" : `${have} of ${t.towns} towns`}`}
         >
-          <TitleMedal earned={t.earned} colors={colors} />
+          <View>
+            {t.earned && t.key === "goat" && <GlowPulse size={56} />}
+            <TitleMedal earned={t.earned} colors={colors} />
+            {t.earned && <BadgeShine size={56} delay={index * 600} />}
+          </View>
           <View style={{ flex: 1 }}>
             <Text style={[styles.titleName, { color: t.earned ? colors.textPrimary : colors.textSecondary }]}>{t.name}</Text>
             <Text style={[styles.titleNeed, { color: colors.textMuted }]}>{need}</Text>
@@ -349,7 +367,11 @@ export default function BadgeScreen() {
           </Text>
           <Text style={[styles.summaryNext, { color: colors.textSecondary }]}>{nextTitleLine(next)}</Text>
         </View>
-        <TitleMedal earned={!!data.title} size={64} colors={colors} />
+        <View>
+          {data.title?.key === "goat" && <GlowPulse size={64} />}
+          <TitleMedal earned={!!data.title} size={64} colors={colors} />
+          {data.title && <BadgeShine size={64} every={4200} />}
+        </View>
       </View>
       {next && (
         <View style={[styles.bar, styles.summaryBar, { backgroundColor: colors.divider }]} accessibilityRole="progressbar" accessibilityValue={{ min: 0, max: 100, now: Math.round(nextShare * 100) }}>
@@ -452,11 +474,19 @@ export default function BadgeScreen() {
   function renderSpotDetail(s) {
     return (
       <>
-        <ProgressRing done={s.done} total={s.total} size={136} stroke={6}>
-          {s.badge.image ? (
-            <Image source={{ uri: badgeImage(s.badge.image, 110, { locked: !s.earned }) }} style={[styles.modalBadgeImg, !s.earned && styles.locked]} resizeMode="cover" />
-          ) : <Icon name="award" size={52} color={s.earned ? colors.brand : colors.textMuted} />}
-        </ProgressRing>
+        {/* Earned, up close: a holographic badge to tilt, glowing and twinkling. */}
+        <View>
+          {s.earned && <GlowPulse size={124} strength={0.26} />}
+          <ProgressRing done={s.done} total={s.total} size={136} stroke={6}>
+            {s.badge.image ? (
+              <HoloTilt size={110} active={s.earned}>
+                <Image source={{ uri: badgeImage(s.badge.image, 110, { locked: !s.earned }) }} style={[styles.modalBadgeImg, !s.earned && styles.locked]} resizeMode="cover" />
+              </HoloTilt>
+            ) : <Icon name="award" size={52} color={s.earned ? colors.brand : colors.textMuted} />}
+          </ProgressRing>
+          {s.earned && <Sparkles size={136} count={6} spread={0.6} />}
+        </View>
+        {s.earned && <Text style={[styles.tiltHint, { color: colors.textMuted }]}>Drag the badge to tilt it</Text>}
         <View style={[styles.earnedPill, { backgroundColor: s.earned ? colors.accent : colors.textMuted }]}>
           <Icon name={s.earned ? "check-circle" : "lock"} size={11} color={s.earned ? colors.onAccent : colors.textInverse} style={{ marginRight: 4 }} />
           <Text style={[styles.earnedPillText, { color: s.earned ? colors.onAccent : colors.textInverse }]}>
@@ -508,9 +538,16 @@ export default function BadgeScreen() {
     const townSpots = spots.filter((s) => s.town === t.municipality);
     return (
       <>
-        <View style={!t.earned && styles.locked}>
-          <TownEmblem town={t.municipality} image={t.image} size={132} />
+        <View>
+          {t.earned && <GlowPulse size={128} />}
+          <View style={!t.earned && styles.locked}>
+            <HoloTilt size={132} active={t.earned}>
+              <TownEmblem town={t.municipality} image={t.image} size={132} />
+            </HoloTilt>
+          </View>
+          {t.earned && <Sparkles size={132} count={7} spread={0.64} seed={2} />}
         </View>
+        {t.earned && <Text style={[styles.tiltHint, { color: colors.textMuted }]}>Drag the badge to tilt it</Text>}
         <View style={[styles.earnedPill, { backgroundColor: t.earned ? colors.accent : colors.textMuted }]}>
           <Icon name={t.earned ? "check-circle" : "lock"} size={11} color={t.earned ? colors.onAccent : colors.textInverse} style={{ marginRight: 4 }} />
           <Text style={[styles.earnedPillText, { color: t.earned ? colors.onAccent : colors.textInverse }]}>
@@ -577,6 +614,7 @@ const styles = StyleSheet.create({
 
   cellWrap: { flexGrow: 1 },
   card:     { flexGrow: 1, borderRadius: 16, padding: 10, alignItems: "center" },
+  badgeImgBox: { width: ICON_SIZE, height: ICON_SIZE },
   badgeImg: { width: ICON_SIZE, height: ICON_SIZE, borderRadius: ICON_SIZE / 2 },
   locked:   { opacity: 0.5 },
   cardName: { fontSize: 11.5, fontFamily: fonts.sansSemi, textAlign: "center", lineHeight: 15, marginTop: 8 },
@@ -600,6 +638,7 @@ const styles = StyleSheet.create({
   modalBody:  { alignItems: "center", paddingTop: 36, paddingBottom: 26, paddingHorizontal: 26 },
   modalClose: { position: "absolute", top: 16, right: 16, width: 32, height: 32, borderRadius: 16, justifyContent: "center", alignItems: "center", zIndex: 2 },
   modalBadgeImg: { width: 110, height: 110, borderRadius: 55 },
+  tiltHint:   { fontSize: 11.5, fontFamily: fonts.sansMedium, marginTop: 8 },
   earnedPill:  { flexDirection: "row", alignItems: "center", borderRadius: 20, paddingHorizontal: 12, paddingVertical: 5, marginTop: 14, marginBottom: 10 },
   earnedPillText: { fontSize: 11, fontFamily: fonts.sansBold, letterSpacing: 0.3 },
   modalName:  { ...typography.display, fontSize: 22, textAlign: "center", lineHeight: 28 },

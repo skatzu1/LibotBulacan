@@ -17,6 +17,8 @@ import { setRewardHandlers } from "../utils/rewards";
 import { showAlert } from "./AppAlert";
 import TownEmblem from "./TownEmblem";
 import ProgressRing from "./ProgressRing";
+import { BadgeShine, Sparkles } from "./BadgeEffects";
+import useReduceMotion from "../hooks/useReduceMotion";
 
 /*
  * The moment something is earned (the thesis panel, 2026-10-21: "pagandahin
@@ -65,17 +67,6 @@ const GOLD = "#F2CE1B";
 const CONFETTI_COLORS = [GOLD, "#8FE1E9", "#FFFFFF", "#56D6E2", "#F6DF5C", "#E0A66B"];
 // Fiesta colours for the banderitas.
 const FLAG_COLORS = ["#D93A3A", GOLD, "#2E5AAC", "#2F9E62", "#FFFFFF", "#E07B39"];
-
-function useReduceMotion() {
-  const [reduce, setReduce] = useState(false);
-  useEffect(() => {
-    let alive = true;
-    AccessibilityInfo.isReduceMotionEnabled?.().then((v) => { if (alive) setReduce(!!v); }).catch(() => {});
-    const sub = AccessibilityInfo.addEventListener?.("reduceMotionChanged", setReduce);
-    return () => { alive = false; sub?.remove?.(); };
-  }, []);
-  return reduce;
-}
 
 // The compass star's rays, as a slow-turning sunburst.
 function Sunburst({ size, reduce }) {
@@ -264,7 +255,10 @@ function Moment({ item, index, count, onNext, onAchievements, onShare, sharing, 
           <Animated.View style={[s.halo, { width: medalSize * 1.32, height: medalSize * 1.32, borderRadius: medalSize, transform: [{ scale: haloScale }] }]} />
           <Animated.View style={{ transform: [{ scale }, { rotate }] }}>
             <Medal item={item} size={medalSize} />
+            {/* The light catching the new badge, as on the Achievements screen. */}
+            <BadgeShine size={medalSize} delay={900} every={2200} intensity={0.55} />
           </Animated.View>
+          <Sparkles size={medalSize} count={7} spread={0.66} seed={index} />
         </View>
 
         <Animated.View style={[s.words, { opacity: words, transform: [{ translateY: lift }] }]}>

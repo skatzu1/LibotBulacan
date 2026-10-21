@@ -33,6 +33,7 @@ import {
   REVIEW_SORTS, ratingBreakdown, filterAndSortReviews, pageOf, pageNumbers, timeAgo,
 } from "../utils/reviewList";
 import Icon from "../components/Icon";
+import { BadgeShine } from "../components/BadgeEffects";
 
 
 // Spot facts up to this many characters fit beside their label ("Malolos",
@@ -1505,11 +1506,14 @@ export default function InformationScreen({ route, navigation }) {
                       ? `${spot.name} badge earned. Opens your achievements`
                       : `Finish all ${totalCount} to unlock the ${spot.name} badge. ${completedCount} done. Opens your achievements`}
                   >
-                    <Image
-                      source={{ uri: badgeImage(spot.Badge, 56, { locked: !allDone }) }}
-                      style={[styles.badgeTeaserImg, !allDone && styles.badgeTeaserLocked]}
-                      resizeMode="contain"
-                    />
+                    <View style={styles.badgeTeaserImg}>
+                      <Image
+                        source={{ uri: badgeImage(spot.Badge, 56, { locked: !allDone }) }}
+                        style={[styles.badgeTeaserImg, !allDone && styles.badgeTeaserLocked]}
+                        resizeMode="contain"
+                      />
+                      {allDone && <BadgeShine size={52} every={3800} />}
+                    </View>
                     <View style={{ flex: 1 }}>
                       <Text style={[styles.badgeTeaserTitle, { color: allDone ? colors.accentDark : colors.textPrimary }]}>
                         {allDone ? "Badge earned" : `Finish all ${totalCount} to unlock the badge`}
