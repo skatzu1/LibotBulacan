@@ -33,6 +33,7 @@ import {
   useGrid, H_PAD,
 } from "../components/ui";
 import Logo from "../components/Logo";
+import UpdateNotice from "../components/UpdateNotice";
 import HomeTour, { tourTarget } from "../components/HomeTour";
 import { BASE_URL } from "../api";
 import { showToast } from "../components/AppAlert";
@@ -382,6 +383,9 @@ function HomeContent({ profilePhoto, navigation }) {
             {firstName}
           </Text>
         </Wrap>
+
+        {/* ─── An update the super admin announced, coming or done ─── */}
+        <UpdateNotice />
 
         {/* ─── Global search ─── */}
         <Wrap {...anim(1)} style={h.searchWrap}>

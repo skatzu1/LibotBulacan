@@ -14,14 +14,19 @@
  *
  * `onRequest(url, init)` may return a function, called when the request ends —
  * App.js uses it to notice reads that are taking long (utils/serverActivity.js).
+ * `onResponse(res)` sees every response — App.js uses it to notice a 503 that
+ * may mean maintenance (utils/systemStatus.js).
  */
 export const DEFAULT_FETCH_TIMEOUT_MS = 60_000;
 
 /** `fetchImpl`, with an abort after `ms` for calls that bring no signal. */
-export function withTimeout(fetchImpl, ms = DEFAULT_FETCH_TIMEOUT_MS, { onRequest } = {}) {
+export function withTimeout(fetchImpl, ms = DEFAULT_FETCH_TIMEOUT_MS, { onRequest, onResponse } = {}) {
   const fetchWithTimeout = (input, init) => {
     const ended = onRequest?.(typeof input === "string" ? input : input?.url, init);
-    const settle = (promise) => (ended ? promise.finally(ended) : promise);
+    const seen = (promise) => (onResponse
+      ? promise.then((res) => { try { onResponse(res); } catch { /* never break the call */ } return res; })
+      : promise);
+    const settle = (promise) => seen(ended ? promise.finally(ended) : promise);
 
     if (init?.signal || typeof AbortController === "undefined") return settle(fetchImpl(input, init));
     const controller = new AbortController();

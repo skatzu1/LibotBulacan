@@ -154,27 +154,8 @@ export const ReviewProvider = ({ children }) => {
     }
   }, [postReview, fetchReviews, fetchModerationStatus]);
 
-  const reportReview = useCallback(async ({ reviewId, reportedClerkUserId, reason, details = "" }) => {
-    if (!reviewId || !reportedClerkUserId || !reason) {
-      setError("reviewId, reportedClerkUserId, and reason are required");
-      return false;
-    }
-    try {
-      const res = await api.post("/api/reports", { reviewId, reportedClerkUserId, reason, details });
-      const data = res.data;
-      if (data.success) {
-        setError(null);
-        return true;
-      } else {
-        console.error("Report API error:", data);
-        throw new Error(data.message || "Failed to submit report");
-      }
-    } catch (err) {
-      console.error("Error reporting review:", err);
-      setError(err.message);
-      return false;
-    }
-  }, []);
+  // reportReview() was removed (mock defense 2026-10-21): travelers no longer
+  // report reviews; the server masks bad words as a review is posted.
 
   // Like/dislike toggle. Optimistically patches the single review in
   // state with the server's returned counts + the caller's own reaction,
@@ -250,7 +231,7 @@ export const ReviewProvider = ({ children }) => {
   return (
     <ReviewContext.Provider value={{
       reviewsBySpot, error, moderationStatus,
-      fetchReviews, addReview, reportReview, reactToReview, fetchModerationStatus,
+      fetchReviews, addReview, reactToReview, fetchModerationStatus,
       getReviewsForSpot, hasReviewsFor, getAverageRating, getReviewCount, deleteReview,
     }}>
       {children}

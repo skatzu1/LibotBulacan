@@ -12,10 +12,11 @@
 // set up yet, or offline): the old buttons appear, and if there is no mail app
 // the address can be copied.
 //
-// These reports are about the APP (crashes, sign-in, installing), not about a
-// spot or a review: those are reported from the spot's page and go to the
-// admins. The website's Report a problem (LibotWeb report.js) still writes an
-// email.
+// These reports are about the APP (crashes, sign-in, installing), and wrong
+// spot details or an offensive review too. Reviews can't be reported from the
+// spot's page any more (mock defense 2026-10-21): the server masks bad words as
+// they're posted. The website's Report a problem (LibotWeb report.js) still
+// writes an email.
 import React, { useMemo, useState } from "react";
 import {
   View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity,
@@ -169,7 +170,8 @@ const ReportProblem = ({ navigation }) => {
       >
         <Text style={[typography.body, { color: colors.textSecondary }]}>
           This goes straight to the Libot Bulacan developers. For wrong details about a spot, choose
-          that below and name the spot. A bad review? Use Report on the review itself.
+          that below and name the spot. An offensive review? Bad words are hidden automatically, and
+          you can tell us about the rest here.
         </Text>
 
         <GroupLabel style={styles.label}>What kind of problem?</GroupLabel>

@@ -40,13 +40,9 @@ import { BadgeShine } from "../components/BadgeEffects";
 // "₱50", "0917 123 4567"); longer ones go on their own line under it.
 const FACT_INLINE_MAX = 22;
 
-const REPORT_REASONS = [
-  { key:"spam",               label:"Spam" },
-  { key:"offensive_language", label:"Offensive language" },
-  { key:"fake_review",        label:"Fake review" },
-  { key:"harassment",         label:"Harassment" },
-  { key:"other",              label:"Other" },
-];
+// Reviews can't be reported from here any more (mock defense 2026-10-21): the
+// server masks bad words with *** as a review is posted (LibotBackend
+// utils/reviewFilter.js), and admins act on reviews in the console.
 
 // How much longer a mute/suspension lasts, e.g. "3 days 4 hr" / "45 min".
 // Returns null once the window has actually elapsed (shouldn't normally be
@@ -103,7 +99,7 @@ const showMutedAlert = (result) => {
     remaining && until
       ? `You can't comment right now — commenting is disabled until ${until} (${remaining} remaining).`
       : (result && result.message) ||
-        "You've been temporarily muted from posting or reacting due to community reports. Please try again later.",
+        "An admin has muted you from posting or reacting for a while. Please try again later.",
     undefined,
     { tone: "warning", icon: "volume-x" },
   );
@@ -243,7 +239,7 @@ function PhotoViewer({ viewer, onClose }) {
   );
 }
 
-function ReviewCard({ review, spotId, clerkUser, profileImage, reactToReview, onReport, onDelete, onOpenPhoto, colors }) {
+function ReviewCard({ review, spotId, clerkUser, profileImage, reactToReview, onDelete, onOpenPhoto, colors }) {
   const isMe = clerkUser?.id === review.clerkUserId;
   // No more pravatar.cc fallback — a reviewer without a photo gets their
   // initials, not a random stranger's face.
@@ -276,18 +272,8 @@ function ReviewCard({ review, spotId, clerkUser, profileImage, reactToReview, on
   const author = review.userName || "Anonymous";
   const when = timeAgo(review.createdAt) || "Just now";
 
-  // ⋮ — your own review can be deleted (onDelete asks to confirm); anyone
-  // else's reported.
-  const openMenu = () => {
-    if (isMe) {
-      onDelete(review);
-    } else {
-      showAlert(`Review by ${author}`, undefined, [
-        { text: "Cancel", style: "cancel" },
-        { text: "Report review", style: "destructive", onPress: () => onReport(review) },
-      ]);
-    }
-  };
+  // ⋮ — on your own review only: delete it (onDelete asks to confirm).
+  const openMenu = () => onDelete(review);
 
   // "Helpful" / "Unhelpful" are the like / dislike reactions, named for what
   // they mean on a review. A render helper, not a component: a component
@@ -329,15 +315,17 @@ function ReviewCard({ review, spotId, clerkUser, profileImage, reactToReview, on
         <Text style={[styles.reviewAuthor, { color: colors.textPrimary }]} numberOfLines={1}>
           By {author}{isMe ? <Text style={{ color: colors.textMuted, fontFamily: fonts.sansMedium }}> (you)</Text> : null}
         </Text>
-        <TouchableOpacity
-          onPress={openMenu}
-          hitSlop={10}
-          style={styles.reviewMenu}
-          accessibilityRole="button"
-          accessibilityLabel={isMe ? "Options for your review" : `Options for the review by ${author}`}
-        >
-          <Icon name="more-vertical" size={18} color={colors.textMuted} />
-        </TouchableOpacity>
+        {isMe && (
+          <TouchableOpacity
+            onPress={openMenu}
+            hitSlop={10}
+            style={styles.reviewMenu}
+            accessibilityRole="button"
+            accessibilityLabel="Options for your review"
+          >
+            <Icon name="more-vertical" size={18} color={colors.textMuted} />
+          </TouchableOpacity>
+        )}
       </View>
 
       {/* Stars, when, and whether they were really there — one line. */}
@@ -402,16 +390,6 @@ function ReviewCard({ review, spotId, clerkUser, profileImage, reactToReview, on
           {reaction({ type: "like",    icon: "thumbs-up",   label: "Helpful",   count: review.likes || 0,    activeColor: colors.brand })}
           {reaction({ type: "dislike", icon: "thumbs-down", label: "Unhelpful", count: review.dislikes || 0, activeColor: colors.danger })}
         </View>
-        {!isMe && (
-          <TouchableOpacity
-            onPress={() => onReport(review)}
-            hitSlop={{ top: 12, bottom: 12, left: 10, right: 10 }}
-            accessibilityRole="button"
-            accessibilityLabel={`Report the review by ${author}`}
-          >
-            <Text style={[styles.reportLink, { color: colors.brand }]}>Report</Text>
-          </TouchableOpacity>
-        )}
       </View>
       )}
     </View>
@@ -490,11 +468,6 @@ export default function InformationScreen({ route, navigation }) {
   // This spot's reviews / missions couldn't be loaded (shown only while none are held).
   const [reviewsFailed,    setReviewsFailed]    = useState(false);
   const [missionsFailed,   setMissionsFailed]   = useState(false);
-  const [reportTarget,     setReportTarget]     = useState(null);
-  const [showReportModal,  setShowReportModal]  = useState(false);
-  const [reportReason,     setReportReason]     = useState("");
-  const [reportDetails,    setReportDetails]    = useState("");
-  const [submittingReport, setSubmittingReport] = useState(false);
   const [submittingReview, setSubmittingReview] = useState(false);
 
   const inputRef = useRef(null);
@@ -505,7 +478,7 @@ export default function InformationScreen({ route, navigation }) {
   const bodyY = useRef(0);
   const { user: clerkUser } = useUser();
   const { isBookmarked, toggleBookmark } = useBookmark();
-  const { getReviewsForSpot, hasReviewsFor, addReview, reportReview, reactToReview, getAverageRating, getReviewCount, fetchReviews, deleteReview } = useReviews();
+  const { getReviewsForSpot, hasReviewsFor, addReview, reactToReview, getAverageRating, getReviewCount, fetchReviews, deleteReview } = useReviews();
   const { fetchMissions, refetchMissions, getMissionsForSpot, hasMissionsFor, completedMissions } = useMissions();
   const { hasVisited, refresh: refreshPoints } = usePoints();
   const { profileImage } = useProfileImage();
@@ -851,36 +824,6 @@ export default function InformationScreen({ route, navigation }) {
   ];
   const allDone = missionsLoaded && completedCount === totalCount;
 
-  const openReportModal = (review) => {
-    setReportTarget({ reviewId: review._id, reportedClerkUserId: review.clerkUserId || "", userName: review.userName || "this user" });
-    setReportReason(""); setReportDetails(""); setShowReportModal(true);
-  };
-
-  const handleSubmitReport = async () => {
-    if (!reportReason) { showAlert("Select a reason", "Please choose a reason for reporting."); return; }
-    setSubmittingReport(true);
-    try {
-      const result = await reportReview({ reviewId: reportTarget.reviewId, reportedClerkUserId: reportTarget.reportedClerkUserId, reason: reportReason, details: reportDetails });
-      setSubmittingReport(false);
-      if (isMutedResult(result)) {
-        setShowReportModal(false);
-        showMutedAlert(result);
-        return;
-      }
-      setShowReportModal(false);
-      if (result) showToast("Report sent. Our moderators will review it.", { type: "success" });
-      else showAlert("Error", "Failed to submit report. Please try again.");
-    } catch (err) {
-      setSubmittingReport(false);
-      setShowReportModal(false);
-      if (isMutedResult(err)) {
-        showMutedAlert(err);
-      } else {
-        showAlert("Error", "Failed to submit report. Please try again.");
-      }
-    }
-  };
-
   return (
     <KeyboardAvoider style={[styles.container, { backgroundColor: colors.background }]}>
       <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={colors.background} />
@@ -1009,11 +952,11 @@ export default function InformationScreen({ route, navigation }) {
                 })}
               </View>
 
-              {/* ── Ratings & Reviews ── */}
+              {/* ── Rate and Review (the paper's name for it, mock defense 2026-10-21) ── */}
               <View style={styles.rrHeading}>
                 <Icon name="star" size={18} color={colors.textPrimary} />
                 <Text style={[styles.sectionHeading, styles.rrHeadingText, { color: colors.textPrimary }]} accessibilityRole="header">
-                  Ratings &amp; Reviews
+                  Rate and Review
                 </Text>
               </View>
 
@@ -1219,7 +1162,6 @@ export default function InformationScreen({ route, navigation }) {
                           clerkUser={clerkUser}
                           profileImage={profileImage}
                           reactToReview={reactToReview}
-                          onReport={openReportModal}
                           onDelete={confirmDeleteReview}
                           onOpenPhoto={openPhotos}
                           colors={colors}
@@ -1544,66 +1486,6 @@ export default function InformationScreen({ route, navigation }) {
       </ScrollView>
 
       <PhotoViewer viewer={viewer} onClose={() => setViewer(null)} />
-
-      {/* Report modal */}
-      <Modal visible={showReportModal} animationType="slide" transparent onRequestClose={() => setShowReportModal(false)}>
-        <View style={[styles.modalOverlay, { backgroundColor: colors.overlay }]}>
-          <View style={[styles.modalContent, { backgroundColor: colors.background, paddingBottom: Math.max(insets.bottom, 24) }]}>
-            <View style={[styles.modalGrabber, { backgroundColor: colors.divider }]} />
-            <View style={styles.modalHeader}>
-              <Text style={[styles.modalTitle, { color: colors.textPrimary }]} accessibilityRole="header">Report review</Text>
-              <TouchableOpacity
-                accessibilityRole="button"
-                accessibilityLabel="Close report"
-                onPress={() => setShowReportModal(false)}
-                style={styles.modalClose}
-              >
-                <Icon name="x" size={22} color={colors.textMuted} />
-              </TouchableOpacity>
-            </View>
-            {reportTarget && (
-              <Text style={[styles.reportSubtitle, { color: colors.textMuted }]}>
-                Reporting comment by <Text style={{ fontFamily: fonts.sansBold, color: colors.textPrimary }}>{reportTarget.userName}</Text>
-              </Text>
-            )}
-            <Text style={[styles.modalLabel, { color: colors.textPrimary }]}>Reason</Text>
-            <View style={styles.reasonList} accessibilityRole="radiogroup">
-              {REPORT_REASONS.map((r) => {
-                const on = reportReason === r.key;
-                return (
-                  <TouchableOpacity
-                    key={r.key}
-                    accessibilityRole="radio"
-                    accessibilityState={{ selected: on }}
-                    accessibilityLabel={r.label}
-                    style={[styles.reasonOption, { backgroundColor: colors.card, borderColor: colors.cardBorder }, on && { borderColor: colors.brand, backgroundColor: colors.brandLight }]}
-                    onPress={() => setReportReason(r.key)}
-                    activeOpacity={0.8}
-                  >
-                    <View style={[styles.reasonRadio, { borderColor: on ? colors.brand : colors.textMuted }]}>
-                      {on && <View style={[styles.reasonRadioDot, { backgroundColor: colors.brand }]} />}
-                    </View>
-                    <Text style={[styles.reasonLabel, { color: on ? colors.textPrimary : colors.textSecondary }, on && { fontFamily: fonts.sansSemi }]}>{r.label}</Text>
-                  </TouchableOpacity>
-                );
-              })}
-            </View>
-            <Text style={[styles.modalLabel, { color: colors.textPrimary }]}>Additional details (optional)</Text>
-            <TextInput
-              style={[styles.reportDetailsInput, { backgroundColor: colors.inputBg, borderColor: colors.inputBorder, color: colors.textPrimary }]}
-              multiline
-              placeholder="Add any extra context..."
-              placeholderTextColor={colors.placeholder}
-              value={reportDetails}
-              onChangeText={setReportDetails}
-              maxLength={500}
-              textAlignVertical="top"
-              accessibilityLabel="Additional details"
-            />
-            <PrimaryButton title="Submit report" onPress={handleSubmitReport} loading={submittingReport} />
-          </View>
-        </View>
-      </Modal>
     </KeyboardAvoider>
   );
 }
@@ -1743,7 +1625,6 @@ const styles = StyleSheet.create({
   reactionsRow:    { flexDirection: "row", alignItems: "center", gap: 16 },
   reactionBtn:     { flexDirection: "row", alignItems: "center", gap: 5, minHeight: 32 },
   reactionLabel:   { fontSize: 13, fontFamily: fonts.sansMedium },
-  reportLink:      { fontSize: 13, fontFamily: fonts.sansBold },
 
   // Pages under the list.
   pager:           { flexDirection: "row", alignItems: "center", justifyContent: "space-between", marginTop: 6, marginBottom: 6 },
@@ -1788,21 +1669,4 @@ const styles = StyleSheet.create({
   viewerCount:     { color: "#FFFFFF", fontFamily: fonts.sansBold, fontSize: 15 },
   viewerCaption:   { color: "rgba(255,255,255,0.85)", fontFamily: fonts.sans, fontSize: 13, marginTop: 2 },
   viewerClose:     { width: TAP, height: TAP, alignItems: "center", justifyContent: "center" },
-
-
-
-  modalOverlay:    { flex: 1, justifyContent: "flex-end" },
-  modalContent:    { borderTopLeftRadius: radius.xl, borderTopRightRadius: radius.xl, paddingHorizontal: H_PAD, paddingTop: 10, maxHeight: "88%" },
-  modalGrabber:    { alignSelf: "center", width: 40, height: 4, borderRadius: 2, marginBottom: 14 },
-  modalHeader:     { flexDirection: "row", justifyContent: "space-between", alignItems: "center", marginBottom: 8 },
-  modalTitle:      { ...typography.h2, fontSize: 22, lineHeight: 28 },
-  modalClose:      { width: TAP, height: TAP, alignItems: "flex-end", justifyContent: "center" },
-  modalLabel:      { fontSize: 14, fontFamily: fonts.sansBold, marginBottom: 10, marginTop: 14 },
-  reportSubtitle:  { fontSize: 13.5, fontFamily: fonts.sans, marginBottom: 4 },
-  reasonList:      { gap: 8, marginBottom: 4 },
-  reasonOption:    { flexDirection: "row", alignItems: "center", borderRadius: radius.md, paddingVertical: 13, paddingHorizontal: 14, borderWidth: 1.5, gap: 12 },
-  reasonRadio:     { width: 20, height: 20, borderRadius: 10, borderWidth: 2, alignItems: "center", justifyContent: "center" },
-  reasonRadioDot:  { width: 10, height: 10, borderRadius: 5 },
-  reasonLabel:     { fontSize: 14, fontFamily: fonts.sans },
-  reportDetailsInput: { borderRadius: radius.md, padding: 14, fontSize: 14, fontFamily: fonts.sans, minHeight: 88, marginBottom: 18, borderWidth: 1, textAlignVertical: "top" },
 });

@@ -65,7 +65,7 @@ export default function BannedScreen({ banInfo }) {
         <Text style={[typography.body, s.center, { color: colors.textSecondary, marginTop: spacing.sm, marginBottom: spacing.xl }]}>
           {inactive
             ? "You hadn't used Libot Bulacan for 30 days or more, so it was deactivated. Your trips, badges and points are kept. Ask below to have your account restored."
-            : 'Your account was flagged and permanently banned following a report review by our admin team.'}
+            : 'Our admin team permanently banned your account for breaking the rules.'}
         </Text>
 
         {!inactive && (

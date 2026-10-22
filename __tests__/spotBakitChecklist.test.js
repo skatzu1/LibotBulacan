@@ -29,7 +29,7 @@ jest.mock("../context/ProfileImageContext", () => ({ useProfileImage: () => ({ p
 jest.mock("../context/BookmarkContext", () => ({ useBookmark: () => ({ isBookmarked: () => false, toggleBookmark: jest.fn() }) }));
 jest.mock("../context/ReviewContext", () => ({
   useReviews: () => ({
-    getReviewsForSpot: () => [], hasReviewsFor: () => true, addReview: jest.fn(), reportReview: jest.fn(),
+    getReviewsForSpot: () => [], hasReviewsFor: () => true, addReview: jest.fn(),
     reactToReview: jest.fn(), getAverageRating: () => null, getReviewCount: () => 0,
     fetchReviews: jest.fn(async () => true), deleteReview: jest.fn(),
   }),

@@ -4,12 +4,12 @@
 
 // What the backend records as the version a traveler agreed to (the later of
 // the two pages' effective dates; utils/signUpDetails.js there).
-export const LEGAL_VERSION = "2026-10-21";
+export const LEGAL_VERSION = "2026-10-23";
 
 export const LEGAL_DOCS = [
   {
     "title": "Terms and Conditions",
-    "effective": "21 October 2026",
+    "effective": "23 October 2026",
     "blocks": [
       {
         "type": "p",
@@ -274,7 +274,7 @@ export const LEGAL_DOCS = [
             "bold": true
           },
           {
-            "text": " Reviews and photos are the opinions and work of the travelers who post them, not of Libot Bulacan, and we do not check them before they appear. We are not responsible for what they say. When one that breaks these rules is reported to us, we may remove it (see Moderation)."
+            "text": " Reviews and photos are the opinions and work of the travelers who post them, not of Libot Bulacan. Apart from hiding bad words (see Moderation), we do not check them before they appear, and we are not responsible for what they say. When one breaks these rules, we may remove it."
           }
         ]
       },
@@ -286,7 +286,7 @@ export const LEGAL_DOCS = [
         "type": "p",
         "runs": [
           {
-            "text": "Anyone can report a review from the app. Administrators review reports and may remove content that breaks these Terms. When a report is upheld against you:"
+            "text": "When a review is posted, bad words in it are hidden automatically and shown as ***. Administrators also read reviews, and may remove content that breaks these Terms. When an administrator acts on a review of yours:"
           }
         ]
       },
@@ -510,7 +510,7 @@ export const LEGAL_DOCS = [
   },
   {
     "title": "Privacy Policy",
-    "effective": "21 October 2026",
+    "effective": "23 October 2026",
     "blocks": [
       {
         "type": "p",
@@ -682,7 +682,7 @@ export const LEGAL_DOCS = [
             "bold": true
           },
           {
-            "text": " Your rating, what you write, up to four photos, the likes and dislikes you give to other reviews, and whether your visit to that spot was recorded."
+            "text": " Your rating, what you write, up to four photos, the likes and dislikes you give to other reviews, and whether your visit to that spot was recorded. If the automatic filter hides words in your review (they show as ***), we also keep what you wrote, which only administrators can see, so they can act on it."
           }
         ]
       },
@@ -694,7 +694,7 @@ export const LEGAL_DOCS = [
             "bold": true
           },
           {
-            "text": " Reports you make about a review or a spot, along with your reason and details. If your account is warned, muted, suspended or banned, we keep a record of it and why. If you appeal, we keep what you wrote."
+            "text": " Any report made about a review, along with its reason and details. If your account is warned, muted, suspended or banned, we keep a record of it and why. If you appeal, we keep what you wrote."
           }
         ]
       },
@@ -963,7 +963,7 @@ export const LEGAL_DOCS = [
             "bold": true
           },
           {
-            "text": " can see accounts, reviews, reports and moderation records in order to run and moderate the service. Moderators who maintain spot information do not have access to user accounts."
+            "text": " can see accounts, reviews (including the words the filter hid), reports and moderation records in order to run and moderate the service. Moderators who maintain spot information do not have access to user accounts."
           }
         ],
         "depth": 1
@@ -1190,7 +1190,7 @@ export const LEGAL_DOCS = [
             "bold": true
           },
           {
-            "text": " (reports and the decisions on them) are kept with the account, to prevent abuse."
+            "text": " (reports, the decisions on them, and the words the filter hid in a review) are kept with the account, to prevent abuse."
           }
         ],
         "depth": 1
