@@ -30,6 +30,7 @@ import { initCrashReporting }   from "./utils/crashReporter";
 import { installFetchTimeout }  from "./utils/fetchTimeout";
 import { trackBackendRead }     from "./utils/serverActivity";
 import useSystemStatus, { SystemStatusContext } from "./hooks/useSystemStatus";
+import { connectLive, disconnectLive, subscribeLive } from "./utils/live";
 
 // Fonts. Every weight is a separate family because React Native does not
 // synthesize weights for custom fonts — see the note in ThemeContext.
@@ -176,6 +177,14 @@ function AppNavigator() {
   // wired up before any child component mounts or fires its effects.
   if (isLoaded) setupClerkInterceptor(getToken);
 
+  // Live updates (utils/live.js), opened again when someone signs in or out:
+  // signed in, the server can send this traveler's own suspension or ban.
+  useEffect(() => {
+    if (!isLoaded) return undefined;
+    connectLive({ getToken: isSignedIn ? getToken : null });
+    return () => disconnectLive();
+  }, [isLoaded, isSignedIn, userId]); // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => {
     const checkWelcome = async () => {
       try {
@@ -235,6 +244,9 @@ function AppNavigator() {
             ],
             { tone: "danger", icon: "slash", cancelable: false },
           );
+        } else if (!isArchivedNow && wasArchivedRef.current) {
+          // Unbanned, or the appeal was approved: the app opens again.
+          setBanInfo(null);
         }
         wasArchivedRef.current = isArchivedNow;
 
@@ -285,12 +297,16 @@ function AppNavigator() {
     const appStateSub = AppState.addEventListener("change", (next) => {
       if (next === "active") checkStatus(true);
     });
+    // And the moment an admin acts on the account (utils/live.js); the
+    // minute's check stays for when the live connection is down.
+    const stopLive = subscribeLive(["moderation"], () => checkStatus(true));
 
     return () => {
       cancelled = true;
       clearTimeout(gate);
       clearInterval(interval);
       appStateSub.remove();
+      stopLive();
     };
   }, [isSignedIn, userId]);
 

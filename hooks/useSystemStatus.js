@@ -2,14 +2,16 @@ import { createContext, useCallback, useContext, useEffect, useRef, useState } f
 import { AppState } from "react-native";
 import { BASE_URL } from "../api";
 import { fetchSystemStatus } from "../utils/systemStatus";
+import { subscribeLive } from "../utils/live";
 
 /*
  * The latest update notice from the super admin (mock defense 2026-10-21),
  * which Home shows (components/UpdateNotice.js). There is no maintenance for
  * travelers (user rule 2026-10-23): the app never closes for it.
  *
- * Asked at launch, every minute, and when the app comes back to the front. The
- * app doesn't wait for it, and a failed check keeps what it had.
+ * Asked at launch, every minute, when the app comes back to the front, and the
+ * moment the super admin publishes or hides one (utils/live.js). The app
+ * doesn't wait for it, and a failed check keeps what it had.
  */
 const EVERY_MS = 60_000;
 
@@ -38,10 +40,12 @@ export default function useSystemStatus({ fetchStatus = fetchSystemStatus } = {}
     check();
     const timer = setInterval(check, EVERY_MS);
     const sub = AppState.addEventListener("change", (next) => { if (next === "active") check(); });
+    const stopLive = subscribeLive(["system"], check);
     return () => {
       live.current = false;
       clearInterval(timer);
       sub.remove();
+      stopLive();
     };
   }, [check]);
 

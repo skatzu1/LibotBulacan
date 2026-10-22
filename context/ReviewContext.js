@@ -2,6 +2,7 @@ import React, { createContext, useState, useContext, useCallback, useEffect } fr
 import { useAuth } from "@clerk/clerk-expo";
 import api, { BASE_URL } from "../api";
 import { averageRating } from "../utils/reviewList";
+import { subscribeLive } from "../utils/live";
 
 // The server's limit (LibotBackend utils/reviewPhotos.js).
 export const MAX_REVIEW_PHOTOS = 4;
@@ -28,8 +29,10 @@ export const ReviewProvider = ({ children }) => {
     // the render-time interceptor fix in App.js/api.js — it ensures this
     // effect never fires a request while isSignedIn is still unresolved,
     // regardless of what else changes upstream in the future.
-    if (!isLoaded || !isSignedIn) return;
+    if (!isLoaded || !isSignedIn) return undefined;
     fetchModerationStatus();
+    // A warning's mute shows on the review box the moment it's given.
+    return subscribeLive(["moderation"], fetchModerationStatus);
   }, [isLoaded, isSignedIn]);
 
   // Resolves true once the spot's reviews are in, false when they couldn't be

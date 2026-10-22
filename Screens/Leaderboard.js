@@ -22,6 +22,7 @@ import { clerkPhoto } from "../utils/image";
 import Icon from "../components/Icon";
 import TitleChip from "../components/TitleChip";
 import { titleName } from "../utils/titles";
+import { subscribeLive } from "../utils/live";
 
 // Was a hardcoded "https://libotbackend.onrender.com".
 
@@ -107,9 +108,10 @@ export function pageButtons(page, pages) {
   return out;
 }
 
-// The board refreshes itself this often while it is on screen and the app is
-// in front, so it stays current without a pull-down (the specification asks
-// for a leaderboard that updates in real time).
+// While it is on screen and the app is in front, the board refreshes the
+// moment someone's points change (utils/live.js), and this often besides, for
+// when the live connection is down (the specification asks for a leaderboard
+// that updates in real time).
 const LIVE_REFRESH_MS = 30 * 1000;
 
 // The server ranks travelers by points, then distinct spots visited
@@ -268,7 +270,11 @@ export default function Leaderboard() {
       const id = setInterval(() => {
         if (AppState.currentState === "active") buildRef.current();
       }, LIVE_REFRESH_MS);
-      return () => clearInterval(id);
+      const stopLive = subscribeLive(["progress"], () => buildRef.current());
+      return () => {
+        clearInterval(id);
+        stopLive();
+      };
     }, [isLoaded])
   );
 

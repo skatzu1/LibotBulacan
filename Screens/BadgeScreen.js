@@ -26,6 +26,7 @@ import {
 } from "../components/ui";
 import { useArrival } from "../context/ArrivalContext";
 import { BASE_URL } from "../api";
+import { useLive } from "../utils/live";
 import { badgeImage } from "../utils/image";
 import { shareBadge } from "../utils/badgeShare";
 import { celebrate } from "../utils/rewards";
@@ -116,8 +117,9 @@ export default function BadgeScreen() {
   // A reward moment's "View achievements" opens a particular tab.
   useEffect(() => { if (route?.params?.tab) setTab(route.params.tab); }, [route?.params?.tab]);
 
-  const load = async () => {
-    setError(null);
+  // `quiet`: a live update, which keeps what's shown if it fails.
+  const load = async ({ quiet = false } = {}) => {
+    if (!quiet) setError(null);
     try {
       const token = await getToken();
       const res = await fetch(`${BASE_URL}/api/achievements/me`, { headers: { Authorization: `Bearer ${token}` } });
@@ -130,7 +132,7 @@ export default function BadgeScreen() {
       celebrate(body.unlocked);
     } catch (e) {
       console.warn("Achievements load error:", e);
-      setError("Couldn't load your achievements. Check your connection.");
+      if (!quiet) setError("Couldn't load your achievements. Check your connection.");
     }
   };
 
@@ -151,6 +153,8 @@ export default function BadgeScreen() {
     const unsub = navigation.addListener("focus", initialLoad);
     return unsub;
   }, [navigation]); // eslint-disable-line react-hooks/exhaustive-deps
+  // An admin's new town badge art or a new spot (utils/live.js).
+  useLive(["badges", "spots"], () => { if (hasLoaded.current) load({ quiet: true }); });
 
   const spots = useMemo(() => (data?.spots || []).filter((s) => s.badge).sort(byProgress), [data]);
   const towns = useMemo(() => (data?.towns || []).map((t) => ({ ...t, name: t.name || t.municipality, done: t.spotsDone, total: t.spotsTotal })).sort(byProgress), [data]);

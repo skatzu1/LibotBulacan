@@ -11,6 +11,7 @@ import {
 import { ScreenHeader, SectionTitle, ErrorState, PhotoScrim, useGrid, H_PAD } from "../components/ui";
 import CategoriesSkeleton from "../components/CategoriesSkeleton";
 import { categoryAPI } from "../api";
+import { useLive } from "../utils/live";
 import { spotImage } from "../utils/image";
 import Icon from "../components/Icon";
 
@@ -68,6 +69,13 @@ export default function Categories() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+  // An admin's change to the categories (utils/live.js). Only a good answer
+  // replaces what's shown.
+  useLive(["categories"], () => {
+    categoryAPI.getAll()
+      .then((rows) => { if (rows.length) { setCategories(rows); setError(false); } })
+      .catch(() => {});
+  });
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);

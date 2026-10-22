@@ -38,6 +38,7 @@ import { arrivalNoticeContent } from "../utils/arrivalNotice";
 import { nearbyToAnnounce, nearbyNoticeContent, NEARBY_CHANNEL_ID } from "../utils/nearbyAlerts";
 import { arrivalRadiusOf } from "../utils/spotRadii";
 import { celebrate, itemsFrom } from "../utils/rewards";
+import { useLive } from "../utils/live";
 
 // One "you arrived" notification for arrivals that come together (spots a
 // few dozen metres apart — see utils/arrivalNotice.js). The foreground awards
@@ -859,6 +860,10 @@ export function ArrivalProvider({ children }) {
     spotsFetchedAt.current = 0;
     return fetchAllSpots();
   }, [fetchAllSpots]);
+
+  // An admin's edit, a new or removed spot, or a new rating (utils/live.js).
+  // The spots on screen stay if the request fails.
+  useLive(["spots"], () => { if (isSignedIn) reloadSpots(); });
 
   // ─────────────────────────────────────────
   // Active spot

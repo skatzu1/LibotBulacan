@@ -36,6 +36,7 @@ import Logo from "../components/Logo";
 import UpdateNotice from "../components/UpdateNotice";
 import HomeTour, { tourTarget } from "../components/HomeTour";
 import { BASE_URL } from "../api";
+import { useLive } from "../utils/live";
 import { showToast } from "../components/AppAlert";
 import { clerkPhoto } from "../utils/image";
 
@@ -299,6 +300,9 @@ function HomeContent({ profilePhoto, navigation }) {
   }, []);
 
   useEffect(() => { loadTopSpots().finally(() => setTopLoading(false)); }, [loadTopSpots]);
+  // Most visited moves as travelers arrive (utils/live.js); the spots shown
+  // stay if the request fails.
+  useLive(["progress", "spots"], loadTopSpots);
 
   useFocusEffect(useCallback(() => { refreshPoints(); }, [refreshPoints]));
 

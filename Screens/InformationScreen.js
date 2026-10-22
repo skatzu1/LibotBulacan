@@ -24,6 +24,7 @@ import { afterAlertCloses, ensureCameraAccess, explainPickerError } from "../uti
 import Skeleton from "../components/Skeleton";
 import KeyboardAvoider from "../components/KeyboardAvoider";
 import usePullToRefresh from "../hooks/usePullToRefresh";
+import { useLive } from "../utils/live";
 import api from "../api";
 import {
   PhotoScrim, Segmented, EmptyState, ErrorState, PrimaryButton, Avatar, SearchField, H_PAD, TAP,
@@ -552,6 +553,17 @@ export default function InformationScreen({ route, navigation }) {
     ]);
   }, [paramSpot?._id, fetchReviews, refetchMissions, refreshPoints]);
   const { refreshControl } = usePullToRefresh(reloadSpotPage, { enabled: activeTab !== "Model3D" });
+
+  // Live (utils/live.js): other travelers' reviews and likes as they come,
+  // and an admin's edit to this spot. What's shown stays if a request fails.
+  useLive(["reviews"], () => { if (paramSpot?._id) fetchReviews(paramSpot._id); });
+  useLive(["spots"], () => {
+    const id = paramSpot?._id;
+    if (!id) return;
+    api.get(`/api/spots/${id}`)
+      .then((res) => { if (res.data?.success && res.data.spot) setFreshSpot(res.data.spot); })
+      .catch(() => {});
+  });
 
   const header = (right) => (
     <View style={[styles.header, { backgroundColor: colors.background, paddingTop: Math.max(insets.top, 12) + 6, borderBottomColor: colors.divider }]}>

@@ -2,6 +2,7 @@ import React, { createContext, useState, useContext, useCallback, useRef, useEff
 import { useAuth } from "@clerk/clerk-expo";
 import api, { BASE_URL } from "../api";
 import { usePoints } from "./PointsContext";
+import { useLive } from "../utils/live";
 
 const MissionContext = createContext();
 export const useMissions = () => useContext(MissionContext);
@@ -58,6 +59,20 @@ export const MissionProvider = ({ children }) => {
       .catch((err) => console.warn("Could not load missions:", err?.message));
     return () => { cancelled = true; };
   }, [isLoaded, isSignedIn]);
+
+  // An admin approved a food spot's pin, or a spot came or went with its
+  // missions (utils/live.js): the server's copy is the newer one here. A
+  // failed request keeps what's shown.
+  useLive(["missions"], () => {
+    if (!isSignedIn) return;
+    api.get("/api/missions")
+      .then(({ data }) => {
+        if (!data?.success || !data.missionsBySpot) return;
+        Object.keys(data.missionsBySpot).forEach((id) => fetchedSpots.current.add(id));
+        setMissionsBySpot((prev) => ({ ...prev, ...data.missionsBySpot }));
+      })
+      .catch(() => {});
+  });
 
   const getMissionsForSpot = useCallback(
     (spotId) => missionsBySpot[spotId] || [],
