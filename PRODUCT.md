@@ -6,7 +6,7 @@
 
 adaptive
 
-One Expo (React Native) app for Android and iPhone that follows each phone's own conventions where they matter (sheets, back behaviour, share sheet, system pickers). Android is the public release (an APK from libotbulacan.com; Play Store pending); the iPhone build exists for the thesis (EAS, min iOS 15.1). Portrait only.
+One Expo (React Native) app for Android and iPhone that follows each phone's own conventions where they matter (sheets, back behaviour, share sheet, system pickers). Android is the public release, shipped only as an APK from libotbulacan.com (no Play Store release planned); the iPhone build exists for the thesis (EAS, min iOS 15.1). Portrait only.
 
 ## Users
 
@@ -44,10 +44,9 @@ Being there is what counts, and the server checks it: arrivals, AR, photo scans 
 - Spot facts and trivia need real sources, never Wikipedia or its mirrors. Missing facts are hidden, not made up.
 - Suspension locks the account until it ends; a ban is closed and appealable for 30 days.
 - Not an official government, church or tourism-office app, and must not look like one.
+- Points come only from Bakit List tasks. Finishing a spot earns its badge, not extra points, so no badge shows a points value.
 
 **Terminology:** spot, town (municipality), Bakit List (a spot's things to do), Nearby Eats (the food mission), AI Scan (the photo mission), Arrive, points, badge, town badge, title, Ranking (the leaderboard tab).
-
-**Undecided:** whether finishing a spot pays its badge's displayed +10 points.
 
 ## Brand Commitments
 
