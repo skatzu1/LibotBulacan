@@ -1,6 +1,5 @@
 import axios from 'axios';
 import { readStarted } from './utils/serverActivity';
-import { hintMaintenance } from './utils/systemStatus';
 
 // ─── Single source of truth for the backend URL ───────────────────────────────
 // EXPO_PUBLIC_API_URL lets a build profile point at a different server (a
@@ -74,12 +73,7 @@ api.interceptors.request.use((config) => {
 });
 api.interceptors.response.use(
   (res) => { res.config?.readEnded?.(); return res; },
-  (err) => {
-    err?.config?.readEnded?.();
-    // Maybe maintenance began: hooks/useSystemStatus.js asks the server now.
-    if (err?.response?.status === 503) hintMaintenance();
-    return Promise.reject(err);
-  },
+  (err) => { err?.config?.readEnded?.(); return Promise.reject(err); },
 );
 
 export const setupClerkInterceptor = (getToken) => {

@@ -121,7 +121,6 @@ import { UsersIcon } from "phosphor-react-native/src/icons/Users";
 import { WarningIcon } from "phosphor-react-native/src/icons/Warning";
 import { WarningCircleIcon } from "phosphor-react-native/src/icons/WarningCircle";
 import { WifiSlashIcon } from "phosphor-react-native/src/icons/WifiSlash";
-import { WrenchIcon } from "phosphor-react-native/src/icons/Wrench";
 import { XIcon } from "phosphor-react-native/src/icons/X";
 import { XCircleIcon } from "phosphor-react-native/src/icons/XCircle";
 
@@ -214,7 +213,6 @@ const PH = {
   Warning: WarningIcon,
   WarningCircle: WarningCircleIcon,
   WifiSlash: WifiSlashIcon,
-  Wrench: WrenchIcon,
   X: XIcon,
   XCircle: XCircleIcon,
 };
@@ -224,7 +222,6 @@ const PH = {
 const MAP = {
   // navigation & chrome
   "home":              "House",
-  "tool":              "Wrench",            // the maintenance screen
   "grid":              "GridFour",
   "search":            "MagnifyingGlass",
   "menu":              "List",

@@ -29,7 +29,6 @@ import ErrorBoundary            from "./utils/ErrorBoundary";
 import { initCrashReporting }   from "./utils/crashReporter";
 import { installFetchTimeout }  from "./utils/fetchTimeout";
 import { trackBackendRead }     from "./utils/serverActivity";
-import { maintenanceHintFrom }  from "./utils/systemStatus";
 import useSystemStatus, { SystemStatusContext } from "./hooks/useSystemStatus";
 
 // Fonts. Every weight is a separate family because React Native does not
@@ -77,7 +76,6 @@ import EditProfile        from './Screens/EditProfile';
 import ProfileScreen      from './Screens/Profilescreen';
 import BannedScreen       from './Screens/BannedScreen';
 import SuspendedScreen    from './Screens/SuspendedScreen';
-import MaintenanceScreen  from './Screens/MaintenanceScreen';
 import MunicipalityScreen from './Screens/MunicipalityScreen';
 import LoginSecurity       from './Screens/LoginSecurity';
 import ReportProblem      from './Screens/ReportProblem';
@@ -132,9 +130,8 @@ function StartupWait() {
 function AppNavigator() {
   const { isLoaded, isSignedIn, getToken, userId, signOut } = useAuth();
   const { colors, isDark } = useTheme();
-  // Maintenance and the update notice (mock defense 2026-10-21). While the
-  // super admin has the system under maintenance, MaintenanceScreen takes the
-  // place of the app for everyone, signed in or not.
+  // The super admin's update notice, shown on Home (mock defense 2026-10-21).
+  // Maintenance never closes the app: it's for the console only.
   const system = useSystemStatus();
 
   // React Navigation paints its own background behind every screen and during
@@ -311,12 +308,8 @@ function AppNavigator() {
     return () => { cancelled = true; };
   }, [isSignedIn, userId]);
 
-  if (!isLoaded || hasSeenWelcome === null || isCheckingBan || !system.ready) {
+  if (!isLoaded || hasSeenWelcome === null || isCheckingBan) {
     return <StartupWait />;
-  }
-
-  if (system.maintenance?.on) {
-    return <MaintenanceScreen maintenance={system.maintenance} onRetry={system.recheck} />;
   }
 
   return (
@@ -398,10 +391,9 @@ function AppNavigator() {
 
 // Every fetch() gets a time limit, so a dead connection ends in an error and a
 // retry instead of a spinner that never stops, and reads from the backend are
-// tracked so a slow one can be explained (OfflineBanner). A 503 from our server
-// makes the maintenance check ask at once (utils/systemStatus.js). Before React
-// mounts, so the first request is covered too. See utils/fetchTimeout.js.
-installFetchTimeout(undefined, { onRequest: trackBackendRead(BASE_URL), onResponse: maintenanceHintFrom(BASE_URL) });
+// tracked so a slow one can be explained (OfflineBanner). Before React mounts,
+// so the first request is covered too. See utils/fetchTimeout.js.
+installFetchTimeout(undefined, { onRequest: trackBackendRead(BASE_URL) });
 
 // Initialised at module scope, before React mounts — a crash in the first
 // render is exactly the one you most need reported.
