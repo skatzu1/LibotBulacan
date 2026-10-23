@@ -74,7 +74,7 @@ export default function ProfileScreen() {
       const data = await res.json();
       const user = data?.user;
       if (typeof user?.points === "number") setPoints(user.points);
-      setBadgeCount((Array.isArray(user?.badges) ? user.badges.length : 0) + (user?.townBadges || 0));
+      setBadgeCount((Array.isArray(user?.badges) ? user.badges.length : 0) + (user?.townBadges || 0) + (user?.districtBadges || 0));
       setTripCount(Array.isArray(user?.visitedSpots) ? user.visitedSpots.length : 0);
       setMiddleName(user?.middleName || "");
       setTitle(user?.title || null);
@@ -164,7 +164,7 @@ export default function ProfileScreen() {
   // on the page. Deleting the account is real and lives in Edit Profile.
   const menuItems = [
     { id: "trips",    icon: "map-pin",  title: "Previous Trips", onPress: () => navigation.navigate("PreviousTrips") },
-    { id: "badges",   icon: "award",    title: "Achievements", subtitle: "Spot badges, town badges and titles", onPress: () => navigation.navigate("Badges") },
+    { id: "badges",   icon: "award",    title: "Achievements", subtitle: "Spot, town and district badges, and titles", onPress: () => navigation.navigate("Badges") },
     { id: "settings", icon: "settings", title: "Settings",       onPress: () => navigation.navigate("Settings") },
   ];
 

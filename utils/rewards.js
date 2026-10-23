@@ -4,7 +4,7 @@
  * can call them without pulling in the celebration's UI.
  *
  *   celebrate(unlocked)      a full-screen moment per reward: a spot's badge,
- *                            then a town's badge, then a title
+ *                            then a town's, a district's, The GOAT Traveler
  *   showProgress(progress)   a small banner for a step that earns nothing yet:
  *                            "+5 points · 2 of 3 done at Barasoain Church"
  *   celebrateResult(reply)   either, from a progress route's reply
@@ -19,14 +19,17 @@ export function setRewardHandlers(next) {
   handlers = next || { items: null, banner: null };
 }
 
-/** The server's `unlocked` (single or list fields) as moments, in order. */
+/**
+ * The server's `unlocked` (single or list fields) as moments, in order: spot
+ * badges, then towns (bronze), districts (silver), The GOAT Traveler (gold).
+ */
 export function itemsFrom(unlocked) {
   if (!unlocked) return [];
-  const spots = [...(unlocked.spotBadges || []), ...(unlocked.spotBadge ? [unlocked.spotBadge] : [])];
-  const towns = [...(unlocked.townBadges || []), ...(unlocked.townBadge ? [unlocked.townBadge] : [])];
+  const all = (list, one) => [...(list || []), ...(one ? [one] : [])];
   return [
-    ...spots.map((badge) => ({ kind: "spot", badge })),
-    ...towns.map((town) => ({ kind: "town", town })),
+    ...all(unlocked.spotBadges, unlocked.spotBadge).map((badge) => ({ kind: "spot", badge })),
+    ...all(unlocked.townBadges, unlocked.townBadge).map((town) => ({ kind: "town", town })),
+    ...all(unlocked.districtBadges, unlocked.districtBadge).map((district) => ({ kind: "district", district })),
     ...(unlocked.title ? [{ kind: "title", title: unlocked.title }] : []),
   ];
 }

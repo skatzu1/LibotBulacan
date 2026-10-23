@@ -3,8 +3,9 @@ import { render, fireEvent, act } from "@testing-library/react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { ThemeProvider } from "../context/ThemeContext";
 
-// The app's side of achievements (the thesis panel, 2026-10-21): the reward
-// moments, the progress banner, titles, and the Terms pop-up's text.
+// The app's side of achievements (the thesis panel, 2026-10-21; tiers
+// 2026-10-24): the reward moments, the progress banner, titles, and the Terms
+// pop-up's text.
 
 jest.mock("@react-native-async-storage/async-storage", () =>
   require("@react-native-async-storage/async-storage/jest/async-storage-mock"),
@@ -25,7 +26,7 @@ jest.mock("react-native-share", () => ({ __esModule: true, default: { open: jest
 
 const { itemsFrom, celebrate, celebrateResult, showProgress } = require("../utils/rewards");
 const { RewardCelebrationProvider, copyFor } = require("../components/RewardCelebration");
-const { nextTitleLine, titleName } = require("../utils/titles");
+const { nextTitleLine, titleName, titleTier } = require("../utils/titles");
 const { reachedEnd } = require("../components/LegalConsentModal");
 const { LEGAL_DOCS, LEGAL_VERSION } = require("../utils/legalText");
 
@@ -43,15 +44,23 @@ const mount = async () => {
 };
 
 const SPOT_BADGE = { badgeId: "b1", name: "Barasoain Church", image: "https://res.cloudinary.com/demo/image/upload/v1/b.png" };
-const TOWN = { municipality: "Malolos", name: "Malolos", description: "Finished every mission in Malolos", image: null };
+const TOWN = {
+  municipality: "Malolos", name: "Malolos", description: "Finished every mission in Malolos", image: null,
+  tier: "bronze", title: { key: "town:Malolos", name: "Malolos Traveler", tier: "bronze" },
+};
+const DISTRICT = {
+  district: "1", name: "District 1", description: "Finished every mission in District 1", image: null,
+  tier: "silver", title: { key: "district:1", name: "District 1 Traveler", tier: "silver" },
+};
+const GOAT = { key: "goat", name: "The GOAT Traveler", tier: "gold" };
 
 describe("utils/rewards", () => {
-  it("orders a step's rewards: the spot's badge, the town's, then the title", () => {
-    const items = itemsFrom({ title: { key: "explorer", name: "Explorer" }, townBadge: TOWN, spotBadge: SPOT_BADGE });
-    expect(items.map((i) => i.kind)).toEqual(["spot", "town", "title"]);
+  it("orders a step's rewards: the spot's badge, the town's, the district's, then the gold title", () => {
+    const items = itemsFrom({ title: GOAT, districtBadge: DISTRICT, townBadge: TOWN, spotBadge: SPOT_BADGE });
+    expect(items.map((i) => i.kind)).toEqual(["spot", "town", "district", "title"]);
     // The lists GET /api/achievements/me sends work too.
-    expect(itemsFrom({ spotBadges: [SPOT_BADGE, SPOT_BADGE], townBadges: [], title: null }).length).toBe(2);
-    expect(itemsFrom({ spotBadge: null, townBadge: null, title: null })).toEqual([]);
+    expect(itemsFrom({ spotBadges: [SPOT_BADGE, SPOT_BADGE], townBadges: [], districtBadges: [DISTRICT], title: null }).length).toBe(3);
+    expect(itemsFrom({ spotBadge: null, townBadge: null, districtBadge: null, title: null })).toEqual([]);
     expect(itemsFrom(undefined)).toEqual([]);
   });
 
@@ -67,19 +76,25 @@ describe("The reward moments", () => {
   it("shows each reward in turn, then closes", async () => {
     const tree = await mount();
     await act(async () => {
-      celebrate({ spotBadge: SPOT_BADGE, townBadge: TOWN, title: { key: "explorer", name: "Explorer" } });
+      celebrate({ spotBadge: SPOT_BADGE, townBadge: TOWN, districtBadge: DISTRICT, title: GOAT });
     });
     expect(tree.getByText("BADGE UNLOCKED")).toBeTruthy();
     expect(tree.getByText("Barasoain Church")).toBeTruthy();
-    expect(tree.getByLabelText("1 of 3")).toBeTruthy();
+    expect(tree.getByLabelText("1 of 4")).toBeTruthy();
 
     fireEvent.press(tree.getByLabelText("Next reward"));
-    expect(tree.getByText("TOWN FINISHED")).toBeTruthy();
+    expect(tree.getByText("TOWN FINISHED · BRONZE")).toBeTruthy();
     expect(tree.getByText("Every spot in Malolos, every mission. That's the whole town.")).toBeTruthy();
+    expect(tree.getByText(/New title: Malolos Traveler/)).toBeTruthy();
 
     fireEvent.press(tree.getByLabelText("Next reward"));
-    expect(tree.getByText("NEW TITLE")).toBeTruthy();
-    expect(tree.getByText("Explorer")).toBeTruthy();
+    expect(tree.getByText("DISTRICT FINISHED · SILVER")).toBeTruthy();
+    expect(tree.getByText("District 1")).toBeTruthy();
+    expect(tree.getByText(/New title: District 1 Traveler/)).toBeTruthy();
+
+    fireEvent.press(tree.getByLabelText("Next reward"));
+    expect(tree.getByText("NEW TITLE · GOLD")).toBeTruthy();
+    expect(tree.getByText("The GOAT Traveler")).toBeTruthy();
     // Only a spot badge can be shared.
     expect(tree.queryByLabelText("Share a link to this badge")).toBeNull();
   }, 15000);
@@ -92,6 +107,13 @@ describe("The reward moments", () => {
       await new Promise((r) => setTimeout(r, 400));
     });
     expect(mockNavigate).toHaveBeenCalledWith("Badges", { tab: "towns" });
+
+    await act(async () => { celebrate({ districtBadge: DISTRICT }); });
+    await act(async () => {
+      fireEvent.press(tree.getByLabelText("View your achievements"));
+      await new Promise((r) => setTimeout(r, 400));
+    });
+    expect(mockNavigate).toHaveBeenLastCalledWith("Badges", { tab: "districts" });
   }, 15000);
 
   it("a step that earns nothing yet: the banner, with points and how far along", async () => {
@@ -111,17 +133,25 @@ describe("The reward moments", () => {
     expect(copyFor({ kind: "spot", badge: SPOT_BADGE }).headline).toBe("Barasoain Church");
     expect(copyFor({ kind: "town", town: { ...TOWN, name: "Malolos Heritage", description: "The first republic's town." } }))
       .toEqual(expect.objectContaining({ headline: "Malolos Heritage", body: "The first republic's town." }));
-    expect(copyFor({ kind: "title", title: { key: "goat", name: "GOAT Traveler" } }).body).toMatch(/no title above/);
+    expect(copyFor({ kind: "town", town: TOWN }).title).toBe("Malolos Traveler");
+    expect(copyFor({ kind: "district", district: DISTRICT }))
+      .toEqual(expect.objectContaining({ headline: "District 1", title: "District 1 Traveler", tier: "silver" }));
+    expect(copyFor({ kind: "title", title: GOAT })).toEqual(expect.objectContaining({ headline: "The GOAT Traveler", tier: "gold" }));
+    expect(copyFor({ kind: "title", title: GOAT }).body).toMatch(/no title above/);
   });
 });
 
 describe("Titles", () => {
-  it("names and the next goal", () => {
-    expect(titleName("voyager")).toBe("Voyager");
-    expect(titleName({ key: "goat", name: "GOAT Traveler" })).toBe("GOAT Traveler");
-    expect(titleName(null)).toBeNull();
-    expect(nextTitleLine({ name: "Voyager", townsLeft: 2 })).toBe("2 more towns to Voyager");
-    expect(nextTitleLine({ name: "Explorer", townsLeft: 1 })).toBe("1 more town to Explorer");
+  it("names, tiers and the next goal", () => {
+    expect(titleName("town:Baliwag")).toBe("Baliwag Traveler");
+    expect(titleName("district:1")).toBe("District 1 Traveler");
+    expect(titleName("district:sjdm")).toBe("San Jose del Monte District Traveler");
+    expect(titleName({ key: "goat", name: "The GOAT Traveler" })).toBe("The GOAT Traveler");
+    expect(["town:Malolos", "district:2", "goat"].map(titleTier)).toEqual(["bronze", "silver", "gold"]);
+    // The old ladder's keys name nothing now.
+    expect([titleName("voyager"), titleName("explorer"), titleName("district:9"), titleName(null)]).toEqual([null, null, null, null]);
+    expect(nextTitleLine({ name: "District 1 Traveler", townsLeft: 2 })).toBe("2 more towns to District 1 Traveler");
+    expect(nextTitleLine({ name: "The GOAT Traveler", townsLeft: 1 })).toBe("1 more town to The GOAT Traveler");
     expect(nextTitleLine(null)).toBe("You've earned every title");
   });
 });

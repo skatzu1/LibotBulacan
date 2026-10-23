@@ -30,11 +30,11 @@ const json = (body) => ({ ok: true, status: 200, headers: { get: () => "applicat
 const TOTAL = 45;
 const traveler = (i) => ({
   _id: `u${i}`, clerkUserId: i === 31 ? "me" : `u${i}`, name: i === 31 ? "Mia Torres" : `Traveler ${i}`,
-  points: (TOTAL - i) * 10, rank: i, spotsVisited: 2, ...(i === 4 && { title: "voyager", titleName: "Voyager" }),
+  points: (TOTAL - i) * 10, rank: i, spotsVisited: 2, ...(i === 4 && { title: "district:2", titleName: "District 2 Traveler" }),
 });
 const board = (page) => ({
   users: Array.from({ length: TOTAL }, (_, i) => traveler(i + 1)).slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
-  me: { ...traveler(31), page: 2, title: "explorer" },
+  me: { ...traveler(31), page: 2, title: "town:Malolos" },
   total: TOTAL, page, pages: 3, pageSize: PAGE_SIZE,
 });
 
@@ -51,9 +51,9 @@ it("pins your standing first and jumps to your page", async () => {
   await tree.findByText("Rankings", {}, { timeout: 8000 });
   expect(global.fetch.mock.calls[0][0]).toBe(`https://api.test/api/users?page=1&limit=${PAGE_SIZE}`);
 
-  const you = tree.getByLabelText("Your standing: rank 31 of 45, 140 points, 2 spots visited, Explorer. Opens page 2");
+  const you = tree.getByLabelText("Your standing: rank 31 of 45, 140 points, 2 spots visited, Malolos Traveler. Opens page 2");
   expect(tree.getByText("#31")).toBeTruthy();
-  expect(tree.getByLabelText(/^Rank 4, Traveler 4, 410 points, 2 spots visited, Voyager$/)).toBeTruthy();
+  expect(tree.getByLabelText(/^Rank 4, Traveler 4, 410 points, 2 spots visited, District 2 Traveler$/)).toBeTruthy();
   expect(tree.getByText("Page 1 of 3 · 45 explorers")).toBeTruthy();
 
   fireEvent.press(you);
@@ -61,7 +61,7 @@ it("pins your standing first and jumps to your page", async () => {
   expect(global.fetch).toHaveBeenLastCalledWith(`https://api.test/api/users?page=2&limit=${PAGE_SIZE}`, expect.anything());
   // On your page: your row is in the list, and the card no longer offers a jump.
   expect(tree.getByLabelText(/^Rank 31, you, 140 points/)).toBeTruthy();
-  expect(tree.getByLabelText("Your standing: rank 31 of 45, 140 points, 2 spots visited, Explorer")).toBeTruthy();
+  expect(tree.getByLabelText("Your standing: rank 31 of 45, 140 points, 2 spots visited, Malolos Traveler")).toBeTruthy();
 
   fireEvent.press(tree.getByLabelText("Next page"));
   await waitFor(() => expect(tree.getByText("Ranks 41–45 of 45")).toBeTruthy());

@@ -60,6 +60,15 @@ export const lightColors = {
   accentSoft:       "#FBF1C4",
   onAccent:         "#2C2810",   //  9.60 on accent
 
+  // Achievement tiers: towns bronze, districts silver (gold is the accent).
+  // The *Ink colours are for text on the *Soft ones.
+  bronze:           "#B4703A",
+  bronzeInk:        "#7A4A22",   //  6.06 on bronzeSoft
+  bronzeSoft:       "#F6E6D8",
+  silver:           "#8E9AA3",
+  silverInk:        "#4A555D",   //  6.48 on silverSoft
+  silverSoft:       "#E9EDF0",
+
   // Drawer (retained so any stray reference still resolves; the drawer
   // navigator itself was removed in favour of tabs + quick actions.)
   drawer:           "#FBF8F2",
@@ -132,6 +141,14 @@ export const darkColors = {
   accentDark:       "#F6DF5C",
   accentSoft:       "#242012",
   onAccent:         "#2C2810",
+
+  // Achievement tiers (see the light palette).
+  bronze:           "#D08A50",
+  bronzeInk:        "#E8B488",   //  8.7 on bronzeSoft
+  bronzeSoft:       "#2A1E14",
+  silver:           "#B9C3CA",
+  silverInk:        "#D6DEE3",
+  silverSoft:       "#1E2629",
 
   // Drawer
   drawer:           "#0C3438",

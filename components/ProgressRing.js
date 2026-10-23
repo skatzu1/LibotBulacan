@@ -6,9 +6,10 @@ import { useTheme } from "../context/ThemeContext";
 /*
  * How far along a badge is: a ring that fills as its steps are done, drawn
  * round whatever sits in the middle (the badge, a photo). Brand teal while in
- * progress, gold once complete.
+ * progress, gold once complete (or `doneColor`: a town's bronze, a district's
+ * silver).
  */
-function ProgressRing({ done = 0, total = 1, size = 96, stroke = 5, children, style }) {
+function ProgressRing({ done = 0, total = 1, size = 96, stroke = 5, doneColor, children, style }) {
   const { colors } = useTheme();
   const r = (size - stroke) / 2;
   const c = 2 * Math.PI * r;
@@ -21,7 +22,7 @@ function ProgressRing({ done = 0, total = 1, size = 96, stroke = 5, children, st
         {share > 0 && (
           <Circle
             cx={size / 2} cy={size / 2} r={r}
-            stroke={complete ? colors.accent : colors.brand}
+            stroke={complete ? doneColor || colors.accent : colors.brand}
             strokeWidth={stroke}
             fill="none"
             strokeLinecap="round"

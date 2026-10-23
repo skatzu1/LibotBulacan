@@ -140,8 +140,9 @@ const toEntry = (u) => ({
   points:  typeof u.points === "number" ? u.points : 0,
   visited: typeof u.spotsVisited === "number" ? u.spotsVisited : 0,
   avatar:  u.profileImage || null,
-  // The title from finishing towns (utils/titles.js); null without one.
-  title:   u.title || null,
+  // The title they show (utils/titles.js: a town's, a district's or The GOAT
+  // Traveler); null without one, or for one the app doesn't know.
+  title:   titleName(u.title) ? u.title : null,
   isMe:    false,
 });
 

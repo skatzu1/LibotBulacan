@@ -31,7 +31,7 @@ import { badgeImage } from "../utils/image";
 import { shareBadge } from "../utils/badgeShare";
 import { celebrate } from "../utils/rewards";
 import { MISSION_KINDS, ARRIVAL_KIND } from "../utils/missionTiers";
-import { nextTitleLine, titleName } from "../utils/titles";
+import { nextTitleLine, titleName, tierColors, TIER_LABEL } from "../utils/titles";
 import { starPath } from "../utils/townEmblem";
 import Icon from "../components/Icon";
 import TitleChip from "../components/TitleChip";
@@ -44,13 +44,19 @@ import { GRID_GAP, H_GUTTER, columnsFor, cardSizeFor, AnimatedCell } from "../co
 /*
  * Achievements (the thesis panel, 2026-10-21), from GET /api/achievements/me:
  *
- *   Spots   every spot's badge — earned for finishing every mission there —
- *           with a ring that fills as its steps are done
- *   Towns   a badge per town, for finishing every spot in it (the image the
- *           admin uploaded, or the plain medal icon until there is one)
- *   Titles  Explorer, Voyager, GOAT Traveler — by the number of towns finished
+ *   Spots      every spot's badge — earned for finishing every mission there —
+ *              with a ring that fills as its steps are done
+ *   Towns      bronze: a badge per town, for finishing every spot in it (the
+ *              image the admin uploaded, or the plain medal icon until there
+ *              is one), with the title "<Town> Traveler"
+ *   Districts  silver: a badge per district, for every town in it with spots,
+ *              with "District 1 Traveler" (tiers: the thesis panel, 2026-10-24)
+ *   Titles     every title, gold (The GOAT Traveler: every town in Bulacan with
+ *              spots), then silver, then bronze; the earned ones are a
+ *              pick-one list of the title to show
  *
- * Until then this was "Badges", one per spot, given on arrival.
+ * Until 2026-10-21 this was "Badges", one per spot, given on arrival; until
+ * 2026-10-24 titles went by the number of towns finished.
  */
 
 const RING = 72;    // the progress ring round each spot badge
@@ -59,9 +65,10 @@ const ICON_SIZE = 54;
 const cardHeightFor = (fontScale) => Math.ceil(118 + 44 * fontScale);
 
 const TABS = [
-  { key: "spots",  label: "Spots" },
-  { key: "towns",  label: "Towns" },
-  { key: "titles", label: "Titles" },
+  { key: "spots",     label: "Spots" },
+  { key: "towns",     label: "Towns" },
+  { key: "districts", label: "Districts" },
+  { key: "titles",    label: "Titles" },
 ];
 
 const fmtDate = (d, month = "short") =>
@@ -76,12 +83,14 @@ const byProgress = (a, b) =>
   (b.done / Math.max(1, b.total) - a.done / Math.max(1, a.total)) ||
   a.name.localeCompare(b.name);
 
-function TitleMedal({ earned, size = 56, colors }) {
+// A title's medal, in its tier's metal once earned.
+function TitleMedal({ earned, size = 56, colors, tier = "gold" }) {
+  const metal = tierColors(colors, tier);
   return (
     <Svg width={size} height={size} viewBox="0 0 100 100">
-      <Circle cx="50" cy="50" r="47" fill={earned ? colors.accentSoft : colors.backgroundSoft} stroke={earned ? colors.accent : colors.cardBorder} strokeWidth={3} />
-      <Path d={starPath(50, 50, 36, 21, 9.5)} fill={earned ? colors.accent : colors.starEmpty} />
-      <Path d={starPath(50, 50, 20, 12, 5.5)} fill={earned ? colors.accentDark : colors.cardBorder} opacity={earned ? 0.35 : 0.6} />
+      <Circle cx="50" cy="50" r="47" fill={earned ? metal.soft : colors.backgroundSoft} stroke={earned ? metal.fill : colors.cardBorder} strokeWidth={3} />
+      <Path d={starPath(50, 50, 36, 21, 9.5)} fill={earned ? metal.fill : colors.starEmpty} />
+      <Path d={starPath(50, 50, 20, 12, 5.5)} fill={earned ? metal.ink : colors.cardBorder} opacity={earned ? 0.35 : 0.6} />
     </Svg>
   );
 }
@@ -106,7 +115,7 @@ export default function BadgeScreen() {
   const [error, setError]             = useState(null);
   const [tab, setTab]                 = useState(route?.params?.tab || "spots");
   const [query, setQuery]             = useState("");
-  const [selected, setSelected]       = useState(null); // { kind: "spot" | "town", item }
+  const [selected, setSelected]       = useState(null); // { kind: "spot" | "town" | "district", item }
   const [modalVisible, setModalVisible] = useState(false);
   const [sharing, setSharing]         = useState(false);
 
@@ -158,18 +167,23 @@ export default function BadgeScreen() {
 
   const spots = useMemo(() => (data?.spots || []).filter((s) => s.badge).sort(byProgress), [data]);
   const towns = useMemo(() => (data?.towns || []).map((t) => ({ ...t, name: t.name || t.municipality, done: t.spotsDone, total: t.spotsTotal })).sort(byProgress), [data]);
+  const districts = useMemo(() => (data?.districts || []).map((d) => ({ ...d, done: d.townsDone, total: d.townsTotal })).sort(byProgress), [data]);
+  // Gold, then silver, then bronze, as the server lists them.
   const titles = data?.titles || [];
-  // The title on the profile and the leaderboard: the traveler's pick, else the highest.
+  // The title on the profile and the leaderboard: the traveler's pick, else their best.
   const shownKey = data?.shownTitle?.key ?? data?.title?.key ?? null;
   const titlesEarned = titles.filter((t) => t.earned).length;
   const spotsEarned = spots.filter((s) => s.earned).length;
   const townsEarned = towns.filter((t) => t.earned).length;
+  const districtsEarned = districts.filter((d) => d.earned).length;
 
   const q = query.trim().toLowerCase();
   const matches = (fields) => !q || fields.filter(Boolean).some((f) => String(f).toLowerCase().includes(q));
   const visible = tab === "spots"
     ? spots.filter((s) => matches([s.name, s.badge?.name, s.town]))
-    : tab === "towns" ? towns.filter((t) => matches([t.name, t.municipality])) : titles;
+    : tab === "towns" ? towns.filter((t) => matches([t.name, t.municipality, t.title?.name]))
+    : tab === "districts" ? districts.filter((d) => matches([d.name, d.title?.name, ...(d.towns || [])]))
+    : titles;
 
   // ── Detail ──
   const open = (kind, item) => {
@@ -213,7 +227,7 @@ export default function BadgeScreen() {
     if (!t.earned || t.key === shownKey) return;
     Haptics.selectionAsync().catch(() => {});
     const before = data?.shownTitle ?? null;
-    setData((d) => d && { ...d, shownTitle: { key: t.key, name: t.name } });
+    setData((d) => d && { ...d, shownTitle: { key: t.key, name: t.name, tier: t.tier } });
     try {
       const token = await getToken();
       const res = await fetch(`${BASE_URL}/api/users/me/title`, {
@@ -289,52 +303,71 @@ export default function BadgeScreen() {
     </AnimatedCell>
   ), [colors, cardSize, cardHeight]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const renderTown = useCallback(({ item: t, index }) => (
-    <AnimatedCell delay={Math.min(index, 8) * 50}>
-      <TouchableOpacity
-        activeOpacity={0.8}
-        onPress={() => open("town", t)}
-        style={[styles.cellWrap, { width: townSize }]}
-        accessibilityRole="button"
-        accessibilityLabel={t.earned
-          ? `${t.name} town badge, earned${t.earnedAt ? ` on ${fmtDate(t.earnedAt, "long")}` : ""}`
-          : `${t.name} town badge, locked, ${t.spotsDone} of ${t.spotsTotal} spots done`}
-        accessibilityHint="Opens the town's badge"
-      >
-        <View style={[
-          styles.townCard,
-          t.earned ? { backgroundColor: colors.card, borderColor: colors.accent, borderWidth: 1.5 } : { backgroundColor: colors.backgroundSoft },
-        ]}>
-          {/* A town badge is a tier up from a spot's: it also glows. */}
-          <View>
-            {t.earned && <GlowPulse size={96} />}
-            <ProgressRing done={t.spotsDone} total={t.spotsTotal} size={104} stroke={5}>
-              <View style={!t.earned && styles.locked}>
-                <TownEmblem image={t.image} size={84} color={t.earned ? colors.brand : colors.textMuted} />
-                {t.earned && t.image && <BadgeShine size={84} delay={(index % 4) * 700} every={3000} />}
-              </View>
-            </ProgressRing>
-            {t.earned && <Sparkles size={104} count={4} seed={index + 3} />}
+  // A town's badge (bronze) or a district's (silver): a tier up from a spot's,
+  // it also glows, in its metal. `unit` is what it counts: spots or towns.
+  const renderArea = (kind, { item: t, index }) => {
+    const metal = tierColors(colors, t.tier);
+    const unit = kind === "town" ? "spot" : "town";
+    return (
+      <AnimatedCell delay={Math.min(index, 8) * 50}>
+        <TouchableOpacity
+          activeOpacity={0.8}
+          onPress={() => open(kind, t)}
+          style={[styles.cellWrap, { width: townSize }]}
+          accessibilityRole="button"
+          accessibilityLabel={t.earned
+            ? `${t.name} ${kind} badge, ${TIER_LABEL[t.tier]}, earned${t.earnedAt ? ` on ${fmtDate(t.earnedAt, "long")}` : ""}`
+            : `${t.name} ${kind} badge, ${TIER_LABEL[t.tier]}, locked, ${t.done} of ${t.total} ${unit}s done`}
+          accessibilityHint={`Opens the ${kind}'s badge`}
+        >
+          <View style={[
+            styles.townCard,
+            t.earned ? { backgroundColor: colors.card, borderColor: metal.fill, borderWidth: 1.5 } : { backgroundColor: colors.backgroundSoft },
+          ]}>
+            <View>
+              {t.earned && <GlowPulse size={96} color={metal.fill} />}
+              <ProgressRing done={t.done} total={t.total} size={104} stroke={5} doneColor={metal.fill}>
+                <View style={!t.earned && styles.locked}>
+                  <TownEmblem image={t.image} size={84} color={t.earned ? metal.fill : colors.textMuted} />
+                  {t.earned && t.image && <BadgeShine size={84} delay={(index % 4) * 700} every={3000} />}
+                </View>
+              </ProgressRing>
+              {t.earned && <Sparkles size={104} count={4} seed={index + 3} />}
+            </View>
+            <Text style={[styles.townName, { color: colors.textPrimary }]} numberOfLines={1}>{t.name}</Text>
+            {t.earned ? (
+              <Text style={[styles.footerText, { color: metal.ink }]}>Finished{t.earnedAt ? ` · ${fmtDate(t.earnedAt)}` : ""}</Text>
+            ) : (
+              <Text style={[styles.footerText, { color: t.done ? colors.brand : colors.textMuted }]}>
+                {t.done} of {t.total} {unit}{t.total === 1 ? "" : "s"}
+              </Text>
+            )}
           </View>
-          <Text style={[styles.townName, { color: colors.textPrimary }]} numberOfLines={1}>{t.name}</Text>
-          {t.earned ? (
-            <Text style={[styles.footerText, { color: colors.accentDark }]}>Finished{t.earnedAt ? ` · ${fmtDate(t.earnedAt)}` : ""}</Text>
-          ) : (
-            <Text style={[styles.footerText, { color: t.spotsDone ? colors.brand : colors.textMuted }]}>
-              {t.spotsDone} of {t.spotsTotal} spot{t.spotsTotal === 1 ? "" : "s"}
-            </Text>
-          )}
-        </View>
-      </TouchableOpacity>
-    </AnimatedCell>
-  ), [colors, townSize]); // eslint-disable-line react-hooks/exhaustive-deps
+        </TouchableOpacity>
+      </AnimatedCell>
+    );
+  };
+  const renderTown = useCallback((cell) => renderArea("town", cell), [colors, townSize]); // eslint-disable-line react-hooks/exhaustive-deps
+  const renderDistrict = useCallback((cell) => renderArea("district", cell), [colors, townSize]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // What a title takes, in words: every town in Bulacan or a district, or
+  // every spot in a town.
+  const titleNeed = (t) => {
+    if (t.tier === "gold") return `Finish every town in Bulacan with spots (${t.total})`;
+    if (t.tier === "silver") {
+      const d = districts.find((x) => `district:${x.district}` === t.key);
+      return `Finish every town with spots in ${d?.name || "the district"} (${t.total})`;
+    }
+    return `Finish every spot in ${t.key.slice("town:".length)} (${t.total})`;
+  };
 
   // The earned titles are a pick-one list: the one picked shows next to the
   // traveler's name on their profile and the leaderboard.
   const renderTitle = ({ item: t, index }) => {
-    const need = t.all ? `Finish every town with spots (${t.towns})` : `Finish ${t.towns} town${t.towns === 1 ? "" : "s"}`;
-    const have = Math.min(townsEarned, t.towns);
+    const need = titleNeed(t);
+    const have = Math.min(t.done, t.total);
     const shown = t.earned && t.key === shownKey;
+    const metal = tierColors(colors, t.tier);
     const Row = t.earned ? TouchableOpacity : View;
     return (
       <AnimatedCell delay={index * 60}>
@@ -352,21 +385,22 @@ export default function BadgeScreen() {
                 accessibilityLabel: `${t.name}, earned`,
                 accessibilityHint: shown ? "Shown on your profile and the leaderboard" : "Shows this title on your profile and the leaderboard",
               }
-            : { accessible: true, accessibilityLabel: `${t.name}: ${need}. ${have} of ${t.towns} towns` })}
+            : { accessible: true, accessibilityLabel: `${t.name}, ${TIER_LABEL[t.tier]}: ${need}. ${have} of ${t.total} ${t.unit}` })}
         >
           <View>
-            {t.earned && t.key === "goat" && <GlowPulse size={56} />}
-            <TitleMedal earned={t.earned} colors={colors} />
+            {t.earned && t.tier === "gold" && <GlowPulse size={56} />}
+            <TitleMedal earned={t.earned} colors={colors} tier={t.tier} />
             {t.earned && <BadgeShine size={56} delay={index * 600} />}
           </View>
           <View style={{ flex: 1 }}>
+            <Text style={[styles.titleTier, { color: t.earned ? metal.ink : colors.textMuted }]}>{TIER_LABEL[t.tier].toUpperCase()}</Text>
             <Text style={[styles.titleName, { color: t.earned ? colors.textPrimary : colors.textSecondary }]}>{t.name}</Text>
             <Text style={[styles.titleNeed, { color: shown ? colors.accentDark : colors.textMuted }]}>
               {shown ? "On your profile and the leaderboard" : t.earned ? "Earned · tap to show it" : need}
             </Text>
             {!t.earned && (
               <View style={[styles.bar, { backgroundColor: colors.divider }]}>
-                <View style={[styles.barFill, { backgroundColor: colors.brand, width: `${(have / Math.max(1, t.towns)) * 100}%` }]} />
+                <View style={[styles.barFill, { backgroundColor: colors.brand, width: `${(have / Math.max(1, t.total)) * 100}%` }]} />
               </View>
             )}
           </View>
@@ -374,7 +408,7 @@ export default function BadgeScreen() {
             <View style={[styles.radio, shown ? { backgroundColor: colors.accent, borderColor: colors.accent } : { borderColor: colors.cardBorder }]}>
               {shown && <Icon name="check" size={14} color={colors.onAccent} />}
             </View>
-          ) : <Text style={[styles.footerText, { color: colors.textMuted }]}>{have}/{t.towns}</Text>}
+          ) : <Text style={[styles.footerText, { color: colors.textMuted }]}>{have}/{t.total}</Text>}
         </Row>
       </AnimatedCell>
     );
@@ -401,9 +435,10 @@ export default function BadgeScreen() {
     );
   }
 
-  // Your title and the next one up: the top of the screen.
+  // Your best title and the nearest one still to earn: the top of the screen.
   const next = data?.nextTitle;
-  const nextShare = next && Number.isFinite(next.townsLeft) ? townsEarned / Math.max(1, townsEarned + next.townsLeft) : 1;
+  const nextRow = next && titles.find((t) => t.key === next.key);
+  const nextShare = nextRow ? nextRow.done / Math.max(1, nextRow.total) : 1;
   const summary = data && (
     <View style={[styles.summary, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
       <View style={styles.summaryTop}>
@@ -417,8 +452,8 @@ export default function BadgeScreen() {
           <Text style={[styles.summaryNext, { color: colors.textSecondary }]}>{nextTitleLine(next)}</Text>
         </View>
         <View>
-          {data.title?.key === "goat" && <GlowPulse size={64} />}
-          <TitleMedal earned={!!data.title} size={64} colors={colors} />
+          {data.title?.tier === "gold" && <GlowPulse size={64} />}
+          <TitleMedal earned={!!data.title} size={64} colors={colors} tier={data.title?.tier} />
           {data.title && <BadgeShine size={64} every={4200} />}
         </View>
       </View>
@@ -430,6 +465,7 @@ export default function BadgeScreen() {
       <View style={styles.summaryStats}>
         <Text style={[styles.summaryStat, { color: colors.textSecondary }]}><Text style={[styles.summaryNum, { color: colors.textPrimary }]}>{spotsEarned}</Text>/{spots.length} spot badges</Text>
         <Text style={[styles.summaryStat, { color: colors.textSecondary }]}><Text style={[styles.summaryNum, { color: colors.textPrimary }]}>{townsEarned}</Text>/{towns.length} towns</Text>
+        <Text style={[styles.summaryStat, { color: colors.textSecondary }]}><Text style={[styles.summaryNum, { color: colors.textPrimary }]}>{districtsEarned}</Text>/{districts.length} districts</Text>
       </View>
       {/* With more than one title there's a choice of which one others see. */}
       {titlesEarned > 1 && (
@@ -448,9 +484,14 @@ export default function BadgeScreen() {
     </View>
   );
 
-  const counts = { spots: `${spotsEarned}/${spots.length}`, towns: `${townsEarned}/${towns.length}`, titles: `${titles.filter((t) => t.earned).length}/${titles.length}` };
-  const listKey = tab === "spots" ? `spots-${columns}` : tab === "towns" ? `towns-${townCols}` : "titles";
-  const numColumns = tab === "spots" ? columns : tab === "towns" ? townCols : 1;
+  const counts = {
+    spots: `${spotsEarned}/${spots.length}`, towns: `${townsEarned}/${towns.length}`,
+    districts: `${districtsEarned}/${districts.length}`, titles: `${titlesEarned}/${titles.length}`,
+  };
+  const grid = tab === "towns" || tab === "districts";
+  const listKey = tab === "spots" ? `spots-${columns}` : grid ? `${tab}-${townCols}` : "titles";
+  const numColumns = tab === "spots" ? columns : grid ? townCols : 1;
+  const renderers = { spots: renderSpot, towns: renderTown, districts: renderDistrict, titles: renderTitle };
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -460,9 +501,9 @@ export default function BadgeScreen() {
       <FlatList
         key={listKey}
         data={visible}
-        keyExtractor={(item) => String(item.spotId || item.municipality || item.key)}
+        keyExtractor={(item) => String(item.spotId || item.municipality || (tab === "districts" ? item.district : item.key))}
         extraData={shownKey}
-        renderItem={tab === "spots" ? renderSpot : tab === "towns" ? renderTown : renderTitle}
+        renderItem={renderers[tab]}
         numColumns={numColumns}
         {...(numColumns > 1 && { columnWrapperStyle: styles.row })}
         contentContainerStyle={styles.scrollContent}
@@ -483,7 +524,8 @@ export default function BadgeScreen() {
                 style={styles.filterBar}
                 value={tab}
                 onChange={(k) => { setTab(k); setQuery(""); }}
-                options={TABS.map((t) => ({ key: t.key, label: `${t.label} ${counts[t.key]}`, a11y: `${t.label}, ${counts[t.key]} earned` }))}
+                // Four tabs: the counts go in the summary above, not the labels.
+                options={TABS.map((t) => ({ key: t.key, label: t.label, a11y: `${t.label}, ${counts[t.key]} earned` }))}
               />
             )}
             {data && tab !== "titles" && (
@@ -491,13 +533,18 @@ export default function BadgeScreen() {
                 value={query}
                 onChangeText={setQuery}
                 onClear={() => setQuery("")}
-                placeholder={tab === "spots" ? "Search badges or spots" : "Search towns"}
+                placeholder={{ spots: "Search badges or spots", towns: "Search towns", districts: "Search districts or towns" }[tab]}
                 style={styles.search}
               />
             )}
+            {tab === "districts" && data && (
+              <Text style={[styles.titlesIntro, { color: colors.textSecondary }]}>
+                Silver: a district is finished when every town in it that has spots is. Each comes with its title.
+              </Text>
+            )}
             {tab === "titles" && data && (
               <Text style={[styles.titlesIntro, { color: colors.textSecondary }]}>
-                A town is finished when every mission at every spot in it is done. Titles stay once earned
+                Bronze for a town, silver for a district, gold for all of Bulacan. Titles stay once earned
                 {titlesEarned > 0 ? ". Pick the one to show next to your name on your profile and the leaderboard." : "."}
               </Text>
             )}
@@ -505,7 +552,8 @@ export default function BadgeScreen() {
         }
         ListEmptyComponent={
           !data ? null
-            : q ? <EmptyState icon="search" text={tab === "spots" ? "No badge matches that. Try a spot or town name." : "No town matches that."} />
+            : q ? <EmptyState icon="search" text={{ spots: "No badge matches that. Try a spot or town name.", towns: "No town matches that.", districts: "No district matches that." }[tab]} />
+            : tab === "districts" ? <EmptyState icon="award" title="No district yet" text="A district's badge can be earned once its towns have spots." />
             : <EmptyState icon="award" title="Nothing here yet" text="Finish every mission at a spot to earn its badge." />
         }
         ListFooterComponent={<View style={{ height: 40 }} />}
@@ -527,7 +575,8 @@ export default function BadgeScreen() {
                 <Icon name="x" size={20} color={colors.textSecondary} />
               </TouchableOpacity>
               <ScrollView contentContainerStyle={styles.modalBody} showsVerticalScrollIndicator={false}>
-                {selected.kind === "spot" ? renderSpotDetail(selected.item) : renderTownDetail(selected.item)}
+                {selected.kind === "spot" ? renderSpotDetail(selected.item)
+                  : selected.kind === "town" ? renderTownDetail(selected.item) : renderDistrictDetail(selected.item)}
               </ScrollView>
             </Animated.View>
           )}
@@ -599,30 +648,52 @@ export default function BadgeScreen() {
     );
   }
 
-  function renderTownDetail(t) {
-    const townSpots = spots.filter((s) => s.town === t.municipality);
+  // The top of a town's or district's card: the badge to tilt, in its metal.
+  function areaDetailTop(t, kind, progress) {
+    const metal = tierColors(colors, t.tier);
     return (
       <>
         <View>
-          {t.earned && <GlowPulse size={128} />}
+          {t.earned && <GlowPulse size={128} color={metal.fill} />}
           <View style={!t.earned && styles.locked}>
             <HoloTilt size={132} active={t.earned}>
-              <TownEmblem image={t.image} size={132} color={t.earned ? colors.brand : colors.textMuted} />
+              <TownEmblem image={t.image} size={132} color={t.earned ? metal.fill : colors.textMuted} />
             </HoloTilt>
           </View>
           {t.earned && <Sparkles size={132} count={7} spread={0.64} seed={2} />}
         </View>
         {t.earned && <Text style={[styles.tiltHint, { color: colors.textMuted }]}>Drag the badge to tilt it</Text>}
-        <View style={[styles.earnedPill, { backgroundColor: t.earned ? colors.accent : colors.textMuted }]}>
+        <View style={[styles.earnedPill, { backgroundColor: t.earned ? metal.fill : colors.textMuted }]}>
           <Icon name={t.earned ? "check-circle" : "lock"} size={11} color={t.earned ? colors.onAccent : colors.textInverse} style={{ marginRight: 4 }} />
           <Text style={[styles.earnedPillText, { color: t.earned ? colors.onAccent : colors.textInverse }]}>
-            {t.earned ? "Town finished" : `${t.spotsDone} of ${t.spotsTotal} spots`}
+            {t.earned ? `${kind === "town" ? "Town" : "District"} finished · ${TIER_LABEL[t.tier]}` : progress}
           </Text>
         </View>
         <Text style={[styles.modalName, { color: colors.textPrimary }]}>{t.name}</Text>
+      </>
+    );
+  }
+
+  // The title that comes with a town or district.
+  function comesWith(t) {
+    if (!t.title) return null;
+    return (
+      <View style={styles.comesWith} accessible accessibilityLabel={`${t.earned ? "Earned" : "Comes with"} the title ${t.title.name}`}>
+        <Text style={[styles.modalSub, { color: colors.textMuted, marginTop: 0 }]}>{t.earned ? "Your title" : "Comes with the title"}</Text>
+        <TitleChip title={t.title} size="sm" />
+      </View>
+    );
+  }
+
+  function renderTownDetail(t) {
+    const townSpots = spots.filter((s) => s.town === t.municipality);
+    return (
+      <>
+        {areaDetailTop(t, "town", `${t.spotsDone} of ${t.spotsTotal} spots`)}
         <Text style={[styles.modalText, { color: colors.textSecondary }]}>
           {t.earned ? t.description : `Finish every mission at every spot in ${t.municipality} to earn it.`}
         </Text>
+        {comesWith(t)}
         {t.earned && t.earnedAt && <Text style={[styles.modalSub, { color: colors.textMuted }]}>Finished on {fmtDate(t.earnedAt, "long")}</Text>}
         {t.earned && t.spotsDone < t.spotsTotal && (
           <Text style={[styles.modalSub, { color: colors.textMuted }]}>New spot added since · {t.spotsDone} of {t.spotsTotal}</Text>
@@ -645,6 +716,47 @@ export default function BadgeScreen() {
             </TouchableOpacity>
           ))}
         </View>
+        <PrimaryButton title="Close" variant="secondary" onPress={() => close()} style={styles.modalButton} />
+      </>
+    );
+  }
+
+  function renderDistrictDetail(d) {
+    const inIt = towns.filter((t) => (d.townsWithSpots || []).includes(t.municipality));
+    const noSpots = (d.towns || []).filter((town) => !(d.townsWithSpots || []).includes(town));
+    return (
+      <>
+        {areaDetailTop(d, "district", `${d.townsDone} of ${d.townsTotal} towns`)}
+        <Text style={[styles.modalText, { color: colors.textSecondary }]}>
+          {d.earned ? d.description : `Finish every town in ${d.name} that has spots to earn it.`}
+        </Text>
+        {comesWith(d)}
+        {d.earned && d.earnedAt && <Text style={[styles.modalSub, { color: colors.textMuted }]}>Finished on {fmtDate(d.earnedAt, "long")}</Text>}
+
+        {/* Its towns, each opening its own card. */}
+        <View style={[styles.steps, { borderColor: colors.cardBorder, backgroundColor: colors.card }]}>
+          {inIt.map((t) => (
+            <TouchableOpacity
+              key={t.municipality}
+              style={styles.stepRow}
+              onPress={() => setSelected({ kind: "town", item: t })}
+              accessibilityRole="button"
+              accessibilityLabel={`${t.name}, ${t.earned ? "town finished" : `${t.spotsDone} of ${t.spotsTotal} spots done`}`}
+              accessibilityHint="Opens the town's badge"
+            >
+              <View style={[styles.stepIcon, { backgroundColor: t.earned ? colors.bronzeSoft : colors.brandLight }]}>
+                <Icon name={t.earned ? "award" : "map"} size={15} color={t.earned ? colors.bronzeInk : colors.brand} />
+              </View>
+              <Text style={[styles.stepLabel, { color: colors.textPrimary }]} numberOfLines={1}>{t.name}</Text>
+              <Text style={[styles.stepState, { color: t.earned ? colors.bronzeInk : colors.textMuted }]}>
+                {t.earned ? "Done" : `${t.spotsDone}/${t.spotsTotal}`}
+              </Text>
+            </TouchableOpacity>
+          ))}
+        </View>
+        {noSpots.length > 0 && (
+          <Text style={[styles.modalSub, { color: colors.textMuted }]}>No spots yet in {noSpots.join(", ")}</Text>
+        )}
         <PrimaryButton title="Close" variant="secondary" onPress={() => close()} style={styles.modalButton} />
       </>
     );
@@ -695,7 +807,9 @@ const styles = StyleSheet.create({
   townName: { ...typography.display, fontSize: 18, lineHeight: 23, marginTop: 4 },
 
   titleRow:  { flexDirection: "row", alignItems: "center", gap: 14, padding: 14, borderRadius: radius.card, borderWidth: 1, marginBottom: 12 },
+  titleTier: { fontFamily: fonts.sansBold, fontSize: 10.5, letterSpacing: 1.2, marginBottom: 1 },
   titleName: { ...typography.display, fontSize: 21, lineHeight: 26 },
+  comesWith: { alignItems: "center", gap: 6, marginTop: 12 },
   titleNeed: { fontFamily: fonts.sansMedium, fontSize: 12.5, marginTop: 2 },
   radio:     { width: 24, height: 24, borderRadius: 12, borderWidth: 2, alignItems: "center", justifyContent: "center" },
 

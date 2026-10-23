@@ -26,44 +26,61 @@ import useReduceMotion from "../hooks/useReduceMotion";
  * celebrate / showProgress / celebrateResult from utils/rewards.js; this draws
  * them:
  *
- *   a full-screen moment per reward — a spot's badge, then a town's badge,
- *   then a title, in that order when one step earns all three — and a small
- *   banner for a step on the way ("+5 points · 2 of 3 done at …").
+ *   a full-screen moment per reward — a spot's badge, then a town's (bronze),
+ *   a district's (silver), The GOAT Traveler (gold), in that order when one
+ *   step earns several — and a small banner for a step on the way ("+5 points
+ *   · 2 of 3 done at …"). A town's and a district's moment also name the title
+ *   that comes with them.
  *
  * The look: the Libot compass star as a slow sunburst behind the reward, gold
- * confetti, and for a whole town, fiesta banderitas swinging in across the top.
- * Always on the dark teal of the AR screen, in either theme, so the gold reads
- * as gold. Reduce Motion keeps the words and the medal, without the movement.
+ * confetti, and for a whole town or district, fiesta banderitas swinging in
+ * across the top. Always on the dark teal of the AR screen, in either theme, so
+ * the metals read as metals. Reduce Motion keeps the words and the medal,
+ * without the movement.
  */
 
 // ── Words ───────────────────────────────────────────────────────────────────
 
-const TITLE_LINES = {
-  explorer: "You finished every mission in a town. Two more towns and you're a Voyager.",
-  voyager:  "Three towns finished. Finish every town with spots to become a GOAT Traveler.",
-  goat:     "Every town with spots, finished. There's no title above this one.",
-};
-
 export function copyFor(item) {
   if (item.kind === "spot") {
-    return { eyebrow: "Badge unlocked", headline: item.badge?.name || "New badge", body: "You finished every mission here. It's in your achievements now." };
+    return { eyebrow: "Badge unlocked", headline: item.badge?.name || "New badge", body: "You finished every mission here. It's in your achievements now.", tier: "gold" };
   }
   if (item.kind === "town") {
     const town = item.town?.municipality || "this town";
     return {
-      eyebrow: "Town finished",
+      eyebrow: "Town finished · Bronze",
       headline: item.town?.name || town,
       body: item.town?.description && item.town.description !== `Finished every mission in ${town}`
         ? item.town.description
         : `Every spot in ${town}, every mission. That's the whole town.`,
+      title: item.town?.title?.name || null,
+      tier: "bronze",
     };
   }
-  return { eyebrow: "New title", headline: item.title?.name || "New title", body: TITLE_LINES[item.title?.key] || "" };
+  if (item.kind === "district") {
+    const name = item.district?.name || "this district";
+    return {
+      eyebrow: "District finished · Silver",
+      headline: name,
+      body: `Every town in ${name} with spots, every mission.`,
+      title: item.district?.title?.name || null,
+      tier: "silver",
+    };
+  }
+  return {
+    eyebrow: "New title · Gold",
+    headline: item.title?.name || "New title",
+    body: "Every town in Bulacan with spots, finished. There's no title above this one.",
+    tier: "gold",
+  };
 }
 
 // ── Pieces ──────────────────────────────────────────────────────────────────
 
 const GOLD = "#F2CE1B";
+// The tiers' metals on the dark teal (the theme's bronze and silver are for the
+// page behind, which this never uses).
+const METAL = { bronze: "#D08A50", silver: "#C9D2D8", gold: GOLD };
 const CONFETTI_COLORS = [GOLD, "#8FE1E9", "#FFFFFF", "#56D6E2", "#F6DF5C", "#E0A66B"];
 // Fiesta colours for the banderitas.
 const FLAG_COLORS = ["#D93A3A", GOLD, "#2E5AAC", "#2F9E62", "#FFFFFF", "#E07B39"];
@@ -189,14 +206,16 @@ function Medal({ item, size }) {
       </View>
     );
   }
-  if (item.kind === "town") {
+  // A town's badge in a bronze ring, a district's in silver.
+  if (item.kind === "town" || item.kind === "district") {
+    const metal = METAL[item.kind === "town" ? "bronze" : "silver"];
     return (
-      <View style={[s.medalRing, { width: size, height: size, borderRadius: size / 2 }]}>
-        <TownEmblem image={item.town?.image} size={size - 22} color={GOLD} />
+      <View style={[s.medalRing, { width: size, height: size, borderRadius: size / 2, borderColor: metal }]}>
+        <TownEmblem image={(item.town || item.district)?.image} size={size - 22} color={metal} />
       </View>
     );
   }
-  // A title: the Libot star itself, struck in gold.
+  // The GOAT Traveler: the Libot star itself, struck in gold.
   return (
     <Svg width={size} height={size} viewBox="0 0 100 100">
       <Circle cx="50" cy="50" r="46" fill="#0B3A3F" stroke={GOLD} strokeWidth={2} />
@@ -223,7 +242,7 @@ function Moment({ item, index, count, onNext, onAchievements, onShare, sharing, 
 
   useEffect(() => {
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-    AccessibilityInfo.announceForAccessibility?.(`${copy.eyebrow}: ${copy.headline}. ${copy.body}`);
+    AccessibilityInfo.announceForAccessibility?.(`${copy.eyebrow}: ${copy.headline}. ${copy.body}${copy.title ? ` New title: ${copy.title}.` : ""}`);
     if (reduce) return undefined;
     Animated.sequence([
       Animated.spring(medal, { toValue: 1, friction: 5, tension: 70, useNativeDriver: true }),
@@ -262,14 +281,23 @@ function Moment({ item, index, count, onNext, onAchievements, onShare, sharing, 
         </View>
 
         <Animated.View style={[s.words, { opacity: words, transform: [{ translateY: lift }] }]}>
-          <Text style={s.eyebrow} maxFontSizeMultiplier={MAX_FONT_SCALE}>{copy.eyebrow.toUpperCase()}</Text>
+          <Text style={[s.eyebrow, { color: METAL[copy.tier] }]} maxFontSizeMultiplier={MAX_FONT_SCALE}>{copy.eyebrow.toUpperCase()}</Text>
           <Text style={s.headline} maxFontSizeMultiplier={MAX_FONT_SCALE} accessibilityRole="header">{copy.headline}</Text>
           {!!copy.body && <Text style={s.body} maxFontSizeMultiplier={MAX_FONT_SCALE}>{copy.body}</Text>}
+          {/* The title that comes with a town or district. */}
+          {!!copy.title && (
+            <View style={[s.newTitle, { borderColor: METAL[copy.tier] }]}>
+              <Svg width={12} height={12} viewBox="0 0 24 24"><Path d={starPath(12, 12, 12, 7, 3.2)} fill={METAL[copy.tier]} /></Svg>
+              <Text style={s.newTitleText} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+                New title: <Text style={{ color: METAL[copy.tier] }}>{copy.title}</Text>
+              </Text>
+            </View>
+          )}
         </Animated.View>
       </View>
 
       <Confetti width={width} height={height} reduce={reduce} />
-      {item.kind === "town" && <Banderitas width={width} top={insets.top + 6} reduce={reduce} />}
+      {(item.kind === "town" || item.kind === "district") && <Banderitas width={width} top={insets.top + 6} reduce={reduce} />}
 
       <Animated.View style={[s.actions, { paddingBottom: Math.max(insets.bottom, 16) + 12, opacity: words }]}>
         {count > 1 && (
@@ -380,7 +408,7 @@ export function RewardCelebrationProvider({ children }) {
   const item = queue[index];
   const next = () => (index < queue.length - 1 ? setIndex(index + 1) : close());
   const toAchievements = () => {
-    const tab = item?.kind === "town" ? "towns" : item?.kind === "title" ? "titles" : "spots";
+    const tab = { town: "towns", district: "districts", title: "titles" }[item?.kind] || "spots";
     close(() => { if (navigationRef.isReady?.()) navigationRef.navigate("Badges", { tab }); });
   };
   const share = async () => {
@@ -429,6 +457,11 @@ const s = StyleSheet.create({
   eyebrow:   { fontFamily: fonts.sansBold, fontSize: 12.5, letterSpacing: 3.2, color: GOLD, marginBottom: 8 },
   headline:  { fontFamily: fonts.displayBlack, fontSize: 36, lineHeight: 42, letterSpacing: -0.5, color: "#FFFFFF", textAlign: "center" },
   body:      { fontFamily: fonts.sans, fontSize: 15.5, lineHeight: 23, color: "rgba(255,255,255,0.78)", textAlign: "center", marginTop: 10, maxWidth: 340 },
+  newTitle:  {
+    flexDirection: "row", alignItems: "center", gap: 8, marginTop: 16, paddingHorizontal: 14, paddingVertical: 7,
+    borderRadius: 999, borderWidth: 1, backgroundColor: "rgba(255,255,255,0.06)",
+  },
+  newTitleText: { fontFamily: fonts.sansSemi, fontSize: 14, color: "rgba(255,255,255,0.88)" },
 
   actions:   { paddingHorizontal: 24, gap: 6 },
   dots:      { flexDirection: "row", justifyContent: "center", gap: 6, marginBottom: 10 },
