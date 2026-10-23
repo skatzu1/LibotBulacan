@@ -48,13 +48,27 @@ it("puts travelers tied for first on one step and leaves the place they skip emp
     traveler("d", "Dee Santos", 10, 4),
   ]);
 
-  expect(tree.getByText("Ana & Ben")).toBeTruthy();
-  expect(tree.getByLabelText("Rank 1, tied: Ana Reyes, Ben Cruz, 100 points each")).toBeTruthy();
+  // One face on the step, the rest of the tie as +N and in the list below.
+  expect(tree.getAllByText("Ana Reyes")).toHaveLength(1);
+  expect(tree.getByText("+1")).toBeTruthy();
+  expect(tree.getByLabelText("Rank 1, tied: Ana Reyes and 1 more listed below, 100 points each")).toBeTruthy();
+  expect(tree.getByLabelText(/^Rank 1, tied, Ben Cruz/)).toBeTruthy();
   expect(tree.getByLabelText("Rank 3, 50 points, 2 spots visited")).toBeTruthy();
-  expect(tree.queryByText("2")).toBeNull(); // no silver: nobody is ranked 2
-  // On the podium, so not listed again below it; fourth place is.
-  expect(tree.queryByText("Ana Reyes")).toBeNull();
+  expect(tree.queryByLabelText(/^Rank 2/)).toBeNull(); // no silver: nobody is ranked 2
   expect(tree.getByLabelText("Rank 4, Dee Santos, 10 points, 2 spots visited")).toBeTruthy();
+}, 15000);
+
+it("keeps travelers with no points off the podium", async () => {
+  const tree = await open([
+    traveler("a", "Ana Reyes", 30, 1),
+    traveler("b", "Ben Cruz", 25, 2),
+    traveler("c", "Cy Lopez", 0, 3),
+    traveler("d", "Dee Santos", 0, 3),
+  ]);
+
+  expect(tree.queryByLabelText(/^Rank 3, tied:/)).toBeNull();
+  expect(tree.getByLabelText(/^Rank 3, tied, Cy Lopez/)).toBeTruthy();
+  expect(tree.getByLabelText(/^Rank 3, tied, Dee Santos/)).toBeTruthy();
 }, 15000);
 
 it("counts the rest of a big tie as +N and lists them below, with you always on the step", async () => {
@@ -66,7 +80,9 @@ it("counts the rest of a big tie as +N and lists them below, with you always on 
     traveler("me", "Mia Torres", 80, 1),
   ]);
 
-  expect(tree.getByText("You, Ana, Ben +2")).toBeTruthy();
+  expect(tree.getByText("You")).toBeTruthy();
+  expect(tree.getByText("+4")).toBeTruthy();
+  expect(tree.getByLabelText(/^Rank 1, tied, Ana Reyes/)).toBeTruthy();
   expect(tree.getByLabelText(/^Rank 1, tied, Cy Lopez/)).toBeTruthy();
   expect(tree.getByLabelText(/^Rank 1, tied, Dee Santos/)).toBeTruthy();
   // Your own standing is pinned first too (2026-10-21), with nowhere to jump: it's this page.
@@ -75,9 +91,10 @@ it("counts the rest of a big tie as +N and lists them below, with you always on 
 
 it("gives each place its own step when nobody is tied", () => {
   const users = [
-    { name: "Ana", rank: 1 }, { name: "Ben", rank: 2 }, { name: "Cy", rank: 3 }, { name: "Dee", rank: 4 },
+    { name: "Ana", rank: 1, points: 40 }, { name: "Ben", rank: 2, points: 30 },
+    { name: "Cy", rank: 3, points: 20 }, { name: "Dee", rank: 4, points: 10 },
   ];
   const steps = podiumSteps(users);
   expect(Object.keys(steps).sort()).toEqual(["1", "2", "3"]);
-  expect(steps[2].shown.map((u) => u.name)).toEqual(["Ben"]);
+  expect(steps[2]).toEqual({ lead: users[1], count: 1 });
 });

@@ -41,41 +41,25 @@ const MEDAL = {
 };
 
 // Each podium step is a place: the middle step is 1, the left 2, the right 3.
-// Travelers with the same points share a place, so they stand together on its
-// step instead of on separate steps that all say 1 (2026-10-20). A place that
+// Travelers with the same points share a place (2026-10-20), and a place that
 // a tie skips stays empty, as at a medal ceremony: 1, 1, 3 has no silver. A
-// step shows up to PODIUM_FACES faces; the rest of a bigger tie is counted as
-// "+N" there and stays in the list below, with the same rank.
-const PODIUM_FACES = 3;
+// step shows ONE face, with "+N" for the rest of its tie, who stay in the list
+// below with the same rank. It used to overlap up to three faces over a line
+// of first names, which a big tie turned into clipped initials (2026-10-24).
+// Only points earn a step: travelers with none stay in the list.
 const PLACES_LEFT_TO_RIGHT = [2, 1, 3];
 // avatarRing's 3px border and 2px padding, both sides.
 const FACE_RING = 10;
-// How far along each face on a shared step sits from the one before it, as a
-// share of a face's width (the rest is the overlap).
-const FACE_STEP = 0.55;
 
 export const podiumSteps = (users) => {
   const steps = {};
   for (const place of PLACES_LEFT_TO_RIGHT) {
-    const tied = users.filter((u) => u.rank === place);
+    const tied = users.filter((u) => u.rank === place && u.points > 0);
     if (!tied.length) continue;
-    // You first, so you're never one of the faces a big tie leaves off.
-    const all = [...tied.filter((u) => u.isMe), ...tied.filter((u) => !u.isMe)];
-    steps[place] = { all, shown: all.slice(0, PODIUM_FACES) };
+    // You first, so the face a tie shows is yours.
+    steps[place] = { lead: tied.find((u) => u.isMe) || tied[0], count: tied.length };
   }
   return steps;
-};
-
-const firstName = (u) => (u.isMe ? "You" : u.name.split(/\s+/)[0]);
-
-// One traveler: the full name. A tie: first names, "Ana & Ben", "Ana, Ben &
-// Cy", or "Ana, Ben, Cy +2" when not everyone fits on the step.
-const stepNames = ({ all, shown }) => {
-  if (all.length === 1) return shown[0].isMe ? "You" : shown[0].name;
-  const names = shown.map(firstName);
-  const more  = all.length - shown.length;
-  if (more) return `${names.join(", ")} +${more}`;
-  return `${names.slice(0, -1).join(", ")} & ${names[names.length - 1]}`;
 };
 
 // Fixed row height so FlatList.getItemLayout can be exact: 40px avatar +
@@ -160,14 +144,6 @@ export default function Leaderboard() {
     width: SW * 0.9, height: SW * 0.9, borderRadius: SW * 0.45,
   };
   const podiumNameMax = { maxWidth: SW / 3 - 16 };
-  // Faces on a shared step shrink so the row fits the step's width, keeping
-  // first place's faces the largest, as they are when it stands alone.
-  const faceSize = (place, faces) => {
-    const own = PODIUM[place].avatarSz;
-    if (faces === 1) return own;
-    const fits = podiumNameMax.maxWidth / (1 + FACE_STEP * (faces - 1)) - FACE_RING;
-    return Math.floor(Math.min(own, (fits * own) / PODIUM[1].avatarSz));
-  };
   const { user: clerkUser, isLoaded } = useUser();
   const { getToken }                  = useAuth();
   const { profileImage, loading: photoLoading } = useProfileImage();
@@ -400,7 +376,8 @@ export default function Leaderboard() {
 
   // The podium is the top of the board, so only page 1 has it.
   const steps     = page === 1 ? podiumSteps(allUsers) : {};
-  const onPodium  = new Set(Object.values(steps).flatMap((step) => step.shown));
+  const hasPodium = Object.keys(steps).length > 0;
+  const onPodium  = new Set(Object.values(steps).map((step) => step.lead));
   const restUsers = allUsers.filter((u) => !onPodium.has(u));
   const firstRank = (page - 1) * PAGE_SIZE + 1;
   const lastRank  = Math.min(page * PAGE_SIZE, total || allUsers.length);
@@ -490,60 +467,57 @@ export default function Leaderboard() {
     <View style={[styles.fullScreen, { backgroundColor: colors.background }]}>
 
       {/* ─── Hero ─── */}
-      <View style={[styles.hero, page !== 1 && styles.heroShort, { backgroundColor: colors.backgroundHero, paddingTop: insets.top + 8 }]}>
+      <View style={[styles.hero, !hasPodium && styles.heroShort, { backgroundColor: colors.backgroundHero, paddingTop: insets.top + 8 }]}>
         <View style={[styles.heroBlob, blob, { backgroundColor: "rgba(255,255,255,0.22)" }]} pointerEvents="none" />
 
         {heroNav}
 
         {youCard}
 
-        <Text style={[styles.heroSub, { color: colors.textSecondary }]}>
-          {page === 1 ? "Top explorers of Bulacan, by points" : `Ranks ${firstRank}–${lastRank} of ${total}`}
-        </Text>
+        {page !== 1 && (
+          <Text style={[styles.heroSub, { color: colors.textSecondary }]}>
+            Ranks {firstRank}–{lastRank} of {total}
+          </Text>
+        )}
 
-        {page === 1 && <View style={styles.podiumRow}>
+        {hasPodium && <View style={styles.podiumRow}>
           {PLACES_LEFT_TO_RIGHT.map((place) => {
-            const step = steps[place];
-            if (!step) return <View key={place} style={{ flex: 1 }} />;
-            const { all, shown } = step;
             const cfg   = PODIUM[place];
+            const step  = steps[place];
+            // Nobody on it yet, or a tie skipped it: an empty ring on its step,
+            // so the podium keeps its shape.
+            if (!step) {
+              return (
+                <View key={place} style={styles.podiumCol} accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+                  <View style={[styles.emptyFace, { width: cfg.avatarSz + FACE_RING, height: cfg.avatarSz + FACE_RING }]} />
+                  <View style={[styles.podiumBlock, { height: cfg.blockH, backgroundColor: "rgba(255,255,255,0.22)" }]}>
+                    <Text style={[styles.podiumNum, styles.podiumNumEmpty, { color: colors.brand }]}>{place}</Text>
+                  </View>
+                </View>
+              );
+            }
+            const { lead, count } = step;
             const medal = MEDAL[place];
-            const size  = faceSize(place, shown.length);
-            const lead  = shown[0];
-            const more  = all.length - shown.length;
-            const label = all.length === 1
-              ? `Rank ${place}, ${lead.points} points, ${spotsLabel(lead.visited)} visited`
-              : `Rank ${place}, tied: ${shown.map((u) => (u.isMe ? "you" : u.name)).join(", ")}` +
-                `${more ? `, and ${more} more listed below` : ""}, ${lead.points} points each`;
+            const more  = count - 1;
+            const label = more
+              ? `Rank ${place}, tied: ${lead.isMe ? "you" : lead.name} and ${more} more listed below, ${lead.points} points each`
+              : `Rank ${place}, ${lead.points} points, ${spotsLabel(lead.visited)} visited`;
             return (
               <View key={place} style={styles.podiumCol}>
-                {place === 1 && <Icon name="star" size={16} color={colors.accent} style={{ marginBottom: 4 }} />}
-
-                <View style={styles.podiumFaces}>
-                  {shown.map((user, j) => (
-                    <View
-                      key={user.id || j}
-                      style={[
-                        styles.avatarRing,
-                        { borderColor: user.isMe ? colors.brand : medal.ring },
-                        j > 0 && { marginLeft: -(size + FACE_RING) * (1 - FACE_STEP) },
-                      ]}
-                    >
-                      {personAvatar(user, size)}
-                      {j === shown.length - 1 && (
-                        <View style={[styles.medalCoin, { backgroundColor: medal.coin }]}>
-                          <Text style={[styles.medalCoinText, { color: medal.coinText }]}>{place}</Text>
-                        </View>
-                      )}
+                <View style={[styles.avatarRing, { borderColor: medal.ring }]}>
+                  {personAvatar(lead, cfg.avatarSz)}
+                  {more > 0 && (
+                    <View style={[styles.moreCoin, { backgroundColor: medal.coin }]}>
+                      <Text style={[styles.moreCoinText, { color: medal.coinText }]}>+{more}</Text>
                     </View>
-                  ))}
+                  )}
                 </View>
 
                 <Text
                   style={[styles.podiumName, podiumNameMax, { color: colors.brandDark }, lead.isMe && { fontFamily: fonts.sansBold }]}
-                  numberOfLines={all.length > 1 ? 2 : 1}
+                  numberOfLines={1}
                 >
-                  {stepNames(step)}
+                  {lead.isMe ? "You" : lead.name}
                 </Text>
 
                 <View
@@ -685,25 +659,32 @@ const styles = StyleSheet.create({
     alignItems: "flex-end",
     justifyContent: "space-evenly",
     paddingHorizontal: 14,
-    marginTop: 12,
+    marginTop: 16,
   },
   podiumCol: { flex: 1, alignItems: "center" },
 
-  // The face, or the overlapping faces of a tie, on one step.
-  podiumFaces: { flexDirection: "row", marginBottom: 8 },
   // borderWidth + padding must stay in sync with FACE_RING.
   avatarRing: {
     borderRadius: 999,
     borderWidth: 3,
     padding: 2,
+    marginBottom: 8,
     backgroundColor: "rgba(255,255,255,0.5)",
     ...shadow.md,
   },
-  medalCoin: {
+  emptyFace: {
+    borderRadius: 999,
+    borderWidth: 2,
+    borderStyle: "dashed",
+    borderColor: "rgba(255,255,255,0.7)",
+    marginBottom: 8,
+  },
+  // "+N": the rest of a tie, listed below.
+  moreCoin: {
     position: "absolute",
     bottom: -2,
-    right: -2,
-    minWidth: 22,
+    right: -4,
+    minWidth: 24,
     height: 22,
     borderRadius: 11,
     paddingHorizontal: 5,
@@ -712,7 +693,7 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: "#fff",
   },
-  medalCoinText: { fontSize: 11, fontFamily: fonts.sansBold },
+  moreCoinText: { fontSize: 11, fontFamily: fonts.sansBold },
 
   podiumName: {
     fontSize: 12,
@@ -740,6 +721,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   podiumNum: { fontSize: 26, fontFamily: fonts.sansBold, opacity: 0.6 },
+  podiumNumEmpty: { opacity: 0.3 },
 
   card: {
     flex: 1,
