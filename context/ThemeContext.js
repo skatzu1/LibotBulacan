@@ -60,8 +60,11 @@ export const lightColors = {
   accentSoft:       "#FBF1C4",
   onAccent:         "#2C2810",   //  9.60 on accent
 
-  // Achievement tiers: towns bronze, districts silver (gold is the accent).
-  // The *Ink colours are for text on the *Soft ones.
+  // Achievement tiers: spots iron, towns bronze, districts silver (gold is the
+  // accent). The *Ink colours are for text on the *Soft ones.
+  iron:             "#5E5A57",
+  ironInk:          "#3D3A38",   //  9.0 on ironSoft
+  ironSoft:         "#E8E5E2",
   bronze:           "#B4703A",
   bronzeInk:        "#7A4A22",   //  6.06 on bronzeSoft
   bronzeSoft:       "#F6E6D8",
@@ -143,6 +146,9 @@ export const darkColors = {
   onAccent:         "#2C2810",
 
   // Achievement tiers (see the light palette).
+  iron:             "#9A938D",
+  ironInk:          "#CFC8C2",   //  9.4 on ironSoft
+  ironSoft:         "#26231F",
   bronze:           "#D08A50",
   bronzeInk:        "#E8B488",   //  8.7 on bronzeSoft
   bronzeSoft:       "#2A1E14",

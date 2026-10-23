@@ -73,7 +73,7 @@ const openShare = async () => {
       </ThemeProvider>
     </SafeAreaProvider>,
   );
-  fireEvent.press(await page.findByLabelText(/^Barasoain Church badge, earned/));
+  fireEvent.press(await page.findByLabelText(/^Barasoain Church badge, Iron, earned/));
   const share = await page.findByRole("button", { name: "Share a link to this badge" });
   return { page, share };
 };

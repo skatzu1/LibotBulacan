@@ -37,12 +37,14 @@ export const titleTier = (title) => titleInfo(title)?.tier ?? null;
 
 /** A tier's colours from the theme: `fill` for rings and plates, `ink` for text on `soft`. */
 export function tierColors(colors, tier) {
+  if (tier === "iron") return { fill: colors.iron, ink: colors.ironInk, soft: colors.ironSoft };
   if (tier === "bronze") return { fill: colors.bronze, ink: colors.bronzeInk, soft: colors.bronzeSoft };
   if (tier === "silver") return { fill: colors.silver, ink: colors.silverInk, soft: colors.silverSoft };
   return { fill: colors.accent, ink: colors.accentDark, soft: colors.accentSoft };
 }
 
-export const TIER_LABEL = { bronze: "Bronze", silver: "Silver", gold: "Gold" };
+// Iron is a spot's badge, which comes with no title.
+export const TIER_LABEL = { iron: "Iron", bronze: "Bronze", silver: "Silver", gold: "Gold" };
 
 /** "2 more towns to District 1 Traveler" — from the server's nextTitle { name, townsLeft }. */
 export function nextTitleLine(next) {

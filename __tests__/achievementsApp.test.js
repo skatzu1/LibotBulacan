@@ -78,7 +78,7 @@ describe("The reward moments", () => {
     await act(async () => {
       celebrate({ spotBadge: SPOT_BADGE, townBadge: TOWN, districtBadge: DISTRICT, title: GOAT });
     });
-    expect(tree.getByText("BADGE UNLOCKED")).toBeTruthy();
+    expect(tree.getByText("BADGE UNLOCKED · IRON")).toBeTruthy();
     expect(tree.getByText("Barasoain Church")).toBeTruthy();
     expect(tree.getByLabelText("1 of 4")).toBeTruthy();
 
@@ -123,14 +123,14 @@ describe("The reward moments", () => {
     });
     expect(tree.getByText("+5 points")).toBeTruthy();
     expect(tree.getByText("2 of 3 done at Barasoain Church")).toBeTruthy();
-    expect(tree.queryByText("BADGE UNLOCKED")).toBeNull();
+    expect(tree.queryByText("BADGE UNLOCKED · IRON")).toBeNull();
     // Nothing earned and no points (a mission done before): no banner.
     await act(async () => { showProgress(null); });
     expect(celebrateResult({ pointsAwarded: 0, progress: { done: 3, total: 3, spotName: "X" } })).toBe(false);
   }, 15000);
 
   it("words for each reward", () => {
-    expect(copyFor({ kind: "spot", badge: SPOT_BADGE }).headline).toBe("Barasoain Church");
+    expect(copyFor({ kind: "spot", badge: SPOT_BADGE })).toEqual(expect.objectContaining({ headline: "Barasoain Church", tier: "iron" }));
     expect(copyFor({ kind: "town", town: { ...TOWN, name: "Malolos Heritage", description: "The first republic's town." } }))
       .toEqual(expect.objectContaining({ headline: "Malolos Heritage", body: "The first republic's town." }));
     expect(copyFor({ kind: "town", town: TOWN }).title).toBe("Malolos Traveler");

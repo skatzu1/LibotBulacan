@@ -1452,7 +1452,8 @@ export default function InformationScreen({ route, navigation }) {
                 {/* What the list is for: the spot's badge, for finishing all of it. */}
                 {missionsLoaded && !!spot.Badge && (
                   <TouchableOpacity
-                    style={[styles.badgeTeaser, { backgroundColor: allDone ? colors.accentSoft : colors.card, borderColor: allDone ? colors.accent : colors.cardBorder }]}
+                    // Earned: in iron, a spot badge's tier.
+                    style={[styles.badgeTeaser, { backgroundColor: allDone ? colors.ironSoft : colors.card, borderColor: allDone ? colors.iron : colors.cardBorder }]}
                     onPress={() => navigation.navigate("Badges")}
                     activeOpacity={0.85}
                     accessibilityRole="button"
@@ -1469,14 +1470,14 @@ export default function InformationScreen({ route, navigation }) {
                       {allDone && <BadgeShine size={52} every={3800} />}
                     </View>
                     <View style={{ flex: 1 }}>
-                      <Text style={[styles.badgeTeaserTitle, { color: allDone ? colors.accentDark : colors.textPrimary }]}>
-                        {allDone ? "Badge earned" : `Finish all ${totalCount} to unlock the badge`}
+                      <Text style={[styles.badgeTeaserTitle, { color: allDone ? colors.ironInk : colors.textPrimary }]}>
+                        {allDone ? "Badge earned · Iron" : `Finish all ${totalCount} to unlock the badge`}
                       </Text>
                       <Text style={[styles.badgeTeaserSub, { color: colors.textMuted }]} numberOfLines={1}>
                         {allDone ? `${spot.name} · in your achievements` : `${spot.name} · ${totalCount - completedCount} to go`}
                       </Text>
                     </View>
-                    <Icon name={allDone ? "award" : "lock"} size={18} color={allDone ? colors.accentDark : colors.textMuted} />
+                    <Icon name={allDone ? "award" : "lock"} size={18} color={allDone ? colors.ironInk : colors.textMuted} />
                   </TouchableOpacity>
                 )}
 

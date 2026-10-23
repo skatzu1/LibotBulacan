@@ -26,7 +26,7 @@ import useReduceMotion from "../hooks/useReduceMotion";
  * celebrate / showProgress / celebrateResult from utils/rewards.js; this draws
  * them:
  *
- *   a full-screen moment per reward — a spot's badge, then a town's (bronze),
+ *   a full-screen moment per reward — a spot's badge (iron), then a town's (bronze),
  *   a district's (silver), The GOAT Traveler (gold), in that order when one
  *   step earns several — and a small banner for a step on the way ("+5 points
  *   · 2 of 3 done at …"). A town's and a district's moment also name the title
@@ -43,7 +43,7 @@ import useReduceMotion from "../hooks/useReduceMotion";
 
 export function copyFor(item) {
   if (item.kind === "spot") {
-    return { eyebrow: "Badge unlocked", headline: item.badge?.name || "New badge", body: "You finished every mission here. It's in your achievements now.", tier: "gold" };
+    return { eyebrow: "Badge unlocked · Iron", headline: item.badge?.name || "New badge", body: "You finished every mission here. It's in your achievements now.", tier: "iron" };
   }
   if (item.kind === "town") {
     const town = item.town?.municipality || "this town";
@@ -80,7 +80,7 @@ export function copyFor(item) {
 const GOLD = "#F2CE1B";
 // The tiers' metals on the dark teal (the theme's bronze and silver are for the
 // page behind, which this never uses).
-const METAL = { bronze: "#D08A50", silver: "#C9D2D8", gold: GOLD };
+const METAL = { iron: "#ADA69F", bronze: "#D08A50", silver: "#C9D2D8", gold: GOLD };
 const CONFETTI_COLORS = [GOLD, "#8FE1E9", "#FFFFFF", "#56D6E2", "#F6DF5C", "#E0A66B"];
 // Fiesta colours for the banderitas.
 const FLAG_COLORS = ["#D93A3A", GOLD, "#2E5AAC", "#2F9E62", "#FFFFFF", "#E07B39"];
@@ -190,9 +190,10 @@ function Banderitas({ width, top, reduce }) {
 }
 
 function Medal({ item, size }) {
+  // A spot's badge in an iron ring.
   if (item.kind === "spot") {
     return (
-      <View style={[s.medalRing, { width: size, height: size, borderRadius: size / 2 }]}>
+      <View style={[s.medalRing, { width: size, height: size, borderRadius: size / 2, borderColor: METAL.iron }]}>
         {item.badge?.image ? (
           <Image
             source={{ uri: badgeImage(item.badge.image, Math.round(size)) }}
@@ -201,7 +202,7 @@ function Medal({ item, size }) {
             accessibilityIgnoresInvertColors
           />
         ) : (
-          <Svg width={size * 0.5} height={size * 0.5} viewBox="0 0 24 24"><Path d={starPath(12, 12, 12, 7, 3.2)} fill={GOLD} /></Svg>
+          <Svg width={size * 0.5} height={size * 0.5} viewBox="0 0 24 24"><Path d={starPath(12, 12, 12, 7, 3.2)} fill={METAL.iron} /></Svg>
         )}
       </View>
     );

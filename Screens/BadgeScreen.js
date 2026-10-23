@@ -44,8 +44,8 @@ import { GRID_GAP, H_GUTTER, columnsFor, cardSizeFor, AnimatedCell } from "../co
 /*
  * Achievements (the thesis panel, 2026-10-21), from GET /api/achievements/me:
  *
- *   Spots      every spot's badge — earned for finishing every mission there —
- *              with a ring that fills as its steps are done
+ *   Spots      iron: every spot's badge — earned for finishing every mission
+ *              there — with a ring that fills as its steps are done
  *   Towns      bronze: a badge per town, for finishing every spot in it (the
  *              image the admin uploaded, or the plain medal icon until there
  *              is one), with the title "<Town> Traveler"
@@ -100,6 +100,7 @@ export default function BadgeScreen() {
   const route        = useRoute();
   const { getToken } = useAuth();
   const { colors, isDark } = useTheme();
+  const iron         = tierColors(colors, "iron"); // a spot's badge
   const { allSpots } = useArrival();
   const hasLoaded    = useRef(false);
   const { width: winWidth, fontScale } = useWindowDimensions();
@@ -262,8 +263,8 @@ export default function BadgeScreen() {
         style={[styles.cellWrap, { width: cardSize }]}
         accessibilityRole="button"
         accessibilityLabel={s.earned
-          ? `${s.badge.name} badge, earned${s.earnedAt ? ` on ${fmtDate(s.earnedAt, "long")}` : ""}`
-          : `${s.badge.name} badge, locked, ${s.done} of ${s.total} done`}
+          ? `${s.badge.name} badge, Iron, earned${s.earnedAt ? ` on ${fmtDate(s.earnedAt, "long")}` : ""}`
+          : `${s.badge.name} badge, Iron, locked, ${s.done} of ${s.total} done`}
         accessibilityHint="Opens the badge details"
       >
         {/* Earned badges lift off the page on a white card; the rest recede. */}
@@ -272,7 +273,7 @@ export default function BadgeScreen() {
           s.earned ? { backgroundColor: colors.card, borderColor: colors.cardBorder, borderWidth: 1 } : { backgroundColor: colors.backgroundSoft },
         ]}>
           <View>
-            <ProgressRing done={s.done} total={s.total} size={RING} stroke={4}>
+            <ProgressRing done={s.done} total={s.total} size={RING} stroke={4} doneColor={iron.fill}>
               {s.badge.image ? (
                 <View style={styles.badgeImgBox}>
                   <Image
@@ -294,9 +295,9 @@ export default function BadgeScreen() {
           </Text>
           <View style={styles.cardFooter}>
             {s.earned ? (
-              <View style={[styles.chip, { backgroundColor: colors.accentSoft }]}>
-                <Icon name="check" size={10} color={colors.accentDark} />
-                <Text style={[styles.chipText, { color: colors.accentDark }]}>{s.earnedAt ? fmtDate(s.earnedAt) : "Earned"}</Text>
+              <View style={[styles.chip, { backgroundColor: iron.soft }]}>
+                <Icon name="check" size={10} color={iron.ink} />
+                <Text style={[styles.chipText, { color: iron.ink }]}>{s.earnedAt ? fmtDate(s.earnedAt) : "Earned"}</Text>
               </View>
             ) : (
               <Text style={[styles.footerText, { color: s.done ? colors.brand : colors.textMuted }]}>{s.done} of {s.total}</Text>
@@ -307,7 +308,7 @@ export default function BadgeScreen() {
     </AnimatedCell>
   ), [colors, cardSize, cardHeight]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // A town's badge (bronze) or a district's (silver): a tier up from a spot's,
+  // A town's badge (bronze) or a district's (silver): a tier up from a spot's (iron),
   // it also glows, in its metal. `unit` is what it counts: spots or towns.
   const renderArea = (kind, { item: t, index }) => {
     const metal = tierColors(colors, t.tier);
@@ -594,8 +595,8 @@ export default function BadgeScreen() {
       <>
         {/* Earned, up close: a holographic badge to tilt, glowing and twinkling. */}
         <View>
-          {s.earned && <GlowPulse size={124} strength={0.26} />}
-          <ProgressRing done={s.done} total={s.total} size={136} stroke={6}>
+          {s.earned && <GlowPulse size={124} color={iron.fill} strength={0.26} />}
+          <ProgressRing done={s.done} total={s.total} size={136} stroke={6} doneColor={iron.fill}>
             {s.badge.image ? (
               <HoloTilt size={110} active={s.earned}>
                 <Image source={{ uri: badgeImage(s.badge.image, 110, { locked: !s.earned }) }} style={[styles.modalBadgeImg, !s.earned && styles.locked]} resizeMode="cover" />
@@ -605,10 +606,10 @@ export default function BadgeScreen() {
           {s.earned && <Sparkles size={136} count={6} spread={0.6} />}
         </View>
         {s.earned && <Text style={[styles.tiltHint, { color: colors.textMuted }]}>Drag the badge to tilt it</Text>}
-        <View style={[styles.earnedPill, { backgroundColor: s.earned ? colors.accent : colors.textMuted }]}>
-          <Icon name={s.earned ? "check-circle" : "lock"} size={11} color={s.earned ? colors.onAccent : colors.textInverse} style={{ marginRight: 4 }} />
-          <Text style={[styles.earnedPillText, { color: s.earned ? colors.onAccent : colors.textInverse }]}>
-            {s.earned ? "Badge earned" : `${s.done} of ${s.total} done`}
+        <View style={[styles.earnedPill, s.earned ? { backgroundColor: iron.soft, borderWidth: 1, borderColor: iron.fill } : { backgroundColor: colors.textMuted }]}>
+          <Icon name={s.earned ? "check-circle" : "lock"} size={11} color={s.earned ? iron.ink : colors.textInverse} style={{ marginRight: 4 }} />
+          <Text style={[styles.earnedPillText, { color: s.earned ? iron.ink : colors.textInverse }]}>
+            {s.earned ? `Badge earned · ${TIER_LABEL.iron}` : `${s.done} of ${s.total} done`}
           </Text>
         </View>
         <Text style={[styles.modalName, { color: colors.textPrimary }]}>{s.badge.name}</Text>
@@ -712,11 +713,11 @@ export default function BadgeScreen() {
               accessibilityRole="button"
               accessibilityLabel={`${s.name}, ${s.earned ? "badge earned" : `${s.done} of ${s.total} done`}`}
             >
-              <View style={[styles.stepIcon, { backgroundColor: s.earned ? colors.accentSoft : colors.brandLight }]}>
-                <Icon name={s.earned ? "award" : "map-pin"} size={15} color={s.earned ? colors.accentDark : colors.brand} />
+              <View style={[styles.stepIcon, { backgroundColor: s.earned ? iron.soft : colors.brandLight }]}>
+                <Icon name={s.earned ? "award" : "map-pin"} size={15} color={s.earned ? iron.ink : colors.brand} />
               </View>
               <Text style={[styles.stepLabel, { color: colors.textPrimary }]} numberOfLines={1}>{s.name}</Text>
-              <Text style={[styles.stepState, { color: s.earned ? colors.accentDark : colors.textMuted }]}>{s.earned ? "Done" : `${s.done}/${s.total}`}</Text>
+              <Text style={[styles.stepState, { color: s.earned ? iron.ink : colors.textMuted }]}>{s.earned ? "Done" : `${s.done}/${s.total}`}</Text>
             </TouchableOpacity>
           ))}
         </View>
