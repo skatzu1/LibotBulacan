@@ -105,6 +105,12 @@ describe("Picking the title to show", () => {
     expect(page.getByRole("button", { name: "Baliwag Traveler shows on your profile and the leaderboard" })).toBeTruthy();
   });
 
+  it("puts the earned titles at the top, then the ones still to earn", async () => {
+    const page = await openTitles();
+    const rows = page.getAllByLabelText(/^.+ Traveler, /).map((r) => r.props.accessibilityLabel.split(",")[0]);
+    expect(rows).toEqual(["Malolos Traveler", "Baliwag Traveler", "The GOAT Traveler", "District 1 Traveler"]);
+  });
+
   it("tapping another earned title shows it and saves the pick", async () => {
     const page = await openTitles();
     fireEvent.press(radio(page, "Malolos Traveler"));

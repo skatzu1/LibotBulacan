@@ -168,8 +168,12 @@ export default function BadgeScreen() {
   const spots = useMemo(() => (data?.spots || []).filter((s) => s.badge).sort(byProgress), [data]);
   const towns = useMemo(() => (data?.towns || []).map((t) => ({ ...t, name: t.name || t.municipality, done: t.spotsDone, total: t.spotsTotal })).sort(byProgress), [data]);
   const districts = useMemo(() => (data?.districts || []).map((d) => ({ ...d, done: d.townsDone, total: d.townsTotal })).sort(byProgress), [data]);
-  // Gold, then silver, then bronze, as the server lists them.
-  const titles = data?.titles || [];
+  // The ones earned first, then the rest; each gold, then silver, then bronze,
+  // as the server lists them.
+  const titles = useMemo(() => {
+    const all = data?.titles || [];
+    return [...all.filter((t) => t.earned), ...all.filter((t) => !t.earned)];
+  }, [data]);
   // The title on the profile and the leaderboard: the traveler's pick, else their best.
   const shownKey = data?.shownTitle?.key ?? data?.title?.key ?? null;
   const titlesEarned = titles.filter((t) => t.earned).length;
