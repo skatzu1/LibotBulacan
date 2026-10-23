@@ -43,23 +43,38 @@ const MEDAL = {
 // Each podium step is a place: the middle step is 1, the left 2, the right 3.
 // Travelers with the same points share a place (2026-10-20), and a place that
 // a tie skips stays empty, as at a medal ceremony: 1, 1, 3 has no silver. A
-// step shows ONE face, with "+N" for the rest of its tie, who stay in the list
-// below with the same rank. It used to overlap up to three faces over a line
-// of first names, which a big tie turned into clipped initials (2026-10-24).
-// Only points earn a step: travelers with none stay in the list.
+// step shows up to PODIUM_FACES faces: one in front at full size, the rest
+// smaller behind it. You are always the one in front when you're in the tie
+// (2026-10-24). The rest of a bigger tie stays in the list below, with the
+// same rank.
+const PODIUM_FACES = 3;
 const PLACES_LEFT_TO_RIGHT = [2, 1, 3];
 // avatarRing's 3px border and 2px padding, both sides.
 const FACE_RING = 10;
+// The faces behind the front one, as a share of its size.
+const BEHIND_SCALE = 0.72;
 
 export const podiumSteps = (users) => {
   const steps = {};
   for (const place of PLACES_LEFT_TO_RIGHT) {
-    const tied = users.filter((u) => u.rank === place && u.points > 0);
+    const tied = users.filter((u) => u.rank === place);
     if (!tied.length) continue;
-    // You first, so the face a tie shows is yours.
-    steps[place] = { lead: tied.find((u) => u.isMe) || tied[0], count: tied.length };
+    // You first: in front, and never one of the faces a big tie leaves off.
+    const all = [...tied.filter((u) => u.isMe), ...tied.filter((u) => !u.isMe)];
+    steps[place] = { all, shown: all.slice(0, PODIUM_FACES) };
   }
   return steps;
+};
+
+const firstName = (u) => (u.isMe ? "You" : u.name.split(/\s+/)[0]);
+
+// One traveler: the full name. A tie, on one line: "You & 2 others",
+// "Ana & 1 other".
+const stepNames = ({ all, shown }) => {
+  const lead = shown[0];
+  if (all.length === 1) return lead.isMe ? "You" : lead.name;
+  const others = all.length - 1;
+  return `${firstName(lead)} & ${others} ${others === 1 ? "other" : "others"}`;
 };
 
 // Fixed row height so FlatList.getItemLayout can be exact: 40px avatar +
@@ -144,6 +159,8 @@ export default function Leaderboard() {
     width: SW * 0.9, height: SW * 0.9, borderRadius: SW * 0.45,
   };
   const podiumNameMax = { maxWidth: SW / 3 - 16 };
+  // One podium column: the row's width less its 14px padding each side.
+  const podiumColW    = (SW - 28) / 3;
   const { user: clerkUser, isLoaded } = useUser();
   const { getToken }                  = useAuth();
   const { profileImage, loading: photoLoading } = useProfileImage();
@@ -377,48 +394,13 @@ export default function Leaderboard() {
   // The podium is the top of the board, so only page 1 has it.
   const steps     = page === 1 ? podiumSteps(allUsers) : {};
   const hasPodium = Object.keys(steps).length > 0;
-  const onPodium  = new Set(Object.values(steps).map((step) => step.lead));
+  const onPodium  = new Set(Object.values(steps).flatMap((step) => step.shown));
   const restUsers = allUsers.filter((u) => !onPodium.has(u));
   const firstRank = (page - 1) * PAGE_SIZE + 1;
   const lastRank  = Math.min(page * PAGE_SIZE, total || allUsers.length);
-
-  // You, first: your standing, pinned above the rankings on every page (the
-  // thesis panel, 2026-10-21). Tapping it opens the page you're on.
-  const meOnOtherPage = !!me?.page && me.page !== page;
-  const youCard = me && (
-    <TouchableOpacity
-      activeOpacity={meOnOtherPage ? 0.85 : 1}
-      disabled={!meOnOtherPage || paging}
-      onPress={() => goToPage(me.page)}
-      style={[styles.youCard, { backgroundColor: colors.card, borderColor: colors.brand }, shadow.md]}
-      accessibilityRole={meOnOtherPage ? "button" : undefined}
-      accessibilityLabel={
-        `Your standing: rank ${me.rank} of ${total}, ${me.points} points, ${spotsLabel(me.visited)} visited` +
-        `${me.title ? `, ${titleName(me.title)}` : ""}${meOnOtherPage ? `. Opens page ${me.page}` : ""}`
-      }
-    >
-      <View style={styles.youRankCol}>
-        <Text style={[styles.youEyebrow, { color: colors.brand }]} maxFontSizeMultiplier={MAX_FONT_SCALE}>YOU</Text>
-        <Text style={[styles.youRank, { color: colors.textPrimary }]} maxFontSizeMultiplier={MAX_FONT_SCALE}>#{me.rank}</Text>
-        <Text style={[styles.youOf, { color: colors.textMuted }]} maxFontSizeMultiplier={MAX_FONT_SCALE}>of {total}</Text>
-      </View>
-      <View style={[styles.youDivider, { backgroundColor: colors.divider }]} />
-      <View style={[styles.rowAvatarWrap, { borderColor: colors.brand }]}>{personAvatar(me, 44)}</View>
-      <View style={styles.youInfo}>
-        <Text style={[styles.youName, { color: colors.textPrimary }]} numberOfLines={1} maxFontSizeMultiplier={MAX_FONT_SCALE}>{me.name}</Text>
-        {me.title ? <TitleChip title={me.title} size="sm" style={styles.youChip} /> : null}
-        <Text style={[styles.youStats, { color: colors.textSecondary }]} numberOfLines={1} maxFontSizeMultiplier={MAX_FONT_SCALE}>
-          {ptsLabel(me.points)} · {spotsLabel(me.visited)}
-        </Text>
-      </View>
-      {meOnOtherPage ? (
-        <View style={[styles.youGo, { backgroundColor: colors.brand }]}>
-          <Text style={[styles.youGoText, { color: colors.onBrand }]} maxFontSizeMultiplier={MAX_FONT_SCALE}>Page {me.page}</Text>
-          <Icon name="chevron-right" size={14} color={colors.onBrand} />
-        </View>
-      ) : null}
-    </TouchableOpacity>
-  );
+  // Your standing used to be pinned in a card above the podium (2026-10-21);
+  // it was taken out (2026-10-24). Your row is marked in the list, and the
+  // pager's dot marks the page you're on.
 
   const pager = pages > 1 && (
     <View style={styles.pager} accessibilityRole="toolbar" accessibilityLabel={`Page ${page} of ${pages}`}>
@@ -472,8 +454,6 @@ export default function Leaderboard() {
 
         {heroNav}
 
-        {youCard}
-
         {page !== 1 && (
           <Text style={[styles.heroSub, { color: colors.textSecondary }]}>
             Ranks {firstRank}–{lastRank} of {total}
@@ -496,28 +476,49 @@ export default function Leaderboard() {
                 </View>
               );
             }
-            const { lead, count } = step;
-            const medal = MEDAL[place];
-            const more  = count - 1;
-            const label = more
-              ? `Rank ${place}, tied: ${lead.isMe ? "you" : lead.name} and ${more} more listed below, ${lead.points} points each`
-              : `Rank ${place}, ${lead.points} points, ${spotsLabel(lead.visited)} visited`;
+            const { all, shown } = step;
+            const lead   = shown[0];
+            const behind = shown.slice(1);
+            const medal  = MEDAL[place];
+            const more   = all.length - shown.length;
+            const label  = all.length === 1
+              ? `Rank ${place}, ${lead.points} points, ${spotsLabel(lead.visited)} visited`
+              : `Rank ${place}, tied: ${shown.map((u) => (u.isMe ? "you" : u.name)).join(", ")}` +
+                `${more ? `, and ${more} more listed below` : ""}, ${lead.points} points each`;
+            // The front face at full size, the rest of the tie smaller behind
+            // it, peeking out on either side.
+            const front  = cfg.avatarSz + FACE_RING;
+            const small  = Math.round(cfg.avatarSz * BEHIND_SCALE);
+            const back   = small + FACE_RING;
+            const room   = (podiumColW - front) / (behind.length === 2 ? 2 : 1);
+            const peek   = behind.length ? Math.max(14, Math.min(back / 2, room)) : 0;
+            const facesW = front + peek * (behind.length === 2 ? 2 : behind.length);
             return (
               <View key={place} style={styles.podiumCol}>
-                <View style={[styles.avatarRing, { borderColor: medal.ring }]}>
-                  {personAvatar(lead, cfg.avatarSz)}
-                  {more > 0 && (
-                    <View style={[styles.moreCoin, { backgroundColor: medal.coin }]}>
-                      <Text style={[styles.moreCoinText, { color: medal.coinText }]}>+{more}</Text>
+                <View style={[styles.podiumFaces, { width: facesW, height: front }]}>
+                  {behind.map((user, j) => (
+                    <View
+                      key={user.id || j}
+                      style={[
+                        styles.avatarRing,
+                        styles.behindFace,
+                        { borderColor: medal.ring, top: (front - back) / 2 + 4 },
+                        behind.length === 2 && j === 0 ? { left: 0 } : { right: 0 },
+                      ]}
+                    >
+                      {personAvatar(user, small)}
                     </View>
-                  )}
+                  ))}
+                  <View style={[styles.avatarRing, styles.frontFace, { borderColor: medal.ring, left: behind.length === 2 ? peek : 0 }]}>
+                    {personAvatar(lead, cfg.avatarSz)}
+                  </View>
                 </View>
 
                 <Text
                   style={[styles.podiumName, podiumNameMax, { color: colors.brandDark }, lead.isMe && { fontFamily: fonts.sansBold }]}
                   numberOfLines={1}
                 >
-                  {lead.isMe ? "You" : lead.name}
+                  {stepNames(step)}
                 </Text>
 
                 <View
@@ -602,28 +603,6 @@ const styles = StyleSheet.create({
   heroStateOnly: { paddingBottom: 14 },
   heroShort:     { paddingBottom: 10 },
 
-  // You, pinned first: a white card on the cyan, outlined in brand teal.
-  youCard: {
-    flexDirection: "row", alignItems: "center", gap: 10,
-    marginHorizontal: H_PAD, marginTop: 6, marginBottom: 6,
-    paddingVertical: 10, paddingHorizontal: 12,
-    borderRadius: radius.lg, borderWidth: 1.5,
-  },
-  youRankCol: { alignItems: "center", minWidth: 46 },
-  youEyebrow: { fontFamily: fonts.sansBold, fontSize: 10, letterSpacing: 1.4 },
-  youRank:    { fontFamily: fonts.display, fontSize: 26, lineHeight: 30, letterSpacing: -0.4 },
-  youOf:      { fontFamily: fonts.sansMedium, fontSize: 10.5 },
-  youDivider: { width: 1, alignSelf: "stretch", marginVertical: 4 },
-  youInfo:    { flex: 1, minWidth: 0, gap: 2 },
-  youName:    { fontFamily: fonts.sansBold, fontSize: 15 },
-  youChip:    { marginVertical: 1 },
-  youStats:   { fontFamily: fonts.sansMedium, fontSize: 12 },
-  youGo: {
-    flexDirection: "row", alignItems: "center", gap: 2,
-    paddingLeft: 10, paddingRight: 6, paddingVertical: 6, borderRadius: 999,
-  },
-  youGoText: { fontFamily: fonts.sansBold, fontSize: 12 },
-
   pager: { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6, paddingTop: 10, paddingBottom: 6, flexWrap: "wrap" },
   pageBtn: {
     minWidth: 40, height: 40, paddingHorizontal: 8, borderRadius: 12, borderWidth: 1,
@@ -663,15 +642,17 @@ const styles = StyleSheet.create({
   },
   podiumCol: { flex: 1, alignItems: "center" },
 
+  // The faces on one step, sized inline: the front one over the rest.
+  podiumFaces: { marginBottom: 8 },
   // borderWidth + padding must stay in sync with FACE_RING.
   avatarRing: {
     borderRadius: 999,
     borderWidth: 3,
     padding: 2,
-    marginBottom: 8,
     backgroundColor: "rgba(255,255,255,0.5)",
-    ...shadow.md,
   },
+  frontFace:  { position: "absolute", top: 0, zIndex: 2, ...shadow.md },
+  behindFace: { position: "absolute", zIndex: 1, opacity: 0.9 },
   emptyFace: {
     borderRadius: 999,
     borderWidth: 2,
@@ -679,21 +660,6 @@ const styles = StyleSheet.create({
     borderColor: "rgba(255,255,255,0.7)",
     marginBottom: 8,
   },
-  // "+N": the rest of a tie, listed below.
-  moreCoin: {
-    position: "absolute",
-    bottom: -2,
-    right: -4,
-    minWidth: 24,
-    height: 22,
-    borderRadius: 11,
-    paddingHorizontal: 5,
-    justifyContent: "center",
-    alignItems: "center",
-    borderWidth: 2,
-    borderColor: "#fff",
-  },
-  moreCoinText: { fontSize: 11, fontFamily: fonts.sansBold },
 
   podiumName: {
     fontSize: 12,

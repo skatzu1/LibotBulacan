@@ -3,8 +3,8 @@ import { render, fireEvent, waitFor } from "@testing-library/react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import { ThemeProvider } from "../context/ThemeContext";
 
-// The leaderboard in pages, with your own standing pinned first on every page
-// (the thesis panel, 2026-10-21).
+// The leaderboard in pages (the thesis panel, 2026-10-21), with the page
+// you're on marked in the pager.
 
 jest.mock("@react-native-async-storage/async-storage", () =>
   require("@react-native-async-storage/async-storage/jest/async-storage-mock"),
@@ -42,7 +42,7 @@ beforeEach(() => {
   global.fetch = jest.fn(async (url) => json(board(Number(/page=(\d+)/.exec(url)[1]))));
 });
 
-it("pins your standing first and jumps to your page", async () => {
+it("marks your page in the pager and opens it", async () => {
   const tree = render(
     <SafeAreaProvider initialMetrics={metrics}>
       <ThemeProvider><Leaderboard /></ThemeProvider>
@@ -51,17 +51,16 @@ it("pins your standing first and jumps to your page", async () => {
   await tree.findByText("Rankings", {}, { timeout: 8000 });
   expect(global.fetch.mock.calls[0][0]).toBe(`https://api.test/api/users?page=1&limit=${PAGE_SIZE}`);
 
-  const you = tree.getByLabelText("Your standing: rank 31 of 45, 140 points, 2 spots visited, Malolos Traveler. Opens page 2");
-  expect(tree.getByText("#31")).toBeTruthy();
+  // No pinned "your standing" card above the podium any more (2026-10-24).
+  expect(tree.queryByLabelText(/^Your standing/)).toBeNull();
   expect(tree.getByLabelText(/^Rank 4, Traveler 4, 410 points, 2 spots visited, District 2 Traveler$/)).toBeTruthy();
   expect(tree.getByText("Page 1 of 3 · 45 explorers")).toBeTruthy();
 
-  fireEvent.press(you);
+  fireEvent.press(tree.getByLabelText("Page 2, your page"));
   await waitFor(() => expect(tree.getByText("Ranks 21–40 of 45")).toBeTruthy());
   expect(global.fetch).toHaveBeenLastCalledWith(`https://api.test/api/users?page=2&limit=${PAGE_SIZE}`, expect.anything());
-  // On your page: your row is in the list, and the card no longer offers a jump.
+  // On your page: your row is in the list.
   expect(tree.getByLabelText(/^Rank 31, you, 140 points/)).toBeTruthy();
-  expect(tree.getByLabelText("Your standing: rank 31 of 45, 140 points, 2 spots visited, Malolos Traveler")).toBeTruthy();
 
   fireEvent.press(tree.getByLabelText("Next page"));
   await waitFor(() => expect(tree.getByText("Ranks 41–45 of 45")).toBeTruthy());
