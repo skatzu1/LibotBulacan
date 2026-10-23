@@ -192,7 +192,7 @@ function Medal({ item, size }) {
   if (item.kind === "town") {
     return (
       <View style={[s.medalRing, { width: size, height: size, borderRadius: size / 2 }]}>
-        <TownEmblem town={item.town?.municipality || ""} image={item.town?.image} size={size - 22} />
+        <TownEmblem image={item.town?.image} size={size - 22} color={GOLD} />
       </View>
     );
   }

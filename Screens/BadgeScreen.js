@@ -46,8 +46,8 @@ import { GRID_GAP, H_GUTTER, columnsFor, cardSizeFor, AnimatedCell } from "../co
  *
  *   Spots   every spot's badge — earned for finishing every mission there —
  *           with a ring that fills as its steps are done
- *   Towns   a badge per town, for finishing every spot in it (the admin's art,
- *           or a drawn seal until there is some)
+ *   Towns   a badge per town, for finishing every spot in it (the image the
+ *           admin uploaded, or the plain medal icon until there is one)
  *   Titles  Explorer, Voyager, GOAT Traveler — by the number of towns finished
  *
  * Until then this was "Badges", one per spot, given on arrival.
@@ -286,8 +286,8 @@ export default function BadgeScreen() {
             {t.earned && <GlowPulse size={96} />}
             <ProgressRing done={t.spotsDone} total={t.spotsTotal} size={104} stroke={5}>
               <View style={!t.earned && styles.locked}>
-                <TownEmblem town={t.municipality} image={t.image} size={84} />
-                {t.earned && <BadgeShine size={84} delay={(index % 4) * 700} every={3000} />}
+                <TownEmblem image={t.image} size={84} color={t.earned ? colors.brand : colors.textMuted} />
+                {t.earned && t.image && <BadgeShine size={84} delay={(index % 4) * 700} every={3000} />}
               </View>
             </ProgressRing>
             {t.earned && <Sparkles size={104} count={4} seed={index + 3} />}
@@ -546,7 +546,7 @@ export default function BadgeScreen() {
           {t.earned && <GlowPulse size={128} />}
           <View style={!t.earned && styles.locked}>
             <HoloTilt size={132} active={t.earned}>
-              <TownEmblem town={t.municipality} image={t.image} size={132} />
+              <TownEmblem image={t.image} size={132} color={t.earned ? colors.brand : colors.textMuted} />
             </HoloTilt>
           </View>
           {t.earned && <Sparkles size={132} count={7} spread={0.64} seed={2} />}

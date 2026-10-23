@@ -28,8 +28,6 @@ const { RewardCelebrationProvider, copyFor } = require("../components/RewardCele
 const { nextTitleLine, titleName } = require("../utils/titles");
 const { reachedEnd } = require("../components/LegalConsentModal");
 const { LEGAL_DOCS, LEGAL_VERSION } = require("../utils/legalText");
-const { sealInk } = require("../utils/townEmblem");
-const { BULACAN_MUNICIPALITIES } = require("../utils/municipalities");
 
 const metrics = { frame: { x: 0, y: 0, width: 390, height: 844 }, insets: { top: 47, left: 0, right: 0, bottom: 34 } };
 // The theme loads first, so wait for the screen behind the moments to be up.
@@ -125,10 +123,6 @@ describe("Titles", () => {
     expect(nextTitleLine({ name: "Voyager", townsLeft: 2 })).toBe("2 more towns to Voyager");
     expect(nextTitleLine({ name: "Explorer", townsLeft: 1 })).toBe("1 more town to Explorer");
     expect(nextTitleLine(null)).toBe("You've earned every title");
-  });
-
-  it("each of the 24 towns has its own seal ink", () => {
-    expect(new Set(BULACAN_MUNICIPALITIES.map(sealInk)).size).toBe(24);
   });
 });
 
