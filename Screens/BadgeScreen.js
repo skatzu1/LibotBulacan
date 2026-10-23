@@ -31,7 +31,7 @@ import { badgeImage } from "../utils/image";
 import { shareBadge } from "../utils/badgeShare";
 import { celebrate } from "../utils/rewards";
 import { MISSION_KINDS, ARRIVAL_KIND } from "../utils/missionTiers";
-import { nextTitleLine } from "../utils/titles";
+import { nextTitleLine, titleName } from "../utils/titles";
 import { starPath } from "../utils/townEmblem";
 import Icon from "../components/Icon";
 import TitleChip from "../components/TitleChip";
@@ -159,6 +159,9 @@ export default function BadgeScreen() {
   const spots = useMemo(() => (data?.spots || []).filter((s) => s.badge).sort(byProgress), [data]);
   const towns = useMemo(() => (data?.towns || []).map((t) => ({ ...t, name: t.name || t.municipality, done: t.spotsDone, total: t.spotsTotal })).sort(byProgress), [data]);
   const titles = data?.titles || [];
+  // The title on the profile and the leaderboard: the traveler's pick, else the highest.
+  const shownKey = data?.shownTitle?.key ?? data?.title?.key ?? null;
+  const titlesEarned = titles.filter((t) => t.earned).length;
   const spotsEarned = spots.filter((s) => s.earned).length;
   const townsEarned = towns.filter((t) => t.earned).length;
 
@@ -203,6 +206,27 @@ export default function BadgeScreen() {
     const ok = await shareBadge({ _id: spot.badge.badgeId, name: spot.badge.name }, getToken);
     setSharing(false);
     if (!ok) showAlert("Error", "Could not open sharing. Please try again.");
+  };
+
+  // Shows the pick at once, and puts the old one back if the server says no.
+  const showTitle = async (t) => {
+    if (!t.earned || t.key === shownKey) return;
+    Haptics.selectionAsync().catch(() => {});
+    const before = data?.shownTitle ?? null;
+    setData((d) => d && { ...d, shownTitle: { key: t.key, name: t.name } });
+    try {
+      const token = await getToken();
+      const res = await fetch(`${BASE_URL}/api/users/me/title`, {
+        method: "PUT",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ key: t.key }),
+      });
+      if (!res.ok) throw new Error(`title ${res.status}`);
+    } catch (e) {
+      console.warn("Show title error:", e);
+      setData((d) => d && { ...d, shownTitle: before });
+      showAlert("Couldn't change your title", "Check your connection and try again.");
+    }
   };
 
   const fullSpot = (spotId) => allSpots.find((s) => String(s._id) === String(spotId));
@@ -305,15 +329,30 @@ export default function BadgeScreen() {
     </AnimatedCell>
   ), [colors, townSize]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // The earned titles are a pick-one list: the one picked shows next to the
+  // traveler's name on their profile and the leaderboard.
   const renderTitle = ({ item: t, index }) => {
     const need = t.all ? `Finish every town with spots (${t.towns})` : `Finish ${t.towns} town${t.towns === 1 ? "" : "s"}`;
     const have = Math.min(townsEarned, t.towns);
+    const shown = t.earned && t.key === shownKey;
+    const Row = t.earned ? TouchableOpacity : View;
     return (
       <AnimatedCell delay={index * 60}>
-        <View
-          style={[styles.titleRow, { backgroundColor: t.earned ? colors.card : colors.backgroundSoft, borderColor: t.earned ? colors.accent : colors.cardBorder }]}
-          accessible
-          accessibilityLabel={`${t.name}: ${need}. ${t.earned ? "Earned" : `${have} of ${t.towns} towns`}`}
+        <Row
+          style={[styles.titleRow, {
+            backgroundColor: t.earned ? colors.card : colors.backgroundSoft,
+            borderColor: shown ? colors.accent : colors.cardBorder,
+          }]}
+          {...(t.earned
+            ? {
+                activeOpacity: 0.75,
+                onPress: () => showTitle(t),
+                accessibilityRole: "radio",
+                accessibilityState: { checked: shown },
+                accessibilityLabel: `${t.name}, earned`,
+                accessibilityHint: shown ? "Shown on your profile and the leaderboard" : "Shows this title on your profile and the leaderboard",
+              }
+            : { accessible: true, accessibilityLabel: `${t.name}: ${need}. ${have} of ${t.towns} towns` })}
         >
           <View>
             {t.earned && t.key === "goat" && <GlowPulse size={56} />}
@@ -322,15 +361,21 @@ export default function BadgeScreen() {
           </View>
           <View style={{ flex: 1 }}>
             <Text style={[styles.titleName, { color: t.earned ? colors.textPrimary : colors.textSecondary }]}>{t.name}</Text>
-            <Text style={[styles.titleNeed, { color: colors.textMuted }]}>{need}</Text>
+            <Text style={[styles.titleNeed, { color: shown ? colors.accentDark : colors.textMuted }]}>
+              {shown ? "On your profile and the leaderboard" : t.earned ? "Earned · tap to show it" : need}
+            </Text>
             {!t.earned && (
               <View style={[styles.bar, { backgroundColor: colors.divider }]}>
                 <View style={[styles.barFill, { backgroundColor: colors.brand, width: `${(have / Math.max(1, t.towns)) * 100}%` }]} />
               </View>
             )}
           </View>
-          {t.earned ? <Icon name="check-circle" size={20} color={colors.accentDark} /> : <Text style={[styles.footerText, { color: colors.textMuted }]}>{have}/{t.towns}</Text>}
-        </View>
+          {t.earned ? (
+            <View style={[styles.radio, shown ? { backgroundColor: colors.accent, borderColor: colors.accent } : { borderColor: colors.cardBorder }]}>
+              {shown && <Icon name="check" size={14} color={colors.onAccent} />}
+            </View>
+          ) : <Text style={[styles.footerText, { color: colors.textMuted }]}>{have}/{t.towns}</Text>}
+        </Row>
       </AnimatedCell>
     );
   };
@@ -386,6 +431,20 @@ export default function BadgeScreen() {
         <Text style={[styles.summaryStat, { color: colors.textSecondary }]}><Text style={[styles.summaryNum, { color: colors.textPrimary }]}>{spotsEarned}</Text>/{spots.length} spot badges</Text>
         <Text style={[styles.summaryStat, { color: colors.textSecondary }]}><Text style={[styles.summaryNum, { color: colors.textPrimary }]}>{townsEarned}</Text>/{towns.length} towns</Text>
       </View>
+      {/* With more than one title there's a choice of which one others see. */}
+      {titlesEarned > 1 && (
+        <TouchableOpacity
+          style={[styles.shownRow, { borderTopColor: colors.divider }]}
+          onPress={() => { setTab("titles"); setQuery(""); }}
+          accessibilityRole="button"
+          accessibilityLabel={`${titleName(shownKey)} shows on your profile and the leaderboard`}
+          accessibilityHint="Opens Titles to change it"
+        >
+          <Text style={[styles.shownLabel, { color: colors.textSecondary }]}>Shown to others</Text>
+          <TitleChip title={shownKey} size="sm" />
+          <Text style={[styles.shownChange, { color: colors.brand }]}>Change</Text>
+        </TouchableOpacity>
+      )}
     </View>
   );
 
@@ -402,6 +461,7 @@ export default function BadgeScreen() {
         key={listKey}
         data={visible}
         keyExtractor={(item) => String(item.spotId || item.municipality || item.key)}
+        extraData={shownKey}
         renderItem={tab === "spots" ? renderSpot : tab === "towns" ? renderTown : renderTitle}
         numColumns={numColumns}
         {...(numColumns > 1 && { columnWrapperStyle: styles.row })}
@@ -437,7 +497,8 @@ export default function BadgeScreen() {
             )}
             {tab === "titles" && data && (
               <Text style={[styles.titlesIntro, { color: colors.textSecondary }]}>
-                A town is finished when every mission at every spot in it is done. Titles stay once earned.
+                A town is finished when every mission at every spot in it is done. Titles stay once earned
+                {titlesEarned > 0 ? ". Pick the one to show next to your name on your profile and the leaderboard." : "."}
               </Text>
             )}
           </>
@@ -607,6 +668,9 @@ const styles = StyleSheet.create({
   summaryStats:    { flexDirection: "row", gap: 18, marginTop: 12 },
   summaryStat:     { fontFamily: fonts.sansMedium, fontSize: 12.5 },
   summaryNum:      { fontFamily: fonts.sansBold, fontSize: 14 },
+  shownRow:        { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 12, paddingTop: 12, borderTopWidth: StyleSheet.hairlineWidth },
+  shownLabel:      { fontFamily: fonts.sansMedium, fontSize: 12.5 },
+  shownChange:     { fontFamily: fonts.sansBold, fontSize: 13, marginLeft: "auto" },
 
   bar:      { height: 6, borderRadius: 3, overflow: "hidden", marginTop: 8 },
   barFill:  { height: "100%", borderRadius: 3 },
@@ -633,6 +697,7 @@ const styles = StyleSheet.create({
   titleRow:  { flexDirection: "row", alignItems: "center", gap: 14, padding: 14, borderRadius: radius.card, borderWidth: 1, marginBottom: 12 },
   titleName: { ...typography.display, fontSize: 21, lineHeight: 26 },
   titleNeed: { fontFamily: fonts.sansMedium, fontSize: 12.5, marginTop: 2 },
+  radio:     { width: 24, height: 24, borderRadius: 12, borderWidth: 2, alignItems: "center", justifyContent: "center" },
 
   modalOverlay: { flex: 1, justifyContent: "center", alignItems: "center" },
   modalCard: {

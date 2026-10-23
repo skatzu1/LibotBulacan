@@ -234,7 +234,18 @@ export default function ProfileScreen() {
         {fullName ? (
           <Text style={[styles.userName, { color: colors.textPrimary }]}>{fullName}</Text>
         ) : null}
-        {title && <TitleChip title={title} style={styles.title} />}
+        {/* The title they picked to show (Achievements → Titles, where it's changed). */}
+        {title && (
+          <TouchableOpacity
+            style={styles.title}
+            onPress={() => navigation.navigate("Badges", { tab: "titles" })}
+            accessibilityRole="button"
+            accessibilityLabel={`Title: ${title.name}`}
+            accessibilityHint="Opens your titles to change which one shows"
+          >
+            <TitleChip title={title} />
+          </TouchableOpacity>
+        )}
         <Text style={[styles.email, { color: colors.textSecondary }]}>{userInfo.email || "No email available"}</Text>
 
         {/* Each stat is grouped into a single accessibility node — otherwise a
