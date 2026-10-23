@@ -52,8 +52,10 @@ it("puts travelers tied for first on one step and leaves the place they skip emp
   expect(tree.getByLabelText("Rank 1, tied: Ana Reyes, Ben Cruz, 100 points each")).toBeTruthy();
   expect(tree.getByLabelText("Rank 3, 50 points, 2 spots visited")).toBeTruthy();
   expect(tree.queryByLabelText(/^Rank 2/)).toBeNull(); // no silver: nobody is ranked 2
-  // On the podium, so not listed again below it; fourth place is.
-  expect(tree.queryByLabelText(/^Rank 1, tied, Ben Cruz/)).toBeNull();
+  // The list below still starts at 1: the podium travelers are in it too.
+  expect(tree.getByLabelText(/^Rank 1, tied, Ana Reyes/)).toBeTruthy();
+  expect(tree.getByLabelText(/^Rank 1, tied, Ben Cruz/)).toBeTruthy();
+  expect(tree.getByLabelText(/^Rank 3, Cy Lopez/)).toBeTruthy();
   expect(tree.getByLabelText("Rank 4, Dee Santos, 10 points, 2 spots visited")).toBeTruthy();
 }, 15000);
 

@@ -45,8 +45,8 @@ const MEDAL = {
 // a tie skips stays empty, as at a medal ceremony: 1, 1, 3 has no silver. A
 // step shows up to PODIUM_FACES faces: one in front at full size, the rest
 // smaller behind it. You are always the one in front when you're in the tie
-// (2026-10-24). The rest of a bigger tie stays in the list below, with the
-// same rank.
+// (2026-10-24). Everyone on the podium is in the list below as well, with
+// the same rank.
 const PODIUM_FACES = 3;
 const PLACES_LEFT_TO_RIGHT = [2, 1, 3];
 // avatarRing's 3px border and 2px padding, both sides.
@@ -394,8 +394,8 @@ export default function Leaderboard() {
   // The podium is the top of the board, so only page 1 has it.
   const steps     = page === 1 ? podiumSteps(allUsers) : {};
   const hasPodium = Object.keys(steps).length > 0;
-  const onPodium  = new Set(Object.values(steps).flatMap((step) => step.shown));
-  const restUsers = allUsers.filter((u) => !onPodium.has(u));
+  // The list under it still starts at 1: the podium travelers are in it too
+  // (2026-10-24), not left out of it.
   const firstRank = (page - 1) * PAGE_SIZE + 1;
   const lastRank  = Math.min(page * PAGE_SIZE, total || allUsers.length);
   // Your standing used to be pinned in a card above the podium (2026-10-21);
@@ -557,7 +557,7 @@ export default function Leaderboard() {
         <FlatList
           ref={listRef}
           style={paging && styles.paging}
-          data={restUsers}
+          data={allUsers}
           keyExtractor={(user) => String(user.id)}
           renderItem={renderRow}
           extraData={myPhoto}
@@ -576,16 +576,6 @@ export default function Leaderboard() {
               tintColor={colors.brand}
               colors={[colors.brand]}
             />
-          }
-          ListEmptyComponent={
-            <>
-              <View style={[styles.stateBadge, { backgroundColor: colors.brandSoft, alignSelf: "center", marginTop: 24 }]}>
-                <Icon name="users" size={22} color={colors.brand} />
-              </View>
-              <Text style={[styles.topThreeOnly, { color: colors.textMuted }]}>
-                Everyone's on the podium so far — invite friends to explore!
-              </Text>
-            </>
           }
         />
       </View>
@@ -752,7 +742,6 @@ const styles = StyleSheet.create({
   },
   rowPts:     { fontSize: 12.5, fontFamily: fonts.sansBold },
 
-  topThreeOnly: { textAlign: "center", fontSize: 13, marginTop: 12, fontFamily: fonts.sansMedium },
 
   stateBadge: {
     width: 60, height: 60, borderRadius: 30,
