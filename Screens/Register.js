@@ -15,7 +15,7 @@ import * as AuthSession from "expo-auth-session";
 import * as WebBrowser from "expo-web-browser";
 import { authAPI } from "../api";
 import { captureError } from "../utils/crashReporter";
-import { useTheme, fonts, radius, MAX_FONT_SCALE } from "../context/ThemeContext";
+import { useTheme, fonts, MAX_FONT_SCALE } from "../context/ThemeContext";
 import AuthScaffold, { useAuthStyles, FieldError, FormError } from "../components/AuthScaffold";
 import {
   nameError, optionalNameError, emailError, dobError, strongPasswordError, confirmPasswordError,
@@ -48,7 +48,7 @@ function ConsentRow({ agreed, onPress, invalid, disabled }) {
       onPress={onPress}
       disabled={disabled}
       activeOpacity={0.8}
-      style={[styles.consent, { borderColor: invalid ? colors.danger : agreed ? colors.success : colors.inputBorder, backgroundColor: colors.inputBg }]}
+      style={styles.consent}
       accessibilityRole="checkbox"
       accessibilityState={{ checked: agreed, disabled }}
       accessibilityLabel="I've read and agree to the Terms and Conditions and Privacy Policy"
@@ -566,7 +566,7 @@ export default function Register({ navigation }) {
 const styles = StyleSheet.create({
   disabled:   { opacity: 0.6 },
 
-  consent:     { flexDirection: "row", alignItems: "center", gap: 12, borderWidth: 1.5, borderRadius: radius.md, paddingVertical: 12, paddingHorizontal: 14 },
+  consent:     { flexDirection: "row", alignItems: "center", gap: 12, paddingVertical: 6 },
   box:         { width: 24, height: 24, borderRadius: 7, borderWidth: 2, alignItems: "center", justifyContent: "center" },
   consentText: { flex: 1, fontFamily: fonts.sans, fontSize: 13.5, lineHeight: 19 },
 
