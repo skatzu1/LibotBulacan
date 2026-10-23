@@ -94,14 +94,15 @@ export function Sparkles({ size, count = 4, spread = 0.62, color = GOLD, seed = 
   }, [stars, reduce]);
   if (reduce) return null;
   return (
-    <View pointerEvents="none" style={[s.center, { width: 0, height: 0 }]}>
+    <View pointerEvents="none" style={s.center}>
       {stars.map((st, i) => (
         <Animated.View
           key={i}
           style={{
-            position: "absolute", left: st.x - st.s / 2, top: st.y - st.s / 2,
+            position: "absolute", width: st.s, height: st.s,
             opacity: st.v,
             transform: [
+              { translateX: st.x }, { translateY: st.y },
               { scale: st.v.interpolate({ inputRange: [0, 1], outputRange: [0.3, 1] }) },
               { rotate: st.v.interpolate({ inputRange: [0, 1], outputRange: ["0deg", "45deg"] }) },
             ],
@@ -129,10 +130,10 @@ export function GlowPulse({ size, color = GOLD, strength = 0.32 }) {
   }, [reduce, v]);
   const d = size * 1.22;
   return (
-    <View pointerEvents="none" style={[s.center, { width: 0, height: 0 }]}>
+    <View pointerEvents="none" style={s.center}>
       <Animated.View
         style={{
-          position: "absolute", left: -d / 2, top: -d / 2, width: d, height: d, borderRadius: d / 2,
+          position: "absolute", width: d, height: d, borderRadius: d / 2,
           backgroundColor: color,
           opacity: reduce ? strength * 0.6 : v.interpolate({ inputRange: [0, 1], outputRange: [strength * 0.45, strength] }),
           transform: [{ scale: reduce ? 1 : v.interpolate({ inputRange: [0, 1], outputRange: [0.96, 1.05] }) }],
@@ -219,6 +220,9 @@ export function HoloTilt({ size, children, active = true }) {
   );
 }
 
+// Glow and sparkles sit in a layer the size of the badge's wrapper and centre
+// on it with flex — not a 0×0 box pinned at left/top 50%, which Android
+// (new architecture) drew off the badge's centre.
 const s = StyleSheet.create({
-  center: { position: "absolute", left: "50%", top: "50%" },
+  center: { ...StyleSheet.absoluteFillObject, alignItems: "center", justifyContent: "center" },
 });
