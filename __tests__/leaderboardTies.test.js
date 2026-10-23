@@ -57,6 +57,10 @@ it("puts travelers tied for first on one step and leaves the place they skip emp
   expect(tree.getByLabelText(/^Rank 1, tied, Ben Cruz/)).toBeTruthy();
   expect(tree.getByLabelText(/^Rank 3, Cy Lopez/)).toBeTruthy();
   expect(tree.getByLabelText("Rank 4, Dee Santos, 10 points, 2 spots visited")).toBeTruthy();
+  // A tie shares a card; other ranks get their own.
+  const card = (label) => tree.getByLabelText(label).parent.parent;
+  expect(card(/^Rank 1, tied, Ana Reyes/)).toBe(card(/^Rank 1, tied, Ben Cruz/));
+  expect(card(/^Rank 1, tied, Ana Reyes/)).not.toBe(card(/^Rank 3, Cy Lopez/));
 }, 15000);
 
 it("puts you in front of the travelers you're tied with, even with no points", async () => {
@@ -85,6 +89,13 @@ it("counts the rest of a big tie as +N and lists them below, with you always on 
   expect(tree.getByLabelText("Rank 1, tied: you, Ana Reyes, Ben Cruz, and 2 more listed below, 80 points each")).toBeTruthy();
   expect(tree.getByLabelText(/^Rank 1, tied, Cy Lopez/)).toBeTruthy();
   expect(tree.getByLabelText(/^Rank 1, tied, Dee Santos/)).toBeTruthy();
+  // Stacked in one card in the list, you on top.
+  const rows = tree.getAllByLabelText(/^Rank 1, tied, /);
+  expect(rows).toHaveLength(5);
+  expect(rows[0].props.accessibilityLabel).toMatch(/^Rank 1, tied, you,/);
+  // Each row's parent is its View wrapper; the one above that is the card.
+  const card = rows[0].parent.parent;
+  expect(rows.every((r) => r.parent.parent === card)).toBe(true);
   // No pinned "your standing" card any more (2026-10-24).
   expect(tree.queryByLabelText(/^Your standing/)).toBeNull();
 }, 15000);

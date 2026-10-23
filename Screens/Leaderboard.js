@@ -80,6 +80,10 @@ const stepNames = ({ all, shown }) => {
 // Fixed row height so FlatList.getItemLayout can be exact: 40px avatar +
 // 9px padding top/bottom + 1px border each side, plus the 8px gap below.
 const ROW_H = 66;
+// A rank's card: its rows (each ROW_H less the card's border and the gap),
+// the card's 1px border top and bottom, and the 8px gap below.
+const INNER_ROW_H = ROW_H - 10;
+const groupHeight = (n) => n * INNER_ROW_H + 10;
 
 const fmtPts = (n) => (n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n));
 
@@ -342,24 +346,40 @@ export default function Leaderboard() {
     );
   }
 
-  // How many on the board share this rank: "Tied" shows when it's more than one.
-  const tiedAt = (rank) => allUsers.filter((u) => u.rank === rank).length > 1;
-
-  const renderRow = ({ item: user }) => {
+  // One row in a rank's card. The first row carries the rank coin; the rows
+  // tied with it have a line down from the coin instead.
+  const renderRow = (user, i, n) => {
     const rank = user.rank;
-    const tied = tiedAt(rank);
+    const tied = n > 1;
     return (
       <View
+        key={user.id}
         style={[
           styles.row,
-          { borderColor: colors.divider },
-          user.isMe && { backgroundColor: colors.brandSoft, borderColor: colors.brand },
+          i > 0 && { borderTopWidth: 1, borderTopColor: colors.divider },
+          user.isMe && { backgroundColor: colors.brandSoft },
         ]}
         accessible
         accessibilityLabel={`Rank ${rank}${tied ? ", tied" : ""}, ${user.isMe ? "you" : user.name}, ${user.points} points, ${spotsLabel(user.visited)} visited${user.title ? `, ${titleName(user.title)}` : ""}`}
       >
-        <View style={[styles.rankCoin, { backgroundColor: colors.brandSoft }]}>
-          <Text style={[styles.rankCoinText, { color: colors.brand }]}>{rank}</Text>
+        <View style={styles.rankSlot}>
+          {tied && (
+            <View
+              style={[
+                styles.rankRail,
+                { backgroundColor: colors.brand },
+                i === 0 && { top: "50%" },
+                i === n - 1 && { bottom: "50%" },
+              ]}
+            />
+          )}
+          {i === 0 ? (
+            <View style={[styles.rankCoin, { backgroundColor: colors.brandSoft }]}>
+              <Text style={[styles.rankCoinText, { color: colors.brand }]}>{rank}</Text>
+            </View>
+          ) : (
+            <View style={[styles.rankDot, { backgroundColor: colors.brand }]} />
+          )}
         </View>
 
         <View style={[styles.rowAvatarWrap, { borderColor: colors.cardBorder }]}>
@@ -377,7 +397,7 @@ export default function Leaderboard() {
             {user.title && <TitleChip title={user.title} size="sm" />}
             {/* "visited" goes when a title takes the room. */}
             <Text style={[styles.rowSub, { color: colors.textMuted }]} numberOfLines={1}>
-              {spotsLabel(user.visited)}{user.title ? "" : " visited"}{tied ? " · Tied" : ""}
+              {spotsLabel(user.visited)}{user.title ? "" : " visited"}
             </Text>
           </View>
         </View>
@@ -387,6 +407,39 @@ export default function Leaderboard() {
           <Icon name="stars" size={12} color={colors.brand} weight="fill" />
           <Text style={[styles.rowPts, { color: colors.brandDark }]}>{ptsLabel(user.points)}</Text>
         </View>
+      </View>
+    );
+  };
+
+  // Travelers on the same rank are stacked in one card (2026-10-24), you
+  // first, as on the podium.
+  const groups = [];
+  for (const user of allUsers) {
+    const last = groups[groups.length - 1];
+    if (last && last.rank === user.rank) last.users.push(user);
+    else groups.push({ rank: user.rank, users: [user] });
+  }
+  for (const g of groups) g.users = [...g.users.filter((u) => u.isMe), ...g.users.filter((u) => !u.isMe)];
+  // Each card's place in the list, for getItemLayout.
+  const layouts = [];
+  let offset = 0;
+  for (const g of groups) {
+    const length = groupHeight(g.users.length);
+    layouts.push({ length, offset });
+    offset += length;
+  }
+
+  const renderGroup = ({ item: group }) => {
+    const n = group.users.length;
+    return (
+      <View
+        style={[
+          styles.group,
+          { borderColor: colors.divider },
+          group.users.some((u) => u.isMe) && { borderColor: colors.brand },
+        ]}
+      >
+        {group.users.map((user, i) => renderRow(user, i, n))}
       </View>
     );
   };
@@ -557,11 +610,11 @@ export default function Leaderboard() {
         <FlatList
           ref={listRef}
           style={paging && styles.paging}
-          data={allUsers}
-          keyExtractor={(user) => String(user.id)}
-          renderItem={renderRow}
+          data={groups}
+          keyExtractor={(group) => `${group.rank}-${group.users[0].id}`}
+          renderItem={renderGroup}
           extraData={myPhoto}
-          getItemLayout={(_, index) => ({ length: ROW_H, offset: ROW_H * index, index })}
+          getItemLayout={(_, index) => ({ ...layouts[index], index })}
           initialNumToRender={12}
           maxToRenderPerBatch={10}
           windowSize={7}
@@ -703,22 +756,32 @@ const styles = StyleSheet.create({
 
   listContent: { paddingTop: 2 },
 
-  row: {
-    flexDirection: "row",
-    alignItems: "center",
-    // Must stay in sync with ROW_H (height + marginBottom) — getItemLayout
-    // above assumes it.
-    height: ROW_H - 8,
-    paddingVertical: 9,
-    paddingHorizontal: 10,
+  // Must stay in sync with groupHeight — getItemLayout above assumes it.
+  group: {
     marginBottom: 8,
     borderRadius: radius.md,
     borderWidth: 1,
+    overflow: "hidden",
   },
+  row: {
+    flexDirection: "row",
+    alignItems: "center",
+    height: INNER_ROW_H,
+    // No vertical padding, so a tie's line runs edge to edge.
+    paddingHorizontal: 10,
+  },
+  // The rank column: the coin, or the line down from it in a tie.
+  rankSlot: {
+    width: 30,
+    alignSelf: "stretch",
+    justifyContent: "center", alignItems: "center",
+    marginRight: 10,
+  },
+  rankRail: { position: "absolute", top: 0, bottom: 0, width: 2, opacity: 0.35 },
+  rankDot: { width: 8, height: 8, borderRadius: 4 },
   rankCoin: {
     width: 30, height: 30, borderRadius: 15,
     justifyContent: "center", alignItems: "center",
-    marginRight: 10,
   },
   rankCoinText: { fontSize: 13, fontFamily: fonts.sansBold },
   rowAvatarWrap: {
