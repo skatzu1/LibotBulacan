@@ -66,7 +66,7 @@ const cardHeightFor = (fontScale) => Math.ceil(118 + 44 * fontScale);
 
 const TABS = [
   { key: "spots",     label: "Spots" },
-  { key: "towns",     label: "Towns" },
+  { key: "towns",     label: "Municipalities" },
   { key: "districts", label: "Districts" },
   { key: "titles",    label: "Titles" },
 ];
@@ -312,7 +312,8 @@ export default function BadgeScreen() {
   // it also glows, in its metal. `unit` is what it counts: spots or towns.
   const renderArea = (kind, { item: t, index }) => {
     const metal = tierColors(colors, t.tier);
-    const unit = kind === "town" ? "spot" : "town";
+    const noun = kind === "town" ? "municipality" : "district";
+    const unit = kind === "town" ? ["spot", "spots"] : ["municipality", "municipalities"];
     return (
       <AnimatedCell delay={Math.min(index, 8) * 50}>
         <TouchableOpacity
@@ -321,9 +322,9 @@ export default function BadgeScreen() {
           style={[styles.cellWrap, { width: townSize }]}
           accessibilityRole="button"
           accessibilityLabel={t.earned
-            ? `${t.name} ${kind} badge, ${TIER_LABEL[t.tier]}, earned${t.earnedAt ? ` on ${fmtDate(t.earnedAt, "long")}` : ""}`
-            : `${t.name} ${kind} badge, ${TIER_LABEL[t.tier]}, locked, ${t.done} of ${t.total} ${unit}s done`}
-          accessibilityHint={`Opens the ${kind}'s badge`}
+            ? `${t.name} ${noun} badge, ${TIER_LABEL[t.tier]}, earned${t.earnedAt ? ` on ${fmtDate(t.earnedAt, "long")}` : ""}`
+            : `${t.name} ${noun} badge, ${TIER_LABEL[t.tier]}, locked, ${t.done} of ${t.total} ${unit[t.total === 1 ? 0 : 1]} done`}
+          accessibilityHint={`Opens the ${noun}'s badge`}
         >
           <View style={[
             styles.townCard,
@@ -344,7 +345,7 @@ export default function BadgeScreen() {
               <Text style={[styles.footerText, { color: metal.ink }]}>Finished{t.earnedAt ? ` · ${fmtDate(t.earnedAt)}` : ""}</Text>
             ) : (
               <Text style={[styles.footerText, { color: t.done ? colors.brand : colors.textMuted }]}>
-                {t.done} of {t.total} {unit}{t.total === 1 ? "" : "s"}
+                {t.done} of {t.total} {unit[t.total === 1 ? 0 : 1]}
               </Text>
             )}
           </View>
@@ -358,10 +359,10 @@ export default function BadgeScreen() {
   // What a title takes, in words: every town in Bulacan or a district, or
   // every spot in a town.
   const titleNeed = (t) => {
-    if (t.tier === "gold") return `Finish every town in Bulacan with spots (${t.total})`;
+    if (t.tier === "gold") return `Finish every municipality in Bulacan with spots (${t.total})`;
     if (t.tier === "silver") {
       const d = districts.find((x) => `district:${x.district}` === t.key);
-      return `Finish every town with spots in ${d?.name || "the district"} (${t.total})`;
+      return `Finish every municipality with spots in ${d?.name || "the district"} (${t.total})`;
     }
     return `Finish every spot in ${t.key.slice("town:".length)} (${t.total})`;
   };
@@ -452,7 +453,7 @@ export default function BadgeScreen() {
             <Text style={[styles.summaryEyebrow, { color: colors.textMuted }]}>NO TITLE YET</Text>
           )}
           <Text style={[styles.summaryHeadline, { color: colors.textPrimary }]}>
-            {data.title ? data.title.name : "Finish a town for your first title"}
+            {data.title ? data.title.name : "Finish a municipality for your first title"}
           </Text>
           <Text style={[styles.summaryNext, { color: colors.textSecondary }]}>{nextTitleLine(next)}</Text>
         </View>
@@ -469,7 +470,7 @@ export default function BadgeScreen() {
       )}
       <View style={styles.summaryStats}>
         <Text style={[styles.summaryStat, { color: colors.textSecondary }]}><Text style={[styles.summaryNum, { color: colors.textPrimary }]}>{spotsEarned}</Text>/{spots.length} spot badges</Text>
-        <Text style={[styles.summaryStat, { color: colors.textSecondary }]}><Text style={[styles.summaryNum, { color: colors.textPrimary }]}>{townsEarned}</Text>/{towns.length} towns</Text>
+        <Text style={[styles.summaryStat, { color: colors.textSecondary }]}><Text style={[styles.summaryNum, { color: colors.textPrimary }]}>{townsEarned}</Text>/{towns.length} municipalities</Text>
         <Text style={[styles.summaryStat, { color: colors.textSecondary }]}><Text style={[styles.summaryNum, { color: colors.textPrimary }]}>{districtsEarned}</Text>/{districts.length} districts</Text>
       </View>
       {/* With more than one title there's a choice of which one others see. */}
@@ -527,9 +528,11 @@ export default function BadgeScreen() {
             {data && (
               <Segmented
                 style={styles.filterBar}
+                fit
                 value={tab}
                 onChange={(k) => { setTab(k); setQuery(""); }}
-                // Four tabs: the counts go in the summary above, not the labels.
+                // Four tabs: the counts go in the summary above, not the labels, and
+                // each tab is as wide as its label ("Municipalities" is long).
                 options={TABS.map((t) => ({ key: t.key, label: t.label, a11y: `${t.label}, ${counts[t.key]} earned` }))}
               />
             )}
@@ -538,18 +541,18 @@ export default function BadgeScreen() {
                 value={query}
                 onChangeText={setQuery}
                 onClear={() => setQuery("")}
-                placeholder={{ spots: "Search badges or spots", towns: "Search towns", districts: "Search districts or towns" }[tab]}
+                placeholder={{ spots: "Search badges or spots", towns: "Search municipalities", districts: "Search districts or municipalities" }[tab]}
                 style={styles.search}
               />
             )}
             {tab === "districts" && data && (
               <Text style={[styles.titlesIntro, { color: colors.textSecondary }]}>
-                Silver: a district is finished when every town in it that has spots is. Each comes with its title.
+                Silver: a district is finished when every municipality in it that has spots is. Each comes with its title.
               </Text>
             )}
             {tab === "titles" && data && (
               <Text style={[styles.titlesIntro, { color: colors.textSecondary }]}>
-                Bronze for a town, silver for a district, gold for all of Bulacan. Titles stay once earned
+                Bronze for a municipality, silver for a district, gold for all of Bulacan. Titles stay once earned
                 {titlesEarned > 0 ? ". Pick the one to show next to your name on your profile and the leaderboard." : "."}
               </Text>
             )}
@@ -557,8 +560,8 @@ export default function BadgeScreen() {
         }
         ListEmptyComponent={
           !data ? null
-            : q ? <EmptyState icon="search" text={{ spots: "No badge matches that. Try a spot or town name.", towns: "No town matches that.", districts: "No district matches that." }[tab]} />
-            : tab === "districts" ? <EmptyState icon="award" title="No district yet" text="A district's badge can be earned once its towns have spots." />
+            : q ? <EmptyState icon="search" text={{ spots: "No badge matches that. Try a spot or municipality name.", towns: "No municipality matches that.", districts: "No district matches that." }[tab]} />
+            : tab === "districts" ? <EmptyState icon="award" title="No district yet" text="A district's badge can be earned once its municipalities have spots." />
             : <EmptyState icon="award" title="Nothing here yet" text="Finish every mission at a spot to earn its badge." />
         }
         ListFooterComponent={<View style={{ height: 40 }} />}
@@ -671,7 +674,7 @@ export default function BadgeScreen() {
         <View style={[styles.earnedPill, { backgroundColor: t.earned ? metal.fill : colors.textMuted }]}>
           <Icon name={t.earned ? "check-circle" : "lock"} size={11} color={t.earned ? colors.onAccent : colors.textInverse} style={{ marginRight: 4 }} />
           <Text style={[styles.earnedPillText, { color: t.earned ? colors.onAccent : colors.textInverse }]}>
-            {t.earned ? `${kind === "town" ? "Town" : "District"} finished · ${TIER_LABEL[t.tier]}` : progress}
+            {t.earned ? `${kind === "town" ? "Municipality" : "District"} finished · ${TIER_LABEL[t.tier]}` : progress}
           </Text>
         </View>
         <Text style={[styles.modalName, { color: colors.textPrimary }]}>{t.name}</Text>
@@ -731,9 +734,9 @@ export default function BadgeScreen() {
     const noSpots = (d.towns || []).filter((town) => !(d.townsWithSpots || []).includes(town));
     return (
       <>
-        {areaDetailTop(d, "district", `${d.townsDone} of ${d.townsTotal} towns`)}
+        {areaDetailTop(d, "district", `${d.townsDone} of ${d.townsTotal} municipalities`)}
         <Text style={[styles.modalText, { color: colors.textSecondary }]}>
-          {d.earned ? d.description : `Finish every town in ${d.name} that has spots to earn it.`}
+          {d.earned ? d.description : `Finish every municipality in ${d.name} that has spots to earn it.`}
         </Text>
         {comesWith(d)}
         {d.earned && d.earnedAt && <Text style={[styles.modalSub, { color: colors.textMuted }]}>Finished on {fmtDate(d.earnedAt, "long")}</Text>}
@@ -746,8 +749,8 @@ export default function BadgeScreen() {
               style={styles.stepRow}
               onPress={() => setSelected({ kind: "town", item: t })}
               accessibilityRole="button"
-              accessibilityLabel={`${t.name}, ${t.earned ? "town finished" : `${t.spotsDone} of ${t.spotsTotal} spots done`}`}
-              accessibilityHint="Opens the town's badge"
+              accessibilityLabel={`${t.name}, ${t.earned ? "municipality finished" : `${t.spotsDone} of ${t.spotsTotal} spots done`}`}
+              accessibilityHint="Opens the municipality's badge"
             >
               <View style={[styles.stepIcon, { backgroundColor: t.earned ? colors.bronzeSoft : colors.brandLight }]}>
                 <Icon name={t.earned ? "award" : "map"} size={15} color={t.earned ? colors.bronzeInk : colors.brand} />

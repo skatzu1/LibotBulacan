@@ -97,8 +97,8 @@ describe("Picking the title to show", () => {
     expect(page.queryByRole("radio", { name: /District 1 Traveler/ })).toBeNull();
     expect(page.getByText("On your profile and the leaderboard")).toBeTruthy();
     // The locked ones say what they take, by tier.
-    expect(page.getByText("Finish every town in Bulacan with spots (7)")).toBeTruthy();
-    expect(page.getByText("Finish every town with spots in District 1 (5)")).toBeTruthy();
+    expect(page.getByText("Finish every municipality in Bulacan with spots (7)")).toBeTruthy();
+    expect(page.getByText("Finish every municipality with spots in District 1 (5)")).toBeTruthy();
     expect(page.getByText("GOLD")).toBeTruthy();
     expect(page.getByText("SILVER")).toBeTruthy();
     // Two earned: the summary says which one others see.

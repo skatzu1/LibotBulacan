@@ -46,9 +46,9 @@ export function tierColors(colors, tier) {
 // Iron is a spot's badge, which comes with no title.
 export const TIER_LABEL = { iron: "Iron", bronze: "Bronze", silver: "Silver", gold: "Gold" };
 
-/** "2 more towns to District 1 Traveler" — from the server's nextTitle { name, townsLeft }. */
+/** "2 more municipalities to District 1 Traveler" — from the server's nextTitle { name, townsLeft }. */
 export function nextTitleLine(next) {
   if (!next) return "You've earned every title";
   const n = next.townsLeft;
-  return `${n} more town${n === 1 ? "" : "s"} to ${next.name}`;
+  return `${n} more ${n === 1 ? "municipality" : "municipalities"} to ${next.name}`;
 }

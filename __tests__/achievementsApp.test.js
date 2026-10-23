@@ -83,8 +83,8 @@ describe("The reward moments", () => {
     expect(tree.getByLabelText("1 of 4")).toBeTruthy();
 
     fireEvent.press(tree.getByLabelText("Next reward"));
-    expect(tree.getByText("TOWN FINISHED · BRONZE")).toBeTruthy();
-    expect(tree.getByText("Every spot in Malolos, every mission. That's the whole town.")).toBeTruthy();
+    expect(tree.getByText("MUNICIPALITY FINISHED · BRONZE")).toBeTruthy();
+    expect(tree.getByText("Every spot in Malolos, every mission. That's the whole municipality.")).toBeTruthy();
     expect(tree.getByText(/New title: Malolos Traveler/)).toBeTruthy();
 
     fireEvent.press(tree.getByLabelText("Next reward"));
@@ -150,8 +150,8 @@ describe("Titles", () => {
     expect(["town:Malolos", "district:2", "goat"].map(titleTier)).toEqual(["bronze", "silver", "gold"]);
     // The old ladder's keys name nothing now.
     expect([titleName("voyager"), titleName("explorer"), titleName("district:9"), titleName(null)]).toEqual([null, null, null, null]);
-    expect(nextTitleLine({ name: "District 1 Traveler", townsLeft: 2 })).toBe("2 more towns to District 1 Traveler");
-    expect(nextTitleLine({ name: "The GOAT Traveler", townsLeft: 1 })).toBe("1 more town to The GOAT Traveler");
+    expect(nextTitleLine({ name: "District 1 Traveler", townsLeft: 2 })).toBe("2 more municipalities to District 1 Traveler");
+    expect(nextTitleLine({ name: "The GOAT Traveler", townsLeft: 1 })).toBe("1 more municipality to The GOAT Traveler");
     expect(nextTitleLine(null)).toBe("You've earned every title");
   });
 });

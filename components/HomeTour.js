@@ -40,7 +40,7 @@ const STEPS = [
   {
     key: "quick",
     title: "Start here",
-    body: "AR View, Bakit List and Navigate each ask which spot you want first. Achievements shows your badges and titles: finish every mission at a spot for its badge, and a whole town or district for more.",
+    body: "AR View, Bakit List and Navigate each ask which spot you want first. Achievements shows your badges and titles: finish every mission at a spot for its badge, and a whole municipality or district for more.",
   },
   {
     key: "featured",

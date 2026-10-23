@@ -59,14 +59,14 @@ it("lists each district's silver badge, opening its towns and the title it comes
       <ThemeProvider><BadgeScreen /></ThemeProvider>
     </SafeAreaProvider>,
   );
-  const card = await page.findByLabelText("District 1 district badge, Silver, locked, 1 of 2 towns done", {}, { timeout: 8000 });
-  expect(page.getByText("1 of 2 towns")).toBeTruthy();
-  expect(page.getByText("1 more town to District 1 Traveler")).toBeTruthy();
+  const card = await page.findByLabelText("District 1 district badge, Silver, locked, 1 of 2 municipalities done", {}, { timeout: 8000 });
+  expect(page.getByText("1 of 2 municipalities")).toBeTruthy();
+  expect(page.getByText("1 more municipality to District 1 Traveler")).toBeTruthy();
 
   fireEvent.press(card);
-  expect(await page.findByText("Finish every town in District 1 that has spots to earn it.")).toBeTruthy();
+  expect(await page.findByText("Finish every municipality in District 1 that has spots to earn it.")).toBeTruthy();
   expect(page.getByLabelText("Comes with the title District 1 Traveler")).toBeTruthy();
-  expect(page.getByLabelText("Malolos, town finished")).toBeTruthy();
+  expect(page.getByLabelText("Malolos, municipality finished")).toBeTruthy();
   expect(page.getByText("No spots yet in Bulakan, Hagonoy, Paombong, Pulilan")).toBeTruthy();
 
   // A town in it opens that town's card.

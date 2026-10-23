@@ -177,7 +177,7 @@ export default function PreviousTripsScreen() {
                 value={query}
                 onChangeText={setQuery}
                 onClear={() => setQuery("")}
-                placeholder="Search trips by spot, town or month"
+                placeholder="Search trips by spot, municipality or month"
                 style={styles.search}
               />
             )}
@@ -200,7 +200,7 @@ export default function PreviousTripsScreen() {
         }
         ListEmptyComponent={
           !error && q && trips.length > 0 ? (
-            <EmptyState icon="search" text="No trip matches that. Try a spot, a town or a month." />
+            <EmptyState icon="search" text="No trip matches that. Try a spot, a municipality or a month." />
           ) : !error ? (
             <EmptyState
               icon="map"

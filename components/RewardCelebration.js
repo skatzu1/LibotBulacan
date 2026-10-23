@@ -46,13 +46,13 @@ export function copyFor(item) {
     return { eyebrow: "Badge unlocked · Iron", headline: item.badge?.name || "New badge", body: "You finished every mission here. It's in your achievements now.", tier: "iron" };
   }
   if (item.kind === "town") {
-    const town = item.town?.municipality || "this town";
+    const town = item.town?.municipality || "this municipality";
     return {
-      eyebrow: "Town finished · Bronze",
+      eyebrow: "Municipality finished · Bronze",
       headline: item.town?.name || town,
       body: item.town?.description && item.town.description !== `Finished every mission in ${town}`
         ? item.town.description
-        : `Every spot in ${town}, every mission. That's the whole town.`,
+        : `Every spot in ${town}, every mission. That's the whole municipality.`,
       title: item.town?.title?.name || null,
       tier: "bronze",
     };
@@ -62,7 +62,7 @@ export function copyFor(item) {
     return {
       eyebrow: "District finished · Silver",
       headline: name,
-      body: `Every town in ${name} with spots, every mission.`,
+      body: `Every municipality in ${name} with spots, every mission.`,
       title: item.district?.title?.name || null,
       tier: "silver",
     };
@@ -70,7 +70,7 @@ export function copyFor(item) {
   return {
     eyebrow: "New title · Gold",
     headline: item.title?.name || "New title",
-    body: "Every town in Bulacan with spots, finished. There's no title above this one.",
+    body: "Every municipality in Bulacan with spots, finished. There's no title above this one.",
     tier: "gold",
   };
 }

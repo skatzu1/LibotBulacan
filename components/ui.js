@@ -444,8 +444,10 @@ export function HeaderAction({ label, onPress, disabled, loading }) {
 /* ── Segmented control ────────────────────────────────────────────────────
    Settings' appearance picker, the spot tabs and the badge filter were three
    separate implementations with the active/inactive colours inverted between
-   them. `role` is "tab" for switching views and "radio" for a setting. */
-export function Segmented({ options, value, onChange, role = "tab", style }) {
+   them. `role` is "tab" for switching views and "radio" for a setting.
+   `fit`: each option as wide as its label (the rest shared out), the label
+   shrinking a little if they still don't fit — for labels of uneven length. */
+export function Segmented({ options, value, onChange, role = "tab", fit = false, style }) {
   const { colors } = useTheme();
   return (
     <View
@@ -457,7 +459,7 @@ export function Segmented({ options, value, onChange, role = "tab", style }) {
         return (
           <TouchableOpacity
             key={o.key}
-            style={[s.segmentItem, on && [{ backgroundColor: colors.card }, shadow.sm]]}
+            style={[s.segmentItem, fit && s.segmentItemFit, on && [{ backgroundColor: colors.card }, shadow.sm]]}
             onPress={() => onChange(o.key)}
             activeOpacity={0.85}
             accessibilityRole={role}
@@ -469,6 +471,7 @@ export function Segmented({ options, value, onChange, role = "tab", style }) {
               style={[s.segmentText, { color: on ? colors.brand : colors.textMuted }]}
               numberOfLines={1}
               maxFontSizeMultiplier={MAX_FONT_SCALE}
+              {...(fit && { adjustsFontSizeToFit: true, minimumFontScale: 0.8 })}
             >
               {o.label}
             </Text>
@@ -833,6 +836,8 @@ const s = StyleSheet.create({
     flex: 1, flexDirection: "row", alignItems: "center", justifyContent: "center",
     gap: 6, minHeight: 40, paddingHorizontal: 6, borderRadius: radius.pill,
   },
+  // Sized from the label, then grown or shrunk (flex: 1 would size from 0).
+  segmentItemFit: { flex: 0, flexGrow: 1, flexShrink: 1 },
   segmentText: { fontFamily: fonts.sansBold, fontSize: 13, letterSpacing: -0.1 },
 
   groupLabel: {

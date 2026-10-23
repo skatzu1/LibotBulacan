@@ -408,7 +408,7 @@ function HomeContent({ profilePhoto, navigation }) {
               {results.length} {results.length === 1 ? "result" : "results"} for “{query.trim()}”
             </Text>
             {results.length === 0 ? (
-              <EmptyState icon="search" text="Nothing matched that. Try a town or a landmark name." />
+              <EmptyState icon="search" text="Nothing matched that. Try a municipality or a landmark name." />
             ) : (
               <View style={[h.grid, { gap }]}>
                 {results.map((spot) => (

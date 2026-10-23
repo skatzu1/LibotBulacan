@@ -164,7 +164,7 @@ export default function ProfileScreen() {
   // on the page. Deleting the account is real and lives in Edit Profile.
   const menuItems = [
     { id: "trips",    icon: "map-pin",  title: "Previous Trips", onPress: () => navigation.navigate("PreviousTrips") },
-    { id: "badges",   icon: "award",    title: "Achievements", subtitle: "Spot, town and district badges, and titles", onPress: () => navigation.navigate("Badges") },
+    { id: "badges",   icon: "award",    title: "Achievements", subtitle: "Spot, municipality and district badges, and titles", onPress: () => navigation.navigate("Badges") },
     { id: "settings", icon: "settings", title: "Settings",       onPress: () => navigation.navigate("Settings") },
   ];
 

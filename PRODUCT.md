@@ -46,7 +46,7 @@ Being there is what counts, and the server checks it: arrivals, AR, photo scans 
 - Not an official government, church or tourism-office app, and must not look like one.
 - Points come only from Bakit List tasks. Finishing a spot earns its badge, not extra points, so no badge shows a points value.
 
-**Terminology:** spot, town (municipality), Bakit List (a spot's things to do), Nearby Eats (the food mission), AI Scan (the photo mission), Arrive, points, badge, town badge, title, Ranking (the leaderboard tab).
+**Terminology:** spot, municipality (never "town" in the UI, user rule 2026-10-24), Bakit List (a spot's things to do), Nearby Eats (the food mission), AI Scan (the photo mission), Arrive, points, badge, municipality badge, title, Ranking (the leaderboard tab).
 
 ## Brand Commitments
 

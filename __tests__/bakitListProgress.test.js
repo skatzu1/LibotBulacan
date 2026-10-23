@@ -82,9 +82,9 @@ it("filters like the badges: finished only, or to do only", async () => {
   expect(shownSpots(tree)).toEqual(["Meyto Shrine", "Casa Real", "Bagbag Bridge"]);
 });
 
-it("searches by spot or town", async () => {
+it("searches by spot or municipality", async () => {
   const tree = wrap();
-  fireEvent.changeText(await tree.findByPlaceholderText("Search by spot or town"), "calumpit");
+  fireEvent.changeText(await tree.findByPlaceholderText("Search by spot or municipality"), "calumpit");
   expect(shownSpots(tree)).toEqual(["Meyto Shrine", "Bagbag Bridge"]);
 });
 

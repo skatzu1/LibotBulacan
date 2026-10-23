@@ -143,7 +143,7 @@ export default function SpotPicker({
                   value={query}
                   onChangeText={setQuery}
                   onClear={() => setQuery("")}
-                  placeholder="Search by spot or town"
+                  placeholder="Search by spot or municipality"
                   style={styles.search}
                 />
                 <Segmented style={styles.filterBar} value={show} onChange={setShow} options={options} />
@@ -155,7 +155,7 @@ export default function SpotPicker({
           listed.all.length === 0 ? (
             <EmptyState icon="map-pin" text="No spots available yet." />
           ) : q ? (
-            <EmptyState icon="search" text="Nothing matched that. Try a town or a landmark name." />
+            <EmptyState icon="search" text="Nothing matched that. Try a municipality or a landmark name." />
           ) : show === "done" ? (
             <EmptyState icon="target" title={`None ${labels.done.toLowerCase()} yet`} />
           ) : (
