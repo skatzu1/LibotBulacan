@@ -27,7 +27,6 @@ import Icon from "../components/Icon";
 import MunicipalityPicker from "../components/MunicipalityPicker";
 import PasswordStrength from "../components/PasswordStrength";
 import DobField from "../components/DobField";
-import LegalConsentModal from "../components/LegalConsentModal";
 import { municipalityError } from "../utils/municipalities";
 import { LEGAL_VERSION } from "../utils/legalText";
 
@@ -37,12 +36,9 @@ const REGISTER_BG = require("../assets/bg.png");
 WebBrowser.maybeCompleteAuthSession();
 
 // ── Terms agreement ───────────────────────────────────────────────
-// The thesis panel (2026-10-21): the Terms and Privacy Policy open in a
-// pop-up that has to be read to the end before sign-up goes through. This box
-// only ticks from that pop-up's "I agree" (components/LegalConsentModal.js);
-// both Sign up and Continue with Google need it. It replaced a line of fine
-// print under each button ("By signing up, you agree…").
-export const CONSENT_ERROR = "Read the Terms and Privacy Policy to the end and agree first.";
+// A plain checkbox (2026-10-24): tap it to tick it. Both Sign up and
+// Continue with Google need the tick.
+export const CONSENT_ERROR = "Tick the box to agree to the Terms and Privacy Policy first.";
 
 function ConsentRow({ agreed, onPress, invalid, disabled }) {
   const { colors } = useTheme();
@@ -56,7 +52,6 @@ function ConsentRow({ agreed, onPress, invalid, disabled }) {
       accessibilityRole="checkbox"
       accessibilityState={{ checked: agreed, disabled }}
       accessibilityLabel="I've read and agree to the Terms and Conditions and Privacy Policy"
-      accessibilityHint={agreed ? "Opens them again" : "Opens them to read; agree at the end"}
     >
       <View style={[styles.box, agreed
         ? { backgroundColor: colors.success, borderColor: colors.success }
@@ -67,7 +62,6 @@ function ConsentRow({ agreed, onPress, invalid, disabled }) {
       <Text style={[styles.consentText, { color: colors.textSecondary }]} maxFontSizeMultiplier={MAX_FONT_SCALE}>
         I've read and agree to the <Text style={link}>Terms and Conditions</Text> and{" "}
         <Text style={link}>Privacy Policy</Text>
-        {!agreed && <Text style={{ color: colors.textMuted }}> · tap to read</Text>}
       </Text>
     </TouchableOpacity>
   );
@@ -120,12 +114,9 @@ export default function Register({ navigation }) {
   const [isLoading, setIsLoading]         = useState(false);
   const [isGoogleLoading, setIsGoogleLoading] = useState(false);
 
-  // When the traveler agreed in the Terms pop-up (null = not yet), and what
-  // they pressed that opened it, so agreeing carries straight on with it.
+  // When the traveler ticked the Terms box (null = not ticked).
   const [agreedAt, setAgreedAt]           = useState(null);
-  const [consentOpen, setConsentOpen]     = useState(false);
   const [consentMissing, setConsentMissing] = useState(false);
-  const pendingAction = useRef(null);
 
   // A field's error shows once the user has left it (or pressed Sign up), and
   // from then on it's recomputed on every keystroke — so it disappears the
@@ -189,26 +180,16 @@ export default function Register({ navigation }) {
     termsAcceptedAt: acceptedAt,
   });
 
-  // Sign up and Continue with Google both stop here until the Terms are
-  // agreed; agreeing in the pop-up then carries on with the one pressed. The
-  // time is passed along rather than read from state, because the handler
-  // that carries on is the one from the render before the agreement.
-  const needsConsent = (action, acceptedAt) => {
-    if (acceptedAt) return false;
-    pendingAction.current = action;
+  // Sign up and Continue with Google both stop here until the box is ticked;
+  // the box turns red with a note under it.
+  const needsConsent = () => {
+    if (agreedAt) return false;
     setConsentMissing(true);
-    setConsentOpen(true);
     return true;
   };
-  const onAgree = () => {
-    const at = new Date().toISOString();
-    setAgreedAt(at);
+  const toggleAgreed = () => {
+    setAgreedAt(agreedAt ? null : new Date().toISOString());
     setConsentMissing(false);
-    setConsentOpen(false);
-    const next = pendingAction.current;
-    pendingAction.current = null;
-    // After the pop-up has closed (the Google window can't open over it).
-    if (next) setTimeout(() => next(at), 450);
   };
 
   // The Google account picked here already has a Libot account, and Google
@@ -251,7 +232,7 @@ export default function Register({ navigation }) {
   // (promptToLogIn), and only a Google account with no Libot account goes on
   // to sign up — the same steps the helper took (Login.js runs them by hand
   // too, for the opposite case).
-  const handleGoogleSignUp = async (acceptedAt = agreedAt) => {
+  const handleGoogleSignUp = async () => {
     if (isGoogleLoading || !isLoaded) return;
     setFormError("");
     const missing = GOOGLE_FIELDS.find((f) => clientErrors[f]);
@@ -261,7 +242,7 @@ export default function Register({ navigation }) {
       inputRefs[missing].current?.focus();
       return;
     }
-    if (needsConsent(handleGoogleSignUp, acceptedAt)) return;
+    if (needsConsent()) return;
     setIsGoogleLoading(true);
     try {
       // Same callback path useOAuth uses, so the redirect Clerk allows is unchanged.
@@ -296,7 +277,7 @@ export default function Register({ navigation }) {
 
       // A new account. unsafeMetadata rides on it; the backend copies it
       // (webhook and /register).
-      const created = await signUp.create({ transfer: true, unsafeMetadata: signUpDetails(acceptedAt) });
+      const created = await signUp.create({ transfer: true, unsafeMetadata: signUpDetails(agreedAt) });
       const createdSessionId = created?.createdSessionId;
       if (!createdSessionId) throw new Error("No session returned from Google sign-up");
       await setActive({ session: createdSessionId });
@@ -319,7 +300,7 @@ export default function Register({ navigation }) {
   };
 
   // ── Email signup ──
-  const handleRegister = async (acceptedAt = agreedAt) => {
+  const handleRegister = async () => {
     setFormError("");
     setTouched(Object.fromEntries(FIELD_ORDER.map((f) => [f, true])));
 
@@ -329,7 +310,7 @@ export default function Register({ navigation }) {
       inputRefs[firstBad].current?.focus();
       return;
     }
-    if (needsConsent(handleRegister, acceptedAt)) return;
+    if (needsConsent()) return;
     if (!isLoaded) return setFormError("Still getting ready. Try again in a moment.");
 
     setIsLoading(true);
@@ -346,7 +327,7 @@ export default function Register({ navigation }) {
       const last = lastName.trim();
       const signUpResult = await signUp.create({
         emailAddress: email.trim(), password, firstName: first, lastName: last,
-        unsafeMetadata: signUpDetails(acceptedAt),
+        unsafeMetadata: signUpDetails(agreedAt),
       });
       await signUp.prepareEmailAddressVerification({ strategy: "email_code" });
       navigation.navigate("EmailVerification", {
@@ -519,7 +500,7 @@ export default function Register({ navigation }) {
       <View>
         <ConsentRow
           agreed={!!agreedAt}
-          onPress={() => setConsentOpen(true)}
+          onPress={toggleAgreed}
           invalid={consentMissing && !agreedAt}
           disabled={anyLoading}
         />
@@ -566,12 +547,6 @@ export default function Register({ navigation }) {
           </>
         )}
       </TouchableOpacity>
-
-      <LegalConsentModal
-        visible={consentOpen}
-        onAgree={onAgree}
-        onClose={() => { pendingAction.current = null; setConsentOpen(false); }}
-      />
 
       <View style={a.linkRow}>
         <Text style={a.linkMuted}>Already Registered? </Text>

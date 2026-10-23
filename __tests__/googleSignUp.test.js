@@ -56,32 +56,27 @@ const { showAlert, showToast } = require("../components/AppAlert");
 const Register = require("../Screens/Register").default;
 const { LEGAL_VERSION } = require("../utils/legalText");
 
-// The Terms pop-up opens first (2026-10-21): read to the end, then I agree.
-async function agreeToTerms(tree) {
-  const scroll = await tree.findByTestId("legal-scroll");
-  fireEvent(scroll, "layout", { nativeEvent: { layout: { height: 700 } } });
-  fireEvent(scroll, "contentSizeChange", 390, 6000);
-  fireEvent.scroll(scroll, {
-    nativeEvent: { layoutMeasurement: { height: 700 }, contentOffset: { y: 5300 }, contentSize: { height: 6000 } },
-  });
-  fireEvent.press(tree.getByLabelText("I agree to the Terms and Conditions and Privacy Policy"));
-}
-
 const metrics = { frame: { x: 0, y: 0, width: 390, height: 844 }, insets: { top: 47, left: 0, right: 0, bottom: 34 } };
 
+const renderRegister = (navigate = jest.fn()) => render(
+  <SafeAreaProvider initialMetrics={metrics}>
+    <ThemeProvider><Register navigation={{ navigate }} /></ThemeProvider>
+  </SafeAreaProvider>,
+);
+
 // Fills what Google sign-up needs first, then taps "Continue with Google".
-async function continueWithGoogle() {
-  const navigate = jest.fn();
-  const tree = render(
-    <SafeAreaProvider initialMetrics={metrics}>
-      <ThemeProvider><Register navigation={{ navigate }} /></ThemeProvider>
-    </SafeAreaProvider>,
-  );
+async function fillForGoogle(tree) {
   fireEvent.press(await tree.findByLabelText("Choose your municipality", {}, { timeout: 8000 }));
   fireEvent.press(tree.getByLabelText("Bocaue"));
   fireEvent.changeText(tree.getByLabelText("Date of birth, month slash day slash year"), "05172000");
+}
+
+async function continueWithGoogle() {
+  const navigate = jest.fn();
+  const tree = renderRegister(navigate);
+  await fillForGoogle(tree);
+  fireEvent.press(tree.getByRole("checkbox")); // the Terms box (2026-10-24: one tap)
   fireEvent.press(tree.getByLabelText("Continue with Google"));
-  await agreeToTerms(tree); // and Google opens straight after
   return { tree, navigate };
 }
 
@@ -102,36 +97,21 @@ beforeEach(async () => {
   jest.clearAllMocks();
 });
 
-describe("The Terms pop-up before sign-up", () => {
-  it("Google waits for the Terms; I agree stays off until the end", async () => {
-    const tree = render(
-      <SafeAreaProvider initialMetrics={metrics}>
-        <ThemeProvider><Register navigation={{ navigate: jest.fn() }} /></ThemeProvider>
-      </SafeAreaProvider>,
-    );
-    fireEvent.press(await tree.findByLabelText("Choose your municipality", {}, { timeout: 8000 }));
-    fireEvent.press(tree.getByLabelText("Bocaue"));
-    fireEvent.changeText(tree.getByLabelText("Date of birth, month slash day slash year"), "05172000");
+describe("The Terms box on sign-up", () => {
+  const checked = (tree) => tree.getByRole("checkbox").props.accessibilityState.checked;
+
+  it("Google waits for the tick; tapping the box ticks it", async () => {
+    const tree = renderRegister();
+    await fillForGoogle(tree);
+
     fireEvent.press(tree.getByLabelText("Continue with Google"));
-
-    const scroll = await tree.findByTestId("legal-scroll");
-    fireEvent(scroll, "layout", { nativeEvent: { layout: { height: 700 } } });
-    fireEvent(scroll, "contentSizeChange", 390, 6000);
-    // Halfway: still off, and pressing it does nothing.
-    fireEvent.scroll(scroll, {
-      nativeEvent: { layoutMeasurement: { height: 700 }, contentOffset: { y: 2650 }, contentSize: { height: 6000 } },
-    });
-    const off =tree.getByLabelText("Scroll to the end to agree");
-    expect(off.props.accessibilityState).toEqual(expect.objectContaining({ disabled: true }));
-    fireEvent.press(off);
+    await waitFor(() => expect(tree.getByText("Tick the box to agree to the Terms and Privacy Policy first.")).toBeTruthy());
     expect(mockSignUpCreate).not.toHaveBeenCalled();
-    expect(tree.getByText(/50% read/)).toBeTruthy();
 
-    // Closing it leaves the box unticked and nothing signed up.
-    fireEvent.press(tree.getByLabelText("Close without agreeing"));
-    await waitFor(() => expect(tree.getByText("Read the Terms and Privacy Policy to the end and agree first.")).toBeTruthy());
-    expect(tree.getByRole("checkbox").props.accessibilityState).toEqual(expect.objectContaining({ checked: false }));
-    expect(mockSignUpCreate).not.toHaveBeenCalled();
+    fireEvent.press(tree.getByRole("checkbox"));
+    expect(checked(tree)).toBe(true);
+    fireEvent.press(tree.getByRole("checkbox"));
+    expect(checked(tree)).toBe(false);
   });
 });
 
