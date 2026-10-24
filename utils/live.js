@@ -14,7 +14,7 @@ import { BASE_URL } from "../api";
  * each screen showing it loads it again through the usual API, keeping what's
  * on screen if that fails. Signed in, the connection also carries the
  * traveler's own "moderation": an admin's suspension or ban reaches the app at
- * once.
+ * once — and their own "achievements", when they arrive or finish a mission.
  *
  *   useLive(["reviews"], () => fetchReviews(spot._id));
  *
