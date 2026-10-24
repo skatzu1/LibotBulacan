@@ -21,6 +21,7 @@ import { useTheme, radius, shadow, fonts } from "../context/ThemeContext";
 import { BULACAN_BOUNDARY, BULACAN_BBOX } from "../utils/bulacanBoundary";
 import { GpsSmoother, isBetterFix, MAX_USABLE_ACCURACY_M } from "../utils/gpsFilter";
 import { BASE_URL } from "../api";
+import { useLive } from "../utils/live";
 import Icon from "../components/Icon";
 import { ScreenHeader } from "../components/ui";
 import useRoadRoute, { fmtDistance, fmtDuration } from "../hooks/useRoadRoute";
@@ -885,6 +886,21 @@ export default function Track({ route, navigation }) {
       locationSubscription.current = null;
     };
   }, [spot._id]);
+
+  // Live (utils/live.js): a moderator moved the pin, renamed the spot or
+  // changed its radii while it's being tracked. Only then, since a new spotData
+  // redraws the map: "spots" also comes for every other spot's edits. A failed
+  // request, or a removed spot, keeps what's shown.
+  const trackedKey = (s) => s && JSON.stringify([s.name, getSpotCoords(s), s.arrivalRadiusMeters, s.nearbyRadiusMeters]);
+  useLive(["spots"], () => {
+    fetch(`${BASE_URL}/api/spots/${spot._id}`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (!isMounted.current || !data?.success || !data?.spot) return;
+        setSpotData((prev) => (trackedKey(prev) === trackedKey(data.spot) ? prev : data.spot));
+      })
+      .catch(() => {});
+  });
 
   /* ── followMode ref ── */
   const followModeRef = useRef(followMode);

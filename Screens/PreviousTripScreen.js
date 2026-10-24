@@ -18,6 +18,7 @@ import {
 import { BASE_URL } from "../api";
 import { useArrival } from "../context/ArrivalContext";
 import { useReviews } from "../context/ReviewContext";
+import { useLive } from "../utils/live";
 
 // Home's Featured card, a little shorter so three still show at a time.
 const CARD_H = 220;
@@ -79,6 +80,10 @@ export default function PreviousTripsScreen() {
     });
     return unsub;
   }, [navigation]);
+
+  // Live (utils/live.js): a first visit, on this phone or another, and a
+  // spot's new name or photo.
+  useLive(["achievements", "spots"], () => { if (hasLoaded.current) loadVisited(false); });
 
   const formatDate = (iso) => {
     if (!iso) return "";

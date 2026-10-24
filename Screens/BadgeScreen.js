@@ -165,8 +165,9 @@ export default function BadgeScreen() {
   }, [navigation]); // eslint-disable-line react-hooks/exhaustive-deps
   // Live (utils/live.js; 2026-10-24: "achievements should be realtime"): their
   // own arrivals and missions, on this phone or another; a mission added to or
-  // taken off a spot; an admin's new badge art; a new spot.
-  useLive(["achievements", "missions", "badges", "spots"], () => { if (hasLoaded.current) load({ quiet: true }); });
+  // taken off a spot; an admin's new badge art; a new spot; a title picked on
+  // another phone ("me").
+  useLive(["achievements", "me", "missions", "badges", "spots"], () => { if (hasLoaded.current) load({ quiet: true }); });
 
   const spots = useMemo(() => (data?.spots || []).filter((s) => s.badge).sort(byProgress), [data]);
   const towns = useMemo(() => (data?.towns || []).map((t) => ({ ...t, name: t.name || t.municipality, done: t.spotsDone, total: t.spotsTotal })).sort(byProgress), [data]);

@@ -2,6 +2,7 @@ import React, { createContext, useState, useContext, useCallback, useEffect } fr
 import { useAuth } from '@clerk/clerk-expo';
 import { BASE_URL } from "../api";
 import { showToast } from "../components/AppAlert";
+import { useLive } from "../utils/live";
 
 const BookmarkContext = createContext();
 export const useBookmark = () => useContext(BookmarkContext);
@@ -12,11 +13,12 @@ export const BookmarkProvider = ({ children }) => {
   const [loading, setLoading] = useState(false);
 
   // Fetch bookmarks - stable function
-  const fetchBookmarks = useCallback(async () => {
+  // `quiet`: a live reload, with no loading state.
+  const fetchBookmarks = useCallback(async ({ quiet = false } = {}) => {
     if (!userId) return;
-    
+
     try {
-      setLoading(true);
+      if (!quiet) setLoading(true);
       const token = await getToken();
       
       if (!token) {
@@ -60,6 +62,10 @@ export const BookmarkProvider = ({ children }) => {
       fetchBookmarks();
     }
   }, [isLoaded, userId]); // FIXED: Don't include fetchBookmarks here!
+
+  // Live (utils/live.js): saved or removed on another phone ("me"), and a
+  // saved spot's new name, photo or removal.
+  useLive(["me", "spots"], () => { if (userId) fetchBookmarks({ quiet: true }); });
 
   // Check if a spot is bookmarked
   const isBookmarked = useCallback((spotId) => {

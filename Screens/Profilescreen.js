@@ -23,6 +23,7 @@ import { BASE_URL } from "../api";
 import { clerkPhoto, avatarImage } from "../utils/image";
 import Icon from "../components/Icon";
 import TitleChip from "../components/TitleChip";
+import { useLive } from "../utils/live";
 
 // Was a hardcoded "https://libotbackend.onrender.com" — the only place in the
 // app not reading the shared base URL, so an environment change would have
@@ -88,6 +89,13 @@ export default function ProfileScreen() {
     const unsubscribe = navigation.addListener("focus", loadStats);
     return unsubscribe;
   }, [navigation, loadStats]);
+  // Live (utils/live.js): their points, trips and badges as they earn them,
+  // and a name, photo or title changed on another phone.
+  useLive(["achievements"], loadStats);
+  useLive(["me"], () => {
+    loadStats();
+    clerkUser?.reload?.().catch(() => {});
+  });
 
   // Pull to refresh — the stats otherwise only reload when the screen is
   // re-opened, so a load that failed (bad signal, server waking up) left the

@@ -9,6 +9,7 @@ import React, {
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useAuth } from "@clerk/clerk-expo";
 import { BASE_URL } from "../api";
+import { useLive } from "../utils/live";
 
 // Single source of truth for the backend host — see api.js.
 const ProfileImageContext = createContext(null);
@@ -112,6 +113,9 @@ export function ProfileImageProvider({ children }) {
       if (retryTimeoutRef.current) clearTimeout(retryTimeoutRef.current);
     };
   }, [userId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Live (utils/live.js): a photo changed or removed on another phone.
+  useLive(["me"], () => { if (isSignedIn) fetchProfileImage(); });
 
   useEffect(() => {
     if (!isSignedIn) {

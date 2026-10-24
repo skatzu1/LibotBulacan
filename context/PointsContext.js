@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import { useAuth } from '@clerk/clerk-expo';
 import api from '../api';
+import { useLive } from '../utils/live';
 
 const PointsContext = createContext(null);
 
@@ -41,6 +42,9 @@ export function PointsProvider({ children }) {
       setCheckedInSpots(new Set());
     }
   }, [isLoaded, isSignedIn, refresh]);
+
+  // Live (utils/live.js): points and visits earned on another phone.
+  useLive(['achievements'], refresh);
 
   // Optimistic local bump when a visit is logged; the backend is the source of
   // truth, so refresh() reconciles on the next screen focus.
