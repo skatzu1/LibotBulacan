@@ -22,14 +22,15 @@ import * as Haptics from "expo-haptics";
 import Svg, { Path, Circle } from "react-native-svg";
 import { useTheme, fonts, typography, radius } from "../context/ThemeContext";
 import {
-  ScreenHeader, Segmented, EmptyState, ErrorState, LoadingState, PrimaryButton, SearchField,
+  ScreenHeader, Segmented, EmptyState, ErrorState, PrimaryButton, SearchField,
 } from "../components/ui";
+import AchievementsSkeleton from "../components/AchievementsSkeleton";
 import { useArrival } from "../context/ArrivalContext";
 import { BASE_URL } from "../api";
 import { useLive } from "../utils/live";
 import { badgeImage } from "../utils/image";
 import { shareBadge } from "../utils/badgeShare";
-import { celebrate } from "../utils/rewards";
+import { fetchAchievements } from "../utils/owedRewards";
 import { MISSION_KINDS, ARRIVAL_KIND } from "../utils/missionTiers";
 import { nextTitleLine, titleName, tierColors, TIER_LABEL } from "../utils/titles";
 import { starPath } from "../utils/townEmblem";
@@ -131,15 +132,10 @@ export default function BadgeScreen() {
   const load = async ({ quiet = false } = {}) => {
     if (!quiet) setError(null);
     try {
-      const token = await getToken();
-      const res = await fetch(`${BASE_URL}/api/achievements/me`, { headers: { Authorization: `Bearer ${token}` } });
-      if (!res.ok) throw new Error(`achievements ${res.status}`);
-      const body = await res.json();
-      setData(body);
+      // Anything owed from before — a mission that stopped counting, say — is
+      // awarded by that request, and its moment plays (utils/owedRewards.js).
+      setData(await fetchAchievements(getToken));
       hasLoaded.current = true;
-      // Anything owed from before — a mission that stopped counting, say —
-      // is awarded by that request; celebrate it here.
-      celebrate(body.unlocked);
     } catch (e) {
       console.warn("Achievements load error:", e);
       if (!quiet) setError("Couldn't load your achievements. Check your connection.");
@@ -439,7 +435,14 @@ export default function BadgeScreen() {
     return (
       <View style={[styles.container, { backgroundColor: colors.background }]}>
         {header}
-        <LoadingState label="Loading achievements…" />
+        <AchievementsSkeleton
+          tab={tab}
+          columns={columns}
+          cardSize={cardSize}
+          cardHeight={cardHeight}
+          townCols={townCols}
+          townSize={townSize}
+        />
       </View>
     );
   }

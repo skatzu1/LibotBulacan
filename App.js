@@ -21,6 +21,7 @@ import api, { setupClerkInterceptor, appealAPI, moderationAPI, BASE_URL } from '
 import { ProfileImageProvider } from "./context/ProfileImageContext";
 import { navigationRef }        from './navigation/navigationRef';
 import { RewardCelebrationProvider } from './components/RewardCelebration';
+import { OwedRewards } from './utils/owedRewards';
 import { MissionProvider }      from "./context/MissionContext";
 import { PointsProvider }       from "./context/PointsContext";
 import { ThemeProvider, useTheme, lightColors, darkColors, MAX_FONT_SCALE } from "./context/ThemeContext";
@@ -340,6 +341,8 @@ function AppNavigator() {
               {/* Draws the reward moments (badges, town badges, titles) above
                   every screen, so they carry over a navigation. */}
               <RewardCelebrationProvider>
+                {/* Rewards earned away from this phone's own steps (utils/owedRewards.js). */}
+                {isSignedIn && !banInfo?.archived && !suspensionInfo?.isSuspended && <OwedRewards key={userId} />}
                 <NavigationContainer ref={navigationRef} theme={navTheme}>
                   {isSignedIn && banInfo?.archived ? (
                     <BannedScreen banInfo={banInfo} />
