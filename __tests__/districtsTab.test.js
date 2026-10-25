@@ -46,7 +46,12 @@ const achievements = {
     image: null, tier: "silver", title: { key: "district:1", name: "District 1 Traveler", tier: "silver" },
     townsDone: 1, townsTotal: 2, earned: false, earnedAt: null,
   }],
-  unlocked: { spotBadges: [], townBadges: [], districtBadges: [], title: null },
+  bulacan: {
+    key: "bulacan", name: "Bulacan", description: "Finished every mission in every municipality of Bulacan with spots",
+    image: null, tier: "gold", title: { key: "goat", name: "The GOAT Traveler", tier: "gold" },
+    townsWithSpots: ["Calumpit", "Malolos"], townsDone: 1, townsTotal: 2, earned: false, earnedAt: null,
+  },
+  unlocked: { spotBadges: [], townBadges: [], districtBadges: [], bulacanBadge: null, title: null },
 };
 global.fetch = jest.fn(async () => ({ ok: true, json: async () => ({ success: true, ...achievements }) }));
 
@@ -60,7 +65,8 @@ it("lists each district's silver badge, opening its towns and the title it comes
     </SafeAreaProvider>,
   );
   const card = await page.findByLabelText("District 1 district badge, Silver, locked, 1 of 2 municipalities done", {}, { timeout: 8000 });
-  expect(page.getByText("1 of 2 municipalities")).toBeTruthy();
+  // The district's card and the Bulacan card above it (its towns are all of Bulacan's here).
+  expect(page.getAllByText("1 of 2 municipalities")).toHaveLength(2);
   expect(page.getByText("1 more municipality to District 1 Traveler")).toBeTruthy();
 
   fireEvent.press(card);
@@ -73,4 +79,20 @@ it("lists each district's silver badge, opening its towns and the title it comes
   fireEvent.press(page.getByLabelText("Calumpit, 1 of 3 spots done"));
   expect(await page.findByText("Finish every mission at every spot in Calumpit to earn it.")).toBeTruthy();
   expect(page.getByLabelText("Comes with the title Calumpit Traveler")).toBeTruthy();
+}, 20000);
+
+it("puts the gold Bulacan badge above the districts, with every municipality and The GOAT Traveler", async () => {
+  const page = render(
+    <SafeAreaProvider initialMetrics={metrics}>
+      <ThemeProvider><BadgeScreen /></ThemeProvider>
+    </SafeAreaProvider>,
+  );
+  const card = await page.findByLabelText("Bulacan badge, Gold, locked, 1 of 2 municipalities done", {}, { timeout: 8000 });
+  expect(page.getByText("GOLD · THE WHOLE PROVINCE")).toBeTruthy();
+
+  fireEvent.press(card);
+  expect(await page.findByText("Finish every municipality in Bulacan that has spots to earn it.")).toBeTruthy();
+  expect(page.getByLabelText("Comes with the title The GOAT Traveler")).toBeTruthy();
+  expect(page.getByLabelText("Malolos, municipality finished")).toBeTruthy();
+  expect(page.getByLabelText("Calumpit, 1 of 3 spots done")).toBeTruthy();
 }, 20000);

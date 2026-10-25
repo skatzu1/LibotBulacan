@@ -5,7 +5,8 @@
  *
  * Mirrors the live layout: the summary card (title, next title, bar, counts),
  * the four tabs, the search field, then the open tab — spot badge cards, the
- * bigger municipality / district cards, or title rows.
+ * bigger municipality / district cards (Districts: under the wide Bulacan
+ * card), or title rows.
  */
 import React from "react";
 import { View, StyleSheet } from "react-native";
@@ -44,6 +45,7 @@ export default function AchievementsSkeleton({ tab = "spots", columns, cardSize,
       {tab !== "titles" && <Skeleton width="100%" height={46} radius={radius.pill} style={{ marginBottom: 14 }} />}
 
       {/* ── The open tab ── */}
+      {tab === "districts" && <Skeleton width="100%" height={132} radius={20} style={{ marginBottom: 14 }} />}
       {tab === "titles" ? (
         Array.from({ length: 4 }).map((_, i) => (
           <View key={i} style={[styles.titleRow, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>

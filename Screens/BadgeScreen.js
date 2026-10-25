@@ -51,7 +51,9 @@ import { GRID_GAP, H_GUTTER, columnsFor, cardSizeFor, AnimatedCell } from "../co
  *              image the admin uploaded, or the plain medal icon until there
  *              is one), with the title "<Town> Traveler"
  *   Districts  silver: a badge per district, for every town in it with spots,
- *              with "District 1 Traveler" (tiers: the thesis panel, 2026-10-24)
+ *              with "District 1 Traveler" (tiers: the thesis panel, 2026-10-24);
+ *              above them, gold: the Bulacan badge, for every town in Bulacan
+ *              with spots, with The GOAT Traveler (2026-10-25)
  *   Titles     every title, gold (The GOAT Traveler: every town in Bulacan with
  *              spots), then silver, then bronze; the earned ones are a
  *              pick-one list of the title to show
@@ -117,7 +119,7 @@ export default function BadgeScreen() {
   const [error, setError]             = useState(null);
   const [tab, setTab]                 = useState(route?.params?.tab || "spots");
   const [query, setQuery]             = useState("");
-  const [selected, setSelected]       = useState(null); // { kind: "spot" | "town" | "district", item }
+  const [selected, setSelected]       = useState(null); // { kind: "spot" | "town" | "district" | "bulacan", item }
   const [modalVisible, setModalVisible] = useState(false);
   const [sharing, setSharing]         = useState(false);
 
@@ -168,6 +170,7 @@ export default function BadgeScreen() {
   const spots = useMemo(() => (data?.spots || []).filter((s) => s.badge).sort(byProgress), [data]);
   const towns = useMemo(() => (data?.towns || []).map((t) => ({ ...t, name: t.name || t.municipality, done: t.spotsDone, total: t.spotsTotal })).sort(byProgress), [data]);
   const districts = useMemo(() => (data?.districts || []).map((d) => ({ ...d, done: d.townsDone, total: d.townsTotal })).sort(byProgress), [data]);
+  const bulacan = data?.bulacan ? { ...data.bulacan, done: data.bulacan.townsDone, total: data.bulacan.townsTotal } : null;
   // The ones earned first, then the rest; each gold, then silver, then bronze,
   // as the server lists them.
   const titles = useMemo(() => {
@@ -188,6 +191,7 @@ export default function BadgeScreen() {
     : tab === "towns" ? towns.filter((t) => matches([t.name, t.municipality, t.title?.name]))
     : tab === "districts" ? districts.filter((d) => matches([d.name, d.title?.name, ...(d.towns || [])]))
     : titles;
+  const showBulacan = tab === "districts" && !!bulacan && matches([bulacan.name, bulacan.title?.name]);
 
   // ── Detail ──
   const open = (kind, item) => {
@@ -354,6 +358,59 @@ export default function BadgeScreen() {
   };
   const renderTown = useCallback((cell) => renderArea("town", cell), [colors, townSize]); // eslint-disable-line react-hooks/exhaustive-deps
   const renderDistrict = useCallback((cell) => renderArea("district", cell), [colors, townSize]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // The Bulacan badge (gold): the top of the Districts tab, a card the width of
+  // the screen, as it takes every district.
+  const bulacanCard = () => {
+    const b = bulacan;
+    const gold = tierColors(colors, b.tier);
+    return (
+      <AnimatedCell delay={0}>
+        <TouchableOpacity
+          activeOpacity={0.8}
+          onPress={() => open("bulacan", b)}
+          style={[
+            styles.bulacanCard,
+            b.earned ? { backgroundColor: colors.card, borderColor: gold.fill, borderWidth: 1.5 } : { backgroundColor: colors.backgroundSoft },
+          ]}
+          accessibilityRole="button"
+          accessibilityLabel={b.earned
+            ? `${b.name} badge, ${TIER_LABEL[b.tier]}, earned${b.earnedAt ? ` on ${fmtDate(b.earnedAt, "long")}` : ""}`
+            : `${b.name} badge, ${TIER_LABEL[b.tier]}, locked, ${b.done} of ${b.total} municipalities done`}
+          accessibilityHint="Opens the Bulacan badge"
+        >
+          <View>
+            {b.earned && <GlowPulse size={96} color={gold.fill} />}
+            <ProgressRing done={b.done} total={b.total} size={104} stroke={5} doneColor={gold.fill}>
+              <View style={!b.earned && styles.locked}>
+                <TownEmblem image={b.image} size={84} color={b.earned ? gold.fill : colors.textMuted} />
+                {b.earned && b.image && <BadgeShine size={84} every={3000} />}
+              </View>
+            </ProgressRing>
+            {b.earned && <Sparkles size={104} count={5} seed={11} />}
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.titleTier, { color: b.earned ? gold.ink : colors.textMuted }]}>
+              {TIER_LABEL[b.tier].toUpperCase()} · THE WHOLE PROVINCE
+            </Text>
+            <Text style={[styles.titleName, { color: colors.textPrimary }]}>{b.name}</Text>
+            {b.earned ? (
+              <Text style={[styles.footerText, { color: gold.ink, marginTop: 2 }]}>Finished{b.earnedAt ? ` · ${fmtDate(b.earnedAt)}` : ""}</Text>
+            ) : (
+              <>
+                <Text style={[styles.footerText, { color: b.done ? colors.brand : colors.textMuted, marginTop: 2 }]}>
+                  {b.done} of {b.total} {b.total === 1 ? "municipality" : "municipalities"}
+                </Text>
+                <View style={[styles.bar, { backgroundColor: colors.divider }]}>
+                  <View style={[styles.barFill, { backgroundColor: gold.fill, width: `${(Math.min(b.done, b.total) / Math.max(1, b.total)) * 100}%` }]} />
+                </View>
+              </>
+            )}
+          </View>
+        </TouchableOpacity>
+      </AnimatedCell>
+    );
+  };
 
   // What a title takes, in words: every town in Bulacan or a district, or
   // every spot in a town.
@@ -551,9 +608,10 @@ export default function BadgeScreen() {
                 style={styles.search}
               />
             )}
+            {showBulacan && bulacanCard()}
             {tab === "districts" && data && (
               <Text style={[styles.titlesIntro, { color: colors.textSecondary }]}>
-                Silver: a district is finished when every municipality in it that has spots is. Each comes with its title.
+                Silver: a district is finished when every municipality in it that has spots is. Gold: all of Bulacan. Each comes with its title.
               </Text>
             )}
             {tab === "titles" && data && (
@@ -565,7 +623,7 @@ export default function BadgeScreen() {
           </>
         }
         ListEmptyComponent={
-          !data ? null
+          !data || (q && showBulacan) ? null
             : q ? <EmptyState icon="search" text={{ spots: "No badge matches that. Try a spot or municipality name.", towns: "No municipality matches that.", districts: "No district matches that." }[tab]} />
             : tab === "districts" ? <EmptyState icon="award" title="No district yet" text="A district's badge can be earned once its municipalities have spots." />
             : <EmptyState icon="award" title="Nothing here yet" text="Finish every mission at a spot to earn its badge." />
@@ -590,7 +648,8 @@ export default function BadgeScreen() {
               </TouchableOpacity>
               <ScrollView contentContainerStyle={styles.modalBody} showsVerticalScrollIndicator={false}>
                 {selected.kind === "spot" ? renderSpotDetail(selected.item)
-                  : selected.kind === "town" ? renderTownDetail(selected.item) : renderDistrictDetail(selected.item)}
+                  : selected.kind === "town" ? renderTownDetail(selected.item)
+                  : selected.kind === "bulacan" ? renderBulacanDetail(selected.item) : renderDistrictDetail(selected.item)}
               </ScrollView>
             </Animated.View>
           )}
@@ -680,7 +739,7 @@ export default function BadgeScreen() {
         <View style={[styles.earnedPill, { backgroundColor: t.earned ? metal.fill : colors.textMuted }]}>
           <Icon name={t.earned ? "check-circle" : "lock"} size={11} color={t.earned ? colors.onAccent : colors.textInverse} style={{ marginRight: 4 }} />
           <Text style={[styles.earnedPillText, { color: t.earned ? colors.onAccent : colors.textInverse }]}>
-            {t.earned ? `${kind === "town" ? "Municipality" : "District"} finished · ${TIER_LABEL[t.tier]}` : progress}
+            {t.earned ? `${{ town: "Municipality", district: "District", bulacan: "Bulacan" }[kind]} finished · ${TIER_LABEL[t.tier]}` : progress}
           </Text>
         </View>
         <Text style={[styles.modalName, { color: colors.textPrimary }]}>{t.name}</Text>
@@ -688,7 +747,7 @@ export default function BadgeScreen() {
     );
   }
 
-  // The title that comes with a town or district.
+  // The title that comes with a town, a district or Bulacan.
   function comesWith(t) {
     if (!t.title) return null;
     return (
@@ -746,33 +805,57 @@ export default function BadgeScreen() {
         </Text>
         {comesWith(d)}
         {d.earned && d.earnedAt && <Text style={[styles.modalSub, { color: colors.textMuted }]}>Finished on {fmtDate(d.earnedAt, "long")}</Text>}
-
-        {/* Its towns, each opening its own card. */}
-        <View style={[styles.steps, { borderColor: colors.cardBorder, backgroundColor: colors.card }]}>
-          {inIt.map((t) => (
-            <TouchableOpacity
-              key={t.municipality}
-              style={styles.stepRow}
-              onPress={() => setSelected({ kind: "town", item: t })}
-              accessibilityRole="button"
-              accessibilityLabel={`${t.name}, ${t.earned ? "municipality finished" : `${t.spotsDone} of ${t.spotsTotal} spots done`}`}
-              accessibilityHint="Opens the municipality's badge"
-            >
-              <View style={[styles.stepIcon, { backgroundColor: t.earned ? colors.bronzeSoft : colors.brandLight }]}>
-                <Icon name={t.earned ? "award" : "map"} size={15} color={t.earned ? colors.bronzeInk : colors.brand} />
-              </View>
-              <Text style={[styles.stepLabel, { color: colors.textPrimary }]} numberOfLines={1}>{t.name}</Text>
-              <Text style={[styles.stepState, { color: t.earned ? colors.bronzeInk : colors.textMuted }]}>
-                {t.earned ? "Done" : `${t.spotsDone}/${t.spotsTotal}`}
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </View>
+        {townRows(inIt)}
         {noSpots.length > 0 && (
           <Text style={[styles.modalSub, { color: colors.textMuted }]}>No spots yet in {noSpots.join(", ")}</Text>
         )}
         <PrimaryButton title="Close" variant="secondary" onPress={() => close()} style={styles.modalButton} />
       </>
+    );
+  }
+
+  function renderBulacanDetail(b) {
+    const inIt = towns.filter((t) => (b.townsWithSpots || []).includes(t.municipality));
+    return (
+      <>
+        {areaDetailTop(b, "bulacan", `${b.townsDone} of ${b.townsTotal} municipalities`)}
+        <Text style={[styles.modalText, { color: colors.textSecondary }]}>
+          {b.earned ? b.description : "Finish every municipality in Bulacan that has spots to earn it."}
+        </Text>
+        {comesWith(b)}
+        {b.earned && b.earnedAt && <Text style={[styles.modalSub, { color: colors.textMuted }]}>Finished on {fmtDate(b.earnedAt, "long")}</Text>}
+        {b.earned && b.townsDone < b.townsTotal && (
+          <Text style={[styles.modalSub, { color: colors.textMuted }]}>New municipality added since · {b.townsDone} of {b.townsTotal}</Text>
+        )}
+        {townRows(inIt)}
+        <PrimaryButton title="Close" variant="secondary" onPress={() => close()} style={styles.modalButton} />
+      </>
+    );
+  }
+
+  // A district's or Bulacan's towns, each opening its own card.
+  function townRows(list) {
+    return (
+      <View style={[styles.steps, { borderColor: colors.cardBorder, backgroundColor: colors.card }]}>
+        {list.map((t) => (
+          <TouchableOpacity
+            key={t.municipality}
+            style={styles.stepRow}
+            onPress={() => setSelected({ kind: "town", item: t })}
+            accessibilityRole="button"
+            accessibilityLabel={`${t.name}, ${t.earned ? "municipality finished" : `${t.spotsDone} of ${t.spotsTotal} spots done`}`}
+            accessibilityHint="Opens the municipality's badge"
+          >
+            <View style={[styles.stepIcon, { backgroundColor: t.earned ? colors.bronzeSoft : colors.brandLight }]}>
+              <Icon name={t.earned ? "award" : "map"} size={15} color={t.earned ? colors.bronzeInk : colors.brand} />
+            </View>
+            <Text style={[styles.stepLabel, { color: colors.textPrimary }]} numberOfLines={1}>{t.name}</Text>
+            <Text style={[styles.stepState, { color: t.earned ? colors.bronzeInk : colors.textMuted }]}>
+              {t.earned ? "Done" : `${t.spotsDone}/${t.spotsTotal}`}
+            </Text>
+          </TouchableOpacity>
+        ))}
+      </View>
     );
   }
 }
@@ -819,6 +902,7 @@ const styles = StyleSheet.create({
 
   townCard: { borderRadius: 20, paddingVertical: 14, paddingHorizontal: 10, alignItems: "center", gap: 6 },
   townName: { ...typography.display, fontSize: 18, lineHeight: 23, marginTop: 4 },
+  bulacanCard: { flexDirection: "row", alignItems: "center", gap: 14, paddingVertical: 14, paddingHorizontal: 14, borderRadius: 20, marginBottom: 14 },
 
   titleRow:  { flexDirection: "row", alignItems: "center", gap: 14, padding: 14, borderRadius: radius.card, borderWidth: 1, marginBottom: 12 },
   titleTier: { fontFamily: fonts.sansBold, fontSize: 10.5, letterSpacing: 1.2, marginBottom: 1 },

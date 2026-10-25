@@ -75,7 +75,7 @@ export default function ProfileScreen() {
       const data = await res.json();
       const user = data?.user;
       if (typeof user?.points === "number") setPoints(user.points);
-      setBadgeCount((Array.isArray(user?.badges) ? user.badges.length : 0) + (user?.townBadges || 0) + (user?.districtBadges || 0));
+      setBadgeCount((Array.isArray(user?.badges) ? user.badges.length : 0) + (user?.townBadges || 0) + (user?.districtBadges || 0) + (user?.bulacanBadges || 0));
       setTripCount(Array.isArray(user?.visitedSpots) ? user.visitedSpots.length : 0);
       setMiddleName(user?.middleName || "");
       setTitle(user?.title || null);

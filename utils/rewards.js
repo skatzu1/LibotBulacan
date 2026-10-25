@@ -4,7 +4,8 @@
  * can call them without pulling in the celebration's UI.
  *
  *   celebrate(unlocked)      a full-screen moment per reward: a spot's badge,
- *                            then a town's, a district's, The GOAT Traveler
+ *                            then a town's, a district's, the Bulacan badge
+ *                            with The GOAT Traveler
  *   showProgress(progress)   a small banner for a step that earns nothing yet:
  *                            "+5 points · 2 of 3 done at Barasoain Church"
  *   celebrateResult(reply)   either, from a progress route's reply
@@ -21,7 +22,9 @@ export function setRewardHandlers(next) {
 
 /**
  * The server's `unlocked` (single or list fields) as moments, in order: spot
- * badges, then towns (bronze), districts (silver), The GOAT Traveler (gold).
+ * badges, then towns (bronze), districts (silver), Bulacan (gold). The Bulacan
+ * badge's moment names The GOAT Traveler, which comes with it; a server from
+ * before the badge (2026-10-25) sends the title alone.
  */
 export function itemsFrom(unlocked) {
   if (!unlocked) return [];
@@ -30,7 +33,8 @@ export function itemsFrom(unlocked) {
     ...all(unlocked.spotBadges, unlocked.spotBadge).map((badge) => ({ kind: "spot", badge })),
     ...all(unlocked.townBadges, unlocked.townBadge).map((town) => ({ kind: "town", town })),
     ...all(unlocked.districtBadges, unlocked.districtBadge).map((district) => ({ kind: "district", district })),
-    ...(unlocked.title ? [{ kind: "title", title: unlocked.title }] : []),
+    ...(unlocked.bulacanBadge ? [{ kind: "bulacan", bulacan: unlocked.bulacanBadge }]
+      : unlocked.title ? [{ kind: "title", title: unlocked.title }] : []),
   ];
 }
 

@@ -27,13 +27,13 @@ import useReduceMotion from "../hooks/useReduceMotion";
  * them:
  *
  *   a full-screen moment per reward — a spot's badge (iron), then a town's (bronze),
- *   a district's (silver), The GOAT Traveler (gold), in that order when one
+ *   a district's (silver), the Bulacan badge (gold), in that order when one
  *   step earns several — and a small banner for a step on the way ("+5 points
- *   · 2 of 3 done at …"). A town's and a district's moment also name the title
- *   that comes with them.
+ *   · 2 of 3 done at …"). A town's, a district's and Bulacan's moment also name
+ *   the title that comes with them.
  *
  * The look: the Libot compass star as a slow sunburst behind the reward, gold
- * confetti, and for a whole town or district, fiesta banderitas swinging in
+ * confetti, and for a whole town, district or Bulacan, fiesta banderitas swinging in
  * across the top. Always on the dark teal of the AR screen, in either theme, so
  * the metals read as metals. Reduce Motion keeps the words and the medal,
  * without the movement.
@@ -65,6 +65,15 @@ export function copyFor(item) {
       body: `Every municipality in ${name} with spots, every mission.`,
       title: item.district?.title?.name || null,
       tier: "silver",
+    };
+  }
+  if (item.kind === "bulacan") {
+    return {
+      eyebrow: "Bulacan finished · Gold",
+      headline: item.bulacan?.name || "Bulacan",
+      body: "Every municipality in Bulacan with spots, every mission. There's no badge above this one.",
+      title: item.bulacan?.title?.name || "The GOAT Traveler",
+      tier: "gold",
     };
   }
   return {
@@ -207,12 +216,12 @@ function Medal({ item, size }) {
       </View>
     );
   }
-  // A town's badge in a bronze ring, a district's in silver.
-  if (item.kind === "town" || item.kind === "district") {
-    const metal = METAL[item.kind === "town" ? "bronze" : "silver"];
+  // A town's badge in a bronze ring, a district's in silver, Bulacan's in gold.
+  if (item.kind === "town" || item.kind === "district" || item.kind === "bulacan") {
+    const metal = METAL[{ town: "bronze", district: "silver", bulacan: "gold" }[item.kind]];
     return (
       <View style={[s.medalRing, { width: size, height: size, borderRadius: size / 2, borderColor: metal }]}>
-        <TownEmblem image={(item.town || item.district)?.image} size={size - 22} color={metal} />
+        <TownEmblem image={(item.town || item.district || item.bulacan)?.image} size={size - 22} color={metal} />
       </View>
     );
   }
@@ -298,7 +307,7 @@ function Moment({ item, index, count, onNext, onAchievements, onShare, sharing, 
       </View>
 
       <Confetti width={width} height={height} reduce={reduce} />
-      {(item.kind === "town" || item.kind === "district") && <Banderitas width={width} top={insets.top + 6} reduce={reduce} />}
+      {(item.kind === "town" || item.kind === "district" || item.kind === "bulacan") && <Banderitas width={width} top={insets.top + 6} reduce={reduce} />}
 
       <Animated.View style={[s.actions, { paddingBottom: Math.max(insets.bottom, 16) + 12, opacity: words }]}>
         {count > 1 && (
@@ -409,7 +418,7 @@ export function RewardCelebrationProvider({ children }) {
   const item = queue[index];
   const next = () => (index < queue.length - 1 ? setIndex(index + 1) : close());
   const toAchievements = () => {
-    const tab = { town: "towns", district: "districts", title: "titles" }[item?.kind] || "spots";
+    const tab = { town: "towns", district: "districts", bulacan: "districts", title: "titles" }[item?.kind] || "spots";
     close(() => { if (navigationRef.isReady?.()) navigationRef.navigate("Badges", { tab }); });
   };
   const share = async () => {

@@ -53,11 +53,17 @@ const DISTRICT = {
   tier: "silver", title: { key: "district:1", name: "District 1 Traveler", tier: "silver" },
 };
 const GOAT = { key: "goat", name: "The GOAT Traveler", tier: "gold" };
+const BULACAN = {
+  key: "bulacan", name: "Bulacan", description: "Finished every mission in every municipality of Bulacan with spots",
+  image: null, tier: "gold", title: GOAT,
+};
 
 describe("utils/rewards", () => {
   it("orders a step's rewards: the spot's badge, the town's, the district's, then the gold title", () => {
     const items = itemsFrom({ title: GOAT, districtBadge: DISTRICT, townBadge: TOWN, spotBadge: SPOT_BADGE });
     expect(items.map((i) => i.kind)).toEqual(["spot", "town", "district", "title"]);
+    // With the Bulacan badge, its moment carries the title: one gold moment, not two.
+    expect(itemsFrom({ title: GOAT, bulacanBadge: BULACAN, districtBadge: DISTRICT }).map((i) => i.kind)).toEqual(["district", "bulacan"]);
     // The lists GET /api/achievements/me sends work too.
     expect(itemsFrom({ spotBadges: [SPOT_BADGE, SPOT_BADGE], townBadges: [], districtBadges: [DISTRICT], title: null }).length).toBe(3);
     expect(itemsFrom({ spotBadge: null, townBadge: null, districtBadge: null, title: null })).toEqual([]);
@@ -116,6 +122,20 @@ describe("The reward moments", () => {
     expect(mockNavigate).toHaveBeenLastCalledWith("Badges", { tab: "districts" });
   }, 15000);
 
+  it("the Bulacan badge: a gold moment that names The GOAT Traveler, opening Districts", async () => {
+    const tree = await mount();
+    await act(async () => { celebrate({ bulacanBadge: BULACAN, title: GOAT }); });
+    expect(tree.getByText("BULACAN FINISHED · GOLD")).toBeTruthy();
+    expect(tree.getByText("Bulacan")).toBeTruthy();
+    expect(tree.getByText(/New title: The GOAT Traveler/)).toBeTruthy();
+    expect(tree.queryByLabelText("1 of 2")).toBeNull();
+    await act(async () => {
+      fireEvent.press(tree.getByLabelText("View your achievements"));
+      await new Promise((r) => setTimeout(r, 400));
+    });
+    expect(mockNavigate).toHaveBeenLastCalledWith("Badges", { tab: "districts" });
+  }, 15000);
+
   it("a step that earns nothing yet: the banner, with points and how far along", async () => {
     const tree = await mount();
     await act(async () => {
@@ -138,6 +158,8 @@ describe("The reward moments", () => {
       .toEqual(expect.objectContaining({ headline: "District 1", title: "District 1 Traveler", tier: "silver" }));
     expect(copyFor({ kind: "title", title: GOAT })).toEqual(expect.objectContaining({ headline: "The GOAT Traveler", tier: "gold" }));
     expect(copyFor({ kind: "title", title: GOAT }).body).toMatch(/no title above/);
+    expect(copyFor({ kind: "bulacan", bulacan: BULACAN }))
+      .toEqual(expect.objectContaining({ headline: "Bulacan", title: "The GOAT Traveler", tier: "gold" }));
   });
 });
 
