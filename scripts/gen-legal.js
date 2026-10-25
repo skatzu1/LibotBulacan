@@ -51,6 +51,10 @@ function parsePage(file) {
   let block = null;
   let depth = 0;
   let bold = 0;
+  // Tables (the moderation steps, providers, retention): each body row is a
+  // bullet, "Row name: the rest"; the column headings are left out.
+  let inHead = false;
+  let cell = 0;
   const flush = () => {
     if (block) {
       block.runs = block.runs
@@ -71,11 +75,21 @@ function parsePage(file) {
   for (const m of body.matchAll(/<(\/?)([a-z0-9]+)([^>]*)>|([^<]+)/gi)) {
     const [, closing, rawTag, attrs, text] = m;
     if (text !== undefined) {
+      if (inHead) continue;
       if (!block) { if (!text.trim()) continue; open("p"); }
       block.runs.push({ text: decode(text), ...(bold > 0 && { bold: true }) });
       continue;
     }
     const tag = rawTag.toLowerCase();
+    if (tag === "thead") { inHead = !closing; continue; }
+    if (inHead) continue;
+    if (tag === "caption") { if (closing) flush(); else open("p"); continue; }
+    if (tag === "tr") { if (closing) flush(); else { open("li", { depth: 1 }); cell = 0; } continue; }
+    if (tag === "th" || tag === "td") {
+      if (!closing) { cell += 1; if (cell === 2) block.runs.push({ text: ": " }); }
+      if (tag === "th") bold += closing ? -1 : 1;
+      continue;
+    }
     if (["h2", "h3", "p", "li"].includes(tag) && closing) flush();
     else if (tag === "h2" || tag === "h3") open("h");
     else if (tag === "p") open("p", /class="lede"/.test(attrs) ? { lede: true } : {});

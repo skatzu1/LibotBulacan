@@ -4,27 +4,35 @@
 
 // What the backend records as the version a traveler agreed to (the later of
 // the two pages' effective dates; utils/signUpDetails.js there).
-export const LEGAL_VERSION = "2026-10-23";
+export const LEGAL_VERSION = "2026-10-26";
 
 export const LEGAL_DOCS = [
   {
     "title": "Terms and Conditions",
-    "effective": "23 October 2026",
+    "effective": "26 October 2026",
     "blocks": [
       {
         "type": "p",
         "runs": [
           {
-            "text": "These Terms are an agreement between you and Jasper, who runs LibotBulacan (“we”, “us”). They cover the LibotBulacan app, this website and the services behind them (together, “LibotBulacan”). By creating an account or using LibotBulacan, you agree to these Terms and to our "
+            "text": "These Terms are the agreement between you and Jasper, who runs LibotBulacan (“we”, “us”). They cover the app, this website and the server behind them (together, “LibotBulacan”)."
+          }
+        ],
+        "lede": true
+      },
+      {
+        "type": "p",
+        "runs": [
+          {
+            "text": "By creating an account or using LibotBulacan, you agree to these Terms and to our "
           },
           {
             "text": "Privacy Policy"
           },
           {
-            "text": ". Before you sign up, the app shows both in full; scrolling to the end and tapping “I agree” is a valid electronic agreement under the Electronic Commerce Act (Republic Act No. 8792), and we record which version you agreed to and when. If you do not agree, please do not use LibotBulacan."
+            "text": ". When you sign up, you tick a box to say you have read and agree to both. That tick is a valid electronic agreement under the Electronic Commerce Act (Republic Act No. 8792), and we record which version you agreed to and when. If you do not agree, do not use LibotBulacan."
           }
-        ],
-        "lede": true
+        ]
       },
       {
         "type": "h",
@@ -34,7 +42,7 @@ export const LEGAL_DOCS = [
         "type": "li",
         "runs": [
           {
-            "text": "You must be at least 13 years of age."
+            "text": "You are at least 13 years old."
           }
         ],
         "depth": 1
@@ -43,7 +51,7 @@ export const LEGAL_DOCS = [
         "type": "li",
         "runs": [
           {
-            "text": "You must live in Bulacan. LibotBulacan is for residents of the province, and signing up asks for your city or municipality."
+            "text": "You live in Bulacan. LibotBulacan is for residents of the province, and signing up asks for your municipality."
           }
         ],
         "depth": 1
@@ -52,7 +60,7 @@ export const LEGAL_DOCS = [
         "type": "li",
         "runs": [
           {
-            "text": "One account per person. Use your real name and an email address you own."
+            "text": "You have one account, under your real name, with an email address that is yours."
           }
         ],
         "depth": 1
@@ -61,7 +69,7 @@ export const LEGAL_DOCS = [
         "type": "li",
         "runs": [
           {
-            "text": "Keep your password to yourself. You are responsible for what happens on your account."
+            "text": "You keep your password to yourself. What happens on your account is your responsibility."
           }
         ],
         "depth": 1
@@ -74,7 +82,7 @@ export const LEGAL_DOCS = [
         "type": "p",
         "runs": [
           {
-            "text": "LibotBulacan is a free guide to tourist spots in Bulacan: spot information, maps and directions, automatic arrival check-ins, missions, points, badges and titles, augmented reality (AR) landmarks, reviews and a leaderboard. There are no ads and nothing to buy."
+            "text": "LibotBulacan is a free guide to tourist spots in Bulacan. It has spot information, maps and directions, arrival check-ins, the Bakit List missions, points, badges and titles, augmented reality (AR), reviews and a leaderboard. It has no ads and nothing to buy."
           }
         ]
       },
@@ -82,7 +90,7 @@ export const LEGAL_DOCS = [
         "type": "p",
         "runs": [
           {
-            "text": "Points, badges and titles are for fun. They have no money value and cannot be exchanged for cash, goods or services, or transferred to anyone else. We may correct them if they were earned by mistake or by breaking these Terms."
+            "text": "Points, badges and titles have no money value. You cannot exchange them for cash, goods or services, or give them to someone else. We may correct them if they were earned by mistake or by breaking these Terms."
           }
         ]
       },
@@ -90,7 +98,7 @@ export const LEGAL_DOCS = [
         "type": "p",
         "runs": [
           {
-            "text": "LibotBulacan is an independent project. It is not an official app of the Provincial Government of Bulacan, any city or municipality, the Department of Tourism, or any church or the owners of the places it lists, and they do not endorse it."
+            "text": "LibotBulacan is an independent project. It is not an official app of the Provincial Government of Bulacan, any municipality, the Department of Tourism, any church, or the owners of the places it lists, and none of them endorses it."
           }
         ]
       },
@@ -102,11 +110,7 @@ export const LEGAL_DOCS = [
         "type": "li",
         "runs": [
           {
-            "text": "Check before you go.",
-            "bold": true
-          },
-          {
-            "text": " Opening hours, entrance fees, contact details and descriptions are general guidance and can change or be wrong. Confirm with the place or the local tourism office before you travel."
+            "text": "Opening hours, entrance fees and descriptions can change or be wrong. Check with the place or the municipal tourism office before you go."
           }
         ],
         "depth": 1
@@ -115,11 +119,7 @@ export const LEGAL_DOCS = [
         "type": "li",
         "runs": [
           {
-            "text": "Directions are a guide, not an instruction.",
-            "bold": true
-          },
-          {
-            "text": " Routes come from third-party map data and can be wrong or out of date. Follow road signs, traffic laws and local authorities. Do not use LibotBulacan while driving."
+            "text": "Directions are a guide. Routes are worked out from map data that can be wrong or out of date, so follow road signs, traffic laws and local authorities. Do not use the app while driving."
           }
         ],
         "depth": 1
@@ -128,11 +128,7 @@ export const LEGAL_DOCS = [
         "type": "li",
         "runs": [
           {
-            "text": "Look up from your screen.",
-            "bold": true
-          },
-          {
-            "text": " Watch where you are going, especially when using AR. AR models are illustrations, not exact copies of the real places."
+            "text": "Watch where you walk, especially in AR. The AR and 3D models are illustrations, not exact copies of the places."
           }
         ],
         "depth": 1
@@ -141,11 +137,7 @@ export const LEGAL_DOCS = [
         "type": "li",
         "runs": [
           {
-            "text": "Respect the places you visit.",
-            "bold": true
-          },
-          {
-            "text": " Many spots are churches, shrines, museums and heritage sites. Follow their rules, dress codes, Mass and service times, and photography restrictions. Do not enter closed or private areas, and do not damage or take anything. Cultural property is protected by the National Cultural Heritage Act of 2009 (Republic Act No. 10066)."
+            "text": "Many spots are churches, shrines, museums and heritage sites. Follow their rules on dress, Mass and service times, and photography. Do not enter closed or private areas, and do not damage or take anything. Cultural property is protected by the National Cultural Heritage Act of 2009 (Republic Act No. 10066)."
           }
         ],
         "depth": 1
@@ -154,139 +146,138 @@ export const LEGAL_DOCS = [
         "type": "li",
         "runs": [
           {
-            "text": "Your trip is your responsibility:",
-            "bold": true
-          },
-          {
-            "text": " your safety, your transport, your costs and your belongings."
+            "text": "Your safety, transport, costs and belongings on a trip are your own responsibility."
           }
         ],
         "depth": 1
       },
       {
         "type": "h",
-        "text": "4. Play fair"
+        "text": "4. Fair play"
       },
       {
         "type": "p",
         "runs": [
           {
-            "text": "Do not fake your location (for example with mock-location or GPS-spoofing apps), submit photos for missions that you did not take at the spot, use more than one account, or use bots or scripts. If you do, we may remove points and badges, reset progress, or suspend or close your account."
+            "text": "Do not fake your location (for example with a mock-location or GPS-spoofing app), send mission photos you did not take at the spot, make more than one account, or use bots or scripts. If you do, we may remove points and badges, reset your progress, or suspend or close your account."
           }
         ]
       },
       {
         "type": "h",
-        "text": "5. Reviews and photos you post"
+        "text": "5. Reviews and photos"
+      },
+      {
+        "type": "h",
+        "text": "Who can review"
       },
       {
         "type": "p",
         "runs": [
           {
-            "text": "Your content stays yours.",
-            "bold": true
-          },
-          {
-            "text": " By posting a review or photo, you allow us to store, display, copy and adapt it (for example, resizing a photo) in the app and on this website, worldwide and free of charge. This permission is not exclusive and ends when the review is deleted, except for copies in backups until they expire. If your account is deleted, deactivated or banned, we stop showing your reviews and photos, and keep a copy for our records."
-          }
-        ]
-      },
-      {
-        "type": "p",
-        "runs": [
-          {
-            "text": "Who can review.",
-            "bold": true
-          },
-          {
-            "text": " You can review a spot once you have visited it with LibotBulacan (the app recorded your arrival there). Anyone can read the reviews. One review per spot, of up to 250 characters and four photos."
-          }
-        ]
-      },
-      {
-        "type": "p",
-        "runs": [
-          {
-            "text": "What you post must:",
-            "bold": true
-          }
-        ]
-      },
-      {
-        "type": "li",
-        "runs": [
-          {
-            "text": "be honest and based on your own experience of the place;"
-          }
-        ],
-        "depth": 1
-      },
-      {
-        "type": "li",
-        "runs": [
-          {
-            "text": "be your own, or something you have the right to share. Don’t post photos or text copied from others;"
-          }
-        ],
-        "depth": 1
-      },
-      {
-        "type": "li",
-        "runs": [
-          {
-            "text": "not include hate speech, harassment, threats, obscenity or nudity;"
-          }
-        ],
-        "depth": 1
-      },
-      {
-        "type": "li",
-        "runs": [
-          {
-            "text": "not make false statements that damage someone’s reputation. Online libel is a crime under the Cybercrime Prevention Act of 2012 (Republic Act No. 10175);"
-          }
-        ],
-        "depth": 1
-      },
-      {
-        "type": "li",
-        "runs": [
-          {
-            "text": "not share anyone’s personal information, such as phone numbers or home addresses, or photos of people (especially children) who have not agreed to be posted;"
-          }
-        ],
-        "depth": 1
-      },
-      {
-        "type": "li",
-        "runs": [
-          {
-            "text": "not be spam, advertising, or anything illegal."
-          }
-        ],
-        "depth": 1
-      },
-      {
-        "type": "p",
-        "runs": [
-          {
-            "text": "Disclaimer.",
-            "bold": true
-          },
-          {
-            "text": " Reviews and photos are the opinions and work of the travelers who post them, not of LibotBulacan. Apart from hiding bad words (see Moderation), we do not check them before they appear, and we are not responsible for what they say. When one breaks these rules, we may remove it."
+            "text": "You can review a spot once the app has recorded your arrival there: one review per spot, of up to 250 characters and four photos. Anyone can read reviews."
           }
         ]
       },
       {
         "type": "h",
-        "text": "6. Moderation"
+        "text": "What you post must"
+      },
+      {
+        "type": "li",
+        "runs": [
+          {
+            "text": "be honest and about your own visit;"
+          }
+        ],
+        "depth": 1
+      },
+      {
+        "type": "li",
+        "runs": [
+          {
+            "text": "be yours, or something you have the right to share;"
+          }
+        ],
+        "depth": 1
+      },
+      {
+        "type": "li",
+        "runs": [
+          {
+            "text": "contain no hate speech, harassment, threats, obscenity or nudity;"
+          }
+        ],
+        "depth": 1
+      },
+      {
+        "type": "li",
+        "runs": [
+          {
+            "text": "make no false claims that damage someone’s reputation (online libel is a crime under the Cybercrime Prevention Act of 2012, Republic Act No. 10175);"
+          }
+        ],
+        "depth": 1
+      },
+      {
+        "type": "li",
+        "runs": [
+          {
+            "text": "not show anyone’s personal details, such as a phone number or home address, or photos of people, especially children, who have not agreed to be posted;"
+          }
+        ],
+        "depth": 1
+      },
+      {
+        "type": "li",
+        "runs": [
+          {
+            "text": "not be spam, advertising or anything illegal."
+          }
+        ],
+        "depth": 1
+      },
+      {
+        "type": "h",
+        "text": "What you post stays yours"
       },
       {
         "type": "p",
         "runs": [
           {
-            "text": "When a review is posted, bad words in it are hidden automatically and shown as ***. Administrators also read reviews, and may remove content that breaks these Terms. When an administrator acts on a review of yours:"
+            "text": "By posting a review or photo, you let us store, show, copy and adapt it (for example, resize a photo) in the app and on this website, worldwide and free of charge. This permission is not exclusive. It ends when the review is deleted, apart from copies in backups until they expire. If your account is deleted, archived for inactivity or banned, we stop showing your reviews and photos and keep a copy for our records."
+          }
+        ]
+      },
+      {
+        "type": "h",
+        "text": "Other travelers’ reviews"
+      },
+      {
+        "type": "p",
+        "runs": [
+          {
+            "text": "Reviews are the opinions of the travelers who write them, not ours. Apart from hiding bad words automatically, we do not check reviews before they appear, and we are not responsible for what they say. We remove any that break these rules."
+          }
+        ]
+      },
+      {
+        "type": "h",
+        "text": "6. Warnings, suspensions and bans"
+      },
+      {
+        "type": "p",
+        "runs": [
+          {
+            "text": "Bad words in a review are hidden automatically and shown as ***. Administrators read reviews and look into reports from travelers. If you break these Terms, an administrator may warn you, suspend your account or ban it."
+          }
+        ]
+      },
+      {
+        "type": "p",
+        "runs": [
+          {
+            "text": "What each step does"
           }
         ]
       },
@@ -294,11 +285,14 @@ export const LEGAL_DOCS = [
         "type": "li",
         "runs": [
           {
-            "text": "First warning:",
+            "text": "First warning",
             "bold": true
           },
           {
-            "text": " you cannot post reviews for 7 days."
+            "text": ": "
+          },
+          {
+            "text": "You cannot post reviews for 7 days."
           }
         ],
         "depth": 1
@@ -307,11 +301,14 @@ export const LEGAL_DOCS = [
         "type": "li",
         "runs": [
           {
-            "text": "Second warning:",
+            "text": "Second warning, and any after it",
             "bold": true
           },
           {
-            "text": " you cannot post reviews for 14 days, and your account is suspended."
+            "text": ": "
+          },
+          {
+            "text": "You cannot post reviews for 14 days."
           }
         ],
         "depth": 1
@@ -320,11 +317,14 @@ export const LEGAL_DOCS = [
         "type": "li",
         "runs": [
           {
-            "text": "First suspension:",
+            "text": "First suspension",
             "bold": true
           },
           {
-            "text": " your account is suspended for 7 days."
+            "text": ": "
+          },
+          {
+            "text": "You cannot use your account for 7 days."
           }
         ],
         "depth": 1
@@ -333,11 +333,14 @@ export const LEGAL_DOCS = [
         "type": "li",
         "runs": [
           {
-            "text": "Second suspension:",
+            "text": "Second suspension",
             "bold": true
           },
           {
-            "text": " your account is suspended for 14 days."
+            "text": ": "
+          },
+          {
+            "text": "You cannot use your account for 14 days."
           }
         ],
         "depth": 1
@@ -346,11 +349,14 @@ export const LEGAL_DOCS = [
         "type": "li",
         "runs": [
           {
-            "text": "Third suspension:",
+            "text": "Third suspension",
             "bold": true
           },
           {
-            "text": " your account is permanently banned instead."
+            "text": ": "
+          },
+          {
+            "text": "Your account is banned permanently."
           }
         ],
         "depth": 1
@@ -359,7 +365,7 @@ export const LEGAL_DOCS = [
         "type": "p",
         "runs": [
           {
-            "text": "While your account is suspended you cannot use it: the app shows only when the suspension ends. Your trips, badges and points are kept, and the account opens again by itself on that date."
+            "text": "A warning only stops you from posting reviews. It never suspends your account."
           }
         ]
       },
@@ -367,7 +373,23 @@ export const LEGAL_DOCS = [
         "type": "p",
         "runs": [
           {
-            "text": "We may skip steps for serious violations, such as threats or illegal content. A banned account is closed and hidden, and kept so that you can appeal from the app within 30 days. An administrator reviews every appeal."
+            "text": "While your account is suspended, the app shows only the date the suspension ends. Your trips, badges and points are kept, and the account opens again by itself on that date."
+          }
+        ]
+      },
+      {
+        "type": "p",
+        "runs": [
+          {
+            "text": "For serious violations, such as threats or illegal content, an administrator may skip steps and ban the account straight away. A banned account is closed and hidden. You can appeal from the app within 30 days, and an administrator reads every appeal. An administrator can also lift a warning, suspension or ban early. It stays in your record, marked as lifted."
+          }
+        ]
+      },
+      {
+        "type": "p",
+        "runs": [
+          {
+            "text": "You can report another traveler from their profile, for example for an offensive name or photo, harassment, pretending to be someone else, spam or cheating. An administrator looks at every report. Do not make false reports."
           }
         ]
       },
@@ -379,13 +401,13 @@ export const LEGAL_DOCS = [
         "type": "li",
         "runs": [
           {
-            "text": "You can stop using LibotBulacan at any time. To delete your account, use Delete account in Edit Profile: your account and sign-in are deleted right away. Without the app, the "
+            "text": "You can stop using LibotBulacan at any time. To delete your account, open Edit Profile and choose Delete account; your account and sign-in are deleted right away. Without the app, the "
           },
           {
             "text": "account deletion page"
           },
           {
-            "text": " explains how to ask by email from the address on your account. The "
+            "text": " explains how to ask by email. The "
           },
           {
             "text": "Privacy Policy"
@@ -400,7 +422,7 @@ export const LEGAL_DOCS = [
         "type": "li",
         "runs": [
           {
-            "text": "If you do not use LibotBulacan for 30 days or more, an administrator may deactivate your account. When you come back, you can ask from the app to have it restored."
+            "text": "If you do not use LibotBulacan for 30 days or more, an administrator may archive your account as inactive. When you come back, you can ask from the app to have it restored."
           }
         ],
         "depth": 1
@@ -422,7 +444,7 @@ export const LEGAL_DOCS = [
         "type": "p",
         "runs": [
           {
-            "text": "LibotBulacan’s app, design, logo, text, 3D models and AR content belong to us or to the people who licensed them to us. Map data is © OpenStreetMap contributors. You may use LibotBulacan for your own personal, non-commercial use. Do not copy, resell, reverse-engineer or scrape it, or use our name or logo, without our written permission."
+            "text": "The app, its design, logo, text, 3D models and AR content belong to us or to the people who licensed them to us. Map data is © OpenStreetMap contributors. You may use LibotBulacan for your own personal, non-commercial use. Do not copy, resell, reverse-engineer or scrape it, or use our name or logo, without our written permission."
           }
         ]
       },
@@ -434,19 +456,19 @@ export const LEGAL_DOCS = [
         "type": "p",
         "runs": [
           {
-            "text": "LibotBulacan relies on services run by others, including Google (sign-in and ARCore), Clerk (accounts) and OpenStreetMap (maps). Their own terms also apply when you use them, and we are not responsible for them."
+            "text": "LibotBulacan uses services run by others, including Google (Google sign-in, and ARCore for AR on Android), Apple (ARKit for AR on iPhone), Clerk (accounts) and OpenStreetMap (maps). Their own terms apply when you use them, and we are not responsible for them."
           }
         ]
       },
       {
         "type": "h",
-        "text": "10. Availability and changes"
+        "text": "10. Availability"
       },
       {
         "type": "p",
         "runs": [
           {
-            "text": "LibotBulacan is free and provided “as is”. We work to keep it running and accurate, but it may sometimes be slow, unavailable or wrong, and we may change or remove features or stop offering LibotBulacan. Mobile data charges from your network provider are yours to pay."
+            "text": "LibotBulacan is free and provided “as is”. We work to keep it running and accurate, but it may sometimes be slow, unavailable or wrong. We may pause it for maintenance, change or remove features, or stop offering it. Mobile data charges from your network are yours to pay."
           }
         ]
       },
@@ -458,7 +480,7 @@ export const LEGAL_DOCS = [
         "type": "p",
         "runs": [
           {
-            "text": "As far as Philippine law allows, we are not responsible for loss or damage that comes from relying on spot information or directions, from your trips and visits, from content posted by other users, or from LibotBulacan being unavailable. Nothing in these Terms limits liability that the law does not allow to be limited, such as for fraud, bad faith or gross negligence, or takes away your rights as a consumer under Philippine law."
+            "text": "As far as Philippine law allows, we are not responsible for loss or damage that comes from relying on spot information or directions, from your trips and visits, from content other travelers post, or from LibotBulacan being unavailable. Nothing in these Terms limits liability that the law does not allow to be limited, such as for fraud, bad faith or gross negligence, or takes away your rights as a consumer under Philippine law."
           }
         ]
       },
@@ -478,7 +500,7 @@ export const LEGAL_DOCS = [
         "type": "p",
         "runs": [
           {
-            "text": "We may update these Terms. We will post the new version here with a new effective date, and tell you in the app or by email about significant changes before they take effect. If you keep using LibotBulacan after that, you accept the new Terms."
+            "text": "We may update these Terms. We post the new version here with a new effective date, and tell you in the app or by email about significant changes before they take effect. If you keep using LibotBulacan after that, you accept the new Terms."
           }
         ]
       },
@@ -490,7 +512,7 @@ export const LEGAL_DOCS = [
         "type": "p",
         "runs": [
           {
-            "text": "These Terms are governed by the laws of the Republic of the Philippines. If you have a problem, please email us first; most things can be sorted out that way. If not, disputes will be heard by the proper courts of the Province of Bulacan, Philippines, without taking away any right you have to bring a case where you live."
+            "text": "These Terms are governed by the laws of the Republic of the Philippines. If you have a problem, email us first. If we cannot settle it together, disputes go to the proper courts of the Province of Bulacan, Philippines. This does not take away any right you have to bring a case where you live."
           }
         ]
       },
@@ -502,7 +524,13 @@ export const LEGAL_DOCS = [
         "type": "p",
         "runs": [
           {
+            "text": "Email "
+          },
+          {
             "text": "support@libotbulacan.com"
+          },
+          {
+            "text": ", or use Report a Problem in the app’s Settings."
           }
         ]
       }
@@ -510,33 +538,41 @@ export const LEGAL_DOCS = [
   },
   {
     "title": "Privacy Policy",
-    "effective": "23 October 2026",
+    "effective": "26 October 2026",
     "blocks": [
       {
         "type": "p",
         "runs": [
           {
-            "text": "LibotBulacan is a tourism guide to Bulacan, Philippines. The LibotBulacan app, this website and the server behind them are run by Jasper (“we”, “us”). This policy explains what personal information we collect, why, who else handles it, how long we keep it, and the rights you have under the "
+            "text": "LibotBulacan is a tourism guide to Bulacan, Philippines. The app, this website and the server behind them are run by Jasper (“we”, “us”)."
+          }
+        ],
+        "lede": true
+      },
+      {
+        "type": "p",
+        "runs": [
+          {
+            "text": "This policy explains what personal information we collect, why, who handles it, how long we keep it, and your rights under the "
           },
           {
             "text": "Data Privacy Act of 2012 (Republic Act No. 10173)",
             "bold": true
           },
           {
-            "text": ", its Implementing Rules and Regulations, and the rules of the National Privacy Commission (NPC). For the information described here, we are the personal information controller."
+            "text": ", its Implementing Rules and Regulations, and the rules of the National Privacy Commission (NPC). For this information, we are the personal information controller."
           }
-        ],
-        "lede": true
+        ]
       },
       {
         "type": "h",
-        "text": "The short version"
+        "text": "In brief"
       },
       {
         "type": "li",
         "runs": [
           {
-            "text": "We collect what LibotBulacan needs to work: your account, the spots you visit, your progress, and the reviews you write."
+            "text": "We collect what LibotBulacan needs to work: your account, the spots you visit, your progress and your reviews."
           }
         ],
         "depth": 1
@@ -545,13 +581,7 @@ export const LEGAL_DOCS = [
         "type": "li",
         "runs": [
           {
-            "text": "Your phone works out when you arrive at a spot. We are told "
-          },
-          {
-            "text": "which"
-          },
-          {
-            "text": " spot and where you were at that moment, to check it — not a trail of where you have been."
+            "text": "Your phone works out when you arrive at a spot. We are told which spot, and where you were at that moment so we can check it. We do not get a trail of where you have been."
           }
         ],
         "depth": 1
@@ -560,7 +590,7 @@ export const LEGAL_DOCS = [
         "type": "li",
         "runs": [
           {
-            "text": "Mission photos, and the location sent with an arrival or a location mission, are checked, then thrown away. We don’t keep them."
+            "text": "Mission photos, and the location sent with an arrival or a mission, are checked and then thrown away."
           }
         ],
         "depth": 1
@@ -569,7 +599,7 @@ export const LEGAL_DOCS = [
         "type": "li",
         "runs": [
           {
-            "text": "Your name and profile photo are shown on your reviews and on the leaderboard."
+            "text": "Other travelers see your name, profile photo, title, points and badges, and the municipality you live in."
           }
         ],
         "depth": 1
@@ -578,7 +608,7 @@ export const LEGAL_DOCS = [
         "type": "li",
         "runs": [
           {
-            "text": "No ads. We don’t sell or rent your information to anyone."
+            "text": "No ads. We do not sell or rent your information."
           }
         ],
         "depth": 1
@@ -587,13 +617,13 @@ export const LEGAL_DOCS = [
         "type": "li",
         "runs": [
           {
-            "text": "Email "
+            "text": "To see or correct your data, email "
           },
           {
             "text": "support@libotbulacan.com"
           },
           {
-            "text": " to see or correct your data. Delete your account in the app (Edit Profile → Delete account) or by email. We keep a copy of a deleted account’s records, hidden from everyone."
+            "text": ". You can delete your account in the app (Edit Profile, then Delete account) or by email. We keep a hidden copy of a deleted account’s records."
           }
         ],
         "depth": 1
@@ -603,14 +633,14 @@ export const LEGAL_DOCS = [
         "text": "1. What we collect"
       },
       {
+        "type": "h",
+        "text": "Your account"
+      },
+      {
         "type": "p",
         "runs": [
           {
-            "text": "Your account.",
-            "bold": true
-          },
-          {
-            "text": " Your first and last name, email address and password when you sign up with email, or your name, email address and profile photo from Google when you sign up with Google. Passwords are handled by our sign-in provider, Clerk; we never see them. You can add a profile photo later."
+            "text": "Your first and last name, email address and password when you sign up with email; or your name, email address and profile photo from Google when you sign up with Google. Passwords are handled by our sign-in provider, Clerk, and we never see them. You can add a profile photo later."
           }
         ]
       },
@@ -618,11 +648,79 @@ export const LEGAL_DOCS = [
         "type": "p",
         "runs": [
           {
-            "text": "Your middle name, if you give one.",
-            "bold": true
-          },
+            "text": "The sign-up form also has a middle name field you can leave blank. You can add, change or remove it in Edit Profile. It shows on your own profile only; reviews, the leaderboard and your traveler profile show your first and last name."
+          }
+        ]
+      },
+      {
+        "type": "h",
+        "text": "Your agreement to the Terms"
+      },
+      {
+        "type": "p",
+        "runs": [
           {
-            "text": " The sign-up form has a middle name field you can leave blank. You can add, change or remove it in Edit Profile. It is shown on your profile only; your reviews and the leaderboard show your first and last name."
+            "text": "When you sign up, you tick a box to say you have read and agree to the Terms and Conditions and this policy. We record which version you agreed to and when."
+          }
+        ]
+      },
+      {
+        "type": "h",
+        "text": "Your home municipality"
+      },
+      {
+        "type": "p",
+        "runs": [
+          {
+            "text": "Sign-up asks which municipality in Bulacan you live in, picked from a list. (An account made before the form asked is asked once, after signing in.) You can change it in Edit Profile. It shows on your traveler profile, which other travelers can open by tapping you on the leaderboard or on one of your reviews. Administrators and moderators see it too, and use it to see where travelers come from."
+          }
+        ]
+      },
+      {
+        "type": "h",
+        "text": "Your date of birth"
+      },
+      {
+        "type": "p",
+        "runs": [
+          {
+            "text": "Sign-up asks for it only to check that you are at least 13. The check happens on your phone. Your date of birth is not sent to us or stored."
+          }
+        ]
+      },
+      {
+        "type": "h",
+        "text": "What you do in LibotBulacan"
+      },
+      {
+        "type": "p",
+        "runs": [
+          {
+            "text": "The spots you have visited and when, your points, the missions you have completed, your badges, the municipalities and districts you have finished and the titles they earned you, which title you chose to show, the spots you have saved, the notifications we send you, and when you last used the app."
+          }
+        ]
+      },
+      {
+        "type": "h",
+        "text": "Reviews"
+      },
+      {
+        "type": "p",
+        "runs": [
+          {
+            "text": "Your rating, what you write, up to four photos, and the likes and dislikes you give to other reviews. If the automatic filter hides words in your review (they show as ***), we also keep what you wrote, which only administrators can see, so they can act on it."
+          }
+        ]
+      },
+      {
+        "type": "h",
+        "text": "Reports, moderation and appeals"
+      },
+      {
+        "type": "p",
+        "runs": [
+          {
+            "text": "If you report another traveler, we keep the report: who you reported, the reason you chose, what you wrote, and that it came from you. Administrators see who made it; the traveler you reported is not told. Reports about you are kept the same way."
           }
         ]
       },
@@ -630,11 +728,19 @@ export const LEGAL_DOCS = [
         "type": "p",
         "runs": [
           {
-            "text": "Your agreement to the Terms.",
-            "bold": true
-          },
+            "text": "If your account is warned, suspended or banned, we keep a record of what was done, why, by which administrator, and whether it was later lifted. If you appeal, we keep what you wrote."
+          }
+        ]
+      },
+      {
+        "type": "h",
+        "text": "Problem reports and suggestions"
+      },
+      {
+        "type": "p",
+        "runs": [
           {
-            "text": " Before you sign up, the app shows the Terms and Conditions and this policy in full. When you agree, we record which version you agreed to and when."
+            "text": "Report a Problem in the app sends your report to support@libotbulacan.com when you press Send, with your account’s email address so we can reply. It includes what you write, the kind of problem you chose, the app version, and your phone’s model and system version."
           }
         ]
       },
@@ -642,11 +748,7 @@ export const LEGAL_DOCS = [
         "type": "p",
         "runs": [
           {
-            "text": "Your home municipality.",
-            "bold": true
-          },
-          {
-            "text": " The sign-up form asks which municipality in Bulacan you live in, picked from a list (an account made before the form asked is asked once, after signing in). You can change it in Edit Profile. Administrators see it next to your name on the traveler leaderboard in the admin panel, and use it to see which towns travelers come from. Other users do not see it."
+            "text": "On this website, Report a problem and Send feedback write an email for you to send from your own email account, with the web page you were on (and, for a problem, your browser). Nothing is sent until you send it."
           }
         ]
       },
@@ -654,83 +756,19 @@ export const LEGAL_DOCS = [
         "type": "p",
         "runs": [
           {
-            "text": "Your date of birth.",
-            "bold": true
-          },
-          {
-            "text": " The sign-up form asks for it only to check that you are at least 13. The check happens on your phone; your date of birth is not sent to us or stored."
+            "text": "We receive both as email; they are not kept in LibotBulacan’s database. They are read by the LibotBulacan developers, not by administrators."
           }
         ]
+      },
+      {
+        "type": "h",
+        "text": "Location"
       },
       {
         "type": "p",
         "runs": [
           {
-            "text": "What you do in LibotBulacan.",
-            "bold": true
-          },
-          {
-            "text": " The spots you have visited and when, your points, the missions you have completed, your badges, the towns you have finished and the title they earned you, the spots you have saved, the notifications we send you, and when you last used the app."
-          }
-        ]
-      },
-      {
-        "type": "p",
-        "runs": [
-          {
-            "text": "Reviews.",
-            "bold": true
-          },
-          {
-            "text": " Your rating, what you write, up to four photos, the likes and dislikes you give to other reviews, and whether your visit to that spot was recorded. If the automatic filter hides words in your review (they show as ***), we also keep what you wrote, which only administrators can see, so they can act on it."
-          }
-        ]
-      },
-      {
-        "type": "p",
-        "runs": [
-          {
-            "text": "Reports, moderation and appeals.",
-            "bold": true
-          },
-          {
-            "text": " Any report made about a review, along with its reason and details. If your account is warned, muted, suspended or banned, we keep a record of it and why. If you appeal, we keep what you wrote."
-          }
-        ]
-      },
-      {
-        "type": "p",
-        "runs": [
-          {
-            "text": "Problem reports.",
-            "bold": true
-          },
-          {
-            "text": " Report a Problem in the app sends your report to support@libotbulacan.com when you press Send, with your account’s email address to reply to. It includes what you write, the kind of problem you chose, the app version, and your phone model and its system version. On this website, Report a problem writes an email for you to send from your own email; nothing is sent until you send it, with the web page you were on and your browser. We receive reports as email; they are not kept in LibotBulacan’s database. Problem reports are read by the LibotBulacan developers, not by administrators."
-          }
-        ]
-      },
-      {
-        "type": "p",
-        "runs": [
-          {
-            "text": "Suggestions.",
-            "bold": true
-          },
-          {
-            "text": " Send feedback, on this website, works the same way: it writes an email for you to send to support@libotbulacan.com, with your suggestion and the web page you were on. Nothing is sent until you send it from your own email, and it is read by the LibotBulacan developers."
-          }
-        ]
-      },
-      {
-        "type": "p",
-        "runs": [
-          {
-            "text": "Location.",
-            "bold": true
-          },
-          {
-            "text": " LibotBulacan uses your phone’s precise location (GPS), only with your permission:"
+            "text": "LibotBulacan uses your phone’s precise location (GPS), only with your permission."
           }
         ]
       },
@@ -738,10 +776,11 @@ export const LEGAL_DOCS = [
         "type": "li",
         "runs": [
           {
-            "text": "On your phone:"
+            "text": "On your phone:",
+            "bold": true
           },
           {
-            "text": " to show nearby spots and distances, draw the map, tell you when a spot you haven’t visited is within about 500 metres, and notice when you are within about 50 metres of a spot. Whether a spot is nearby is worked out on your phone; it is not sent to us."
+            "text": " to show nearby spots and distances, draw the map, tell you when a spot you have not visited is nearby, and notice when you arrive. Each spot sets its own distances; most use about 500 metres for “nearby” and about 50 metres for an arrival. Whether a spot is nearby is worked out on your phone and is not sent to us."
           }
         ],
         "depth": 1
@@ -750,55 +789,11 @@ export const LEGAL_DOCS = [
         "type": "li",
         "runs": [
           {
-            "text": "In the background:"
-          },
-          {
-            "text": " only if you choose “Allow all the time” on Android. LibotBulacan then checks for nearby spots and arrivals while it is closed, and Android shows a notification while it does. An arrival noticed while it is closed is sent to us the next time you open the app. With “While using the app”, this happens only while LibotBulacan is open."
-          }
-        ],
-        "depth": 1
-      },
-      {
-        "type": "li",
-        "runs": [
-          {
-            "text": "Sent to us:"
-          },
-          {
-            "text": " when you arrive at a spot, the app tells our server which spot and sends your coordinates at that moment, so the server can check that you are there before it records the visit and gives its points (and its badge, if that was the last thing left to do there). When you complete a location mission, a photo mission or an AR mission, your current coordinates are sent for the same check. They are used for that check and not stored; what is stored is the visit (which spot, and when)."
-          }
-        ],
-        "depth": 1
-      },
-      {
-        "type": "li",
-        "runs": [
-          {
-            "text": "Sent to others:"
-          },
-          {
-            "text": " when you ask for directions, your position and destination go to the routing service. When you view a map, the map service learns which area you are looking at."
-          }
-        ],
-        "depth": 1
-      },
-      {
-        "type": "p",
-        "runs": [
-          {
-            "text": "Camera and photos.",
+            "text": "In the background:",
             "bold": true
-          }
-        ]
-      },
-      {
-        "type": "li",
-        "runs": [
-          {
-            "text": "Photo missions:"
           },
           {
-            "text": " the photo is sent to our server and checked by an image recognition model that runs on our own server (for example, to confirm a photo shows the Philippine flag or a cross). The photo is then discarded, not stored. The check is automatic; if it says no, you can try again."
+            "text": " only if you allow it, with “Allow all the time” on Android or “Always” on iPhone. LibotBulacan then checks for nearby spots and arrivals while it is closed, and Android shows a notification while it does. An arrival noticed while the app is closed is sent to us the next time you open it. With “While using the app”, this happens only while LibotBulacan is open."
           }
         ],
         "depth": 1
@@ -807,16 +802,60 @@ export const LEGAL_DOCS = [
         "type": "li",
         "runs": [
           {
-            "text": "Augmented reality:"
+            "text": "Sent to us:",
+            "bold": true
           },
           {
-            "text": " AR on Android runs on Google Play Services for AR (ARCore), which is provided by Google and governed by the "
+            "text": " when you arrive at a spot, the app tells our server which spot and sends your coordinates at that moment, so the server can check that you are there before it records the visit and gives its points (and the spot’s badge, if that was the last thing left to do there). When you complete a location mission, a photo mission or an AR mission, your coordinates are sent for the same check. When you ask for directions, your position and the destination are sent to our server, which works out the route on our own routing service. These coordinates are used for that moment and not stored; what is stored is the visit (which spot, and when)."
+          }
+        ],
+        "depth": 1
+      },
+      {
+        "type": "li",
+        "runs": [
+          {
+            "text": "Sent to others:",
+            "bold": true
+          },
+          {
+            "text": " when you view a map, OpenStreetMap’s map servers learn which area you are looking at."
+          }
+        ],
+        "depth": 1
+      },
+      {
+        "type": "h",
+        "text": "Camera and photos"
+      },
+      {
+        "type": "li",
+        "runs": [
+          {
+            "text": "Photo missions:",
+            "bold": true
+          },
+          {
+            "text": " the photo is sent to our server and checked by an image recognition model that runs on that server (for example, to confirm a photo shows the Philippine flag or a cross). The photo is then thrown away, not stored. The check is automatic; if it says no, you can try again."
+          }
+        ],
+        "depth": 1
+      },
+      {
+        "type": "li",
+        "runs": [
+          {
+            "text": "Augmented reality:",
+            "bold": true
+          },
+          {
+            "text": " on Android, AR runs on Google Play Services for AR (ARCore), provided by Google under the "
           },
           {
             "text": "Google Privacy Policy"
           },
           {
-            "text": ". The camera view is processed on your phone; LibotBulacan does not send it to us or to anyone else."
+            "text": ". On iPhone, it uses Apple’s ARKit, built into iOS. Either way the camera view is processed on your phone and is not sent to us or anyone else."
           }
         ],
         "depth": 1
@@ -825,7 +864,8 @@ export const LEGAL_DOCS = [
         "type": "li",
         "runs": [
           {
-            "text": "Profile and review photos"
+            "text": "Profile and review photos",
+            "bold": true
           },
           {
             "text": " you upload are stored so they can be shown."
@@ -842,14 +882,14 @@ export const LEGAL_DOCS = [
         ]
       },
       {
+        "type": "h",
+        "text": "Technical information"
+      },
+      {
         "type": "p",
         "runs": [
           {
-            "text": "Technical information.",
-            "bold": true
-          },
-          {
-            "text": " Like any app that goes online, your phone’s IP address and basic device details reach our server and the services listed below. Our own server logs record the kind of request and its result, not your IP address. If crash reporting is turned on, a crash report includes your device model, operating system, app version and what went wrong, with your email, IP address and location removed before it leaves your phone."
+            "text": "Like any app that goes online, your phone’s IP address and basic device details reach our server and the services listed below. Our own server logs record the kind of request and its result, not your IP address. While the app is open, it keeps a connection to our server so screens update live; that connection carries notices that something changed, not extra information about you. If crash reporting is turned on, a crash report includes your device model, operating system, app version and what went wrong, with your email, IP address and location removed before it leaves your phone."
           }
         ]
       },
@@ -886,7 +926,7 @@ export const LEGAL_DOCS = [
             "bold": true
           },
           {
-            "text": " for location, camera and photos, through your phone’s permission prompts. You can withdraw it at any time in your phone’s settings; the features that need it will stop working, and the rest of LibotBulacan will keep working."
+            "text": " for location, camera and photos, through your phone’s permission prompts. You can withdraw it at any time in your phone’s settings. The features that need it stop working; the rest of LibotBulacan keeps working."
           }
         ],
         "depth": 1
@@ -899,7 +939,7 @@ export const LEGAL_DOCS = [
             "bold": true
           },
           {
-            "text": " keeping reviews fair and safe (moderation, stopping cheating and abuse), keeping the service secure, fixing crashes, and counting things in aggregate, such as how many people have visited a spot."
+            "text": " keeping reviews fair and safe (moderation, and stopping cheating and abuse), keeping the service secure, fixing crashes, and counting things in aggregate, such as how many people have visited a spot."
           }
         ],
         "depth": 1
@@ -933,11 +973,11 @@ export const LEGAL_DOCS = [
         "type": "li",
         "runs": [
           {
-            "text": "Other LibotBulacan users",
+            "text": "Other travelers",
             "bold": true
           },
           {
-            "text": " see your name and profile photo on your reviews and on the leaderboard, plus your points, number of spots visited and title on the leaderboard. Your reviews show your rating, text, photos and whether your visit was recorded."
+            "text": " see your name, profile photo and chosen title on your reviews and on the leaderboard, with your points and the number of spots you have visited. By tapping you there, they can open your traveler profile, which also shows the municipality you live in, when you joined, and how many badges you have. Your reviews show your rating, text and photos, and that your visit was recorded."
           }
         ],
         "depth": 1
@@ -959,11 +999,37 @@ export const LEGAL_DOCS = [
         "type": "li",
         "runs": [
           {
-            "text": "LibotBulacan administrators",
+            "text": "Moderators",
             "bold": true
           },
           {
-            "text": " can see accounts, reviews (including the words the filter hid), reports and moderation records in order to run and moderate the service. Moderators who maintain spot information do not have access to user accounts."
+            "text": " look after the spots of one municipality each. For the travelers who visited those spots, a moderator sees their name, profile photo and home municipality, which of those spots they visited and when, their points, and how many warnings and suspensions they have had. Moderators cannot see email addresses or change accounts."
+          }
+        ],
+        "depth": 1
+      },
+      {
+        "type": "li",
+        "runs": [
+          {
+            "text": "Administrators",
+            "bold": true
+          },
+          {
+            "text": " can see traveler accounts, reviews (including the words the filter hid), reports and moderation records, to run and moderate the service."
+          }
+        ],
+        "depth": 1
+      },
+      {
+        "type": "li",
+        "runs": [
+          {
+            "text": "The super admin",
+            "bold": true
+          },
+          {
+            "text": ", a member of the development team, manages the staff accounts. They can see every account, including archived ones, and a log of sign-ins and actions in the admin console."
           }
         ],
         "depth": 1
@@ -976,109 +1042,10 @@ export const LEGAL_DOCS = [
             "bold": true
           },
           {
-            "text": " that handle data on our behalf, only for the purposes above:"
+            "text": " that handle data on our behalf, only for the purposes above (see the table below)."
           }
         ],
         "depth": 1
-      },
-      {
-        "type": "li",
-        "runs": [
-          {
-            "text": "Clerk: sign-in, accounts and email verification codes"
-          }
-        ],
-        "depth": 2
-      },
-      {
-        "type": "li",
-        "runs": [
-          {
-            "text": "MongoDB Atlas: our database"
-          }
-        ],
-        "depth": 2
-      },
-      {
-        "type": "li",
-        "runs": [
-          {
-            "text": "Render: hosting for our server"
-          }
-        ],
-        "depth": 2
-      },
-      {
-        "type": "li",
-        "runs": [
-          {
-            "text": "Cloudinary: storing and resizing profile and review photos"
-          }
-        ],
-        "depth": 2
-      },
-      {
-        "type": "li",
-        "runs": [
-          {
-            "text": "Google: Google sign-in, and ARCore for AR"
-          }
-        ],
-        "depth": 2
-      },
-      {
-        "type": "li",
-        "runs": [
-          {
-            "text": "Expo: delivering app updates"
-          }
-        ],
-        "depth": 2
-      },
-      {
-        "type": "li",
-        "runs": [
-          {
-            "text": "OpenStreetMap: map tiles"
-          }
-        ],
-        "depth": 2
-      },
-      {
-        "type": "li",
-        "runs": [
-          {
-            "text": "OSRM, a public routing service: directions"
-          }
-        ],
-        "depth": 2
-      },
-      {
-        "type": "li",
-        "runs": [
-          {
-            "text": "GitHub: storing our encrypted database backups"
-          }
-        ],
-        "depth": 2
-      },
-      {
-        "type": "li",
-        "runs": [
-          {
-            "text": "Vercel: hosting this website"
-          }
-        ],
-        "depth": 2
-      },
-      {
-        "type": "li",
-        "runs": [
-          {
-            "text": "Sentry: crash reports, only when crash reporting is turned on"
-          }
-        ],
-        "depth": 2
       },
       {
         "type": "li",
@@ -1089,6 +1056,174 @@ export const LEGAL_DOCS = [
           },
           {
             "text": ", when the law, a court order or the NPC requires it, or when it is needed to protect someone’s life or safety."
+          }
+        ],
+        "depth": 1
+      },
+      {
+        "type": "p",
+        "runs": [
+          {
+            "text": "Our service providers"
+          }
+        ]
+      },
+      {
+        "type": "li",
+        "runs": [
+          {
+            "text": "Clerk",
+            "bold": true
+          },
+          {
+            "text": ": "
+          },
+          {
+            "text": "Sign-in, accounts and email verification codes"
+          }
+        ],
+        "depth": 1
+      },
+      {
+        "type": "li",
+        "runs": [
+          {
+            "text": "MongoDB Atlas",
+            "bold": true
+          },
+          {
+            "text": ": "
+          },
+          {
+            "text": "Our database"
+          }
+        ],
+        "depth": 1
+      },
+      {
+        "type": "li",
+        "runs": [
+          {
+            "text": "Render",
+            "bold": true
+          },
+          {
+            "text": ": "
+          },
+          {
+            "text": "Hosting for our server and our routing service"
+          }
+        ],
+        "depth": 1
+      },
+      {
+        "type": "li",
+        "runs": [
+          {
+            "text": "Cloudinary",
+            "bold": true
+          },
+          {
+            "text": ": "
+          },
+          {
+            "text": "Storing and resizing profile and review photos"
+          }
+        ],
+        "depth": 1
+      },
+      {
+        "type": "li",
+        "runs": [
+          {
+            "text": "Google",
+            "bold": true
+          },
+          {
+            "text": ": "
+          },
+          {
+            "text": "Google sign-in, and ARCore for AR on Android"
+          }
+        ],
+        "depth": 1
+      },
+      {
+        "type": "li",
+        "runs": [
+          {
+            "text": "Expo",
+            "bold": true
+          },
+          {
+            "text": ": "
+          },
+          {
+            "text": "Delivering app updates"
+          }
+        ],
+        "depth": 1
+      },
+      {
+        "type": "li",
+        "runs": [
+          {
+            "text": "OpenStreetMap",
+            "bold": true
+          },
+          {
+            "text": ": "
+          },
+          {
+            "text": "Map tiles"
+          }
+        ],
+        "depth": 1
+      },
+      {
+        "type": "li",
+        "runs": [
+          {
+            "text": "GitHub",
+            "bold": true
+          },
+          {
+            "text": ": "
+          },
+          {
+            "text": "Storing our encrypted database backups"
+          }
+        ],
+        "depth": 1
+      },
+      {
+        "type": "li",
+        "runs": [
+          {
+            "text": "Vercel",
+            "bold": true
+          },
+          {
+            "text": ": "
+          },
+          {
+            "text": "Hosting this website"
+          }
+        ],
+        "depth": 1
+      },
+      {
+        "type": "li",
+        "runs": [
+          {
+            "text": "Sentry",
+            "bold": true
+          },
+          {
+            "text": ": "
+          },
+          {
+            "text": "Crash reports, only when crash reporting is turned on"
           }
         ],
         "depth": 1
@@ -1109,7 +1244,7 @@ export const LEGAL_DOCS = [
         "type": "p",
         "runs": [
           {
-            "text": "Several of the providers above store or process data on servers outside the Philippines, for example in the United States. We remain accountable for your information wherever it is processed, as Section 21 of the Data Privacy Act requires. We choose providers that protect data with security measures comparable to those described here."
+            "text": "Several of the providers above store or process data on servers outside the Philippines, for example in the United States. We remain accountable for your information wherever it is processed, as Section 21 of the Data Privacy Act requires, and we choose providers that protect data with security measures comparable to those described here."
           }
         ]
       },
@@ -1118,14 +1253,25 @@ export const LEGAL_DOCS = [
         "text": "5. How long we keep it"
       },
       {
+        "type": "p",
+        "runs": [
+          {
+            "text": "What we keep, and for how long"
+          }
+        ]
+      },
+      {
         "type": "li",
         "runs": [
           {
-            "text": "Your account and activity:",
+            "text": "Your account and activity",
             "bold": true
           },
           {
-            "text": " kept while you use LibotBulacan."
+            "text": ": "
+          },
+          {
+            "text": "While you use LibotBulacan."
           }
         ],
         "depth": 1
@@ -1134,11 +1280,14 @@ export const LEGAL_DOCS = [
         "type": "li",
         "runs": [
           {
-            "text": "When you delete your account:",
+            "text": "Your account, when you delete it",
             "bold": true
           },
           {
-            "text": " in the app, your account and sign-in are deleted right away. By email, we confirm the request came from you, then delete them within 30 days."
+            "text": ": "
+          },
+          {
+            "text": "From the app, your account and sign-in are deleted right away. By email, we confirm the request came from you, then delete them within 30 days."
           }
         ],
         "depth": 1
@@ -1147,11 +1296,14 @@ export const LEGAL_DOCS = [
         "type": "li",
         "runs": [
           {
-            "text": "Records we keep after an account is deleted, deactivated or banned:",
+            "text": "Records of a deleted, inactive or banned account",
             "bold": true
           },
           {
-            "text": " for record-keeping, we keep a copy of its name, email, home municipality, profile photo, visit history, points, badges, saved spots, reviews and their photos. This copy is not shown to anyone: it is off the leaderboard, and its reviews and ratings no longer appear in the app or on this website. Only administrators can see it."
+            "text": ": "
+          },
+          {
+            "text": "Kept for our records, hidden from everyone but staff (see below)."
           }
         ],
         "depth": 1
@@ -1160,11 +1312,14 @@ export const LEGAL_DOCS = [
         "type": "li",
         "runs": [
           {
-            "text": "Inactive accounts:",
+            "text": "An inactive account",
             "bold": true
           },
           {
-            "text": " if you do not use LibotBulacan for 30 days or more, an administrator may deactivate your account. When you come back, you can ask from the app to have it restored."
+            "text": ": "
+          },
+          {
+            "text": "After 30 days or more without use, an administrator may archive it. When you come back, you can ask from the app to have it restored."
           }
         ],
         "depth": 1
@@ -1173,11 +1328,14 @@ export const LEGAL_DOCS = [
         "type": "li",
         "runs": [
           {
-            "text": "Banned accounts",
+            "text": "A banned account",
             "bold": true
           },
           {
-            "text": " are closed and hidden, and kept so the ban can be appealed from the app within 30 days."
+            "text": ": "
+          },
+          {
+            "text": "Closed and hidden, and kept so the ban can be appealed from the app within 30 days."
           }
         ],
         "depth": 1
@@ -1190,7 +1348,10 @@ export const LEGAL_DOCS = [
             "bold": true
           },
           {
-            "text": " (reports, the decisions on them, and the words the filter hid in a review) are kept with the account, to prevent abuse."
+            "text": ": "
+          },
+          {
+            "text": "Kept with the account, including warnings and suspensions that were lifted, to prevent abuse."
           }
         ],
         "depth": 1
@@ -1199,11 +1360,14 @@ export const LEGAL_DOCS = [
         "type": "li",
         "runs": [
           {
-            "text": "Mission photos, and the coordinates sent with an arrival or a mission:",
+            "text": "Mission photos, and coordinates sent with an arrival, a mission or a route",
             "bold": true
           },
           {
-            "text": " not kept."
+            "text": ": "
+          },
+          {
+            "text": "Not kept."
           }
         ],
         "depth": 1
@@ -1212,14 +1376,25 @@ export const LEGAL_DOCS = [
         "type": "li",
         "runs": [
           {
-            "text": "Backups:",
+            "text": "Backups",
             "bold": true
           },
           {
-            "text": " we take an encrypted copy of the database weekly and keep each copy for up to 35 days, so something you delete, such as a review, can remain in a backup until that backup expires."
+            "text": ": "
+          },
+          {
+            "text": "An encrypted copy of the database is made weekly and kept for up to 35 days, so something you delete, such as a review, can stay in a backup until that backup expires."
           }
         ],
         "depth": 1
+      },
+      {
+        "type": "p",
+        "runs": [
+          {
+            "text": "The records we keep after an account is deleted, archived or banned are its name, email, home municipality, profile photo, visit history, points, badges, saved spots, reviews and their photos. That copy is not shown to anyone: it is off the leaderboard, and its reviews and ratings no longer appear in the app or on this website. Only staff can see it."
+          }
+        ]
       },
       {
         "type": "h",
@@ -1241,7 +1416,7 @@ export const LEGAL_DOCS = [
             "bold": true
           },
           {
-            "text": " about how your personal information is processed; this policy is part of that."
+            "text": " about how your personal information is processed. This policy is part of that."
           }
         ],
         "depth": 1
@@ -1267,7 +1442,7 @@ export const LEGAL_DOCS = [
             "bold": true
           },
           {
-            "text": " it. You can change your name and photo in Edit Profile; for anything else, email us."
+            "text": " it. You can change your name, middle name, photo and municipality in Edit Profile; for anything else, email us."
           }
         ],
         "depth": 1
@@ -1276,11 +1451,11 @@ export const LEGAL_DOCS = [
         "type": "li",
         "runs": [
           {
-            "text": "Blocking:",
+            "text": "Erasure or blocking:",
             "bold": true
           },
           {
-            "text": " ask us to stop processing your data. We do this by deleting your account and sign-in; the copy of your records we keep (section 5) is no longer shown or used. In the app, Edit Profile → Delete account does this right away; without the app, the "
+            "text": " ask us to stop processing your data. We do this by deleting your account and sign-in; the copy of your records we keep (section 5) is no longer shown or used. In the app, Edit Profile, then Delete account, does this right away. Without the app, the "
           },
           {
             "text": "account deletion page"
@@ -1325,7 +1500,7 @@ export const LEGAL_DOCS = [
             "bold": true
           },
           {
-            "text": " if you are harmed by inaccurate, incomplete, outdated, false, unlawfully obtained or unauthorised use of your personal information."
+            "text": " if you are harmed by inaccurate, incomplete, outdated, false or unlawfully obtained information, or its unauthorised use."
           }
         ],
         "depth": 1
@@ -1359,7 +1534,7 @@ export const LEGAL_DOCS = [
             "text": "support@libotbulacan.com"
           },
           {
-            "text": " from the email address on your LibotBulacan account. We may ask you to confirm it is you, and we will reply within 30 days. If a user has died or cannot act for themselves, their lawful heirs or assigns may exercise these rights for them."
+            "text": " from the email address on your LibotBulacan account. We may ask you to confirm it is you, and we reply within 30 days. If a user has died or cannot act for themselves, their lawful heirs or assigns may use these rights for them."
           }
         ]
       },
@@ -1389,7 +1564,7 @@ export const LEGAL_DOCS = [
         "type": "li",
         "runs": [
           {
-            "text": "Only administrators can reach account data. Their accounts are password-protected and lock after repeated failed sign-ins."
+            "text": "Only staff accounts can reach account data: administrators, the super admin, and moderators for their own municipality’s visitors. Staff sign in with a username and password, are locked out for a while after five failed attempts, and are signed out after 12 hours."
           }
         ],
         "depth": 1
@@ -1419,7 +1594,7 @@ export const LEGAL_DOCS = [
         "type": "p",
         "runs": [
           {
-            "text": "LibotBulacan is for people who are at least 13 years of age. If we learn that a child under 13 has an account, we will delete it (the records kept afterwards are in section 5, hidden from everyone). A parent or guardian who believes their child has given us personal information can email us and we will act on it."
+            "text": "LibotBulacan is for people who are at least 13 years old. If we learn that a child under 13 has an account, we delete it (the records kept afterwards are in section 5, hidden from everyone but staff). A parent or guardian who believes their child has given us personal information can email us, and we will act on it."
           }
         ]
       },
@@ -1431,7 +1606,7 @@ export const LEGAL_DOCS = [
         "type": "p",
         "runs": [
           {
-            "text": "When we change this policy, we will post the new version here with a new effective date. If a change significantly affects how your information is used, we will tell you in the app or by email before it takes effect."
+            "text": "When we change this policy, we post the new version here with a new effective date. If a change significantly affects how your information is used, we tell you in the app or by email before it takes effect."
           }
         ]
       },
