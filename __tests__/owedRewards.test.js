@@ -3,10 +3,17 @@
 
 jest.mock("@clerk/clerk-expo", () => ({ useAuth: () => ({ getToken: async () => "token" }) }));
 jest.mock("../api", () => ({ __esModule: true, BASE_URL: "https://api.test", default: {} }));
-jest.mock("../utils/live", () => ({ subscribeLive: () => () => {} }));
+let mockLive = null;
+jest.mock("../utils/live", () => ({ subscribeLive: (topics, cb) => { mockLive = { topics, cb }; return () => {}; } }));
+let mockNavState = null;
+jest.mock("../navigation/navigationRef", () => ({
+  navigationRef: { addListener: (_event, cb) => { mockNavState = cb; return () => { mockNavState = null; }; } },
+}));
 
+const React = require("react");
+const { render, act } = require("@testing-library/react-native");
 const { setRewardHandlers } = require("../utils/rewards");
-const { fetchAchievements } = require("../utils/owedRewards");
+const { fetchAchievements, OwedRewards } = require("../utils/owedRewards");
 
 const BODY = {
   spots: [],
@@ -41,5 +48,35 @@ describe("fetchAchievements", () => {
     global.fetch = jest.fn(async () => ({ ok: false, status: 503 }));
     await expect(fetchAchievements(async () => "token")).rejects.toThrow("achievements 503");
     expect(played).toEqual([]);
+  });
+});
+
+// 2026-10-25: also on a change of screen (at most every 15 s) and when badges change.
+describe("OwedRewards", () => {
+  beforeEach(() => {
+    setRewardHandlers({ items: () => {}, banner: () => {} });
+    global.fetch = jest.fn(async () => ({ ok: true, json: async () => BODY }));
+  });
+  afterEach(() => { setRewardHandlers(null); jest.useRealTimers(); });
+
+  it("asks on opening, on a screen change after 15 s, and on a live hint", async () => {
+    jest.useFakeTimers({ now: 1_000_000 });
+    const tree = render(React.createElement(OwedRewards));
+    await act(async () => {});
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+    expect(mockLive.topics).toEqual(["achievements", "badges"]);
+
+    await act(async () => { mockNavState(); });
+    expect(global.fetch).toHaveBeenCalledTimes(1); // too soon after the last
+
+    jest.setSystemTime(1_000_000 + 15000);
+    await act(async () => { mockNavState(); });
+    expect(global.fetch).toHaveBeenCalledTimes(2);
+
+    await act(async () => { mockLive.cb(); });
+    expect(global.fetch).toHaveBeenCalledTimes(3);
+
+    tree.unmount();
+    expect(mockNavState).toBeNull();
   });
 });

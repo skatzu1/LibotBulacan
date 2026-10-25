@@ -4,6 +4,7 @@ import { useAuth } from "@clerk/clerk-expo";
 import { BASE_URL } from "../api";
 import { celebrate } from "./rewards";
 import { subscribeLive } from "./live";
+import { navigationRef } from "../navigation/navigationRef";
 
 /*
  * Rewards owed, wherever the traveler is (2026-10-24: "why does the reward
@@ -15,12 +16,20 @@ import { subscribeLive } from "./live";
  * stopped counting, another phone) is only awarded when the app asks
  * GET /api/achievements/me, which awards what is owed and says what it
  * awarded. Until now only the Achievements screen asked. Now the app asks on
- * opening, on coming back to the foreground, and when the server says this
+ * opening, on coming back to the foreground, when the server says this
  * traveler's achievements changed (utils/live.js), and plays the moments over
  * whatever screen is open.
+ *
+ * 2026-10-25 (asked again): the script runs in its own process, so the server
+ * can't tell the phone, and an admin giving a finished spot or municipality
+ * its badge only announces "badges". So the app also asks when badges change
+ * and whenever the traveler moves to another screen (at most every
+ * NAV_CHECK_MS) — the moment plays on the next screen, whichever it is.
  */
 
 let inflight = null;
+
+const NAV_CHECK_MS = 15000;
 
 /**
  * GET /api/achievements/me, playing a moment for anything it awarded. One
@@ -44,11 +53,18 @@ export function fetchAchievements(getToken) {
 export function OwedRewards() {
   const { getToken } = useAuth();
   useEffect(() => {
-    const check = () => fetchAchievements(getToken).catch(() => {});
+    let lastCheck = 0;
+    const check = () => {
+      lastCheck = Date.now();
+      return fetchAchievements(getToken).catch(() => {});
+    };
     check();
     const appStateSub = AppState.addEventListener("change", (next) => { if (next === "active") check(); });
-    const stopLive = subscribeLive(["achievements"], check);
-    return () => { appStateSub.remove(); stopLive(); };
+    const stopLive = subscribeLive(["achievements", "badges"], check);
+    const stopNav = navigationRef.addListener("state", () => {
+      if (Date.now() - lastCheck >= NAV_CHECK_MS) check();
+    });
+    return () => { appStateSub.remove(); stopLive(); stopNav(); };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
   return null;
 }
