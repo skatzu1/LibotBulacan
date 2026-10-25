@@ -464,13 +464,7 @@ export default function Leaderboard() {
   const renderGroup = ({ item: group }) => {
     const n = group.users.length;
     return (
-      <View
-        style={[
-          styles.group,
-          { borderColor: colors.divider },
-          group.users.some((u) => u.isMe) && { borderColor: colors.brand },
-        ]}
-      >
+      <View style={[styles.group, { borderColor: colors.divider }]}>
         {group.users.map((user, i) => renderRow(user, i, n))}
       </View>
     );
