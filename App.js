@@ -36,12 +36,12 @@ import { connectLive, disconnectLive, subscribeLive } from "./utils/live";
 // Fonts. Every weight is a separate family because React Native does not
 // synthesize weights for custom fonts — see the note in ThemeContext.
 // Each face comes from its own folder. A package's index requires every face
-// it publishes (12 Schibsted files), and everything required ships inside the
-// iPhone and Android app, used or not.
-import { SchibstedGrotesk_400Regular }  from "@expo-google-fonts/schibsted-grotesk/400Regular";
-import { SchibstedGrotesk_500Medium }   from "@expo-google-fonts/schibsted-grotesk/500Medium";
-import { SchibstedGrotesk_600SemiBold } from "@expo-google-fonts/schibsted-grotesk/600SemiBold";
+// it publishes, and everything required ships inside the iPhone and Android
+// app, used or not. Dongle is our own cut (Latin only, scaled), so it lives in
+// assets/fonts.
 import { MomoTrustDisplay_400Regular }  from "@expo-google-fonts/momo-trust-display/400Regular";
+const Dongle_400Regular = require("./assets/fonts/Dongle_400Regular.ttf");
+const Dongle_700Bold    = require("./assets/fonts/Dongle_700Bold.ttf");
 // Trial faces for Home's greeting name — see NAME_FONT in Screens/Home.js.
 import { Raleway_700Bold }  from "@expo-google-fonts/raleway";
 import { Epilogue_700Bold } from "@expo-google-fonts/epilogue";
@@ -423,8 +423,7 @@ export default function App() {
   // the theme itself starts from — so dark-mode phones don't get a cream flash.
   const scheme = useColorScheme();
   const [fontsLoaded, fontError] = useFonts({
-    SchibstedGrotesk_400Regular, SchibstedGrotesk_500Medium,
-    SchibstedGrotesk_600SemiBold, MomoTrustDisplay_400Regular,
+    Dongle_400Regular, Dongle_700Bold, MomoTrustDisplay_400Regular,
     Raleway_700Bold, Epilogue_700Bold, Nunito_700Bold, Dosis_700Bold,
   });
 

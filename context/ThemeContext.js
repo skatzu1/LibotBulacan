@@ -243,14 +243,20 @@ export const radius = {
 // Momo Trust Display: every heading and every bold (700+) — titles, buttons,
 // labels, names, numbers. It ships one weight only, and that weight is
 // already heavy, so the three display keys all point at it.
-// Schibsted Grotesk: workhorse for UI and body copy.
+// Dongle: everything else, UI and body copy. It has no 500 or 600: medium
+// takes the regular face (quiet text, as in the admin panel) and semibold the
+// bold one. The files in assets/fonts are Dongle cut to its Latin letters
+// (the Korean ones made each file 4.4 MB) and scaled up 1.72x through
+// unitsPerEm, because Dongle's letters are small for their size: 14px of it
+// now reads like 14px of any other sans, as the admin panel's size-adjust
+// does. Line box 0.96 em up, 0.26 em down, also as in the panel.
 export const fonts = {
   display:     'MomoTrustDisplay_400Regular',
   displaySemi: 'MomoTrustDisplay_400Regular',
   displayBlack:'MomoTrustDisplay_400Regular',
-  sans:        'SchibstedGrotesk_400Regular',
-  sansMedium:  'SchibstedGrotesk_500Medium',
-  sansSemi:    'SchibstedGrotesk_600SemiBold',
+  sans:        'Dongle_400Regular',
+  sansMedium:  'Dongle_400Regular',
+  sansSemi:    'Dongle_700Bold',
   sansBold:    'MomoTrustDisplay_400Regular',
 };
 
@@ -264,7 +270,7 @@ export const weightFamily = {
 };
 
 // Type scale. Display sizes use Momo Trust Display; everything from h3 down is
-// Schibsted Grotesk, so headings carry character and UI text stays quiet.
+// Dongle, so headings carry character and UI text stays quiet.
 export const typography = {
   h1:         { fontFamily: fonts.display,     fontSize: 32,   letterSpacing: -0.4, lineHeight: 38 },
   h2:         { fontFamily: fonts.display,     fontSize: 25,   letterSpacing: -0.3, lineHeight: 31 },

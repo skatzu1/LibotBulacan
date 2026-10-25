@@ -26,6 +26,7 @@ import Icon from "../components/Icon";
 import { ScreenHeader } from "../components/ui";
 import useRoadRoute, { fmtDistance, fmtDuration } from "../hooks/useRoadRoute";
 import { ROUTE_LINE_JS } from "../utils/routeLine";
+import { MAP_FONT_FACES, MAP_FONT } from "../utils/mapFont";
 
 // Single source of truth for the backend host — see api.js.
 
@@ -1141,16 +1142,14 @@ export default function Track({ route, navigation }) {
            with the version in the URL. -->
       <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
         integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
-      <!-- The app's UI face for popups, tooltips and the loading line, as on
-           the Nearby Eats map. media=print + onload keeps it from blocking
-           the map; offline it falls back to the system font. -->
-      <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@600;700&display=swap"
-        media="print" onload="this.media='all'" />
       <style>
+        /* The app's UI face for popups, tooltips and the loading line, as on
+           the Nearby Eats map (utils/mapFont.js). */
+        ${MAP_FONT_FACES}
         * { margin:0; padding:0; box-sizing:border-box; }
         html,body { background:${mapBg}; }
         #map { width:100%; height:100vh; background:${mapBg}; }
-        .leaflet-container { font-family:'Schibsted Grotesk',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif; background:${mapBg}; }
+        .leaflet-container { font-family:${MAP_FONT}; background:${mapBg}; }
         ${isDark
           // OSM only publishes a light style. Invert + hue-rotate turns it
           // into a dark map while keeping water blue and parks green; only the
@@ -1169,7 +1168,7 @@ export default function Track({ route, navigation }) {
           display:flex; flex-direction:column;
           align-items:center; justify-content:center;
           z-index:9999;
-          font-family:'Schibsted Grotesk',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+          font-family:${MAP_FONT};
           color:${surfaceSub}; font-size:13.5px; font-weight:600; gap:14px;
           letter-spacing:0.2px;
           transition:opacity 0.35s ease;

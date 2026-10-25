@@ -14,6 +14,7 @@ import { View, StyleSheet, TouchableOpacity } from "react-native";
 import { WebView } from "react-native-webview";
 import { useTheme, radius, shadow } from "../context/ThemeContext";
 import { ROUTE_LINE_JS } from "../utils/routeLine";
+import { MAP_FONT_FACES, MAP_FONT } from "../utils/mapFont";
 import Icon from "./Icon";
 
 // A JS string literal that is also safe inside an inline <script> block —
@@ -47,16 +48,13 @@ function buildHtml({ target, radiusMeters, placeName, colors, isDark }) {
     <!-- Same pinned Leaflet build + SRI hashes as Screens/Track.js. -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
       integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
-    <!-- The app's UI face for the pin label. media=print + onload keeps it
-         from blocking the map on a slow connection; offline it just falls
-         back to the system font. -->
-    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Schibsted+Grotesk:wght@600;700&display=swap"
-      media="print" onload="this.media='all'" />
     <style>
+      /* The app's UI face for the pin label (utils/mapFont.js). */
+      ${MAP_FONT_FACES}
       * { margin:0; padding:0; box-sizing:border-box; }
       html, body, #map { width:100%; height:100%; background:${colors.background}; }
       .leaflet-container {
-        font-family:'Schibsted Grotesk',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+        font-family:${MAP_FONT};
         background:${colors.background};
       }
       path.leaflet-interactive, path.route-line { stroke-linecap:round; stroke-linejoin:round; }
@@ -76,7 +74,7 @@ function buildHtml({ target, radiusMeters, placeName, colors, isDark }) {
         display:flex; align-items:center; justify-content:center;
         padding:0 28px; text-align:center;
         background:${colors.background}; color:${colors.textSecondary};
-        font:600 13px/1.45 'Schibsted Grotesk',-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;
+        font:600 13px/1.45 ${MAP_FONT};
         transition:opacity .3s ease;
       }
       .spinner {
