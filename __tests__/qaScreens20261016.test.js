@@ -92,18 +92,6 @@ describe("Register", () => {
   });
 });
 
-describe("Welcome", () => {
-  const WelcomePage = require("../Screens/WelcomePage").default;
-
-  it("goes straight to sign-in; the municipality is asked on sign-up", async () => {
-    const navigate = jest.fn();
-    const tree = wrap(<WelcomePage navigation={{ navigate }} />);
-    fireEvent.press(await tree.findByLabelText("Next — continue to sign in"));
-    expect(navigate).toHaveBeenCalledWith("Login");
-    await waitFor(async () => expect(await AsyncStorage.getItem("hasSeenWelcome")).toBe("true"));
-  });
-});
-
 describe("Report a Problem", () => {
   const ReportProblem = require("../Screens/ReportProblem").default;
 

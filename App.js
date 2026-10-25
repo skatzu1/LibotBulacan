@@ -50,7 +50,6 @@ import { Dosis_700Bold }    from "@expo-google-fonts/dosis";
 import { useFonts } from "expo-font";
 
 // Screens
-import WelcomePage        from "./Screens/WelcomePage";
 import Login              from "./Screens/Login";
 import Register           from "./Screens/Register";
 import EmailVerification  from "./Screens/EmailVerification";
@@ -152,7 +151,6 @@ function AppNavigator() {
       },
     };
   }, [isDark, colors]);
-  const [hasSeenWelcome, setHasSeenWelcome] = useState(null);
   const [banInfo,        setBanInfo]        = useState(null);
   const [suspensionInfo, setSuspensionInfo] = useState(null);
   const [isCheckingBan,  setIsCheckingBan]  = useState(true);
@@ -183,18 +181,6 @@ function AppNavigator() {
     connectLive({ getToken: isSignedIn ? getToken : null });
     return () => disconnectLive();
   }, [isLoaded, isSignedIn, userId]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  useEffect(() => {
-    const checkWelcome = async () => {
-      try {
-        const value = await AsyncStorage.getItem("hasSeenWelcome");
-        setHasSeenWelcome(value === "true");
-      } catch {
-        setHasSeenWelcome(false);
-      }
-    };
-    checkWelcome();
-  }, [isSignedIn]);
 
   useEffect(() => {
     if (!(isSignedIn && userId)) {
@@ -323,7 +309,7 @@ function AppNavigator() {
     return () => { cancelled = true; };
   }, [isSignedIn, userId]);
 
-  if (!isLoaded || hasSeenWelcome === null || isCheckingBan) {
+  if (!isLoaded || isCheckingBan) {
     return <StartupWait />;
   }
 
@@ -382,10 +368,10 @@ function AppNavigator() {
                           </>
                         ) : (
                           <>
-                            {!hasSeenWelcome && (
-                              <Stack.Screen name="WelcomePage" component={WelcomePage} />
-                            )}
-                            <Stack.Screen name="Login"             component={Login}             options={{ gestureEnabled: false }} />
+                            {/* Sign-in is the first screen: the "Discover Fun Ways
+                                to Explore Bulacan" welcome screen in front of it
+                                is gone (mock defense notes, 2026-10-26). */}
+                            <Stack.Screen name="Login"             component={Login}            options={{ gestureEnabled: false }} />
                             <Stack.Screen name="Register"          component={Register} />
                             <Stack.Screen name="EmailVerification" component={EmailVerification} options={{ gestureEnabled: false }} />
                           </>

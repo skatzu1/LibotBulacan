@@ -113,9 +113,7 @@ it("counts the rest of a big tie as +N and lists them below, with you always on 
   expect(new Set(rows.map(cardOf)).size).toBe(5);
 }, 15000);
 
-it("pins your row at the bottom when it is on another page, and hides it once your row shows", async () => {
-  const { act } = require("@testing-library/react-native");
-  const { FlatList } = require("react-native");
+it("puts you first in the rankings even when you are on another page", async () => {
   global.fetch = jest.fn().mockResolvedValue(json({
     users: [traveler("a", "Ana Reyes", 30, 1), traveler("b", "Ben Cruz", 20, 2)],
     total: 30, page: 1, pages: 2,
@@ -127,15 +125,26 @@ it("pins your row at the bottom when it is on another page, and hides it once yo
     </SafeAreaProvider>,
   );
   await tree.findByText("Rankings", {}, { timeout: 8000 });
-  expect(tree.getByLabelText("You, rank 25 of 30, 2 points, 2 spots visited")).toBeTruthy();
-  expect(tree.getByText("On page 2 · tap to go")).toBeTruthy();
+  const rows = tree.getAllByLabelText(/^Rank \d+/).filter((el) => el.props.accessibilityRole === "button" && el.props.accessibilityHint);
+  expect(rows.map((r) => r.props.accessibilityLabel)).toEqual([
+    "Rank 25, you, 2 points, 2 spots visited",
+    "Rank 1, Ana Reyes, 30 points, 2 spots visited",
+    "Rank 2, Ben Cruz, 20 points, 2 spots visited",
+  ]);
+}, 15000);
 
-  // Your own row scrolled into view in the list: the pinned copy steps aside.
-  const list = tree.UNSAFE_getByType(FlatList);
-  act(() => {
-    list.props.onViewableItemsChanged({ viewableItems: [{ item: { rank: 25, users: [{ isMe: true }] } }], changed: [] });
-  });
-  expect(tree.queryByLabelText(/^You, rank 25/)).toBeNull();
+it("shows you once, first, when you are on the page you are looking at", async () => {
+  const tree = await open([
+    traveler("a", "Ana Reyes", 30, 1),
+    traveler("me", "Mia Torres", 20, 2),
+    traveler("c", "Cy Lopez", 10, 3),
+  ]);
+  const rows = tree.getAllByLabelText(/^Rank \d+/).filter((el) => el.props.accessibilityRole === "button" && el.props.accessibilityHint);
+  expect(rows.map((r) => r.props.accessibilityLabel)).toEqual([
+    "Rank 2, you, 20 points, 2 spots visited",
+    "Rank 1, Ana Reyes, 30 points, 2 spots visited",
+    "Rank 3, Cy Lopez, 10 points, 2 spots visited",
+  ]);
 }, 15000);
 
 it("gives each place its own step when nobody is tied", () => {

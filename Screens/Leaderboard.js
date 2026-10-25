@@ -98,8 +98,6 @@ const INNER_ROW_H = ROW_H - 10;
 // height: every row grows by the same amount (the text is capped at
 // MAX_FONT_SCALE), so the rows stay one height for getItemLayout.
 const rowHFor = (fontScale) => ROW_H + Math.ceil(Math.max(0, Math.min(fontScale, MAX_FONT_SCALE) - 1) * 44);
-// Your row counts as on screen once most of it shows.
-const VIEWABILITY = { itemVisiblePercentThreshold: 60 };
 
 const fmtPts = (n) => (n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n));
 
@@ -184,10 +182,10 @@ export default function Leaderboard() {
   const podiumNameMax = { maxWidth: SW / 3 - 16 };
   // One podium column: the row's width less its 14px padding each side.
   const podiumColW    = (SW - 28) / 3;
-  // Your pinned row sits above the floating tab bar (Home.js CustomTabBar);
-  // opened from a stack screen there is no tab bar.
+  // The list's end clears the floating tab bar (Home.js CustomTabBar); opened
+  // from a stack screen there is no tab bar.
   const inTabs        = navigation.getState?.()?.type === "tab";
-  const meBarBottom   = inTabs ? TAB_BAR_HEIGHT + Math.max(insets.bottom, 12) + 12 + 8 : insets.bottom + 12;
+  const listBottom    = inTabs ? TAB_BAR_HEIGHT + Math.max(insets.bottom, 12) + 12 + 8 : insets.bottom + 12;
   const { user: clerkUser, isLoaded } = useUser();
   const { getToken }                  = useAuth();
   const { profileImage, loading: photoLoading } = useProfileImage();
@@ -208,12 +206,6 @@ export default function Leaderboard() {
   // The page on screen, for the focus reload and the live refresh.
   const pageRef                     = useRef(1);
   const listRef                     = useRef(null);
-  // Whether your own row is on screen in the list, so the pinned copy of it
-  // can step aside (a ref: FlatList won't take a new callback after mount).
-  const [meInView, setMeInView]     = useState(false);
-  const onViewable                  = useRef(({ viewableItems }) => {
-    setMeInView(viewableItems.some((v) => v.item?.users?.some((u) => u.isMe)));
-  }).current;
 
   // Only the FIRST load shows the loading state. This is a tab, so the focus
   // listener below fires on every switch back to it — each of those used to
@@ -455,22 +447,29 @@ export default function Leaderboard() {
 
   // Every traveler has their own card. Same-rank travelers used to be stacked
   // in one card with a line and dots for the rest (2026-10-24); the user found
-  // it confusing (2026-10-25), so a tie now just repeats the number. You still
-  // come first among the travelers you're tied with, as on the podium.
+  // it confusing (2026-10-25), so a tie now just repeats the number.
+  //
+  // You are in front of the rankings on every page (mock defense notes: "kung
+  // sino yung user siya yung nasa harap ng rankings", 2026-10-26): your card
+  // is the first one, with your real rank, and it isn't repeated further down.
+  // It replaces the row pinned at the bottom (2026-10-25).
   const groups = [];
   for (const user of allUsers) {
     const last = groups[groups.length - 1];
     if (last && last.rank === user.rank) last.users.push(user);
     else groups.push({ rank: user.rank, users: [user] });
   }
-  const cards = groups.flatMap((g) => {
-    const tied = g.users.length > 1;
-    return [...g.users.filter((u) => u.isMe), ...g.users.filter((u) => !u.isMe)]
-      .map((user) => ({ rank: g.rank, users: [user], tied }));
-  });
+  const meTied = !!me && allUsers.filter((u) => u.rank === me.rank).length > 1;
+  const cards = [
+    ...(me ? [{ rank: me.rank, users: [me], tied: meTied, mine: true }] : []),
+    ...groups.flatMap((g) => {
+      const tied = g.users.length > 1;
+      return g.users.filter((u) => !u.isMe).map((user) => ({ rank: g.rank, users: [user], tied }));
+    }),
+  ];
 
   const renderGroup = ({ item: card }) => (
-    <View style={[styles.group, { borderColor: colors.divider }]}>
+    <View style={[styles.group, { borderColor: card.mine ? colors.brand : colors.divider }, card.mine && styles.groupMine]}>
       {renderRow(card.users[0], card.tied)}
     </View>
   );
@@ -482,47 +481,6 @@ export default function Leaderboard() {
   // (2026-10-24), not left out of it.
   const firstRank = (page - 1) * PAGE_SIZE + 1;
   const lastRank  = Math.min(page * PAGE_SIZE, total || allUsers.length);
-  // Your standing used to be pinned in a card above the podium (2026-10-21);
-  // it was taken out (2026-10-24). Since 2026-10-25 your row is pinned at the
-  // bottom instead, as in the user's reference board, whenever your row in
-  // the list is out of sight: on another page or scrolled away. With your row
-  // on screen it hides, so you're never shown twice ("bakit nakahiwalay yung
-  // number 1", 2026-10-25). Off your page it takes you there; on it, to your
-  // profile.
-  const ME_BAR_H    = innerRowH + 4;
-  const meElsewhere = me?.page && me.page !== page;
-  const meBar = me && !meInView && (
-    <TouchableOpacity
-      style={[
-        styles.row,
-        styles.meBar,
-        { bottom: meBarBottom, height: ME_BAR_H, backgroundColor: colors.brandSoft, borderColor: colors.brand },
-      ]}
-      onPress={() => (meElsewhere ? goToPage(me.page) : openTraveler(me))}
-      activeOpacity={0.85}
-      accessibilityRole="button"
-      accessibilityLabel={`You${me.rank ? `, rank ${me.rank} of ${total || allUsers.length}` : ""}, ${me.points} points, ${spotsLabel(me.visited)} visited${me.title ? `, ${titleName(me.title)}` : ""}`}
-      accessibilityHint={meElsewhere ? `Opens page ${me.page}, where you are` : "Opens your profile"}
-    >
-      <View style={styles.rankSlot}>
-        <View style={[styles.rankCoin, { backgroundColor: colors.brand }]}>
-          <Text style={[styles.rankCoinText, { color: colors.onBrand }]} maxFontSizeMultiplier={MAX_FONT_SCALE}>{me.rank ?? "–"}</Text>
-        </View>
-      </View>
-      <View style={[styles.rowAvatarWrap, { borderColor: colors.cardBorder }]}>
-        {personAvatar(me, 40)}
-      </View>
-      <View style={styles.rowNameCol}>
-        <Text style={[styles.rowName, { color: colors.brand, fontFamily: fonts.sansBold }]} numberOfLines={1} maxFontSizeMultiplier={MAX_FONT_SCALE}>
-          {me.name} · You
-        </Text>
-        <Text style={[styles.rowSub, { color: colors.textMuted }]} numberOfLines={1} maxFontSizeMultiplier={MAX_FONT_SCALE}>
-          {meElsewhere ? `On page ${me.page} · tap to go` : `${spotsLabel(me.visited)} visited`}
-        </Text>
-      </View>
-      {rowEnd(me)}
-    </TouchableOpacity>
-  );
 
   const pager = pages > 1 && (
     <View style={styles.pager} accessibilityRole="toolbar" accessibilityLabel={`Page ${page} of ${pages}`}>
@@ -694,11 +652,9 @@ export default function Leaderboard() {
             list jump straight to an offset without measuring. */}
         <FlatList
           ref={listRef}
-          onViewableItemsChanged={onViewable}
-          viewabilityConfig={VIEWABILITY}
           style={paging && styles.paging}
           data={cards}
-          keyExtractor={(card) => `${card.rank}-${card.users[0].id}`}
+          keyExtractor={(card) => `${card.mine ? "me" : card.rank}-${card.users[0].id}`}
           renderItem={renderGroup}
           extraData={myPhoto}
           getItemLayout={(_, index) => ({ length: rowH, offset: rowH * index, index })}
@@ -707,7 +663,7 @@ export default function Leaderboard() {
           windowSize={7}
           removeClippedSubviews
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={[styles.listContent, { paddingBottom: meBarBottom + (me ? ME_BAR_H + 12 : 0) + 8 }]}
+          contentContainerStyle={[styles.listContent, { paddingBottom: listBottom + 8 }]}
           ListFooterComponent={pager || null}
           refreshControl={
             <RefreshControl
@@ -719,8 +675,6 @@ export default function Leaderboard() {
           }
         />
       </View>
-
-      {meBar}
     </View>
   );
 }
@@ -884,15 +838,9 @@ const styles = StyleSheet.create({
   rowEnd:   { alignItems: "flex-end", gap: 3, maxWidth: "45%" },
   rowTitle: { alignSelf: "flex-end" },
 
-  // Your row, pinned over the list's bottom edge.
-  meBar: {
-    position: "absolute",
-    left: 18,
-    right: 18,
-    borderWidth: 1.5,
-    borderRadius: radius.md,
-    ...shadow.md,
-  },
+  // Your card, first in the rankings. Same height as the others: only the
+  // border's colour changes, so getItemLayout stays exact.
+  groupMine: { ...shadow.sm },
   rowPtsPill: {
     flexDirection: "row",
     alignItems: "center",
