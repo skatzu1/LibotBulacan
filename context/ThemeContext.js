@@ -240,19 +240,14 @@ export const radius = {
 // unpredictable on iOS. Every weight is therefore a SEPARATE FAMILY NAME, and
 // styles must set `fontFamily` instead of `fontWeight`.
 //
-// Newsreader: editorial serif with an `opsz` axis. Display only.
+// Momo Trust Display: every heading and every bold (700+) — titles, buttons,
+// labels, names, numbers. It ships one weight only, and that weight is
+// already heavy, so the three display keys all point at it.
 // Schibsted Grotesk: workhorse for UI and body copy.
-// Momo Trust Display: every bold (700+) — buttons, labels, names, numbers.
-// It ships one weight only, and that weight is already heavy.
-//
-// `displayBlack` is ExtraBold, not Black. Newsreader's heaviest weight is 800;
-// there is no 900 to load. The key keeps its name because Home.js and ui.js
-// both reference it, and the two call sites set it at 60 and 64pt where the
-// difference between 800 and 900 is not what carries the headline.
 export const fonts = {
-  display:     'Newsreader_700Bold',
-  displaySemi: 'Newsreader_600SemiBold',
-  displayBlack:'Newsreader_800ExtraBold',
+  display:     'MomoTrustDisplay_400Regular',
+  displaySemi: 'MomoTrustDisplay_400Regular',
+  displayBlack:'MomoTrustDisplay_400Regular',
   sans:        'SchibstedGrotesk_400Regular',
   sansMedium:  'SchibstedGrotesk_500Medium',
   sansSemi:    'SchibstedGrotesk_600SemiBold',
@@ -268,14 +263,14 @@ export const weightFamily = {
   normal: fonts.sans,      bold:  fonts.sansBold,
 };
 
-// Type scale. Display sizes use Newsreader; everything from h3 down is
+// Type scale. Display sizes use Momo Trust Display; everything from h3 down is
 // Schibsted Grotesk, so headings carry character and UI text stays quiet.
 export const typography = {
   h1:         { fontFamily: fonts.display,     fontSize: 32,   letterSpacing: -0.4, lineHeight: 38 },
   h2:         { fontFamily: fonts.display,     fontSize: 25,   letterSpacing: -0.3, lineHeight: 31 },
   h3:         { fontFamily: fonts.sansSemi,    fontSize: 19,   letterSpacing: -0.1, lineHeight: 25 },
   // `display` is the editorial variant of h2 for hero moments (screen intros,
-  // rank numerals, badge names) where the serif should be unmistakable.
+  // rank numerals, badge names).
   display:    { fontFamily: fonts.display,     fontSize: 28,   letterSpacing: -0.3, lineHeight: 34 },
   title:      { fontFamily: fonts.sansSemi,    fontSize: 16,   letterSpacing: -0.1 },
   body:       { fontFamily: fonts.sans,        fontSize: 14.5, lineHeight: 22 },

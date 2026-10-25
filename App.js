@@ -36,12 +36,8 @@ import { connectLive, disconnectLive, subscribeLive } from "./utils/live";
 // Fonts. Every weight is a separate family because React Native does not
 // synthesize weights for custom fonts — see the note in ThemeContext.
 // Each face comes from its own folder. A package's index requires every face
-// it publishes (14 Newsreader + 12 Schibsted files, 2.9 MB), and everything
-// required ships inside the iPhone and Android app, used or not; these seven
-// are 0.8 MB.
-import { Newsreader_600SemiBold }       from "@expo-google-fonts/newsreader/600SemiBold";
-import { Newsreader_700Bold }           from "@expo-google-fonts/newsreader/700Bold";
-import { Newsreader_800ExtraBold }      from "@expo-google-fonts/newsreader/800ExtraBold";
+// it publishes (12 Schibsted files), and everything required ships inside the
+// iPhone and Android app, used or not.
 import { SchibstedGrotesk_400Regular }  from "@expo-google-fonts/schibsted-grotesk/400Regular";
 import { SchibstedGrotesk_500Medium }   from "@expo-google-fonts/schibsted-grotesk/500Medium";
 import { SchibstedGrotesk_600SemiBold } from "@expo-google-fonts/schibsted-grotesk/600SemiBold";
@@ -427,7 +423,6 @@ export default function App() {
   // the theme itself starts from — so dark-mode phones don't get a cream flash.
   const scheme = useColorScheme();
   const [fontsLoaded, fontError] = useFonts({
-    Newsreader_600SemiBold, Newsreader_700Bold, Newsreader_800ExtraBold,
     SchibstedGrotesk_400Regular, SchibstedGrotesk_500Medium,
     SchibstedGrotesk_600SemiBold, MomoTrustDisplay_400Regular,
     Raleway_700Bold, Epilogue_700Bold, Nunito_700Bold, Dosis_700Bold,

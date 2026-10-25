@@ -265,7 +265,7 @@ const s = StyleSheet.create({
   },
   inner: { width: "100%", maxWidth: 480, alignSelf: "center" },
 
-  // Newsreader at display size. This is the app's voice at its loudest.
+  // Momo Trust Display at display size. This is the app's voice at its loudest.
   title: {
     ...typography.h1,
     fontSize: 42,

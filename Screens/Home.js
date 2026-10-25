@@ -596,7 +596,7 @@ const styles = StyleSheet.create({
 });
 
 // Font trial for the greeting name. Swap the value and reload the app:
-//   fonts.display (Newsreader, current) · "Raleway_700Bold" · "Epilogue_700Bold"
+//   "Raleway_700Bold" · "Epilogue_700Bold"
 //   "Nunito_700Bold" · "Dosis_700Bold" · fonts.sansBold (Momo Trust Display)
 // Each name must also be loaded in App.js's useFonts, or it falls back to the
 // phone's default font.
@@ -619,7 +619,7 @@ const h = StyleSheet.create({
   // ── Greeting ──
   greeting: { paddingHorizontal: H_PAD, paddingTop: 10 },
   greetHi:  { ...typography.bodyStrong, fontSize: 14, lineHeight: 20 },
-  // The signature line of the app — the one place on Home that gets the serif.
+  // The signature line of the app.
   greetName: { ...typography.h1, fontFamily: NAME_FONT, fontSize: 32, lineHeight: 40 },
   // As tall as the avatar beside it, so the two read as one group.
   pointsPill: {
