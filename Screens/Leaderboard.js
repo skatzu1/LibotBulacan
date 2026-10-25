@@ -469,7 +469,7 @@ export default function Leaderboard() {
   ];
 
   const renderGroup = ({ item: card }) => (
-    <View style={[styles.group, { borderColor: card.mine ? colors.brand : colors.divider }, card.mine && styles.groupMine]}>
+    <View style={[styles.group, { borderColor: colors.divider }]}>
       {renderRow(card.users[0], card.tied)}
     </View>
   );
@@ -838,9 +838,6 @@ const styles = StyleSheet.create({
   rowEnd:   { alignItems: "flex-end", gap: 3, maxWidth: "45%" },
   rowTitle: { alignSelf: "flex-end" },
 
-  // Your card, first in the rankings. Same height as the others: only the
-  // border's colour changes, so getItemLayout stays exact.
-  groupMine: { ...shadow.sm },
   rowPtsPill: {
     flexDirection: "row",
     alignItems: "center",
