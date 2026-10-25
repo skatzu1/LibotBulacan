@@ -112,8 +112,8 @@ it("counts the rest of a big tie as +N and lists them below, with you always on 
   const card = cardOf(rows[0]);
   expect(card).not.toBeNull();
   expect(rows.every((r) => cardOf(r) === card)).toBe(true);
-  // No pinned "your standing" card any more (2026-10-24).
-  expect(tree.queryByLabelText(/^Your standing/)).toBeNull();
+  // Your row is pinned at the bottom as well (2026-10-25), with your rank.
+  expect(tree.getByLabelText("You, rank 1 of 5, 80 points, 2 spots visited")).toBeTruthy();
 }, 15000);
 
 it("gives each place its own step when nobody is tied", () => {

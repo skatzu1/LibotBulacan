@@ -14,8 +14,9 @@ import { useSafeAreaInsets } from "react-native-safe-area-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useUser, useAuth } from "@clerk/clerk-expo";
 import { useProfileImage } from "../context/ProfileImageContext";
-import { useTheme, radius, shadow, fonts, typography, MAX_FONT_SCALE } from "../context/ThemeContext";
-import { Avatar, EmptyState, ErrorState, LoadingState, H_PAD, TAP } from "../components/ui";
+import { useTheme, radius, shadow, fonts, typography, MAX_FONT_SCALE, TAB_BAR_HEIGHT } from "../context/ThemeContext";
+import { Avatar, EmptyState, ErrorState, H_PAD, TAP } from "../components/ui";
+import LeaderboardSkeleton, { PodiumSkeleton } from "../components/LeaderboardSkeleton";
 import { showToast } from "../components/AppAlert";
 import { BASE_URL } from "../api";
 import { clerkPhoto } from "../utils/image";
@@ -165,6 +166,10 @@ export default function Leaderboard() {
   const podiumNameMax = { maxWidth: SW / 3 - 16 };
   // One podium column: the row's width less its 14px padding each side.
   const podiumColW    = (SW - 28) / 3;
+  // Your pinned row sits above the floating tab bar (Home.js CustomTabBar);
+  // opened from a stack screen there is no tab bar.
+  const inTabs        = navigation.getState?.()?.type === "tab";
+  const meBarBottom   = inTabs ? TAB_BAR_HEIGHT + Math.max(insets.bottom, 12) + 12 + 8 : insets.bottom + 12;
   const { user: clerkUser, isLoaded } = useUser();
   const { getToken }                  = useAuth();
   const { profileImage, loading: photoLoading } = useProfileImage();
@@ -336,8 +341,20 @@ export default function Leaderboard() {
     </View>
   );
 
+  // Loading is the board's own shape in bones, never "Loading…" text.
   if (!isLoaded || loading) {
-    return stateScreen(<LoadingState label="Loading leaderboard…" />);
+    return (
+      <View style={[styles.fullScreen, { backgroundColor: colors.background }]}>
+        <View style={[styles.hero, { backgroundColor: colors.backgroundHero, paddingTop: insets.top + 8 }]}>
+          <View style={[styles.heroBlob, blob, { backgroundColor: "rgba(255,255,255,0.22)" }]} pointerEvents="none" />
+          {heroNav}
+          <PodiumSkeleton sizes={PODIUM} />
+        </View>
+        <View style={[styles.card, { backgroundColor: colors.background }]}>
+          <LeaderboardSkeleton />
+        </View>
+      </View>
+    );
   }
 
   if (error) {
@@ -403,23 +420,28 @@ export default function Leaderboard() {
           >
             {user.name}{user.isMe ? " · You" : ""}
           </Text>
-          <View style={styles.rowSubLine}>
-            {user.title && <TitleChip title={user.title} size="sm" />}
-            {/* "visited" goes when a title takes the room. */}
-            <Text style={[styles.rowSub, { color: colors.textMuted }]} numberOfLines={1}>
-              {spotsLabel(user.visited)}{user.title ? "" : " visited"}
-            </Text>
-          </View>
+          <Text style={[styles.rowSub, { color: colors.textMuted }]} numberOfLines={1}>
+            {spotsLabel(user.visited)} visited
+          </Text>
         </View>
 
-        {/* Points, with the sparkle the points pill on Home uses. */}
-        <View style={[styles.rowPtsPill, { backgroundColor: colors.background, borderColor: colors.divider }]}>
-          <Icon name="stars" size={12} color={colors.brand} weight="fill" />
-          <Text style={[styles.rowPts, { color: colors.brandDark }]}>{ptsLabel(user.points)}</Text>
-        </View>
+        {rowEnd(user)}
       </TouchableOpacity>
     );
   };
+
+  // A row's right end: the points, with the sparkle the points pill on Home
+  // uses, and the title they show under it (on the right since 2026-10-25,
+  // as in the user's reference board).
+  const rowEnd = (user) => (
+    <View style={styles.rowEnd}>
+      <View style={[styles.rowPtsPill, { backgroundColor: colors.background, borderColor: colors.divider }]}>
+        <Icon name="stars" size={12} color={colors.brand} weight="fill" />
+        <Text style={[styles.rowPts, { color: colors.brandDark }]}>{ptsLabel(user.points)}</Text>
+      </View>
+      {user.title && <TitleChip title={user.title} size="sm" style={styles.rowTitle} />}
+    </View>
+  );
 
   // Travelers on the same rank are stacked in one card (2026-10-24), you
   // first, as on the podium.
@@ -462,8 +484,43 @@ export default function Leaderboard() {
   const firstRank = (page - 1) * PAGE_SIZE + 1;
   const lastRank  = Math.min(page * PAGE_SIZE, total || allUsers.length);
   // Your standing used to be pinned in a card above the podium (2026-10-21);
-  // it was taken out (2026-10-24). Your row is marked in the list, and the
-  // pager's dot marks the page you're on.
+  // it was taken out (2026-10-24). Since 2026-10-25 your row is pinned at the
+  // bottom instead, on every page, as in the user's reference board. Off your
+  // page it takes you there; on it, to your profile.
+  const ME_BAR_H    = INNER_ROW_H + 4;
+  const meElsewhere = me?.page && me.page !== page;
+  const meBar = me && (
+    <TouchableOpacity
+      style={[
+        styles.row,
+        styles.meBar,
+        { bottom: meBarBottom, height: ME_BAR_H, backgroundColor: colors.brandSoft, borderColor: colors.brand },
+      ]}
+      onPress={() => (meElsewhere ? goToPage(me.page) : openTraveler(me))}
+      activeOpacity={0.85}
+      accessibilityRole="button"
+      accessibilityLabel={`You${me.rank ? `, rank ${me.rank} of ${total || allUsers.length}` : ""}, ${me.points} points, ${spotsLabel(me.visited)} visited${me.title ? `, ${titleName(me.title)}` : ""}`}
+      accessibilityHint={meElsewhere ? `Opens page ${me.page}, where you are` : "Opens your profile"}
+    >
+      <View style={styles.rankSlot}>
+        <View style={[styles.rankCoin, { backgroundColor: colors.brand }]}>
+          <Text style={[styles.rankCoinText, { color: colors.onBrand }]}>{me.rank ?? "–"}</Text>
+        </View>
+      </View>
+      <View style={[styles.rowAvatarWrap, { borderColor: colors.cardBorder }]}>
+        {personAvatar(me, 40)}
+      </View>
+      <View style={styles.rowNameCol}>
+        <Text style={[styles.rowName, { color: colors.brand, fontFamily: fonts.sansBold }]} numberOfLines={1}>
+          {me.name} · You
+        </Text>
+        <Text style={[styles.rowSub, { color: colors.textMuted }]} numberOfLines={1}>
+          {meElsewhere ? `On page ${me.page} · tap to go` : `${spotsLabel(me.visited)} visited`}
+        </Text>
+      </View>
+      {rowEnd(me)}
+    </TouchableOpacity>
+  );
 
   const pager = pages > 1 && (
     <View style={styles.pager} accessibilityRole="toolbar" accessibilityLabel={`Page ${page} of ${pages}`}>
@@ -640,7 +697,7 @@ export default function Leaderboard() {
           windowSize={7}
           removeClippedSubviews
           showsVerticalScrollIndicator={false}
-          contentContainerStyle={[styles.listContent, { paddingBottom: 116 + insets.bottom }]}
+          contentContainerStyle={[styles.listContent, { paddingBottom: meBarBottom + (me ? ME_BAR_H + 12 : 0) + 8 }]}
           ListFooterComponent={pager || null}
           refreshControl={
             <RefreshControl
@@ -652,6 +709,8 @@ export default function Leaderboard() {
           }
         />
       </View>
+
+      {meBar}
     </View>
   );
 }
@@ -812,8 +871,20 @@ const styles = StyleSheet.create({
   },
   rowNameCol: { flex: 1, marginRight: 8 },
   rowName: { fontSize: 14.5, fontFamily: fonts.sansSemi },
-  rowSubLine: { flexDirection: "row", alignItems: "center", gap: 6, marginTop: 2 },
-  rowSub:  { fontSize: 11.5, fontFamily: fonts.sansMedium, flexShrink: 1 },
+  rowSub:  { fontSize: 11.5, fontFamily: fonts.sansMedium, marginTop: 2 },
+  // Points over the title, both flush right.
+  rowEnd:   { alignItems: "flex-end", gap: 3, maxWidth: "45%" },
+  rowTitle: { alignSelf: "flex-end" },
+
+  // Your row, pinned over the list's bottom edge.
+  meBar: {
+    position: "absolute",
+    left: 18,
+    right: 18,
+    borderWidth: 1.5,
+    borderRadius: radius.md,
+    ...shadow.md,
+  },
   rowPtsPill: {
     flexDirection: "row",
     alignItems: "center",
