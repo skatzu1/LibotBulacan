@@ -85,6 +85,8 @@ const ROW_H = 66;
 // the card's 1px border top and bottom, and the 8px gap below.
 const INNER_ROW_H = ROW_H - 10;
 const groupHeight = (n) => n * INNER_ROW_H + 10;
+// Your row counts as on screen once most of it shows.
+const VIEWABILITY = { itemVisiblePercentThreshold: 60 };
 
 const fmtPts = (n) => (n >= 1000 ? `${(n / 1000).toFixed(1)}k` : String(n));
 
@@ -190,6 +192,12 @@ export default function Leaderboard() {
   // The page on screen, for the focus reload and the live refresh.
   const pageRef                     = useRef(1);
   const listRef                     = useRef(null);
+  // Whether your own row is on screen in the list, so the pinned copy of it
+  // can step aside (a ref: FlatList won't take a new callback after mount).
+  const [meInView, setMeInView]     = useState(false);
+  const onViewable                  = useRef(({ viewableItems }) => {
+    setMeInView(viewableItems.some((v) => v.item?.users?.some((u) => u.isMe)));
+  }).current;
 
   // Only the FIRST load shows the loading state. This is a tab, so the focus
   // listener below fires on every switch back to it — each of those used to
@@ -479,11 +487,14 @@ export default function Leaderboard() {
   const lastRank  = Math.min(page * PAGE_SIZE, total || allUsers.length);
   // Your standing used to be pinned in a card above the podium (2026-10-21);
   // it was taken out (2026-10-24). Since 2026-10-25 your row is pinned at the
-  // bottom instead, on every page, as in the user's reference board. Off your
-  // page it takes you there; on it, to your profile.
+  // bottom instead, as in the user's reference board, whenever your row in
+  // the list is out of sight: on another page or scrolled away. With your row
+  // on screen it hides, so you're never shown twice ("bakit nakahiwalay yung
+  // number 1", 2026-10-25). Off your page it takes you there; on it, to your
+  // profile.
   const ME_BAR_H    = INNER_ROW_H + 4;
   const meElsewhere = me?.page && me.page !== page;
-  const meBar = me && (
+  const meBar = me && !meInView && (
     <TouchableOpacity
       style={[
         styles.row,
@@ -680,6 +691,8 @@ export default function Leaderboard() {
             list jump straight to an offset without measuring. */}
         <FlatList
           ref={listRef}
+          onViewableItemsChanged={onViewable}
+          viewabilityConfig={VIEWABILITY}
           style={paging && styles.paging}
           data={groups}
           keyExtractor={(group) => `${group.rank}-${group.users[0].id}`}

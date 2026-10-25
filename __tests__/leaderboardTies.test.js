@@ -112,8 +112,31 @@ it("counts the rest of a big tie as +N and lists them below, with you always on 
   const card = cardOf(rows[0]);
   expect(card).not.toBeNull();
   expect(rows.every((r) => cardOf(r) === card)).toBe(true);
-  // Your row is pinned at the bottom as well (2026-10-25), with your rank.
-  expect(tree.getByLabelText("You, rank 1 of 5, 80 points, 2 spots visited")).toBeTruthy();
+}, 15000);
+
+it("pins your row at the bottom when it is on another page, and hides it once your row shows", async () => {
+  const { act } = require("@testing-library/react-native");
+  const { FlatList } = require("react-native");
+  global.fetch = jest.fn().mockResolvedValue(json({
+    users: [traveler("a", "Ana Reyes", 30, 1), traveler("b", "Ben Cruz", 20, 2)],
+    total: 30, page: 1, pages: 2,
+    me: { ...traveler("me", "Mia Torres", 2, 25), page: 2 },
+  }));
+  const tree = render(
+    <SafeAreaProvider initialMetrics={metrics}>
+      <ThemeProvider><Leaderboard /></ThemeProvider>
+    </SafeAreaProvider>,
+  );
+  await tree.findByText("Rankings", {}, { timeout: 8000 });
+  expect(tree.getByLabelText("You, rank 25 of 30, 2 points, 2 spots visited")).toBeTruthy();
+  expect(tree.getByText("On page 2 · tap to go")).toBeTruthy();
+
+  // Your own row scrolled into view in the list: the pinned copy steps aside.
+  const list = tree.UNSAFE_getByType(FlatList);
+  act(() => {
+    list.props.onViewableItemsChanged({ viewableItems: [{ item: { rank: 25, users: [{ isMe: true }] } }], changed: [] });
+  });
+  expect(tree.queryByLabelText(/^You, rank 25/)).toBeNull();
 }, 15000);
 
 it("gives each place its own step when nobody is tied", () => {
