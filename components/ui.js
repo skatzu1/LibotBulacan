@@ -471,7 +471,10 @@ export function Segmented({ options, value, onChange, role = "tab", fit = false,
               style={[s.segmentText, { color: on ? colors.brand : colors.textMuted }]}
               numberOfLines={1}
               maxFontSizeMultiplier={MAX_FONT_SCALE}
-              {...(fit && { adjustsFontSizeToFit: true, minimumFontScale: 0.8 })}
+              // Shrinks a little on a narrow phone rather than cutting the
+              // label short with "…" ("Not yet (12)", "Municipalities").
+              adjustsFontSizeToFit
+              minimumFontScale={fit ? 0.8 : 0.75}
             >
               {o.label}
             </Text>
@@ -717,6 +720,24 @@ export function useGrid(gap = 12, pad = H_PAD) {
   return { width, columns, cardW, gap, isTablet: width >= 600 };
 }
 
+/* ── Columns for a list of full-width cards ───────────────────────────────
+   A category's spots, Saved, Previous Trips: one card a row on a phone; on a
+   tablet two (three on a wide one) rather than photos stretched edge to edge.
+   `rowStyle` goes on the cards' container, `cardStyle` on each card. */
+export function useCardColumns(gap = 14, pad = H_PAD) {
+  const { width } = useWindowDimensions();
+  return React.useMemo(() => {
+    const columns = width >= 900 ? 3 : width >= 600 ? 2 : 1;
+    if (columns === 1) return { columns, rowStyle: null, cardStyle: null };
+    const cardW = (width - pad * 2 - gap * (columns - 1)) / columns;
+    return {
+      columns,
+      rowStyle: { flexDirection: "row", flexWrap: "wrap" },
+      cardStyle: { width: cardW, flexGrow: 0 },
+    };
+  }, [width, gap, pad]);
+}
+
 const s = StyleSheet.create({
   header: {
     flexDirection: "row",
@@ -737,7 +758,7 @@ const s = StyleSheet.create({
     marginTop: 28,
     marginBottom: 14,
   },
-  sectionTitle: { ...typography.h2, fontSize: 22, lineHeight: 28 },
+  sectionTitle: { ...typography.h2, fontSize: 22, lineHeight: 28, flexShrink: 1, marginRight: 12 },
 
   tile: { alignItems: "center" },
   tileIcon: { borderRadius: 20, alignItems: "center", justifyContent: "center", marginBottom: 8 },
@@ -823,7 +844,9 @@ const s = StyleSheet.create({
     flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 8,
   },
   btnOff:  { opacity: 0.55 },
-  btnText: { fontFamily: fonts.sansBold, fontSize: 15.5, letterSpacing: -0.1 },
+  // Wraps rather than running past the button's edge when the label is long
+  // for the space (two buttons side by side, a narrow phone, a pop-up).
+  btnText: { fontFamily: fonts.sansBold, fontSize: 15.5, letterSpacing: -0.1, flexShrink: 1, textAlign: "center" },
 
   headerAction: {
     minWidth: 64, height: 36, borderRadius: radius.pill, paddingHorizontal: 16,

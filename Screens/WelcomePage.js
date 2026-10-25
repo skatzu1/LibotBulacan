@@ -1,6 +1,6 @@
 import React, { useMemo } from "react";
 import {
-  View, Text, StyleSheet, TouchableOpacity, StatusBar, ImageBackground,
+  View, Text, StyleSheet, TouchableOpacity, StatusBar, ImageBackground, useWindowDimensions,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { LinearGradient } from "expo-linear-gradient";
@@ -22,6 +22,10 @@ export default function WelcomePage({ navigation }) {
   const insets = useSafeAreaInsets();
   const { colors, isDark } = useTheme();
   const styles = useMemo(() => makeStyles(colors), [colors]);
+  // 52 on a usual phone; smaller on a narrow one, so "to Explore" keeps to
+  // one line, and larger on a tablet.
+  const { width } = useWindowDimensions();
+  const headSize = Math.round(Math.min(64, Math.max(40, width * 0.133)));
 
   const handleNext = () => {
     // If the flag can't be saved, the welcome screen just shows again next time.
@@ -53,7 +57,11 @@ export default function WelcomePage({ navigation }) {
 
       <View style={[styles.content, { paddingTop: insets.top, paddingBottom: Math.max(insets.bottom, 16) + 20 }]}>
         <View style={styles.headlineWrap}>
-          <Text style={styles.headline} accessibilityRole="header" maxFontSizeMultiplier={MAX_FONT_SCALE}>
+          <Text
+            style={[styles.headline, { fontSize: headSize, lineHeight: Math.round(headSize * 1.15) }]}
+            accessibilityRole="header"
+            maxFontSizeMultiplier={MAX_FONT_SCALE}
+          >
             Discover{"\n"}
             <Text style={styles.accentWord}>Fun</Text> Ways{"\n"}
             to Explore{"\n"}
@@ -98,6 +106,9 @@ const makeStyles = (c) => StyleSheet.create({
 
   // The app's primary button.
   cta: {
+    width: "100%",
+    maxWidth: 480,
+    alignSelf: "center",
     height: 62,
     borderRadius: 31,
     alignItems: "center",

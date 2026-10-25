@@ -4,7 +4,7 @@ import { useNavigation } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 import { useBookmark } from "../context/BookmarkContext";
 import { useTheme, fonts, TAB_BAR_CLEARANCE } from "../context/ThemeContext";
-import { ScreenHeader, SpotCard, EmptyState, PhotoBookmark, H_PAD } from "../components/ui";
+import { ScreenHeader, SpotCard, EmptyState, PhotoBookmark, H_PAD, useCardColumns } from "../components/ui";
 import ListsSkeleton from "../components/ListsSkeleton";
 import usePullToRefresh from "../hooks/usePullToRefresh";
 
@@ -14,6 +14,7 @@ export default function Bookmark() {
   const { bookmarks, toggleBookmark, loading, fetchBookmarks } = useBookmark();
   const { colors, isDark } = useTheme();
   const { refreshing, refreshControl } = usePullToRefresh(fetchBookmarks);
+  const { rowStyle, cardStyle } = useCardColumns();
 
   const bookmarkedSpots = useMemo(
     () =>
@@ -55,13 +56,14 @@ export default function Bookmark() {
               text="Tap the bookmark on any place to keep it here."
             />
           ) : (
-            <View style={styles.list}>
+            <View style={[styles.list, rowStyle]}>
               {bookmarkedSpots.map((spot) => (
                 <SpotCard
                   key={spot._id || spot.id}
                   spot={spot}
                   wide
                   height={180}
+                  style={cardStyle}
                   onPress={() => navigation.navigate("InformationScreen", { spot })}
                   right={<PhotoBookmark saved onPress={() => toggleBookmark(spot)} />}
                 />

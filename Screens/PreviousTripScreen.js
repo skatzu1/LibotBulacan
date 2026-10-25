@@ -13,6 +13,7 @@ import { useAuth } from "@clerk/clerk-expo";
 import { useTheme, fonts } from "../context/ThemeContext";
 import {
   ScreenHeader, EmptyState, ErrorState, LoadingState, PrimaryButton, FeatureCard, PhotoChip, SearchField, H_PAD,
+  useCardColumns,
 } from "../components/ui";
 // Was a hardcoded "https://libotbackend.onrender.com".
 import { BASE_URL } from "../api";
@@ -26,6 +27,7 @@ const CARD_H = 220;
 export default function PreviousTripsScreen() {
   const navigation   = useNavigation();
   const insets       = useSafeAreaInsets();
+  const { columns, cardStyle } = useCardColumns();
   const { getToken } = useAuth();
   const { colors }   = useTheme();
   const { allSpots } = useArrival();
@@ -142,10 +144,11 @@ export default function PreviousTripsScreen() {
         right={<PhotoChip>{formatShortDate(item.visitedAt)} · {formatTime(item.visitedAt)}</PhotoChip>}
         onPress={() => navigation.navigate("InformationScreen", { spot: fullSpot })}
         accessibilityLabel={`${spot.name}, ${formatDate(item.visitedAt)}`}
-        style={styles.card}
+        style={[styles.card, cardStyle]}
+        imageWidth={cardStyle?.width}
       />
     );
-  }, [navigation, getAverageRating]);
+  }, [navigation, getAverageRating, cardStyle]);
 
   return (
     <View style={[styles.container, { backgroundColor: colors.background }]}>
@@ -171,6 +174,10 @@ export default function PreviousTripsScreen() {
         data={shownTrips}
         keyExtractor={(entry, index) => entry.item._id?.toString() ?? `trip-${index}`}
         renderItem={renderItem}
+        // FlatList can't change numColumns in place: a new key remounts it.
+        key={columns}
+        numColumns={columns}
+        {...(columns > 1 && { columnWrapperStyle: styles.columns })}
         contentContainerStyle={[styles.listContent, { paddingBottom: insets.bottom + 40 }]}
         ListHeaderComponent={
           <>
@@ -248,4 +255,5 @@ const styles = StyleSheet.create({
 
   // The same 14 apart as the spot lists behind the other quick actions.
   card: { marginBottom: 14 },
+  columns: { gap: 14 },
 });

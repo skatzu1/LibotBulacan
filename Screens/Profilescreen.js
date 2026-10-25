@@ -37,7 +37,8 @@ export default function ProfileScreen() {
   const { profileImage }              = useProfileImage();
   const { colors }                    = useTheme();
   const { width: winWidth, height: winHeight } = useWindowDimensions();
-  const modalSize                     = winWidth * 0.82;
+  // Most of a phone's width; within a tablet's or a short screen's height.
+  const modalSize                     = Math.min(winWidth * 0.82, winHeight * 0.6, 480);
 
   const [userInfo, setUserInfo] = useState({
     email: "", firstName: "", lastName: "", fullName: "", profilePhoto: null,

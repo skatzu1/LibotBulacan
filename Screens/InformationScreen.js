@@ -456,6 +456,10 @@ export default function InformationScreen({ route, navigation }) {
   );
   const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
+  // The photo (or 3D model) at the top: 288 on a usual phone, shorter on a
+  // small one, taller on a tablet, and never most of a short screen.
+  const { width: winW, height: winH } = useWindowDimensions();
+  const heroH = Math.round(Math.max(200, Math.min(winW * 0.73, winH * 0.42, 460)));
 
   // Callers can deep-link to a specific tab (e.g. the Missions flow lands here
   // on the missions list rather than Overview).
@@ -880,13 +884,13 @@ export default function InformationScreen({ route, navigation }) {
       >
         {/* [0] Hero */}
         <View style={styles.heroWrap}>
-          <View style={[styles.heroCard, { backgroundColor: colors.card }, shadow.md]}>
+          <View style={[styles.heroCard, { height: heroH, backgroundColor: colors.card }, shadow.md]}>
             {/* The 3D Model tab turns the photo into the model, in the same
                 place. It only mounts while that tab is open (see showing3D). */}
             {showing3D ? (
               <ModelViewer url={spot.modelUrl} style={styles.heroImage} />
             ) : (
-              <Image source={{ uri: spotImage(spot.image, 400, 260) }} style={styles.heroImage} resizeMode="cover" />
+              <Image source={{ uri: spotImage(spot.image, winW - H_PAD * 2, heroH) }} style={styles.heroImage} resizeMode="cover" />
             )}
             {/* Over the model the scrim only needs to back the caption; from
                 halfway down it would dim the lower half of the model. */}
@@ -1536,7 +1540,8 @@ const styles = StyleSheet.create({
   // One gutter for the whole screen — hero, tabs and body used to sit at 16,
   // 16 and 22, so their edges didn't line up.
   heroWrap:        { paddingHorizontal: H_PAD, paddingTop: 14, paddingBottom: 4 },
-  heroCard:        { borderRadius: radius.xl, overflow: "hidden", height: 288 },
+  // Its height comes from the window at render (heroH).
+  heroCard:        { borderRadius: radius.xl, overflow: "hidden" },
   heroImage:       { width: "100%", height: "100%" },
   // The 3D Model tab's words under the buttons; the model is in the hero.
   modelHintRow:    { flexDirection: "row", alignItems: "center", gap: 8, paddingHorizontal: 2 },
@@ -1572,7 +1577,7 @@ const styles = StyleSheet.create({
 
   // ── Bakit List tab: one checklist ──
   checkHead:       { flexDirection: "row", alignItems: "baseline", justifyContent: "space-between", gap: 12, marginTop: 4 },
-  checkHeading:    { marginBottom: 8, marginTop: 0 },
+  checkHeading:    { marginBottom: 8, marginTop: 0, flexShrink: 1 },
   checkCount:      { fontSize: 13.5, fontFamily: fonts.sansBold },
   progressTrack:   { height: 6, borderRadius: 3, overflow: "hidden", marginBottom: 14 },
   progressFill:    { height: "100%", borderRadius: 3 },
@@ -1669,8 +1674,9 @@ const styles = StyleSheet.create({
 
   // The Facebook-style review box at the end of the reviews.
   fbComposer:      { borderTopWidth: 1, marginTop: 14, paddingTop: 14, gap: 10 },
-  fbRateRow:       { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingLeft: 46 },
-  fbRateLabel:     { fontSize: 13, fontFamily: fonts.sansSemi },
+  // The stars drop under the label where the two don't fit on one line.
+  fbRateRow:       { flexDirection: "row", flexWrap: "wrap", alignItems: "center", justifyContent: "space-between", rowGap: 8, columnGap: 12, paddingLeft: 46 },
+  fbRateLabel:     { fontSize: 13, fontFamily: fonts.sansSemi, flexShrink: 1 },
   fbStars:         { flexDirection: "row", gap: 8 },
   fbPhotos:        { flexDirection: "row", flexWrap: "wrap", gap: 10, paddingLeft: 46, paddingTop: 6 },
   fbThumbWrap:     { width: 58, height: 58 },

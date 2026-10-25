@@ -90,34 +90,37 @@ export default function AuthScaffold({
               panel runs to the bottom edge instead of stopping short and
               leaving a strip of photo under the last link. */}
           <View style={[s.panel, { backgroundColor: colors.panelOverPhoto, paddingBottom: Math.max(insets.bottom, 16) + 24 }]}>
-            {onBack && (
-              <TouchableOpacity
-                onPress={onBack}
-                style={s.backInline}
-                hitSlop={12}
-                accessibilityRole="button"
-                accessibilityLabel="Go back"
-              >
-                <Icon name="chevron-left" size={26} color={colors.textSecondary} />
-              </TouchableOpacity>
-            )}
+            {/* A phone's width of form, centred on a tablet. */}
+            <View style={s.inner}>
+              {onBack && (
+                <TouchableOpacity
+                  onPress={onBack}
+                  style={s.backInline}
+                  hitSlop={12}
+                  accessibilityRole="button"
+                  accessibilityLabel="Go back"
+                >
+                  <Icon name="chevron-left" size={26} color={colors.textSecondary} />
+                </TouchableOpacity>
+              )}
 
-            {!!title && (
-              <Text
-                style={[s.title, { color: colors.brandDark }]}
-                accessibilityRole="header"
-                maxFontSizeMultiplier={MAX_FONT_SCALE}
-              >
-                {title}
-              </Text>
-            )}
-            {!!subtitle && (
-              <Text style={[s.subtitle, { color: colors.textSecondary }]} maxFontSizeMultiplier={MAX_FONT_SCALE}>
-                {subtitle}
-              </Text>
-            )}
+              {!!title && (
+                <Text
+                  style={[s.title, { color: colors.brandDark }]}
+                  accessibilityRole="header"
+                  maxFontSizeMultiplier={MAX_FONT_SCALE}
+                >
+                  {title}
+                </Text>
+              )}
+              {!!subtitle && (
+                <Text style={[s.subtitle, { color: colors.textSecondary }]} maxFontSizeMultiplier={MAX_FONT_SCALE}>
+                  {subtitle}
+                </Text>
+              )}
 
-            <View style={s.body}>{children}</View>
+              <View style={s.body}>{children}</View>
+            </View>
           </View>
         </ScrollView>
       </KeyboardAvoider>
@@ -260,6 +263,7 @@ const s = StyleSheet.create({
     paddingHorizontal: 30,
     paddingTop: 34,
   },
+  inner: { width: "100%", maxWidth: 480, alignSelf: "center" },
 
   // Newsreader at display size. This is the app's voice at its loudest.
   title: {

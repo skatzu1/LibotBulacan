@@ -19,6 +19,7 @@ import {
   ActivityIndicator,
   ScrollView,
   Dimensions,
+  useWindowDimensions,
   StatusBar,
   Animated,
   PanResponder,
@@ -43,12 +44,16 @@ import { useMissions } from '../context/MissionContext';
 import { ScreenHeader, PrimaryButton, H_PAD } from '../components/ui';
 import Icon from "../components/Icon";
 
-const { width, height } = Dimensions.get('window');
-
-// ─── Scan frame geometry (must match scanFrame style below) ───────────────────
-const FRAME_TOP_RATIO  = 0.22;  // matches scanFrame.top: height * 0.22
-const FRAME_LEFT_RATIO = 0.1;   // matches scanFrame.left: width * 0.1
-const FRAME_SIZE_RATIO = 0.8;   // matches scanFrame.width/height: width * 0.8
+// ─── Scan frame geometry ──────────────────────────────────────────────────────
+// A square 80% of the window's width, centred, 22% down: on a phone, as it
+// always was. On a wide window (a tablet, an unfolded phone) it is no taller
+// than half the height, so it stays clear of the hint and the shutter. The
+// frame on screen and the crop both come from here, for the window the
+// camera is shown in.
+export const scanFrameFor = (w, h) => {
+  const size = Math.min(w * 0.8, h * 0.5);
+  return { left: (w - size) / 2, top: h * 0.22, size };
+};
 
 // Crops the captured photo down to exactly the square region the user saw
 // inside the on-screen scan frame. Two things make this fiddly:
@@ -68,7 +73,7 @@ const FRAME_SIZE_RATIO = 0.8;   // matches scanFrame.width/height: width * 0.8
 // preview, which is as wide as the phone.
 const WORK_WIDTH_PX = 1280;
 
-async function cropToScanFrame(uri) {
+async function cropToScanFrame(uri, width, height) {
   try {
     // Normalises EXIF orientation as it shrinks, so width/height and the crop
     // rect below are all in the same (upright) coordinate space.
@@ -99,12 +104,13 @@ async function cropToScanFrame(uri) {
 
     // Photo pixels per screen point — uniform on both axes for a "cover" fit.
     const scale = visibleW / width;
+    const frame = scanFrameFor(width, height);
 
-    const originX = Math.max(0, Math.round(offsetX + FRAME_LEFT_RATIO * width  * scale));
-    const originY = Math.max(0, Math.round(offsetY + FRAME_TOP_RATIO  * height * scale));
+    const originX = Math.max(0, Math.round(offsetX + frame.left * scale));
+    const originY = Math.max(0, Math.round(offsetY + frame.top  * scale));
     // Keep it square, and never run past the image edges.
     const size = Math.round(
-      Math.min(FRAME_SIZE_RATIO * width * scale, photoW - originX, photoH - originY)
+      Math.min(frame.size * scale, photoW - originX, photoH - originY)
     );
 
     const result = await ImageManipulator.manipulateAsync(
@@ -136,6 +142,8 @@ export default function Mission({ navigation, route }) {
   const { colors, isDark } = useTheme();
 
   const insets = useSafeAreaInsets();
+  const { width: winW, height: winH } = useWindowDimensions();
+  const frame = scanFrameFor(winW, winH);
   const cameraRef = useRef(null);
   // Where the phone was when the camera opened — the fallback if a fresh fix
   // can't be had at the moment the photo is taken.
@@ -251,7 +259,7 @@ export default function Mission({ navigation, route }) {
           zoomStartRef.current = zoomRef.current;
           return;
         }
-        const delta = (dist - pinchStartDistRef.current) / width;
+        const delta = (dist - pinchStartDistRef.current) / Dimensions.get('window').width;
         applyZoom(Math.max(0, Math.min(1, zoomStartRef.current + delta)));
       },
       onPanResponderRelease: (evt) => {
@@ -296,7 +304,7 @@ export default function Mission({ navigation, route }) {
       const [croppedUri, coords] = await Promise.all([
         // Exactly what the user saw inside the scan frame, so the AI analyzes
         // the same region the guide shows.
-        cropToScanFrame(photoUri),
+        cropToScanFrame(photoUri, winW, winH),
         // Where the photo was taken: a reading from the last 15 s if the
         // phone has one, else a fresh one for up to 4 s, else where it was
         // when the camera opened (just checked to be at the spot).
@@ -413,7 +421,7 @@ export default function Mission({ navigation, route }) {
             </TouchableOpacity>
           </SafeAreaView>
 
-          <View style={styles.scanFrame} pointerEvents="none">
+          <View style={[styles.scanFrame, { top: frame.top, left: frame.left, width: frame.size, height: frame.size }]} pointerEvents="none">
             <View style={[styles.corner, styles.topLeft,     { borderColor: colors.accent }]} />
             <View style={[styles.corner, styles.topRight,    { borderColor: colors.accent }]} />
             <View style={[styles.corner, styles.bottomLeft,  { borderColor: colors.accent }]} />
@@ -443,7 +451,7 @@ export default function Mission({ navigation, route }) {
             style={[styles.shutterFlash, { backgroundColor: colors.brand, opacity: flashAnim }]}
           />
 
-          <View style={styles.scanHintWrap} pointerEvents="none">
+          <View style={[styles.scanHintWrap, { bottom: winH * 0.21 }]} pointerEvents="none">
             <Text style={styles.scanHint} maxFontSizeMultiplier={MAX_FONT_SCALE}>
               Keep {target} inside the frame
             </Text>
@@ -598,7 +606,8 @@ const styles = StyleSheet.create({
   tile:     { width: 64, height: 64, borderRadius: radius.md, alignItems: 'center', justifyContent: 'center' },
   headText: { flex: 1 },
 
-  preview: { width: '100%', aspectRatio: 1, borderRadius: radius.card, marginTop: spacing.lg },
+  // Square, as wide as the screen on a phone; on a tablet it stops at 520.
+  preview: { width: '100%', maxWidth: 520, alignSelf: 'center', aspectRatio: 1, borderRadius: radius.card, marginTop: spacing.lg },
   slot:       { alignItems: 'center', justifyContent: 'center' },
   // The camera's frame corners, inset into the empty slot.
   slotCorner: { position: 'absolute', width: 34, height: 34, margin: 18 },
@@ -636,10 +645,8 @@ const styles = StyleSheet.create({
   },
   cameraTitle: { flex: 1, textAlign: 'center', color: 'white', fontSize: 15, fontFamily: fonts.sansBold },
 
-  scanFrame: {
-    position: 'absolute', top: height * 0.22,
-    left: width * 0.1, width: width * 0.8, height: width * 0.8,
-  },
+  // Placed and sized at render, from scanFrameFor.
+  scanFrame: { position: 'absolute' },
   corner:      { position: 'absolute', width: 26, height: 26 },
   topLeft:     { top: 0,    left: 0,  borderTopWidth: 3,    borderLeftWidth: 3,  borderTopLeftRadius: 6 },
   topRight:    { top: 0,    right: 0, borderTopWidth: 3,    borderRightWidth: 3, borderTopRightRadius: 6 },
@@ -653,7 +660,7 @@ const styles = StyleSheet.create({
   shutterFlash: { ...StyleSheet.absoluteFillObject },
 
   scanHintWrap: {
-    position: 'absolute', bottom: height * 0.21, alignSelf: 'center',
+    position: 'absolute', alignSelf: 'center', // `bottom` at render
     backgroundColor: 'rgba(0,0,0,0.55)',
     paddingHorizontal: 14, paddingVertical: 7, borderRadius: 20,
     maxWidth: '80%',

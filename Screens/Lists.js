@@ -12,7 +12,7 @@ import { useArrival } from "../context/ArrivalContext";
 import { useBookmark } from "../context/BookmarkContext";
 import { useTheme, fonts } from "../context/ThemeContext";
 import {
-  ScreenHeader, SpotCard, EmptyState, ErrorState, SearchField, PhotoBookmark, H_PAD,
+  ScreenHeader, SpotCard, EmptyState, ErrorState, SearchField, PhotoBookmark, H_PAD, useCardColumns,
 } from "../components/ui";
 
 // ── Skeleton import ───────────────────────────────────────────────────────────
@@ -32,6 +32,7 @@ export default function Lists() {
   const { allSpots, spotsStatus, reloadSpots } = useArrival();
   const { colors, isDark } = useTheme();
   const styles = getStyles(colors);
+  const { rowStyle, cardStyle } = useCardColumns();
 
   const category    = route.params?.category    || "Religious";
   const displayName = route.params?.displayName || category;
@@ -91,13 +92,14 @@ export default function Lists() {
             </Text>
 
             {visibleDestinations.length > 0 ? (
-              <View style={styles.cardsContainer}>
+              <View style={[styles.cardsContainer, rowStyle]}>
                 {visibleDestinations.map((item) => (
                   <SpotCard
                     key={item._id}
                     spot={item}
                     wide
                     height={180}
+                    style={cardStyle}
                     onPress={() => navigation.navigate("InformationScreen", { spot: item })}
                     right={
                       <PhotoBookmark

@@ -6,7 +6,7 @@ import {
   StyleSheet,
   TouchableOpacity,
   ActivityIndicator,
-  Dimensions,
+  useWindowDimensions,
   Animated,
   PanResponder,
   StatusBar,
@@ -27,7 +27,6 @@ import { ScreenHeader } from "../components/ui";
 import useRoadRoute, { fmtDistance, fmtDuration } from "../hooks/useRoadRoute";
 import { ROUTE_LINE_JS } from "../utils/routeLine";
 
-const { width, height } = Dimensions.get("window");
 // Single source of truth for the backend host — see api.js.
 
 // The show/hide terminals choice, remembered on the phone ("0" = hidden).
@@ -754,6 +753,7 @@ export default function Track({ route, navigation }) {
   const { setActiveSpot } = useArrival();
   const { colors, isDark } = useTheme();
   const insets = useSafeAreaInsets();
+  const { width: winW } = useWindowDimensions();
 
   const [userLocation, setUserLocation]   = useState(null);
   const [loading, setLoading]             = useState(true);
@@ -1622,7 +1622,7 @@ window.updateSpotProximity = function(active) {
         pointerEvents="box-none"
       >
         {routeInfo ? (
-          <View style={[styles.etaCard, { backgroundColor: colors.background }, shadow.lg]}>
+          <View style={[styles.etaCard, { maxWidth: winW - 100, backgroundColor: colors.background }, shadow.lg]}>
             <View style={[styles.etaIcon, { backgroundColor: colors.brand }]}>
               <Icon name="navigation-2" size={15} color={colors.onBrand} />
             </View>
@@ -1636,7 +1636,7 @@ window.updateSpotProximity = function(active) {
             </View>
           </View>
         ) : routeNote ? (
-          <View style={[styles.etaCard, { backgroundColor: colors.background }, shadow.lg]} accessibilityLiveRegion="polite">
+          <View style={[styles.etaCard, { maxWidth: winW - 100, backgroundColor: colors.background }, shadow.lg]} accessibilityLiveRegion="polite">
             <View style={[styles.etaIcon, { backgroundColor: colors.brandSoft }]}>
               <Icon name="info" size={15} color={colors.brand} />
             </View>
@@ -1788,10 +1788,10 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+  // Fills the screen, whatever its size (it was the window's size at start-up,
+  // which split-screen or unfolding a phone made wrong).
   map: {
     flex: 1,
-    width,
-    height,
   },
   loading: {
     flex: 1,
@@ -1880,8 +1880,7 @@ const styles = StyleSheet.create({
     gap: 11,
     paddingVertical: 10,
     paddingHorizontal: 12,
-    borderRadius: radius.lg,
-    maxWidth: width - 100,
+    borderRadius: radius.lg, // maxWidth at render: clear of the buttons
   },
   etaIcon: {
     width: 32,

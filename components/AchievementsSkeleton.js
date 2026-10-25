@@ -76,7 +76,7 @@ const styles = StyleSheet.create({
   container:  { paddingHorizontal: H_GUTTER / 2, paddingTop: 8 },
   summary:    { borderRadius: radius.card, borderWidth: 1, padding: 16, marginBottom: 16 },
   summaryTop: { flexDirection: "row", alignItems: "center", gap: 12 },
-  stats:      { flexDirection: "row", gap: 18, marginTop: 14 },
+  stats:      { flexDirection: "row", flexWrap: "wrap", columnGap: 18, rowGap: 6, marginTop: 14 },
   row:        { flexDirection: "row", gap: GRID_GAP, marginBottom: GRID_GAP },
   titleRow:   { flexDirection: "row", alignItems: "center", gap: 14, padding: 14, borderRadius: radius.card, borderWidth: 1, marginBottom: 12 },
 });

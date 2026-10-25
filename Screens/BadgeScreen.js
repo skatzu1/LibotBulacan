@@ -874,7 +874,9 @@ const styles = StyleSheet.create({
   summaryHeadline: { ...typography.display, fontSize: 24, lineHeight: 29, marginTop: 6 },
   summaryNext:     { fontFamily: fonts.sansMedium, fontSize: 13, marginTop: 3 },
   summaryBar:      { marginTop: 14 },
-  summaryStats:    { flexDirection: "row", gap: 18, marginTop: 12 },
+  // Wraps to a second line where the three don't fit (a narrow phone, a
+  // large text size) instead of running off the card's edge.
+  summaryStats:    { flexDirection: "row", flexWrap: "wrap", columnGap: 18, rowGap: 4, marginTop: 12 },
   summaryStat:     { fontFamily: fonts.sansMedium, fontSize: 12.5 },
   summaryNum:      { fontFamily: fonts.sansBold, fontSize: 14 },
   shownRow:        { flexDirection: "row", alignItems: "center", gap: 8, marginTop: 12, paddingTop: 12, borderTopWidth: StyleSheet.hairlineWidth },

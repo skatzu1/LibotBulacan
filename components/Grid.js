@@ -11,7 +11,9 @@ export const H_GUTTER = 40; // total horizontal screen padding
 
 // Columns scale with the viewport instead of being pinned at 3 — on a tablet or
 // in split-screen the old fixed grid produced either giant cells or clipping.
-export const columnsFor = (w) => (w >= 900 ? 6 : w >= 600 ? 4 : 3);
+// Under 340 (a 320-wide phone, or one with a large display size) three cards
+// are narrower than a badge's ring, so it's two.
+export const columnsFor = (w) => (w >= 900 ? 6 : w >= 600 ? 4 : w >= 340 ? 3 : 2);
 export const cardSizeFor = (w) => (w - H_GUTTER - GRID_GAP * (columnsFor(w) - 1)) / columnsFor(w);
 
 // Self-contained fade-in wrapper — safe with FlatList recycling since each

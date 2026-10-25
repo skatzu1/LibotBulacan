@@ -266,7 +266,10 @@ function Moment({ item, index, count, onNext, onAchievements, onShare, sharing, 
     return () => loop.stop();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const medalSize = Math.min(188, width * 0.46);
+  // On a short screen the medal and the space above it shrink, so the words
+  // stay clear of the buttons.
+  const short = height < 740;
+  const medalSize = Math.min(188, width * 0.46, height * 0.21);
   const burst = Math.max(width, height) * 1.05;
   const scale = medal.interpolate({ inputRange: [0, 1], outputRange: [0.3, 1] });
   const rotate = medal.interpolate({ inputRange: [0, 1], outputRange: ["-14deg", "0deg"] });
@@ -278,7 +281,7 @@ function Moment({ item, index, count, onNext, onAchievements, onShare, sharing, 
     <View style={s.fill} accessibilityViewIsModal>
       <LinearGradient colors={["#04191B", "#0B3A3F", "#051C1F"]} locations={[0, 0.45, 1]} style={StyleSheet.absoluteFill} />
 
-      <View style={[s.stage, { paddingTop: insets.top + 70 }]}>
+      <View style={[s.stage, { paddingTop: insets.top + (short ? 36 : 70) }]}>
         <View style={[s.medalBox, { width: medalSize * 1.5, height: medalSize * 1.5 }]}>
           <Sunburst size={burst} reduce={reduce} />
           <Animated.View style={[s.halo, { width: medalSize * 1.32, height: medalSize * 1.32, borderRadius: medalSize, transform: [{ scale: haloScale }] }]} />
@@ -292,7 +295,7 @@ function Moment({ item, index, count, onNext, onAchievements, onShare, sharing, 
 
         <Animated.View style={[s.words, { opacity: words, transform: [{ translateY: lift }] }]}>
           <Text style={[s.eyebrow, { color: METAL[copy.tier] }]} maxFontSizeMultiplier={MAX_FONT_SCALE}>{copy.eyebrow.toUpperCase()}</Text>
-          <Text style={s.headline} maxFontSizeMultiplier={MAX_FONT_SCALE} accessibilityRole="header">{copy.headline}</Text>
+          <Text style={[s.headline, short && s.headlineShort]} maxFontSizeMultiplier={MAX_FONT_SCALE} accessibilityRole="header">{copy.headline}</Text>
           {!!copy.body && <Text style={s.body} maxFontSizeMultiplier={MAX_FONT_SCALE}>{copy.body}</Text>}
           {/* The title that comes with a town or district. */}
           {!!copy.title && (
@@ -466,14 +469,16 @@ const s = StyleSheet.create({
   words:     { alignItems: "center", paddingHorizontal: 32, marginTop: 8 },
   eyebrow:   { fontFamily: fonts.sansBold, fontSize: 12.5, letterSpacing: 3.2, color: GOLD, marginBottom: 8 },
   headline:  { fontFamily: fonts.displayBlack, fontSize: 36, lineHeight: 42, letterSpacing: -0.5, color: "#FFFFFF", textAlign: "center" },
+  headlineShort: { fontSize: 30, lineHeight: 36 },
   body:      { fontFamily: fonts.sans, fontSize: 15.5, lineHeight: 23, color: "rgba(255,255,255,0.78)", textAlign: "center", marginTop: 10, maxWidth: 340 },
   newTitle:  {
     flexDirection: "row", alignItems: "center", gap: 8, marginTop: 16, paddingHorizontal: 14, paddingVertical: 7,
-    borderRadius: 999, borderWidth: 1, backgroundColor: "rgba(255,255,255,0.06)",
+    borderRadius: 999, borderWidth: 1, backgroundColor: "rgba(255,255,255,0.06)", maxWidth: "100%",
   },
-  newTitleText: { fontFamily: fonts.sansSemi, fontSize: 14, color: "rgba(255,255,255,0.88)" },
+  newTitleText: { fontFamily: fonts.sansSemi, fontSize: 14, color: "rgba(255,255,255,0.88)", flexShrink: 1 },
 
-  actions:   { paddingHorizontal: 24, gap: 6 },
+  // A phone's width; on a tablet, centred rather than edge to edge.
+  actions:   { paddingHorizontal: 24, gap: 6, width: "100%", maxWidth: 480, alignSelf: "center" },
   dots:      { flexDirection: "row", justifyContent: "center", gap: 6, marginBottom: 10 },
   dot:       { width: 7, height: 7, borderRadius: 4, backgroundColor: "rgba(255,255,255,0.3)" },
   dotOn:     { backgroundColor: GOLD, width: 18 },

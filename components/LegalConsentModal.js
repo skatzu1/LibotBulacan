@@ -172,5 +172,5 @@ const st = StyleSheet.create({
   end:       { fontFamily: fonts.sansMedium, fontSize: 12.5, textAlign: "center", marginTop: 24 },
   foot:      { paddingHorizontal: H_PAD, paddingTop: 12, borderTopWidth: StyleSheet.hairlineWidth, gap: 8 },
   hintRow:   { flexDirection: "row", alignItems: "center", justifyContent: "center", gap: 6 },
-  hint:      { fontFamily: fonts.sansMedium, fontSize: 12.5 },
+  hint:      { fontFamily: fonts.sansMedium, fontSize: 12.5, flexShrink: 1, textAlign: "center" },
 });

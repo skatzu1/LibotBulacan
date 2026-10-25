@@ -34,6 +34,16 @@ const PODIUM = {
   3: { blockH: 52, avatarSz: 58, order: 2 },
 };
 
+// On a short screen the podium shrinks (to three quarters at most), so the
+// list under it keeps room for more than a couple of rows.
+const podiumFor = (screenH) => {
+  const k = Math.min(1, Math.max(0.75, screenH / 820));
+  if (k === 1) return PODIUM;
+  return Object.fromEntries(Object.entries(PODIUM).map(([place, p]) => [
+    place, { ...p, blockH: Math.round(p.blockH * k), avatarSz: Math.round(p.avatarSz * k) },
+  ]));
+};
+
 // Medal palette — gold uses the app's yellow accent; silver / bronze are neutral.
 const MEDAL = {
   1: { ring: "#F2CE1B", coin: "#F2CE1B", coinText: "#5E4B00" },
@@ -84,6 +94,10 @@ const ROW_H = 66;
 // The row inside its card: ROW_H less the card's 1px border top and bottom
 // and the 8px gap below.
 const INNER_ROW_H = ROW_H - 10;
+// With a larger text size the points and the title under them need more
+// height: every row grows by the same amount (the text is capped at
+// MAX_FONT_SCALE), so the rows stay one height for getItemLayout.
+const rowHFor = (fontScale) => ROW_H + Math.ceil(Math.max(0, Math.min(fontScale, MAX_FONT_SCALE) - 1) * 44);
 // Your row counts as on screen once most of it shows.
 const VIEWABILITY = { itemVisiblePercentThreshold: 60 };
 
@@ -157,7 +171,10 @@ const ptsLabel   = (n) => `${fmtPts(n)} pts`;
 export default function Leaderboard() {
   const navigation                    = useNavigation();
   const insets                        = useSafeAreaInsets();
-  const { width: SW }                 = useWindowDimensions();
+  const { width: SW, height: SH, fontScale } = useWindowDimensions();
+  const podium      = podiumFor(SH);
+  const rowH        = rowHFor(fontScale);
+  const innerRowH   = rowH - (ROW_H - INNER_ROW_H);
   // The decorative hero blob and the podium name width both scale with the
   // viewport instead of a Dimensions.get() frozen at module import.
   const blob = {
@@ -355,7 +372,7 @@ export default function Leaderboard() {
         <View style={[styles.hero, { backgroundColor: colors.backgroundHero, paddingTop: insets.top + 8 }]}>
           <View style={[styles.heroBlob, blob, { backgroundColor: "rgba(255,255,255,0.22)" }]} pointerEvents="none" />
           {heroNav}
-          <PodiumSkeleton sizes={PODIUM} />
+          <PodiumSkeleton sizes={podium} />
         </View>
         <View style={[styles.card, { backgroundColor: colors.background }]}>
           <LeaderboardSkeleton />
@@ -386,6 +403,7 @@ export default function Leaderboard() {
         key={user.id}
         style={[
           styles.row,
+          { height: innerRowH },
           user.isMe && { backgroundColor: colors.brandSoft },
         ]}
         onPress={() => openTraveler(user)}
@@ -396,7 +414,7 @@ export default function Leaderboard() {
       >
         <View style={styles.rankSlot}>
           <View style={[styles.rankCoin, { backgroundColor: colors.brandSoft }]}>
-            <Text style={[styles.rankCoinText, { color: colors.brand }]}>{rank}</Text>
+            <Text style={[styles.rankCoinText, { color: colors.brand }]} maxFontSizeMultiplier={MAX_FONT_SCALE}>{rank}</Text>
           </View>
         </View>
 
@@ -408,10 +426,11 @@ export default function Leaderboard() {
           <Text
             style={[styles.rowName, { color: colors.textPrimary }, user.isMe && { color: colors.brand, fontFamily: fonts.sansBold }]}
             numberOfLines={1}
+            maxFontSizeMultiplier={MAX_FONT_SCALE}
           >
             {user.name}{user.isMe ? " · You" : ""}
           </Text>
-          <Text style={[styles.rowSub, { color: colors.textMuted }]} numberOfLines={1}>
+          <Text style={[styles.rowSub, { color: colors.textMuted }]} numberOfLines={1} maxFontSizeMultiplier={MAX_FONT_SCALE}>
             {spotsLabel(user.visited)} visited
           </Text>
         </View>
@@ -428,7 +447,7 @@ export default function Leaderboard() {
     <View style={styles.rowEnd}>
       <View style={[styles.rowPtsPill, { backgroundColor: colors.background, borderColor: colors.divider }]}>
         <Icon name="stars" size={12} color={colors.brand} weight="fill" />
-        <Text style={[styles.rowPts, { color: colors.brandDark }]}>{ptsLabel(user.points)}</Text>
+        <Text style={[styles.rowPts, { color: colors.brandDark }]} maxFontSizeMultiplier={MAX_FONT_SCALE}>{ptsLabel(user.points)}</Text>
       </View>
       {user.title && <TitleChip title={user.title} size="sm" style={styles.rowTitle} />}
     </View>
@@ -470,7 +489,7 @@ export default function Leaderboard() {
   // on screen it hides, so you're never shown twice ("bakit nakahiwalay yung
   // number 1", 2026-10-25). Off your page it takes you there; on it, to your
   // profile.
-  const ME_BAR_H    = INNER_ROW_H + 4;
+  const ME_BAR_H    = innerRowH + 4;
   const meElsewhere = me?.page && me.page !== page;
   const meBar = me && !meInView && (
     <TouchableOpacity
@@ -487,17 +506,17 @@ export default function Leaderboard() {
     >
       <View style={styles.rankSlot}>
         <View style={[styles.rankCoin, { backgroundColor: colors.brand }]}>
-          <Text style={[styles.rankCoinText, { color: colors.onBrand }]}>{me.rank ?? "–"}</Text>
+          <Text style={[styles.rankCoinText, { color: colors.onBrand }]} maxFontSizeMultiplier={MAX_FONT_SCALE}>{me.rank ?? "–"}</Text>
         </View>
       </View>
       <View style={[styles.rowAvatarWrap, { borderColor: colors.cardBorder }]}>
         {personAvatar(me, 40)}
       </View>
       <View style={styles.rowNameCol}>
-        <Text style={[styles.rowName, { color: colors.brand, fontFamily: fonts.sansBold }]} numberOfLines={1}>
+        <Text style={[styles.rowName, { color: colors.brand, fontFamily: fonts.sansBold }]} numberOfLines={1} maxFontSizeMultiplier={MAX_FONT_SCALE}>
           {me.name} · You
         </Text>
-        <Text style={[styles.rowSub, { color: colors.textMuted }]} numberOfLines={1}>
+        <Text style={[styles.rowSub, { color: colors.textMuted }]} numberOfLines={1} maxFontSizeMultiplier={MAX_FONT_SCALE}>
           {meElsewhere ? `On page ${me.page} · tap to go` : `${spotsLabel(me.visited)} visited`}
         </Text>
       </View>
@@ -565,7 +584,7 @@ export default function Leaderboard() {
 
         {hasPodium && <View style={styles.podiumRow}>
           {PLACES_LEFT_TO_RIGHT.map((place) => {
-            const cfg   = PODIUM[place];
+            const cfg   = podium[place];
             const step  = steps[place];
             // Nobody on it yet, or a tie skipped it: an empty ring on its step,
             // so the podium keeps its shape.
@@ -630,6 +649,7 @@ export default function Leaderboard() {
                 <Text
                   style={[styles.podiumName, podiumNameMax, { color: colors.brandDark }, lead.isMe && { fontFamily: fonts.sansBold }]}
                   numberOfLines={1}
+                  maxFontSizeMultiplier={MAX_FONT_SCALE}
                 >
                   {stepNames(step)}
                 </Text>
@@ -640,7 +660,7 @@ export default function Leaderboard() {
                   accessibilityLabel={label}
                 >
                   <Icon name="stars" size={10} color={colors.brand} weight="fill" />
-                  <Text style={[styles.podiumPtsText, { color: colors.brandDark }]}>{ptsLabel(lead.points)}</Text>
+                  <Text style={[styles.podiumPtsText, { color: colors.brandDark }]} maxFontSizeMultiplier={MAX_FONT_SCALE}>{ptsLabel(lead.points)}</Text>
                 </View>
 
                 <View style={[
@@ -676,7 +696,7 @@ export default function Leaderboard() {
           keyExtractor={(card) => `${card.rank}-${card.users[0].id}`}
           renderItem={renderGroup}
           extraData={myPhoto}
-          getItemLayout={(_, index) => ({ length: ROW_H, offset: ROW_H * index, index })}
+          getItemLayout={(_, index) => ({ length: rowH, offset: rowH * index, index })}
           initialNumToRender={12}
           maxToRenderPerBatch={10}
           windowSize={7}
@@ -820,7 +840,7 @@ const styles = StyleSheet.create({
 
   listContent: { paddingTop: 2 },
 
-  // Must stay in sync with ROW_H — getItemLayout above assumes it.
+  // Must stay in sync with ROW_H (rowHFor) — getItemLayout above assumes it.
   group: {
     marginBottom: 8,
     borderRadius: radius.md,
@@ -830,7 +850,7 @@ const styles = StyleSheet.create({
   row: {
     flexDirection: "row",
     alignItems: "center",
-    height: INNER_ROW_H,
+    height: INNER_ROW_H, // grown at render with the text size (rowHFor)
     paddingHorizontal: 10,
   },
   // The rank column: the coin.
