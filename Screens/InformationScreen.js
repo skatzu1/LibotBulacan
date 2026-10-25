@@ -1024,7 +1024,7 @@ export default function InformationScreen({ route, navigation }) {
                     <Text style={[styles.firstReviewSub, { color: colors.textSecondary }]}>
                       {arrived
                         ? "You've been here. Be the first to tell the next visitor what it was like."
-                        : "Reviews here come from travelers who visited with Libot Bulacan."}
+                        : "Reviews here come from travelers who visited with LibotBulacan."}
                     </Text>
                   </View>
                 </TouchableOpacity>
@@ -1272,7 +1272,7 @@ export default function InformationScreen({ route, navigation }) {
                   <View style={styles.fbDoneText}>
                     <Text style={[styles.fbDoneTitle, { color: colors.textPrimary }]}>Visit to write a review</Text>
                     <Text style={[styles.fbDoneSub, { color: colors.textSecondary }]}>
-                      Only travelers who have been to {spot.name} with Libot Bulacan can review it.
+                      Only travelers who have been to {spot.name} with LibotBulacan can review it.
                       Arrive there and the review box opens here.
                     </Text>
                     <TouchableOpacity

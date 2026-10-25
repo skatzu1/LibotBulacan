@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "Libot Bulacan",
+    "name": "LibotBulacan",
     "slug": "libot",
     "jsEngine": "hermes",
     "version": "1.2.2",
@@ -54,9 +54,9 @@
       [
         "expo-image-picker",
         {
-          "cameraPermission": "Libot Bulacan uses the camera for AR and to take mission photos at tourist spots.",
-          "photosPermission": "Libot Bulacan uses your photos when you choose a profile picture or add photos to a review.",
-          "microphonePermission": "Libot Bulacan does not record audio. The camera and AR libraries it uses can, so iOS asks for this note."
+          "cameraPermission": "LibotBulacan uses the camera for AR and to take mission photos at tourist spots.",
+          "photosPermission": "LibotBulacan uses your photos when you choose a profile picture or add photos to a review.",
+          "microphonePermission": "LibotBulacan does not record audio. The camera and AR libraries it uses can, so iOS asks for this note."
         }
       ],
       [
@@ -68,10 +68,10 @@
             ]
           },
           "ios": {
-            "cameraUsagePermission": "Libot Bulacan uses the camera for AR experiences.",
-            "microphoneUsagePermission": "Libot Bulacan uses your microphone for AR experiences.",
-            "photosPermission": "Libot Bulacan would like to read photos for AR.",
-            "savephotosPermission": "Libot Bulacan would like to save photos during AR."
+            "cameraUsagePermission": "LibotBulacan uses the camera for AR experiences.",
+            "microphoneUsagePermission": "LibotBulacan uses your microphone for AR experiences.",
+            "photosPermission": "LibotBulacan would like to read photos for AR.",
+            "savephotosPermission": "LibotBulacan would like to save photos during AR."
           }
         }
       ],
@@ -86,9 +86,9 @@
       [
         "expo-location",
         {
-          "locationAlwaysAndWhenInUsePermission": "Libot Bulacan uses your location in the background to tell you when a tourist spot is nearby and when you arrive at one, even when the app is closed.",
-          "locationAlwaysPermission": "Libot Bulacan uses your location in the background to tell you when a tourist spot is nearby and when you arrive at one, even when the app is closed.",
-          "locationWhenInUsePermission": "Libot Bulacan uses your location to show nearby tourist spots, give directions, and check when you arrive at a spot.",
+          "locationAlwaysAndWhenInUsePermission": "LibotBulacan uses your location in the background to tell you when a tourist spot is nearby and when you arrive at one, even when the app is closed.",
+          "locationAlwaysPermission": "LibotBulacan uses your location in the background to tell you when a tourist spot is nearby and when you arrive at one, even when the app is closed.",
+          "locationWhenInUsePermission": "LibotBulacan uses your location to show nearby tourist spots, give directions, and check when you arrive at a spot.",
           "isIosBackgroundLocationEnabled": true,
           "isAndroidBackgroundLocationEnabled": true,
           "isAndroidForegroundServiceEnabled": true
@@ -114,10 +114,10 @@
       "supportsTablet": true,
       "bundleIdentifier": "com.skatzu15.libot",
       "infoPlist": {
-        "NSCameraUsageDescription": "Libot Bulacan uses the camera for AR and to take mission photos at tourist spots.",
-        "NSLocationWhenInUseUsageDescription": "Libot Bulacan uses your location to show nearby tourist spots, give directions, and check when you arrive at a spot.",
-        "NSLocationAlwaysAndWhenInUseUsageDescription": "Libot Bulacan uses your location in the background to tell you when a tourist spot is nearby and when you arrive at one, even when the app is closed.",
-        "NSPhotoLibraryUsageDescription": "Libot Bulacan uses your photos when you choose a profile picture or add photos to a review.",
+        "NSCameraUsageDescription": "LibotBulacan uses the camera for AR and to take mission photos at tourist spots.",
+        "NSLocationWhenInUseUsageDescription": "LibotBulacan uses your location to show nearby tourist spots, give directions, and check when you arrive at a spot.",
+        "NSLocationAlwaysAndWhenInUseUsageDescription": "LibotBulacan uses your location in the background to tell you when a tourist spot is nearby and when you arrive at one, even when the app is closed.",
+        "NSPhotoLibraryUsageDescription": "LibotBulacan uses your photos when you choose a profile picture or add photos to a review.",
         "CFBundleURLTypes": [
           {
             "CFBundleURLSchemes": [
@@ -125,8 +125,8 @@
             ]
           }
         ],
-        "NSPhotoLibraryAddUsageDescription": "Libot Bulacan saves a badge picture to your photos when you choose Save Image while sharing a badge.",
-        "NSMicrophoneUsageDescription": "Libot Bulacan does not record audio. The camera and AR libraries it uses can, so iOS asks for this note.",
+        "NSPhotoLibraryAddUsageDescription": "LibotBulacan saves a badge picture to your photos when you choose Save Image while sharing a badge.",
+        "NSMicrophoneUsageDescription": "LibotBulacan does not record audio. The camera and AR libraries it uses can, so iOS asks for this note.",
         "ITSAppUsesNonExemptEncryption": false
       }
     },

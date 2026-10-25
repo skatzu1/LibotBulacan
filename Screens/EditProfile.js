@@ -311,7 +311,7 @@ export default function EditProfile({ navigation }) {
     showAlert(
       "Delete your account?",
       "Your account is deleted right away and you'll be signed out. A copy of your reviews, trips and "
-        + "badges is kept for Libot Bulacan's records, hidden from everyone. "
+        + "badges is kept for LibotBulacan's records, hidden from everyone. "
         + "You can make a new account with the same email later.",
       [
         { text: "Cancel", style: "cancel" },

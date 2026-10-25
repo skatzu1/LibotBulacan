@@ -74,7 +74,7 @@ describe("Register", () => {
     fireEvent.press(tree.getByLabelText("I don't live in Bulacan"));
     await waitFor(() => expect(showAlert).toHaveBeenCalledWith(
       "For Bulacan residents only",
-      "Sorry, Libot Bulacan is for residents of Bulacan only.",
+      "Sorry, LibotBulacan is for residents of Bulacan only.",
       expect.anything(),
       expect.anything(),
     ));

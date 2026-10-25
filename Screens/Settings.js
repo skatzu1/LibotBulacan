@@ -138,7 +138,7 @@ const Settings = ({ navigation }) => {
           <ListRow icon="flag"        title="Report a Problem" onPress={() => navigation.navigate("ReportProblem")} />
           <ListRow icon="file-text"   title="Terms of Service" onPress={() => openURL(TERMS_URL)}   />
           <ListRow icon="lock"        title="Privacy Policy"   onPress={() => openURL(PRIVACY_URL)} />
-          <ListRow icon="info"        title="About Libot Bulacan" onPress={() => openURL(ABOUT_URL)}   />
+          <ListRow icon="info"        title="About LibotBulacan" onPress={() => openURL(ABOUT_URL)}   />
         </View>
       </ScrollView>
     </View>

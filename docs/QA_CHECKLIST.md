@@ -38,7 +38,7 @@ https://developers.google.com/ar/devices). Add an iPhone when iOS is in scope.
 - [ ] Leaderboard, achievements, previous trips, bookmarks all load. Equal points show the same rank. Achievements and Previous Trips can be searched.
 - [ ] Bookmarking or un-bookmarking a spot shows a toast.
 - [ ] Directions on the Track screen draw a route.
-- [ ] Settings → Privacy / Terms / Help open the web pages. Report a Problem sends from the app (a toast names the account email); About Libot Bulacan is the last row.
+- [ ] Settings → Privacy / Terms / Help open the web pages. Report a Problem sends from the app (a toast names the account email); About LibotBulacan is the last row.
 - [ ] Profile → Log Out (bottom of the Profile screen).
 - [ ] Edit Profile → Save stays on the screen with a "Profile updated" toast. Delete account → one confirmation → signed out; the account is archived (admin panel), not erased.
 

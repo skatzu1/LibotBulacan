@@ -520,7 +520,7 @@ export default function Login({ navigation }) {
       if (done.firstFactorVerification?.status === "transferable") {
         showAlert(
           "No account found",
-          "This Google account isn't registered with Libot Bulacan yet. Sign up to create your account first.",
+          "This Google account isn't registered with LibotBulacan yet. Sign up to create your account first.",
           [
             { text: "Cancel", style: "cancel" },
             { text: "Sign up", onPress: () => navigation.navigate("Register") },

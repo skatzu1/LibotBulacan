@@ -2173,7 +2173,7 @@ export default function ARScreen({ route, navigation }) {
     return renderNoAR({
       icon: "camera-off",
       title: "Camera access is off",
-      text: `AR View shows ${spot.name}'s models through the camera. Allow camera access for Libot Bulacan in your phone's Settings, then open AR View again.`,
+      text: `AR View shows ${spot.name}'s models through the camera. Allow camera access for LibotBulacan in your phone's Settings, then open AR View again.`,
     });
   }
 

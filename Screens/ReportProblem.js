@@ -119,7 +119,7 @@ const ReportProblem = ({ navigation }) => {
 
   // ── Fallback: an email the person sends themselves ──
   const compose = () => {
-    const subject = `Libot Bulacan problem: ${label}`;
+    const subject = `LibotBulacan problem: ${label}`;
     const body = [
       message.trim(),
       "",
@@ -169,7 +169,7 @@ const ReportProblem = ({ navigation }) => {
         contentContainerStyle={[styles.content, { paddingBottom: insets.bottom + 40 }]}
       >
         <Text style={[typography.body, { color: colors.textSecondary }]}>
-          This goes straight to the Libot Bulacan developers. For wrong details about a spot, choose
+          This goes straight to the LibotBulacan developers. For wrong details about a spot, choose
           that below and name the spot. An offensive review? Bad words are hidden automatically, and
           you can tell us about the rest here.
         </Text>

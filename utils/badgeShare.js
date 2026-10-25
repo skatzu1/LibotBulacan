@@ -58,7 +58,7 @@ export async function shareBadge(badge, getToken) {
     const RNShare = require("react-native-share").default;
     await RNShare.open({
       title: `${badge.name} Badge`,
-      message: `I just earned the "${badge.name}" badge on Libot Bulacan! Discover Bulacan's history!`,
+      message: `I just earned the "${badge.name}" badge on LibotBulacan! Discover Bulacan's history!`,
       url: badgeShareUrl(id, code),
       failOnCancel: false,
     });

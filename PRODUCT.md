@@ -50,7 +50,7 @@ Being there is what counts, and the server checks it: arrivals, AR, photo scans 
 
 ## Brand Commitments
 
-- Name: **Libot Bulacan** ("Libot" on the store listing).
+- Name: **LibotBulacan** ("Libot" on the store listing).
 - Logo: the yellow rounded square with a white eight-point compass star (assets/logo.svg is the master).
 - Voice: plain, honest and specific. Say what happened and what to do next; no hype, no invented claims, nothing that implies official endorsement.
 - Free, no ads, nothing to buy.

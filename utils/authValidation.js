@@ -125,7 +125,7 @@ export const dobError = (dob, today = new Date()) => {
   if (parsed > today) return "Date of birth can't be in the future.";
   let age = today.getFullYear() - y;
   if (today.getMonth() < m - 1 || (today.getMonth() === m - 1 && today.getDate() < d)) age -= 1;
-  if (age < MIN_AGE) return `You must be at least ${MIN_AGE} to use Libot Bulacan.`;
+  if (age < MIN_AGE) return `You must be at least ${MIN_AGE} to use LibotBulacan.`;
   if (age > 120) return "Check the year.";
   return null;
 };

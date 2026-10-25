@@ -15,20 +15,20 @@ export const LEGAL_DOCS = [
         "type": "p",
         "runs": [
           {
-            "text": "These Terms are an agreement between you and Jasper, who runs Libot Bulacan (“we”, “us”). They cover the Libot Bulacan app, this website and the services behind them (together, “Libot Bulacan”). By creating an account or using Libot Bulacan, you agree to these Terms and to our "
+            "text": "These Terms are an agreement between you and Jasper, who runs LibotBulacan (“we”, “us”). They cover the LibotBulacan app, this website and the services behind them (together, “LibotBulacan”). By creating an account or using LibotBulacan, you agree to these Terms and to our "
           },
           {
             "text": "Privacy Policy"
           },
           {
-            "text": ". Before you sign up, the app shows both in full; scrolling to the end and tapping “I agree” is a valid electronic agreement under the Electronic Commerce Act (Republic Act No. 8792), and we record which version you agreed to and when. If you do not agree, please do not use Libot Bulacan."
+            "text": ". Before you sign up, the app shows both in full; scrolling to the end and tapping “I agree” is a valid electronic agreement under the Electronic Commerce Act (Republic Act No. 8792), and we record which version you agreed to and when. If you do not agree, please do not use LibotBulacan."
           }
         ],
         "lede": true
       },
       {
         "type": "h",
-        "text": "1. Who can use Libot Bulacan"
+        "text": "1. Who can use LibotBulacan"
       },
       {
         "type": "li",
@@ -43,7 +43,7 @@ export const LEGAL_DOCS = [
         "type": "li",
         "runs": [
           {
-            "text": "You must live in Bulacan. Libot Bulacan is for residents of the province, and signing up asks for your city or municipality."
+            "text": "You must live in Bulacan. LibotBulacan is for residents of the province, and signing up asks for your city or municipality."
           }
         ],
         "depth": 1
@@ -68,13 +68,13 @@ export const LEGAL_DOCS = [
       },
       {
         "type": "h",
-        "text": "2. What Libot Bulacan is"
+        "text": "2. What LibotBulacan is"
       },
       {
         "type": "p",
         "runs": [
           {
-            "text": "Libot Bulacan is a free guide to tourist spots in Bulacan: spot information, maps and directions, automatic arrival check-ins, missions, points, badges and titles, augmented reality (AR) landmarks, reviews and a leaderboard. There are no ads and nothing to buy."
+            "text": "LibotBulacan is a free guide to tourist spots in Bulacan: spot information, maps and directions, automatic arrival check-ins, missions, points, badges and titles, augmented reality (AR) landmarks, reviews and a leaderboard. There are no ads and nothing to buy."
           }
         ]
       },
@@ -90,7 +90,7 @@ export const LEGAL_DOCS = [
         "type": "p",
         "runs": [
           {
-            "text": "Libot Bulacan is an independent project. It is not an official app of the Provincial Government of Bulacan, any city or municipality, the Department of Tourism, or any church or the owners of the places it lists, and they do not endorse it."
+            "text": "LibotBulacan is an independent project. It is not an official app of the Provincial Government of Bulacan, any city or municipality, the Department of Tourism, or any church or the owners of the places it lists, and they do not endorse it."
           }
         ]
       },
@@ -119,7 +119,7 @@ export const LEGAL_DOCS = [
             "bold": true
           },
           {
-            "text": " Routes come from third-party map data and can be wrong or out of date. Follow road signs, traffic laws and local authorities. Do not use Libot Bulacan while driving."
+            "text": " Routes come from third-party map data and can be wrong or out of date. Follow road signs, traffic laws and local authorities. Do not use LibotBulacan while driving."
           }
         ],
         "depth": 1
@@ -199,7 +199,7 @@ export const LEGAL_DOCS = [
             "bold": true
           },
           {
-            "text": " You can review a spot once you have visited it with Libot Bulacan (the app recorded your arrival there). Anyone can read the reviews. One review per spot, of up to 250 characters and four photos."
+            "text": " You can review a spot once you have visited it with LibotBulacan (the app recorded your arrival there). Anyone can read the reviews. One review per spot, of up to 250 characters and four photos."
           }
         ]
       },
@@ -274,7 +274,7 @@ export const LEGAL_DOCS = [
             "bold": true
           },
           {
-            "text": " Reviews and photos are the opinions and work of the travelers who post them, not of Libot Bulacan. Apart from hiding bad words (see Moderation), we do not check them before they appear, and we are not responsible for what they say. When one breaks these rules, we may remove it."
+            "text": " Reviews and photos are the opinions and work of the travelers who post them, not of LibotBulacan. Apart from hiding bad words (see Moderation), we do not check them before they appear, and we are not responsible for what they say. When one breaks these rules, we may remove it."
           }
         ]
       },
@@ -379,7 +379,7 @@ export const LEGAL_DOCS = [
         "type": "li",
         "runs": [
           {
-            "text": "You can stop using Libot Bulacan at any time. To delete your account, use Delete account in Edit Profile: your account and sign-in are deleted right away. Without the app, the "
+            "text": "You can stop using LibotBulacan at any time. To delete your account, use Delete account in Edit Profile: your account and sign-in are deleted right away. Without the app, the "
           },
           {
             "text": "account deletion page"
@@ -400,7 +400,7 @@ export const LEGAL_DOCS = [
         "type": "li",
         "runs": [
           {
-            "text": "If you do not use Libot Bulacan for 30 days or more, an administrator may deactivate your account. When you come back, you can ask from the app to have it restored."
+            "text": "If you do not use LibotBulacan for 30 days or more, an administrator may deactivate your account. When you come back, you can ask from the app to have it restored."
           }
         ],
         "depth": 1
@@ -422,7 +422,7 @@ export const LEGAL_DOCS = [
         "type": "p",
         "runs": [
           {
-            "text": "Libot Bulacan’s app, design, logo, text, 3D models and AR content belong to us or to the people who licensed them to us. Map data is © OpenStreetMap contributors. You may use Libot Bulacan for your own personal, non-commercial use. Do not copy, resell, reverse-engineer or scrape it, or use our name or logo, without our written permission."
+            "text": "LibotBulacan’s app, design, logo, text, 3D models and AR content belong to us or to the people who licensed them to us. Map data is © OpenStreetMap contributors. You may use LibotBulacan for your own personal, non-commercial use. Do not copy, resell, reverse-engineer or scrape it, or use our name or logo, without our written permission."
           }
         ]
       },
@@ -434,7 +434,7 @@ export const LEGAL_DOCS = [
         "type": "p",
         "runs": [
           {
-            "text": "Libot Bulacan relies on services run by others, including Google (sign-in and ARCore), Clerk (accounts) and OpenStreetMap (maps). Their own terms also apply when you use them, and we are not responsible for them."
+            "text": "LibotBulacan relies on services run by others, including Google (sign-in and ARCore), Clerk (accounts) and OpenStreetMap (maps). Their own terms also apply when you use them, and we are not responsible for them."
           }
         ]
       },
@@ -446,7 +446,7 @@ export const LEGAL_DOCS = [
         "type": "p",
         "runs": [
           {
-            "text": "Libot Bulacan is free and provided “as is”. We work to keep it running and accurate, but it may sometimes be slow, unavailable or wrong, and we may change or remove features or stop offering Libot Bulacan. Mobile data charges from your network provider are yours to pay."
+            "text": "LibotBulacan is free and provided “as is”. We work to keep it running and accurate, but it may sometimes be slow, unavailable or wrong, and we may change or remove features or stop offering LibotBulacan. Mobile data charges from your network provider are yours to pay."
           }
         ]
       },
@@ -458,7 +458,7 @@ export const LEGAL_DOCS = [
         "type": "p",
         "runs": [
           {
-            "text": "As far as Philippine law allows, we are not responsible for loss or damage that comes from relying on spot information or directions, from your trips and visits, from content posted by other users, or from Libot Bulacan being unavailable. Nothing in these Terms limits liability that the law does not allow to be limited, such as for fraud, bad faith or gross negligence, or takes away your rights as a consumer under Philippine law."
+            "text": "As far as Philippine law allows, we are not responsible for loss or damage that comes from relying on spot information or directions, from your trips and visits, from content posted by other users, or from LibotBulacan being unavailable. Nothing in these Terms limits liability that the law does not allow to be limited, such as for fraud, bad faith or gross negligence, or takes away your rights as a consumer under Philippine law."
           }
         ]
       },
@@ -466,7 +466,7 @@ export const LEGAL_DOCS = [
         "type": "p",
         "runs": [
           {
-            "text": "If something you post, or your misuse of Libot Bulacan, leads to a claim against us, you are responsible for it."
+            "text": "If something you post, or your misuse of LibotBulacan, leads to a claim against us, you are responsible for it."
           }
         ]
       },
@@ -478,7 +478,7 @@ export const LEGAL_DOCS = [
         "type": "p",
         "runs": [
           {
-            "text": "We may update these Terms. We will post the new version here with a new effective date, and tell you in the app or by email about significant changes before they take effect. If you keep using Libot Bulacan after that, you accept the new Terms."
+            "text": "We may update these Terms. We will post the new version here with a new effective date, and tell you in the app or by email about significant changes before they take effect. If you keep using LibotBulacan after that, you accept the new Terms."
           }
         ]
       },
@@ -516,7 +516,7 @@ export const LEGAL_DOCS = [
         "type": "p",
         "runs": [
           {
-            "text": "Libot Bulacan is a tourism guide to Bulacan, Philippines. The Libot Bulacan app, this website and the server behind them are run by Jasper (“we”, “us”). This policy explains what personal information we collect, why, who else handles it, how long we keep it, and the rights you have under the "
+            "text": "LibotBulacan is a tourism guide to Bulacan, Philippines. The LibotBulacan app, this website and the server behind them are run by Jasper (“we”, “us”). This policy explains what personal information we collect, why, who else handles it, how long we keep it, and the rights you have under the "
           },
           {
             "text": "Data Privacy Act of 2012 (Republic Act No. 10173)",
@@ -536,7 +536,7 @@ export const LEGAL_DOCS = [
         "type": "li",
         "runs": [
           {
-            "text": "We collect what Libot Bulacan needs to work: your account, the spots you visit, your progress, and the reviews you write."
+            "text": "We collect what LibotBulacan needs to work: your account, the spots you visit, your progress, and the reviews you write."
           }
         ],
         "depth": 1
@@ -666,7 +666,7 @@ export const LEGAL_DOCS = [
         "type": "p",
         "runs": [
           {
-            "text": "What you do in Libot Bulacan.",
+            "text": "What you do in LibotBulacan.",
             "bold": true
           },
           {
@@ -706,7 +706,7 @@ export const LEGAL_DOCS = [
             "bold": true
           },
           {
-            "text": " Report a Problem in the app sends your report to support@libotbulacan.com when you press Send, with your account’s email address to reply to. It includes what you write, the kind of problem you chose, the app version, and your phone model and its system version. On this website, Report a problem writes an email for you to send from your own email; nothing is sent until you send it, with the web page you were on and your browser. We receive reports as email; they are not kept in Libot Bulacan’s database. Problem reports are read by the Libot Bulacan developers, not by administrators."
+            "text": " Report a Problem in the app sends your report to support@libotbulacan.com when you press Send, with your account’s email address to reply to. It includes what you write, the kind of problem you chose, the app version, and your phone model and its system version. On this website, Report a problem writes an email for you to send from your own email; nothing is sent until you send it, with the web page you were on and your browser. We receive reports as email; they are not kept in LibotBulacan’s database. Problem reports are read by the LibotBulacan developers, not by administrators."
           }
         ]
       },
@@ -718,7 +718,7 @@ export const LEGAL_DOCS = [
             "bold": true
           },
           {
-            "text": " Send feedback, on this website, works the same way: it writes an email for you to send to support@libotbulacan.com, with your suggestion and the web page you were on. Nothing is sent until you send it from your own email, and it is read by the Libot Bulacan developers."
+            "text": " Send feedback, on this website, works the same way: it writes an email for you to send to support@libotbulacan.com, with your suggestion and the web page you were on. Nothing is sent until you send it from your own email, and it is read by the LibotBulacan developers."
           }
         ]
       },
@@ -730,7 +730,7 @@ export const LEGAL_DOCS = [
             "bold": true
           },
           {
-            "text": " Libot Bulacan uses your phone’s precise location (GPS), only with your permission:"
+            "text": " LibotBulacan uses your phone’s precise location (GPS), only with your permission:"
           }
         ]
       },
@@ -753,7 +753,7 @@ export const LEGAL_DOCS = [
             "text": "In the background:"
           },
           {
-            "text": " only if you choose “Allow all the time” on Android. Libot Bulacan then checks for nearby spots and arrivals while it is closed, and Android shows a notification while it does. An arrival noticed while it is closed is sent to us the next time you open the app. With “While using the app”, this happens only while Libot Bulacan is open."
+            "text": " only if you choose “Allow all the time” on Android. LibotBulacan then checks for nearby spots and arrivals while it is closed, and Android shows a notification while it does. An arrival noticed while it is closed is sent to us the next time you open the app. With “While using the app”, this happens only while LibotBulacan is open."
           }
         ],
         "depth": 1
@@ -816,7 +816,7 @@ export const LEGAL_DOCS = [
             "text": "Google Privacy Policy"
           },
           {
-            "text": ". The camera view is processed on your phone; Libot Bulacan does not send it to us or to anyone else."
+            "text": ". The camera view is processed on your phone; LibotBulacan does not send it to us or to anyone else."
           }
         ],
         "depth": 1
@@ -837,7 +837,7 @@ export const LEGAL_DOCS = [
         "type": "p",
         "runs": [
           {
-            "text": "Libot Bulacan does not record audio and does not read your contacts."
+            "text": "LibotBulacan does not record audio and does not read your contacts."
           }
         ]
       },
@@ -886,7 +886,7 @@ export const LEGAL_DOCS = [
             "bold": true
           },
           {
-            "text": " for location, camera and photos, through your phone’s permission prompts. You can withdraw it at any time in your phone’s settings; the features that need it will stop working, and the rest of Libot Bulacan will keep working."
+            "text": " for location, camera and photos, through your phone’s permission prompts. You can withdraw it at any time in your phone’s settings; the features that need it will stop working, and the rest of LibotBulacan will keep working."
           }
         ],
         "depth": 1
@@ -933,7 +933,7 @@ export const LEGAL_DOCS = [
         "type": "li",
         "runs": [
           {
-            "text": "Other Libot Bulacan users",
+            "text": "Other LibotBulacan users",
             "bold": true
           },
           {
@@ -959,7 +959,7 @@ export const LEGAL_DOCS = [
         "type": "li",
         "runs": [
           {
-            "text": "Libot Bulacan administrators",
+            "text": "LibotBulacan administrators",
             "bold": true
           },
           {
@@ -1125,7 +1125,7 @@ export const LEGAL_DOCS = [
             "bold": true
           },
           {
-            "text": " kept while you use Libot Bulacan."
+            "text": " kept while you use LibotBulacan."
           }
         ],
         "depth": 1
@@ -1164,7 +1164,7 @@ export const LEGAL_DOCS = [
             "bold": true
           },
           {
-            "text": " if you do not use Libot Bulacan for 30 days or more, an administrator may deactivate your account. When you come back, you can ask from the app to have it restored."
+            "text": " if you do not use LibotBulacan for 30 days or more, an administrator may deactivate your account. When you come back, you can ask from the app to have it restored."
           }
         ],
         "depth": 1
@@ -1359,7 +1359,7 @@ export const LEGAL_DOCS = [
             "text": "support@libotbulacan.com"
           },
           {
-            "text": " from the email address on your Libot Bulacan account. We may ask you to confirm it is you, and we will reply within 30 days. If a user has died or cannot act for themselves, their lawful heirs or assigns may exercise these rights for them."
+            "text": " from the email address on your LibotBulacan account. We may ask you to confirm it is you, and we will reply within 30 days. If a user has died or cannot act for themselves, their lawful heirs or assigns may exercise these rights for them."
           }
         ]
       },
@@ -1419,7 +1419,7 @@ export const LEGAL_DOCS = [
         "type": "p",
         "runs": [
           {
-            "text": "Libot Bulacan is for people who are at least 13 years of age. If we learn that a child under 13 has an account, we will delete it (the records kept afterwards are in section 5, hidden from everyone). A parent or guardian who believes their child has given us personal information can email us and we will act on it."
+            "text": "LibotBulacan is for people who are at least 13 years of age. If we learn that a child under 13 has an account, we will delete it (the records kept afterwards are in section 5, hidden from everyone). A parent or guardian who believes their child has given us personal information can email us and we will act on it."
           }
         ]
       },

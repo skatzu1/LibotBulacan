@@ -17,8 +17,8 @@ export function arrivalNoticeContent(arrivals) {
     return {
       title: first.isFirstVisit ? "You arrived!" : "Welcome back!",
       body: first.isFirstVisit
-        ? `You've reached ${first.spotName}! Open Libot Bulacan to claim your badge.`
-        : `You've arrived at ${first.spotName}. Open Libot Bulacan to explore!`,
+        ? `You've reached ${first.spotName}! Open LibotBulacan to claim your badge.`
+        : `You've arrived at ${first.spotName}. Open LibotBulacan to explore!`,
       data: { spotId: first.spotId, spotName: first.spotName, isFirstVisit: first.isFirstVisit },
     };
   }
@@ -27,8 +27,8 @@ export function arrivalNoticeContent(arrivals) {
   return {
     title: anyFirst ? `You arrived at ${arrivals.length} spots!` : "Welcome back!",
     body: anyFirst
-      ? `You've reached ${names}! Open Libot Bulacan to claim your badges.`
-      : `You've arrived at ${names}. Open Libot Bulacan to explore!`,
+      ? `You've reached ${names}! Open LibotBulacan to claim your badges.`
+      : `You've arrived at ${names}. Open LibotBulacan to explore!`,
     // A tap opens the first spot, as a single arrival's does.
     data: {
       spotId: first.spotId,

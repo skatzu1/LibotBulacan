@@ -201,7 +201,7 @@ export default function Register({ navigation }) {
   const promptToLogIn = (sessionId) => {
     showAlert(
       "You already have an account",
-      "This Google account is already registered with Libot Bulacan. Log in with it instead.",
+      "This Google account is already registered with LibotBulacan. Log in with it instead.",
       [
         {
           text: "Cancel",

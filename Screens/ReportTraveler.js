@@ -92,7 +92,7 @@ export default function ReportTraveler({ navigation, route }) {
       >
         <Text style={[typography.body, { color: colors.textSecondary }]}>
           Your report about <Text style={{ fontFamily: fonts.sansSemi, color: colors.textPrimary }}>{name}</Text> goes
-          to the Libot Bulacan admins. They won't be told who reported them.
+          to the LibotBulacan admins. They won't be told who reported them.
         </Text>
 
         <GroupLabel style={styles.label}>What's wrong?</GroupLabel>

@@ -46,7 +46,7 @@ export default function MunicipalityScreen({ onDone }) {
           Where in Bulacan do you live?
         </Text>
         <Text style={[typography.body, s.center, { color: colors.textSecondary, marginTop: spacing.sm, marginBottom: spacing.xl }]}>
-          Libot Bulacan is for residents of Bulacan, and your account was made before the app
+          LibotBulacan is for residents of Bulacan, and your account was made before the app
           asked. Choose your municipality to continue. Other travelers don't see it.
         </Text>
 

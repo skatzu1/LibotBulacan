@@ -40,7 +40,7 @@ export default function SuspendedScreen({ suspensionInfo }) {
           Your account is suspended
         </Text>
         <Text style={[typography.body, s.center, { color: colors.textSecondary, marginTop: spacing.sm, marginBottom: spacing.xl }]}>
-          An administrator suspended your account. You can't use Libot Bulacan until the
+          An administrator suspended your account. You can't use LibotBulacan until the
           suspension ends. Your trips, badges and points are kept.
         </Text>
 

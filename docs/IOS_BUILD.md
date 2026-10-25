@@ -1,4 +1,4 @@
-# Building Libot Bulacan for iPhone
+# Building LibotBulacan for iPhone
 
 No Mac is needed. Expo's EAS Build compiles the iPhone app on Expo's Macs in
 the cloud; everything below runs from Windows.

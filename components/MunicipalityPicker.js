@@ -81,7 +81,7 @@ export function MunicipalitySheet({ visible, value, onPick, onClose }) {
     setTimeout(() => {
       showAlert(
         "For Bulacan residents only",
-        "Sorry, Libot Bulacan is for residents of Bulacan only.",
+        "Sorry, LibotBulacan is for residents of Bulacan only.",
         [{ text: "OK" }],
         { tone: "info", icon: "map-pin" },
       );

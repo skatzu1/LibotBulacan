@@ -25,7 +25,7 @@ const openSettings = () => Linking.openSettings().catch(() => {});
 function explainCameraOff(purpose) {
   showAlert(
     "Camera access is off",
-    `Libot Bulacan needs the camera ${purpose}. Allow camera access for Libot Bulacan in your phone's Settings, then try again.`,
+    `LibotBulacan needs the camera ${purpose}. Allow camera access for LibotBulacan in your phone's Settings, then try again.`,
     [
       { text: "Not now", style: "cancel" },
       { text: "Open Settings", onPress: openSettings },
@@ -37,7 +37,7 @@ function explainCameraOff(purpose) {
 function explainPhotosOff() {
   showAlert(
     "Photo access is off",
-    "To add a photo from your gallery, allow photo access for Libot Bulacan in your phone's Settings, then try again.",
+    "To add a photo from your gallery, allow photo access for LibotBulacan in your phone's Settings, then try again.",
     [
       { text: "Not now", style: "cancel" },
       { text: "Open Settings", onPress: openSettings },

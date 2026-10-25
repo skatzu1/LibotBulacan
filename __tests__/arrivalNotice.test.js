@@ -10,7 +10,7 @@ describe("arrivalNoticeContent", () => {
   it("keeps the single-spot wording", () => {
     expect(arrivalNoticeContent([church])).toEqual({
       title: "You arrived!",
-      body: "You've reached San Isidro Labrador! Open Libot Bulacan to claim your badge.",
+      body: "You've reached San Isidro Labrador! Open LibotBulacan to claim your badge.",
       data: { spotId: "a", spotName: "San Isidro Labrador", isFirstVisit: true },
     });
     expect(arrivalNoticeContent([museum]).title).toBe("Welcome back!");
@@ -20,7 +20,7 @@ describe("arrivalNoticeContent", () => {
     const n = arrivalNoticeContent([church, museum, fest]);
     expect(n.title).toBe("You arrived at 3 spots!");
     expect(n.body).toBe(
-      "You've reached San Isidro Labrador, Museo San Ysidro and Kneeling Carabao Festival! Open Libot Bulacan to claim your badges."
+      "You've reached San Isidro Labrador, Museo San Ysidro and Kneeling Carabao Festival! Open LibotBulacan to claim your badges."
     );
     expect(n.data).toEqual({
       spotId: "a", spotName: "San Isidro Labrador", isFirstVisit: true, spotIds: ["a", "b", "c"],
@@ -30,6 +30,6 @@ describe("arrivalNoticeContent", () => {
   it("is a welcome back when every spot was visited before", () => {
     const n = arrivalNoticeContent([museum, fest]);
     expect(n.title).toBe("Welcome back!");
-    expect(n.body).toBe("You've arrived at Museo San Ysidro and Kneeling Carabao Festival. Open Libot Bulacan to explore!");
+    expect(n.body).toBe("You've arrived at Museo San Ysidro and Kneeling Carabao Festival. Open LibotBulacan to explore!");
   });
 });

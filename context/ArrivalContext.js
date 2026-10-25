@@ -378,10 +378,10 @@ async function requestAllLocationPermissions() {
   // makes more sense once the user knows why).
   if (current.status !== "granted" && current.canAskAgain) {
     const proceed = await confirmAsync(
-      "Libot Bulacan uses your location",
+      "LibotBulacan uses your location",
       BACKGROUND_ARRIVALS_ENABLED
         ? "To show spots near you, tell you when one is nearby, log the places you visit, and send arrival alerts. You'll pick a permission level on the next screen."
-        : "To show spots near you and recognise when you arrive at one while Libot Bulacan is open. Libot Bulacan doesn't use your location when the app is closed.",
+        : "To show spots near you and recognise when you arrive at one while LibotBulacan is open. LibotBulacan doesn't use your location when the app is closed.",
       { confirmText: "Continue", icon: "map-pin", tone: "info" },
     );
     if (!proceed) {
@@ -433,7 +433,7 @@ const ALLTIME_PROMPT_KEY  = "alltimeLocationPromptAt";
 const ALLTIME_PROMPT_EVERY = 12 * 60 * 60 * 1000; // at most once per 12h
 
 const alwaysWording = () => (Platform.OS === "ios"
-  ? { choose: `When iPhone asks next, choose "Change to Always Allow".`, settings: `Settings > Libot Bulacan > Location > "Always"` }
+  ? { choose: `When iPhone asks next, choose "Change to Always Allow".`, settings: `Settings > LibotBulacan > Location > "Always"` }
   : { choose: `On the next screen, choose "Allow all the time".`,       settings: `Permissions > Location > "Allow all the time"` });
 
 async function promptForAllTimeLocation() {
@@ -446,7 +446,7 @@ async function promptForAllTimeLocation() {
 
   const proceed = await confirmAsync(
     "Background location access needed",
-    `For a better experience, Libot Bulacan needs access to your location in the background — even when the app is closed or not in use — so it can tell you when a tourist spot is nearby, alert you when you arrive, and log your visit. ${alwaysWording().choose}`,
+    `For a better experience, LibotBulacan needs access to your location in the background — even when the app is closed or not in use — so it can tell you when a tourist spot is nearby, alert you when you arrive, and log your visit. ${alwaysWording().choose}`,
     { confirmText: "Continue", cancelText: "Not now", icon: "map-pin", tone: "info" },
   );
   if (!proceed) return false;
@@ -725,7 +725,7 @@ export function ArrivalProvider({ children }) {
                 distanceInterval:           20,
                 pausesUpdatesAutomatically: false,
                 foregroundService: {
-                  notificationTitle: "Libot Bulacan is tracking your location",
+                  notificationTitle: "LibotBulacan is tracking your location",
                   notificationBody:  "Detecting nearby tourist spots in Bulacan.",
                   notificationColor: "#0A6F78", // lightColors.brand
                   // Keep running after Libot is swiped away, so nearby and
