@@ -107,9 +107,6 @@ const arTokens = (c, isDark) => ({
   youDot:       isDark ? c.textPrimary : "#FFFFFF",
   youRing:      isDark ? "rgba(8,26,28,0.9)" : c.textPrimary,
   chipBg:       isDark ? "rgba(6,18,20,0.72)" : "rgba(251,248,242,0.85)",
-  // Backgrounds the camera while there's still walking to do: dimmed in dark
-  // mode, washed out toward the page in light mode. Either way, "not yet".
-  travelScrim:  isDark ? "rgba(6,18,20,0.62)" : "rgba(251,248,242,0.60)",
   statusBar:    isDark ? "light-content" : "dark-content",
   // Behind the trivia sheet and the guide: the same dim as every other
   // dialog in the app.
@@ -2245,11 +2242,9 @@ export default function ARScreen({ route, navigation }) {
       {/* Tap anywhere that isn't the model → the camera refocuses. */}
       <FocusRing pulse={focusPulse} />
 
-      {/* While the user still has to walk somewhere, the camera feed is not the
-          task — it's a distraction that makes the screen look like it should
-          already be showing something. Dimming it says "not yet, keep walking"
-          far better than any sentence, and it lifts the moment they arrive. */}
-      {!nextInRange && <View style={main.travelScrim} pointerEvents="none" />}
+      {/* No tint over the camera while walking: a theme-coloured scrim made the
+          feed look dark in dark mode and washed out in light mode. The radar and
+          the distance card already say "not yet". */}
 
       {/* In range but nothing placed yet: put the target on the screen instead
           of only describing it. Suppressed while the trivia card is up —
@@ -2412,10 +2407,7 @@ const makeHud = (TOKEN) => StyleSheet.create({
 // ─────────────────────────────────────────────
 const makeMain = (TOKEN) => StyleSheet.create({
   root: { flex: 1, backgroundColor: TOKEN.bg },
-  // Not opaque — the camera stays visible so the phone doesn't feel broken,
-  // just clearly backgrounded while walking is the job.
   arView:      { flex: 1 },
-  travelScrim: { ...StyleSheet.absoluteFillObject, backgroundColor: TOKEN.travelScrim },
   // `top` comes from the insets at render.
   topBar: {
     position:       "absolute",
