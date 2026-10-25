@@ -81,10 +81,9 @@ const stepNames = ({ all, shown }) => {
 // Fixed row height so FlatList.getItemLayout can be exact: 40px avatar +
 // 9px padding top/bottom + 1px border each side, plus the 8px gap below.
 const ROW_H = 66;
-// A rank's card: its rows (each ROW_H less the card's border and the gap),
-// the card's 1px border top and bottom, and the 8px gap below.
+// The row inside its card: ROW_H less the card's 1px border top and bottom
+// and the 8px gap below.
 const INNER_ROW_H = ROW_H - 10;
-const groupHeight = (n) => n * INNER_ROW_H + 10;
 // Your row counts as on screen once most of it shows.
 const VIEWABILITY = { itemVisiblePercentThreshold: 60 };
 
@@ -378,17 +377,15 @@ export default function Leaderboard() {
     );
   }
 
-  // One row in a rank's card. The first row carries the rank coin; the rows
-  // tied with it have a line down from the coin instead.
-  const renderRow = (user, i, n) => {
+  // One traveler's row, with their own rank coin. Travelers tied on points
+  // each show the same number: 3, 3, 3.
+  const renderRow = (user, tied) => {
     const rank = user.rank;
-    const tied = n > 1;
     return (
       <TouchableOpacity
         key={user.id}
         style={[
           styles.row,
-          i > 0 && { borderTopWidth: 1, borderTopColor: colors.divider },
           user.isMe && { backgroundColor: colors.brandSoft },
         ]}
         onPress={() => openTraveler(user)}
@@ -398,23 +395,9 @@ export default function Leaderboard() {
         accessibilityHint={user.isMe ? "Opens your profile" : "Opens their profile"}
       >
         <View style={styles.rankSlot}>
-          {tied && (
-            <View
-              style={[
-                styles.rankRail,
-                { backgroundColor: colors.brand },
-                i === 0 && { top: "50%" },
-                i === n - 1 && { bottom: "50%" },
-              ]}
-            />
-          )}
-          {i === 0 ? (
-            <View style={[styles.rankCoin, { backgroundColor: colors.brandSoft }]}>
-              <Text style={[styles.rankCoinText, { color: colors.brand }]}>{rank}</Text>
-            </View>
-          ) : (
-            <View style={[styles.rankDot, { backgroundColor: colors.brand }]} />
-          )}
+          <View style={[styles.rankCoin, { backgroundColor: colors.brandSoft }]}>
+            <Text style={[styles.rankCoinText, { color: colors.brand }]}>{rank}</Text>
+          </View>
         </View>
 
         <View style={[styles.rowAvatarWrap, { borderColor: colors.cardBorder }]}>
@@ -451,32 +434,27 @@ export default function Leaderboard() {
     </View>
   );
 
-  // Travelers on the same rank are stacked in one card (2026-10-24), you
-  // first, as on the podium.
+  // Every traveler has their own card. Same-rank travelers used to be stacked
+  // in one card with a line and dots for the rest (2026-10-24); the user found
+  // it confusing (2026-10-25), so a tie now just repeats the number. You still
+  // come first among the travelers you're tied with, as on the podium.
   const groups = [];
   for (const user of allUsers) {
     const last = groups[groups.length - 1];
     if (last && last.rank === user.rank) last.users.push(user);
     else groups.push({ rank: user.rank, users: [user] });
   }
-  for (const g of groups) g.users = [...g.users.filter((u) => u.isMe), ...g.users.filter((u) => !u.isMe)];
-  // Each card's place in the list, for getItemLayout.
-  const layouts = [];
-  let offset = 0;
-  for (const g of groups) {
-    const length = groupHeight(g.users.length);
-    layouts.push({ length, offset });
-    offset += length;
-  }
+  const cards = groups.flatMap((g) => {
+    const tied = g.users.length > 1;
+    return [...g.users.filter((u) => u.isMe), ...g.users.filter((u) => !u.isMe)]
+      .map((user) => ({ rank: g.rank, users: [user], tied }));
+  });
 
-  const renderGroup = ({ item: group }) => {
-    const n = group.users.length;
-    return (
-      <View style={[styles.group, { borderColor: colors.divider }]}>
-        {group.users.map((user, i) => renderRow(user, i, n))}
-      </View>
-    );
-  };
+  const renderGroup = ({ item: card }) => (
+    <View style={[styles.group, { borderColor: colors.divider }]}>
+      {renderRow(card.users[0], card.tied)}
+    </View>
+  );
 
   // The podium is the top of the board, so only page 1 has it.
   const steps     = page === 1 ? podiumSteps(allUsers) : {};
@@ -694,11 +672,11 @@ export default function Leaderboard() {
           onViewableItemsChanged={onViewable}
           viewabilityConfig={VIEWABILITY}
           style={paging && styles.paging}
-          data={groups}
-          keyExtractor={(group) => `${group.rank}-${group.users[0].id}`}
+          data={cards}
+          keyExtractor={(card) => `${card.rank}-${card.users[0].id}`}
           renderItem={renderGroup}
           extraData={myPhoto}
-          getItemLayout={(_, index) => ({ ...layouts[index], index })}
+          getItemLayout={(_, index) => ({ length: ROW_H, offset: ROW_H * index, index })}
           initialNumToRender={12}
           maxToRenderPerBatch={10}
           windowSize={7}
@@ -842,7 +820,7 @@ const styles = StyleSheet.create({
 
   listContent: { paddingTop: 2 },
 
-  // Must stay in sync with groupHeight — getItemLayout above assumes it.
+  // Must stay in sync with ROW_H — getItemLayout above assumes it.
   group: {
     marginBottom: 8,
     borderRadius: radius.md,
@@ -853,18 +831,15 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     height: INNER_ROW_H,
-    // No vertical padding, so a tie's line runs edge to edge.
     paddingHorizontal: 10,
   },
-  // The rank column: the coin, or the line down from it in a tie.
+  // The rank column: the coin.
   rankSlot: {
     width: 30,
     alignSelf: "stretch",
     justifyContent: "center", alignItems: "center",
     marginRight: 10,
   },
-  rankRail: { position: "absolute", top: 0, bottom: 0, width: 2, opacity: 0.35 },
-  rankDot: { width: 8, height: 8, borderRadius: 4 },
   rankCoin: {
     width: 30, height: 30, borderRadius: 15,
     justifyContent: "center", alignItems: "center",
