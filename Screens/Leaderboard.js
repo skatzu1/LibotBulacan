@@ -292,6 +292,13 @@ export default function Leaderboard() {
     <Avatar uri={avatarOf(user)} name={user.name} size={size} strong={user.isMe} />
   );
 
+  // A traveler on the board opens their profile, where they can be reported
+  // (Screens/TravelerProfile.js); you open your own.
+  const openTraveler = (user) => {
+    if (user.isMe) navigation.navigate("Profile");
+    else navigation.navigate("TravelerProfile", { clerkUserId: user.clerkUserId, name: user.name, avatar: user.avatar, title: user.title });
+  };
+
   // The hero's top bar. Loading, error and empty states render it too — the
   // loading state used to replace the whole screen, back button included.
   const heroNav = (
@@ -352,15 +359,18 @@ export default function Leaderboard() {
     const rank = user.rank;
     const tied = n > 1;
     return (
-      <View
+      <TouchableOpacity
         key={user.id}
         style={[
           styles.row,
           i > 0 && { borderTopWidth: 1, borderTopColor: colors.divider },
           user.isMe && { backgroundColor: colors.brandSoft },
         ]}
-        accessible
+        onPress={() => openTraveler(user)}
+        activeOpacity={0.7}
+        accessibilityRole="button"
         accessibilityLabel={`Rank ${rank}${tied ? ", tied" : ""}, ${user.isMe ? "you" : user.name}, ${user.points} points, ${spotsLabel(user.visited)} visited${user.title ? `, ${titleName(user.title)}` : ""}`}
+        accessibilityHint={user.isMe ? "Opens your profile" : "Opens their profile"}
       >
         <View style={styles.rankSlot}>
           {tied && (
@@ -407,7 +417,7 @@ export default function Leaderboard() {
           <Icon name="stars" size={12} color={colors.brand} weight="fill" />
           <Text style={[styles.rowPts, { color: colors.brandDark }]}>{ptsLabel(user.points)}</Text>
         </View>
-      </View>
+      </TouchableOpacity>
     );
   };
 
@@ -550,7 +560,7 @@ export default function Leaderboard() {
               <View key={place} style={styles.podiumCol}>
                 <View style={[styles.podiumFaces, { width: facesW, height: front }]}>
                   {behind.map((user, j) => (
-                    <View
+                    <TouchableOpacity
                       key={user.id || j}
                       style={[
                         styles.avatarRing,
@@ -558,13 +568,23 @@ export default function Leaderboard() {
                         { borderColor: medal.ring, top: (front - back) / 2 + 4 },
                         behind.length === 2 && j === 0 ? { left: 0 } : { right: 0 },
                       ]}
+                      onPress={() => openTraveler(user)}
+                      activeOpacity={0.8}
+                      accessibilityRole="button"
+                      accessibilityLabel={user.isMe ? "Your profile" : `${user.name}'s profile`}
                     >
                       {personAvatar(user, small)}
-                    </View>
+                    </TouchableOpacity>
                   ))}
-                  <View style={[styles.avatarRing, styles.frontFace, { borderColor: medal.ring, left: behind.length === 2 ? peek : 0 }]}>
+                  <TouchableOpacity
+                    style={[styles.avatarRing, styles.frontFace, { borderColor: medal.ring, left: behind.length === 2 ? peek : 0 }]}
+                    onPress={() => openTraveler(lead)}
+                    activeOpacity={0.8}
+                    accessibilityRole="button"
+                    accessibilityLabel={lead.isMe ? "Your profile" : `${lead.name}'s profile`}
+                  >
                     {personAvatar(lead, cfg.avatarSz)}
-                  </View>
+                  </TouchableOpacity>
                 </View>
 
                 <Text

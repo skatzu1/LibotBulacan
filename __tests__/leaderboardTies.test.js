@@ -25,6 +25,21 @@ const Leaderboard = require("../Screens/Leaderboard").default;
 const { podiumSteps } = require("../Screens/Leaderboard");
 
 const metrics = { frame: { x: 0, y: 0, width: 390, height: 844 }, insets: { top: 47, left: 0, right: 0, bottom: 34 } };
+
+// The rank's card a row sits in: the first bordered, clipped View above it.
+// Rows are buttons since 2026-10-25 (they open the traveler's profile), so it
+// is no longer a fixed number of parents up. Compared with ===: a failing
+// toBe() on two of these prints the whole tree.
+const { StyleSheet } = require("react-native");
+const cardOf = (el) => {
+  let n = el.parent;
+  while (n) {
+    const s = typeof n.type === "string" ? StyleSheet.flatten(n.props.style) || {} : {};
+    if (s.borderWidth === 1 && s.overflow === "hidden") return n;
+    n = n.parent;
+  }
+  return null;
+};
 const json = (body) => ({ ok: true, status: 200, headers: { get: () => "application/json" }, json: async () => body });
 
 // The server's board: sorted, each with the rank it shares (1, 1, 3, 4).
@@ -58,9 +73,10 @@ it("puts travelers tied for first on one step and leaves the place they skip emp
   expect(tree.getByLabelText(/^Rank 3, Cy Lopez/)).toBeTruthy();
   expect(tree.getByLabelText("Rank 4, Dee Santos, 10 points, 2 spots visited")).toBeTruthy();
   // A tie shares a card; other ranks get their own.
-  const card = (label) => tree.getByLabelText(label).parent.parent;
-  expect(card(/^Rank 1, tied, Ana Reyes/)).toBe(card(/^Rank 1, tied, Ben Cruz/));
-  expect(card(/^Rank 1, tied, Ana Reyes/)).not.toBe(card(/^Rank 3, Cy Lopez/));
+  const card = (label) => cardOf(tree.getByLabelText(label));
+  expect(card(/^Rank 1, tied, Ana Reyes/)).not.toBeNull();
+  expect(card(/^Rank 1, tied, Ana Reyes/) === card(/^Rank 1, tied, Ben Cruz/)).toBe(true);
+  expect(card(/^Rank 1, tied, Ana Reyes/) === card(/^Rank 3, Cy Lopez/)).toBe(false);
 }, 15000);
 
 it("puts you in front of the travelers you're tied with, even with no points", async () => {
@@ -93,9 +109,9 @@ it("counts the rest of a big tie as +N and lists them below, with you always on 
   const rows = tree.getAllByLabelText(/^Rank 1, tied, /);
   expect(rows).toHaveLength(5);
   expect(rows[0].props.accessibilityLabel).toMatch(/^Rank 1, tied, you,/);
-  // Each row's parent is its View wrapper; the one above that is the card.
-  const card = rows[0].parent.parent;
-  expect(rows.every((r) => r.parent.parent === card)).toBe(true);
+  const card = cardOf(rows[0]);
+  expect(card).not.toBeNull();
+  expect(rows.every((r) => cardOf(r) === card)).toBe(true);
   // No pinned "your standing" card any more (2026-10-24).
   expect(tree.queryByLabelText(/^Your standing/)).toBeNull();
 }, 15000);

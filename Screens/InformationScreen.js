@@ -240,7 +240,7 @@ function PhotoViewer({ viewer, onClose }) {
   );
 }
 
-function ReviewCard({ review, spotId, clerkUser, profileImage, reactToReview, onDelete, onOpenPhoto, colors }) {
+function ReviewCard({ review, spotId, clerkUser, profileImage, reactToReview, onDelete, onOpenPhoto, onOpenAuthor, colors }) {
   const isMe = clerkUser?.id === review.clerkUserId;
   // No more pravatar.cc fallback — a reviewer without a photo gets their
   // initials, not a random stranger's face.
@@ -312,10 +312,21 @@ function ReviewCard({ review, spotId, clerkUser, profileImage, reactToReview, on
   return (
     <View style={[styles.reviewCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
       <View style={styles.reviewHead}>
-        <Avatar uri={avatarUri} name={author} size={32} />
-        <Text style={[styles.reviewAuthor, { color: colors.textPrimary }]} numberOfLines={1}>
-          By {author}{isMe ? <Text style={{ color: colors.textMuted, fontFamily: fonts.sansMedium }}> (you)</Text> : null}
-        </Text>
+        {/* Someone else's photo and name open their profile. */}
+        <TouchableOpacity
+          style={styles.reviewAuthorTap}
+          onPress={() => onOpenAuthor(review)}
+          disabled={isMe || !review.clerkUserId}
+          activeOpacity={0.7}
+          accessibilityRole={isMe ? undefined : "button"}
+          accessibilityLabel={isMe ? `By ${author} (you)` : `By ${author}`}
+          accessibilityHint={isMe ? undefined : "Opens their profile"}
+        >
+          <Avatar uri={avatarUri} name={author} size={32} />
+          <Text style={[styles.reviewAuthor, { color: colors.textPrimary }]} numberOfLines={1}>
+            By {author}{isMe ? <Text style={{ color: colors.textMuted, fontFamily: fonts.sansMedium }}> (you)</Text> : null}
+          </Text>
+        </TouchableOpacity>
         {isMe && (
           <TouchableOpacity
             onPress={openMenu}
@@ -629,6 +640,12 @@ export default function InformationScreen({ route, navigation }) {
   const progressRatio    = completedCount / totalCount;
   const arMission        = missions.find((m) => m.type === "ar");
   const hasAR            = spotHasAR(spot);
+
+  // A reviewer's photo or name opens their profile, where they can be
+  // reported (Screens/TravelerProfile.js).
+  const openAuthor = (review) => navigation.navigate("TravelerProfile", {
+    clerkUserId: review.clerkUserId, name: review.userName, avatar: review.userImage,
+  });
 
   const cityText = spot.city || spot.address || "Bulacan, Philippines";
 
@@ -1176,6 +1193,7 @@ export default function InformationScreen({ route, navigation }) {
                           reactToReview={reactToReview}
                           onDelete={confirmDeleteReview}
                           onOpenPhoto={openPhotos}
+                          onOpenAuthor={openAuthor}
                           colors={colors}
                         />
                       ))
@@ -1625,6 +1643,7 @@ const styles = StyleSheet.create({
   seeMoreText:     { fontSize: 13.5, fontFamily: fonts.sansBold },
   reviewCard:      { borderRadius: radius.card, borderWidth: 1, padding: 16, marginBottom: 12, gap: 8 },
   reviewHead:      { flexDirection: "row", alignItems: "center", gap: 10 },
+  reviewAuthorTap: { flex: 1, flexDirection: "row", alignItems: "center", gap: 10, minHeight: 32 },
   reviewAuthor:    { flex: 1, fontSize: 14.5, fontFamily: fonts.sansBold },
   reviewMenu:      { width: 32, height: 32, alignItems: "flex-end", justifyContent: "center" },
   reviewComment:   { fontSize: 14, lineHeight: 21, fontFamily: fonts.sans },
