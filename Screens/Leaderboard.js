@@ -604,7 +604,7 @@ export default function Leaderboard() {
             const medal  = MEDAL[place];
             const more   = all.length - shown.length;
             const label  = all.length === 1
-              ? `Rank ${place}, ${lead.points} points, ${spotsLabel(lead.visited)} visited`
+              ? `Rank ${place}, ${lead.points} points, ${spotsLabel(lead.visited)} visited${lead.title ? `, ${titleName(lead.title)}` : ""}`
               : `Rank ${place}, tied: ${shown.map((u) => (u.isMe ? "you" : u.name)).join(", ")}` +
                 `${more ? `, and ${more} more listed below` : ""}, ${lead.points} points each`;
             // The front face at full size, the rest of the tie smaller behind
@@ -653,6 +653,11 @@ export default function Leaderboard() {
                 >
                   {stepNames(step)}
                 </Text>
+
+                {/* The title the front traveler shows, as in their row below. */}
+                {lead.title && (
+                  <TitleChip title={lead.title} size="sm" style={[styles.podiumTitle, { maxWidth: podiumColW - 4 }]} />
+                )}
 
                 <View
                   style={[styles.podiumPts, { backgroundColor: colors.background }]}
@@ -794,6 +799,7 @@ const styles = StyleSheet.create({
     textAlign: "center",
     marginBottom: 5,
   },
+  podiumTitle: { alignSelf: "center", marginTop: -1, marginBottom: 6 },
   podiumPts: {
     flexDirection: "row",
     alignItems: "center",
