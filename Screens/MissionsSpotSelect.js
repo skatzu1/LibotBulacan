@@ -38,6 +38,9 @@ export default function MissionsSpotSelect() {
     const p = progressOf(spot);
     return -p.done / p.total;
   }, [progressOf]);
+  // To do = spots already started; untouched ones show only under All
+  // (user, 2026-10-25: "to do in bakit list should only contain spots with progress").
+  const started = useCallback((spot) => progressOf(spot).done > 0, [progressOf]);
 
   return (
     <SpotPicker
@@ -49,7 +52,8 @@ export default function MissionsSpotSelect() {
       }
       isDone={isDone}
       rank={rank}
-      labels={{ todo: "To do", done: "Finished" }}
+      started={started}
+      labels={{ todo: "To do", done: "Finished", todoEmpty: "No spots started yet" }}
       footer={(spot) => {
         const { done, total } = progressOf(spot);
         return done === total ? { text: "All done" } : { text: `${done} of ${total}` };

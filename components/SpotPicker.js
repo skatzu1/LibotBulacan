@@ -22,12 +22,15 @@ const matches = (spot, q) =>
  *   filter(spot)  -> optional; only spots it returns true for are listed,
  *   isDone(spot)  -> whether the spot is done (finished / AR done / visited),
  *   rank(spot)    -> optional; orders the spots not done (lower first),
- *   labels        -> { todo, done }: the filter's names for the two groups,
+ *   started(spot) -> optional; only spots not done that it returns true for
+ *                    go under the to-do filter (All still lists every spot),
+ *   labels        -> { todo, done, todoEmpty? }: the filter's names for the two
+ *                    groups, and what an empty to-do group says,
  *   footer(spot)  -> the card's footer ({ text, icon? }),
  *   a11y(spot)    -> the card's accessibility label; a11yHint: what a tap does.
  */
 export default function SpotPicker({
-  title, subtitle, onPick, filter, isDone, rank, labels, footer, a11y, a11yHint,
+  title, subtitle, onPick, filter, isDone, rank, started, labels, footer, a11y, a11yHint,
 }) {
   const navigation = useNavigation();
   const { allSpots, spotsStatus, reloadSpots } = useArrival();
@@ -44,10 +47,11 @@ export default function SpotPicker({
   const listed = useMemo(() => {
     const spots = filter ? allSpots.filter(filter) : allSpots;
     const done = spots.filter(isDone);
-    const todo = spots.filter((s) => !isDone(s));
-    if (rank) todo.sort((a, b) => rank(a) - rank(b));
-    return { all: [...done, ...todo], done, todo };
-  }, [allSpots, filter, isDone, rank]);
+    const rest = spots.filter((s) => !isDone(s));
+    if (rank) rest.sort((a, b) => rank(a) - rank(b));
+    const todo = started ? rest.filter(started) : rest;
+    return { all: [...done, ...rest], done, todo };
+  }, [allSpots, filter, isDone, rank, started]);
 
   const q = query.trim().toLowerCase();
   const visible = useMemo(() => {
@@ -158,6 +162,8 @@ export default function SpotPicker({
             <EmptyState icon="search" text="Nothing matched that. Try a municipality or a landmark name." />
           ) : show === "done" ? (
             <EmptyState icon="target" title={`None ${labels.done.toLowerCase()} yet`} />
+          ) : listed.done.length < listed.all.length && labels.todoEmpty ? (
+            <EmptyState icon="target" title={labels.todoEmpty} />
           ) : (
             <EmptyState icon="check-circle" title="All done!" />
           )

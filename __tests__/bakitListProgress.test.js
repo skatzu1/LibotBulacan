@@ -57,7 +57,8 @@ it("counts the finished spots and lists them first, then the furthest along", as
   const tree = wrap();
   expect(await tree.findByLabelText("1 of 4 finished")).toBeTruthy();
   expect(tree.getByLabelText("All, 4 spots")).toBeTruthy();
-  expect(tree.getByLabelText("To do, 3 spots")).toBeTruthy();
+  // To do holds only spots already started (user, 2026-10-25).
+  expect(tree.getByLabelText("To do, 1 spots")).toBeTruthy();
   expect(tree.getByLabelText("Finished, 1 spots")).toBeTruthy();
   expect(shownSpots(tree)).toEqual(["Barasoain Church", "Meyto Shrine", "Casa Real", "Bagbag Bridge"]);
 });
@@ -74,12 +75,12 @@ it("says how far along each spot is", async () => {
   )).toBeTruthy();
 });
 
-it("filters like the badges: finished only, or to do only", async () => {
+it("filters like the badges: finished only, or to do (started, not finished) only", async () => {
   const tree = wrap();
   fireEvent.press(await tree.findByLabelText("Finished, 1 spots"));
   expect(shownSpots(tree)).toEqual(["Barasoain Church"]);
-  fireEvent.press(tree.getByLabelText("To do, 3 spots"));
-  expect(shownSpots(tree)).toEqual(["Meyto Shrine", "Casa Real", "Bagbag Bridge"]);
+  fireEvent.press(tree.getByLabelText("To do, 1 spots"));
+  expect(shownSpots(tree)).toEqual(["Meyto Shrine"]);
 });
 
 it("searches by spot or municipality", async () => {
