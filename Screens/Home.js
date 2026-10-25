@@ -597,10 +597,10 @@ const styles = StyleSheet.create({
 
 // Font trial for the greeting name. Swap the value and reload the app:
 //   fonts.display (Newsreader, current) · "Raleway_700Bold" · "Epilogue_700Bold"
-//   "Nunito_700Bold" · "Dosis_700Bold"
+//   "Nunito_700Bold" · "Dosis_700Bold" · fonts.sansBold (Momo Trust Display)
 // Each name must also be loaded in App.js's useFonts, or it falls back to the
 // phone's default font.
-const NAME_FONT = "Dosis_700Bold";
+const NAME_FONT = fonts.sansBold;
 
 const h = StyleSheet.create({
   scroll: { flex: 1 },

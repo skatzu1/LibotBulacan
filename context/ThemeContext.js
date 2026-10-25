@@ -242,6 +242,8 @@ export const radius = {
 //
 // Newsreader: editorial serif with an `opsz` axis. Display only.
 // Schibsted Grotesk: workhorse for UI and body copy.
+// Momo Trust Display: every bold (700+) — buttons, labels, names, numbers.
+// It ships one weight only, and that weight is already heavy.
 //
 // `displayBlack` is ExtraBold, not Black. Newsreader's heaviest weight is 800;
 // there is no 900 to load. The key keeps its name because Home.js and ui.js
@@ -254,12 +256,11 @@ export const fonts = {
   sans:        'SchibstedGrotesk_400Regular',
   sansMedium:  'SchibstedGrotesk_500Medium',
   sansSemi:    'SchibstedGrotesk_600SemiBold',
-  sansBold:    'SchibstedGrotesk_700Bold',
+  sansBold:    'MomoTrustDisplay_400Regular',
 };
 
-// Maps a legacy numeric fontWeight onto the correct family. Schibsted Grotesk
-// does publish 800 and 900, but only 400/500/600/700 are loaded in App.js, so
-// both still resolve to Bold. Add the faces there first if you want them.
+// Maps a legacy numeric fontWeight onto the correct family. 700, 800 and 900
+// all resolve to Momo Trust Display, which has no heavier weight.
 export const weightFamily = {
   '400': fonts.sans,       '500': fonts.sansMedium,
   '600': fonts.sansSemi,   '700': fonts.sansBold,
