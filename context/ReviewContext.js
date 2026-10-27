@@ -143,6 +143,11 @@ export const ReviewProvider = ({ children }) => {
       // the spot can review it (backend, QA 2026-10-16).
       const notVisited = err.response?.data?.notVisited === true;
       if (notVisited) return { success: false, message, notVisited };
+      // A word that isn't allowed: the server blocks the whole review (422,
+      // 2026-10-28) and names the words, so the draft can be fixed and sent.
+      if (err.response?.data?.blocked === true) {
+        return { success: false, message, blocked: true, words: err.response.data.words || [] };
+      }
       let status = null;
       if (err.response?.status === 403) status = await fetchModerationStatus();
       // One review per spot (409): the list this screen has must be out of
@@ -158,7 +163,7 @@ export const ReviewProvider = ({ children }) => {
   }, [postReview, fetchReviews, fetchModerationStatus]);
 
   // reportReview() was removed (mock defense 2026-10-21): travelers no longer
-  // report reviews; the server masks bad words as a review is posted.
+  // report reviews; the server blocks a review with a bad word as it is posted.
 
   // Like/dislike toggle. Optimistically patches the single review in
   // state with the server's returned counts + the caller's own reaction,

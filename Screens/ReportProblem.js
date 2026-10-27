@@ -14,8 +14,8 @@
 //
 // These reports are about the APP (crashes, sign-in, installing), and wrong
 // spot details or an offensive review too. Reviews can't be reported from the
-// spot's page any more (mock defense 2026-10-21): the server masks bad words as
-// they're posted. The website's Report a problem (LibotWeb report.js) still
+// spot's page any more (mock defense 2026-10-21): the server blocks a review
+// with a bad word as it's posted. The website's Report a problem (LibotWeb report.js) still
 // writes an email.
 import React, { useMemo, useState } from "react";
 import {
