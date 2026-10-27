@@ -42,8 +42,9 @@ import { BadgeShine } from "../components/BadgeEffects";
 const FACT_INLINE_MAX = 22;
 
 // Reviews can't be reported from here any more (mock defense 2026-10-21): the
-// server masks bad words with *** as a review is posted (LibotBackend
-// utils/reviewFilter.js), and admins act on reviews in the console.
+// server blocks a review with a bad word as it is posted (LibotBackend
+// utils/reviewFilter.js; it masked them with *** until 2026-10-28), and
+// admins act on reviews in the console.
 
 // How much longer a mute/suspension lasts, e.g. "3 days 4 hr" / "45 min".
 // Returns null once the window has actually elapsed (shouldn't normally be
@@ -318,11 +319,12 @@ function ReviewCard({ review, spotId, clerkUser, profileImage, reactToReview, on
           onPress={() => onOpenAuthor(review)}
           disabled={isMe || !review.clerkUserId}
           activeOpacity={0.7}
-          accessibilityRole={isMe ? undefined : "button"}
+          accessibilityRole={isMe || !review.clerkUserId ? undefined : "button"}
           accessibilityLabel={isMe ? `By ${author} (you)` : `By ${author}`}
-          accessibilityHint={isMe ? undefined : "Opens their profile"}
+          accessibilityHint={isMe || !review.clerkUserId ? undefined : "Opens their profile"}
         >
-          <Avatar uri={avatarUri} name={author} size={32} />
+          {/* A writer who hid their account (2026-10-28): "Hidden traveler". */}
+          <Avatar uri={avatarUri} name={author} size={32} hidden={review.hidden === true} />
           <Text style={[styles.reviewAuthor, { color: colors.textPrimary }]} numberOfLines={1}>
             By {author}{isMe ? <Text style={{ color: colors.textMuted, fontFamily: fonts.sansMedium }}> (you)</Text> : null}
           </Text>
@@ -795,6 +797,12 @@ export default function InformationScreen({ route, navigation }) {
       if (result?.alreadyReviewed) {
         inputRef.current?.blur();
         showAlert("You've already reviewed this spot", "To change your review, delete it from its ⋮ menu, then write a new one.");
+        return;
+      }
+      // Words that aren't allowed: blocked, not posted. The draft stays, with
+      // the keyboard up, so they can take the words out and post again.
+      if (result?.blocked) {
+        showAlert("Your review wasn't posted", result.message);
         return;
       }
       // Any other failure leaves the box as it is, so the text isn't lost.

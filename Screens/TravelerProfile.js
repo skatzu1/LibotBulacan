@@ -30,7 +30,7 @@ export default function TravelerProfile({ navigation, route }) {
   const clerkUserId = preview.clerkUserId;
 
   const [traveler, setTraveler] = useState(null);
-  const [error, setError] = useState(null); // "gone" | "failed"
+  const [error, setError] = useState(null); // "gone" | "hidden" | "failed"
   const [refreshing, setRefreshing] = useState(false);
   const shown = useRef(false);
 
@@ -42,7 +42,8 @@ export default function TravelerProfile({ navigation, route }) {
       setError(null);
     } catch (err) {
       // A profile already on screen stays when a later load fails.
-      if (err?.response?.status === 404) setError("gone");
+      // They hid their account (2026-10-28), maybe while this was open.
+      if (err?.response?.status === 404) setError(err.response.data?.hidden ? "hidden" : "gone");
       else if (!shown.current) setError("failed");
     }
   }, [clerkUserId]);
@@ -69,12 +70,14 @@ export default function TravelerProfile({ navigation, route }) {
 
   const header = <ScreenHeader title="Traveler" onBack={() => navigation.goBack()} />;
 
-  if (error === "gone") {
+  if (error === "gone" || error === "hidden") {
     return (
       <View style={[styles.container, { backgroundColor: colors.background }]}>
         {header}
         <View style={styles.state}>
-          <EmptyState icon="user" title="This traveler is no longer here" text="Their account was removed or is out of public view." />
+          {error === "hidden"
+            ? <EmptyState icon="eye-off" title="This traveler keeps their account hidden" text="They chose not to show their profile to other travelers." />
+            : <EmptyState icon="user" title="This traveler is no longer here" text="Their account was removed or is out of public view." />}
         </View>
       </View>
     );

@@ -8,11 +8,14 @@ import {
   Switch,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
-import { showAlert } from "../components/AppAlert";
+import { useAuth } from "@clerk/clerk-expo";
+import { showAlert, showToast } from "../components/AppAlert";
 import { useTheme } from "../context/ThemeContext";
 import { ScreenHeader, ListRow, GroupLabel, Segmented, H_PAD } from "../components/ui";
 import * as Notifications from "expo-notifications";
 import { HELP_URL, ABOUT_URL, TERMS_URL, PRIVACY_URL } from "../utils/legalLinks";
+import { BASE_URL } from "../api";
+import { useLive } from "../utils/live";
 
 const openURL = async (url) => {
   try {
@@ -48,6 +51,51 @@ const Settings = ({ navigation }) => {
     const unsubscribe = navigation.addListener("focus", checkNotifPermission);
     return unsubscribe;
   }, [navigation, checkNotifPermission]);
+
+  // Hide my account (user, 2026-10-28: "option to hide account to other
+  // users"): other travelers see "Hidden traveler" on the leaderboard and on
+  // reviews, and can't open the profile (LibotBackend utils/hiddenTravelers.js).
+  // Read from /api/users/me, and again when another phone of theirs changes it.
+  const { getToken } = useAuth();
+  const [hidden, setHidden] = React.useState(null);
+  const [savingHidden, setSavingHidden] = React.useState(false);
+
+  const loadHidden = React.useCallback(async () => {
+    try {
+      const token = await getToken();
+      const res = await fetch(`${BASE_URL}/api/users/me`, { headers: { Authorization: `Bearer ${token}` } });
+      const data = await res.json();
+      if (res.ok && data?.user) setHidden(!!data.user.hidden);
+    } catch {}
+  }, [getToken]);
+
+  React.useEffect(() => { loadHidden(); }, [loadHidden]);
+  useLive(["me"], loadHidden);
+
+  const handleHiddenToggle = async (value) => {
+    const before = hidden;
+    setHidden(value);
+    setSavingHidden(true);
+    try {
+      const token = await getToken();
+      const res = await fetch(`${BASE_URL}/api/users/me/visibility`, {
+        method: "PUT",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ hidden: value }),
+      });
+      if (!res.ok) throw new Error(`visibility ${res.status}`);
+      showToast(
+        value ? "Your account is hidden. Others see you as “Hidden traveler”." : "Your account shows to other travelers again.",
+        { type: "success" },
+      );
+    } catch (e) {
+      console.warn("Hide account error:", e);
+      setHidden(before);
+      showAlert("Couldn't change that", "Check your connection and try again.");
+    } finally {
+      setSavingHidden(false);
+    }
+  };
 
   const handleNotifToggle = async (value) => {
     if (value) {
@@ -114,6 +162,26 @@ const Settings = ({ navigation }) => {
                     trackColor={{ false: colors.cardBorder, true: colors.brand }}
                     thumbColor="#fff"
                     accessibilityLabel="Notifications"
+                  />
+                )
+            }
+          />
+          <ListRow
+            icon="eye-off"
+            title="Hide my account"
+            subtitle={hidden ? "Others see “Hidden traveler”" : "Others see your name and photo"}
+            right={
+              hidden === null
+                ? <ActivityIndicator size="small" color={colors.brand} />
+                : (
+                  <Switch
+                    value={hidden}
+                    disabled={savingHidden}
+                    onValueChange={handleHiddenToggle}
+                    trackColor={{ false: colors.cardBorder, true: colors.brand }}
+                    thumbColor="#fff"
+                    accessibilityLabel="Hide my account from other travelers"
+                    accessibilityHint="Other travelers see Hidden traveler instead of your name and photo on the leaderboard and on your reviews"
                   />
                 )
             }

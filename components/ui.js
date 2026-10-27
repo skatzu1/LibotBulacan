@@ -663,14 +663,23 @@ const initialsOf = (name) =>
     .join("")
     .toUpperCase();
 
-export function Avatar({ uri, name, size = 36, strong, style }) {
+// `hidden`: a traveler who hid their account (2026-10-28) — no photo, no
+// initials, just a closed eye.
+export function Avatar({ uri, name, size = 36, strong, hidden, style }) {
   const { colors } = useTheme();
   const box = { width: size, height: size, borderRadius: size / 2 };
-  if (uri) {
+  if (uri && !hidden) {
     return <Image source={{ uri: avatarImage(uri, size) }} style={[box, style]} accessibilityIgnoresInvertColors />;
   }
   const bg = strong ? colors.brand : colors.brandLight;
   const fg = strong ? colors.onBrand : colors.brand;
+  if (hidden) {
+    return (
+      <View style={[box, s.avatarFallback, { backgroundColor: colors.cardBorder }, style]}>
+        <Icon name="eye-off" size={Math.round(size * 0.44)} color={colors.textMuted} />
+      </View>
+    );
+  }
   const initials = initialsOf(name);
   return (
     <View style={[box, s.avatarFallback, { backgroundColor: bg }, style]}>
