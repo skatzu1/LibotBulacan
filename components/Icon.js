@@ -64,6 +64,7 @@ import { CircleIcon } from "phosphor-react-native/src/icons/Circle";
 import { ClockIcon } from "phosphor-react-native/src/icons/Clock";
 import { CompassIcon } from "phosphor-react-native/src/icons/Compass";
 import { CpuIcon } from "phosphor-react-native/src/icons/Cpu";
+import { CrownIcon } from "phosphor-react-native/src/icons/Crown";
 import { CrosshairIcon } from "phosphor-react-native/src/icons/Crosshair";
 import { CubeFocusIcon } from "phosphor-react-native/src/icons/CubeFocus";
 import { CubeTransparentIcon } from "phosphor-react-native/src/icons/CubeTransparent";
@@ -156,6 +157,7 @@ const PH = {
   Clock: ClockIcon,
   Compass: CompassIcon,
   Cpu: CpuIcon,
+  Crown: CrownIcon,
   Crosshair: CrosshairIcon,
   CubeFocus: CubeFocusIcon,
   CubeTransparent: CubeTransparentIcon,
@@ -282,6 +284,7 @@ const MAP = {
   // status & feedback
   "star":              "Star",
   "award":             "Medal",
+  "crown":             "Crown",             // the leaderboard's 1st place
   "flag":              "Flag",
   "bookmark":          "BookmarkSimple",
   "info":              "Info",

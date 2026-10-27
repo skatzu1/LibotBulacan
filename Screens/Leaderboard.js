@@ -11,6 +11,7 @@ import {
 } from "react-native";
 import { useNavigation, useFocusEffect } from "@react-navigation/native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
+import { LinearGradient } from "expo-linear-gradient";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { useUser, useAuth } from "@clerk/clerk-expo";
 import { useProfileImage } from "../context/ProfileImageContext";
@@ -24,6 +25,7 @@ import Icon from "../components/Icon";
 import TitleChip from "../components/TitleChip";
 import { titleName } from "../utils/titles";
 import { subscribeLive } from "../utils/live";
+import { BadgeShine, Sparkles, GlowPulse } from "../components/BadgeEffects";
 
 // Was a hardcoded "https://libotbackend.onrender.com".
 
@@ -45,10 +47,22 @@ const podiumFor = (screenH) => {
 };
 
 // Medal palette — gold uses the app's yellow accent; silver / bronze are neutral.
+// `metal` is the step's and the coin's gradient, light to deep.
 const MEDAL = {
-  1: { ring: "#F2CE1B", coin: "#F2CE1B", coinText: "#5E4B00" },
-  2: { ring: "#C4D0D2", coin: "#C4D0D2", coinText: "#4B5859" },
-  3: { ring: "#E0A66B", coin: "#E0A66B", coinText: "#5E3A17" },
+  1: { ring: "#F2CE1B", coin: "#F2CE1B", coinText: "#5E4B00", metal: ["#FFF1A8", "#F2CE1B", "#C99A06"] },
+  2: { ring: "#C4D0D2", coin: "#C4D0D2", coinText: "#4B5859", metal: ["#F4F8F9", "#C4D0D2", "#93A3A7"] },
+  3: { ring: "#E0A66B", coin: "#E0A66B", coinText: "#5E3A17", metal: ["#F7D3AE", "#E0A66B", "#B4703A"] },
+};
+
+// The top three get some bling (user, 2026-10-28: "leaderboards bling bling
+// for top 1-3"): on the podium a glow breathing behind each face, twinkles
+// round it, a light sweeping across it, a crown on 1st and metal steps; in the
+// rankings a metal coin that shines and a row washed in its metal. The layout
+// stays the old board's (2026-10-25). Reduce Motion stills all of it.
+const SPARKLES = { 1: 6, 2: 4, 3: 4 };
+const medalWash = (hex, a) => {
+  const n = parseInt(hex.slice(1), 16);
+  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
 };
 
 // Each podium step is a place: the middle step is 1, the left 2, the right 3.
@@ -160,6 +174,9 @@ const toEntry = (u) => ({
   // The title they show (utils/titles.js: a town's, a district's or The GOAT
   // Traveler); null without one, or for one the app doesn't know.
   title:   titleName(u.title) ? u.title : null,
+  // Hid their account from other travelers (2026-10-28): the server sends
+  // "Hidden traveler" with no photo, title or id, so the row can't open.
+  hidden:  u.hidden === true,
   isMe:    false,
 });
 
@@ -310,13 +327,14 @@ export default function Leaderboard() {
   // a new type every render, so React remounted every avatar (and re-fetched
   // its image) on each update.
   const personAvatar = (user, size) => (
-    <Avatar uri={avatarOf(user)} name={user.name} size={size} strong={user.isMe} />
+    <Avatar uri={avatarOf(user)} name={user.name} size={size} strong={user.isMe} hidden={user.hidden && !user.isMe} />
   );
 
   // A traveler on the board opens their profile, where they can be reported
-  // (Screens/TravelerProfile.js); you open your own.
+  // (Screens/TravelerProfile.js); you open your own. A hidden one doesn't open.
   const openTraveler = (user) => {
     if (user.isMe) navigation.navigate("Profile");
+    else if (!user.clerkUserId) showToast("This traveler keeps their account hidden.");
     else navigation.navigate("TravelerProfile", { clerkUserId: user.clerkUserId, name: user.name, avatar: user.avatar, title: user.title });
   };
 
@@ -390,12 +408,14 @@ export default function Leaderboard() {
   // each show the same number: 3, 3, 3.
   const renderRow = (user, tied) => {
     const rank = user.rank;
+    const medal = MEDAL[rank];
     return (
       <TouchableOpacity
         key={user.id}
         style={[
           styles.row,
           { height: innerRowH },
+          medal && { backgroundColor: medalWash(medal.ring, 0.14) },
           user.isMe && { backgroundColor: colors.brandSoft },
         ]}
         onPress={() => openTraveler(user)}
@@ -405,9 +425,17 @@ export default function Leaderboard() {
         accessibilityHint={user.isMe ? "Opens your profile" : "Opens their profile"}
       >
         <View style={styles.rankSlot}>
-          <View style={[styles.rankCoin, { backgroundColor: colors.brandSoft }]}>
-            <Text style={[styles.rankCoinText, { color: colors.brand }]} maxFontSizeMultiplier={MAX_FONT_SCALE}>{rank}</Text>
-          </View>
+          {medal ? (
+            <LinearGradient colors={medal.metal} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={[styles.rankCoin, styles.rankCoinMetal, { borderColor: medal.ring }]}>
+              <Text style={[styles.rankCoinText, { color: medal.coinText }]} maxFontSizeMultiplier={MAX_FONT_SCALE}>{rank}</Text>
+              <BadgeShine size={30} delay={rank * 500} every={2600} intensity={0.75} />
+            </LinearGradient>
+          ) : (
+            <View style={[styles.rankCoin, { backgroundColor: colors.brandSoft }]}>
+              <Text style={[styles.rankCoinText, { color: colors.brand }]} maxFontSizeMultiplier={MAX_FONT_SCALE}>{rank}</Text>
+            </View>
+          )}
+          {rank === 1 && <Icon name="crown" size={13} color={medal.ring} weight="fill" style={styles.rankCrown} />}
         </View>
 
         <View style={[styles.rowAvatarWrap, { borderColor: colors.cardBorder }]}>
@@ -423,7 +451,7 @@ export default function Leaderboard() {
             {user.name}{user.isMe ? " · You" : ""}
           </Text>
           <Text style={[styles.rowSub, { color: colors.textMuted }]} numberOfLines={1} maxFontSizeMultiplier={MAX_FONT_SCALE}>
-            {spotsLabel(user.visited)} visited
+            {spotsLabel(user.visited)} visited{user.isMe && user.hidden ? " · hidden from others" : ""}
           </Text>
         </View>
 
@@ -573,9 +601,14 @@ export default function Leaderboard() {
             const room   = (podiumColW - front) / (behind.length === 2 ? 2 : 1);
             const peek   = behind.length ? Math.max(14, Math.min(back / 2, room)) : 0;
             const facesW = front + peek * (behind.length === 2 ? 2 : behind.length);
+            const frontLeft = behind.length === 2 ? peek : 0;
             return (
               <View key={place} style={styles.podiumCol}>
                 <View style={[styles.podiumFaces, { width: facesW, height: front }]}>
+                  {/* The glow breathing behind the front face, in its metal. */}
+                  <View pointerEvents="none" style={[styles.faceFx, { left: frontLeft, width: front, height: front, zIndex: 0 }]}>
+                    <GlowPulse size={front} color={medal.ring} strength={place === 1 ? 0.55 : 0.4} />
+                  </View>
                   {behind.map((user, j) => (
                     <TouchableOpacity
                       key={user.id || j}
@@ -594,14 +627,21 @@ export default function Leaderboard() {
                     </TouchableOpacity>
                   ))}
                   <TouchableOpacity
-                    style={[styles.avatarRing, styles.frontFace, { borderColor: medal.ring, left: behind.length === 2 ? peek : 0 }]}
+                    style={[styles.avatarRing, styles.frontFace, { borderColor: medal.ring, left: frontLeft }]}
                     onPress={() => openTraveler(lead)}
                     activeOpacity={0.8}
                     accessibilityRole="button"
                     accessibilityLabel={lead.isMe ? "Your profile" : `${lead.name}'s profile`}
                   >
                     {personAvatar(lead, cfg.avatarSz)}
+                    <BadgeShine size={front} delay={place * 700} every={3000} intensity={0.5} />
                   </TouchableOpacity>
+                  <View pointerEvents="none" style={[styles.faceFx, { left: frontLeft, width: front, height: front, zIndex: 3 }]}>
+                    <Sparkles size={front} count={SPARKLES[place]} spread={0.6} color={place === 1 ? medal.ring : "#FFFFFF"} seed={place} />
+                    {place === 1 && (
+                      <Icon name="crown" size={Math.round(front * 0.34)} color={medal.ring} weight="fill" style={[styles.podiumCrown, { top: -Math.round(front * 0.3) }]} />
+                    )}
+                  </View>
                 </View>
 
                 <Text
@@ -626,12 +666,15 @@ export default function Leaderboard() {
                   <Text style={[styles.podiumPtsText, { color: colors.brandDark }]} maxFontSizeMultiplier={MAX_FONT_SCALE}>{ptsLabel(lead.points)}</Text>
                 </View>
 
-                <View style={[
-                  styles.podiumBlock,
-                  { height: cfg.blockH, backgroundColor: "rgba(255,255,255,0.42)" },
-                ]}>
-                  <Text style={[styles.podiumNum, { color: colors.brand }]}>{place}</Text>
-                </View>
+                <LinearGradient
+                  colors={medal.metal}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={[styles.podiumBlock, styles.podiumBlockMetal, { height: cfg.blockH }]}
+                >
+                  <Text style={[styles.podiumNum, styles.podiumNumMetal, { color: medal.coinText }]}>{place}</Text>
+                  <BadgeShine size={podiumColW * 0.82} radius={14} delay={place * 900} every={3600} intensity={0.55} style={styles.podiumShine} />
+                </LinearGradient>
               </View>
             );
           })}
@@ -724,7 +767,8 @@ const styles = StyleSheet.create({
     alignItems: "flex-end",
     justifyContent: "space-evenly",
     paddingHorizontal: 14,
-    marginTop: 16,
+    // Room above 1st place's face for its crown.
+    marginTop: 26,
   },
   podiumCol: { flex: 1, alignItems: "center" },
 
@@ -774,6 +818,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   podiumNum: { fontSize: 26, fontFamily: fonts.sansBold, opacity: 0.6 },
+  podiumBlockMetal: { overflow: "hidden" },
+  podiumNumMetal:   { opacity: 0.85 },
+  podiumShine:      { borderBottomLeftRadius: 0, borderBottomRightRadius: 0 },
+  // Holds the glow, twinkles and crown over the front face, the same size.
+  faceFx:      { position: "absolute", top: 0, alignItems: "center", overflow: "visible" },
+  podiumCrown: { position: "absolute", transform: [{ rotate: "-8deg" }] },
   podiumNumEmpty: { opacity: 0.3 },
 
   card: {
@@ -825,6 +875,9 @@ const styles = StyleSheet.create({
     justifyContent: "center", alignItems: "center",
   },
   rankCoinText: { fontSize: 13, fontFamily: fonts.sansBold },
+  rankCoinMetal: { borderWidth: 1, overflow: "hidden" },
+  // Tipped on the 1st-place coin's top edge.
+  rankCrown: { position: "absolute", top: 1, transform: [{ rotate: "-14deg" }], left: -2 },
   rowAvatarWrap: {
     marginRight: 11,
     borderRadius: 21,

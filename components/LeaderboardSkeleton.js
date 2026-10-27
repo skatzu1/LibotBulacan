@@ -56,7 +56,7 @@ export default function LeaderboardSkeleton() {
 }
 
 const styles = StyleSheet.create({
-  podium: { flexDirection: "row", alignItems: "flex-end", justifyContent: "space-evenly", paddingHorizontal: 14, marginTop: 16 },
+  podium: { flexDirection: "row", alignItems: "flex-end", justifyContent: "space-evenly", paddingHorizontal: 14, marginTop: 26 },
   col:    { flex: 1, alignItems: "center" },
   block:  { borderBottomLeftRadius: 0, borderBottomRightRadius: 0 },
   header: { flexDirection: "row", alignItems: "center", justifyContent: "space-between", paddingHorizontal: 6, marginBottom: 12 },
