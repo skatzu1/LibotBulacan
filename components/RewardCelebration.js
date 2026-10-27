@@ -32,11 +32,12 @@ import useReduceMotion from "../hooks/useReduceMotion";
  *   · 2 of 3 done at …"). A town's, a district's and Bulacan's moment also name
  *   the title that comes with them.
  *
- * The look: the Libot compass star as a slow sunburst behind the reward, gold
+ * The look: the Libot compass star as a slow sunburst behind the reward,
  * confetti, and for a whole town, district or Bulacan, fiesta banderitas swinging in
- * across the top. Always on the dark teal of the AR screen, in either theme, so
- * the metals read as metals. Reduce Motion keeps the words and the medal,
- * without the movement.
+ * across the top. Everything but the flags is in the reward's own metal (iron,
+ * bronze, silver, gold; TIER_LOOK), on a dark ground of that metal in either
+ * theme, so the metals read as metals. Reduce Motion keeps the words and the
+ * medal, without the movement.
  */
 
 // ── Words ───────────────────────────────────────────────────────────────────
@@ -87,15 +88,46 @@ export function copyFor(item) {
 // ── Pieces ──────────────────────────────────────────────────────────────────
 
 const GOLD = "#F2CE1B";
-// The tiers' metals on the dark teal (the theme's bronze and silver are for the
-// page behind, which this never uses).
+// The tiers' metals on the dark backdrop (the theme's bronze and silver are for
+// the page behind, which this never uses).
 const METAL = { iron: "#ADA69F", bronze: "#D08A50", silver: "#C9D2D8", gold: GOLD };
-const CONFETTI_COLORS = [GOLD, "#8FE1E9", "#FFFFFF", "#56D6E2", "#F6DF5C", "#E0A66B"];
+// Each tier's whole moment is struck in its own metal (user, 2026-10-28: the
+// confetti's colours should match the kind of badge): the backdrop, the
+// sunburst, the halo, the sparkles and the confetti. A higher tier also
+// throws more confetti.
+const TIER_LOOK = {
+  iron: {
+    backdrop: ["#0D1113", "#283034", "#0B0F11"],
+    confetti: ["#ADA69F", "#7D8287", "#D9D6D2", "#5E6469", "#FFFFFF", "#9AA3A8"],
+    pieces: 26,
+  },
+  bronze: {
+    backdrop: ["#170C05", "#3E2413", "#120904"],
+    confetti: ["#D08A50", "#A8622E", "#F0B98A", "#8A4A1E", "#E7A06A", "#FFE2C6"],
+    pieces: 36,
+  },
+  silver: {
+    backdrop: ["#0A121A", "#243848", "#09111A"],
+    confetti: ["#C9D2D8", "#FFFFFF", "#9FB0BC", "#E4ECF1", "#7E909D", "#BFE3F2"],
+    pieces: 46,
+  },
+  gold: {
+    backdrop: ["#171103", "#41320A", "#100B02"],
+    confetti: [GOLD, "#F6DF5C", "#FFF4B8", "#D9A50F", "#FFFFFF", "#B8860B"],
+    pieces: 60,
+  },
+};
+const tierLook = (tier) => TIER_LOOK[tier] || TIER_LOOK.gold;
+// A metal's colour at some see-through-ness, for the halo.
+const tint = (hex, a) => {
+  const n = parseInt(hex.slice(1), 16);
+  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
+};
 // Fiesta colours for the banderitas.
 const FLAG_COLORS = ["#D93A3A", GOLD, "#2E5AAC", "#2F9E62", "#FFFFFF", "#E07B39"];
 
 // The compass star's rays, as a slow-turning sunburst.
-function Sunburst({ size, reduce }) {
+function Sunburst({ size, reduce, color = GOLD }) {
   const spin = useRef(new Animated.Value(0)).current;
   useEffect(() => {
     if (reduce) return undefined;
@@ -117,23 +149,24 @@ function Sunburst({ size, reduce }) {
   return (
     <Animated.View pointerEvents="none" style={{ position: "absolute", width: size, height: size, transform: [{ rotate }] }}>
       <Svg width={size} height={size}>
-        {rays.map((ray, i) => <Path key={i} d={ray.d} fill={GOLD} fillOpacity={ray.o} />)}
+        {rays.map((ray, i) => <Path key={i} d={ray.d} fill={color} fillOpacity={ray.o} />)}
       </Svg>
     </Animated.View>
   );
 }
 
-function Confetti({ width, height, reduce }) {
-  const pieces = useMemo(() => Array.from({ length: 34 }, (_, i) => ({
+function Confetti({ width, height, reduce, tier }) {
+  const look = tierLook(tier);
+  const pieces = useMemo(() => Array.from({ length: look.pieces }, (_, i) => ({
     x: Math.random() * width,
     sway: 18 + Math.random() * 34,
     delay: Math.random() * 700,
     duration: 2600 + Math.random() * 1800,
     rot: (Math.random() > 0.5 ? 1 : -1) * (360 + Math.random() * 720),
-    color: CONFETTI_COLORS[i % CONFETTI_COLORS.length],
+    color: look.confetti[i % look.confetti.length],
     shape: ["rect", "dot", "diamond"][i % 3],
     v: new Animated.Value(0),
-  })), [width]);
+  })), [width, look]);
   useEffect(() => {
     if (reduce) return undefined;
     const anims = pieces.map((p) => Animated.timing(p.v, { toValue: 1, duration: p.duration, delay: p.delay, easing: Easing.out(Easing.quad), useNativeDriver: true }));
@@ -198,11 +231,11 @@ function Banderitas({ width, top, reduce }) {
   );
 }
 
-function Medal({ item, size }) {
+function Medal({ item, size, ground }) {
   // A spot's badge in an iron ring.
   if (item.kind === "spot") {
     return (
-      <View style={[s.medalRing, { width: size, height: size, borderRadius: size / 2, borderColor: METAL.iron }]}>
+      <View style={[s.medalRing, { width: size, height: size, borderRadius: size / 2, borderColor: METAL.iron, backgroundColor: ground }]}>
         {item.badge?.image ? (
           <Image
             source={{ uri: badgeImage(item.badge.image, Math.round(size)) }}
@@ -220,7 +253,7 @@ function Medal({ item, size }) {
   if (item.kind === "town" || item.kind === "district" || item.kind === "bulacan") {
     const metal = METAL[{ town: "bronze", district: "silver", bulacan: "gold" }[item.kind]];
     return (
-      <View style={[s.medalRing, { width: size, height: size, borderRadius: size / 2, borderColor: metal }]}>
+      <View style={[s.medalRing, { width: size, height: size, borderRadius: size / 2, borderColor: metal, backgroundColor: ground }]}>
         <TownEmblem image={(item.town || item.district || item.bulacan)?.image} size={size - 22} color={metal} />
       </View>
     );
@@ -228,11 +261,11 @@ function Medal({ item, size }) {
   // The GOAT Traveler: the Libot star itself, struck in gold.
   return (
     <Svg width={size} height={size} viewBox="0 0 100 100">
-      <Circle cx="50" cy="50" r="46" fill="#0B3A3F" stroke={GOLD} strokeWidth={2} />
+      <Circle cx="50" cy="50" r="46" fill={ground} stroke={GOLD} strokeWidth={2} />
       <G>
         <Path d={starPath(50, 50, 40, 24, 11)} fill={GOLD} />
         <Path d={starPath(50, 50, 24, 14, 6.5)} fill="#FBF1C4" />
-        <Circle cx="50" cy="50" r="4.5" fill="#0B3A3F" />
+        <Circle cx="50" cy="50" r="4.5" fill={ground} />
       </G>
     </Svg>
   );
@@ -245,6 +278,8 @@ function Moment({ item, index, count, onNext, onAchievements, onShare, sharing, 
   const insets = useSafeAreaInsets();
   const { colors } = useTheme();
   const copy = copyFor(item);
+  const metal = METAL[copy.tier];
+  const look = tierLook(copy.tier);
 
   const medal = useRef(new Animated.Value(reduce ? 1 : 0)).current;
   const words = useRef(new Animated.Value(reduce ? 1 : 0)).current;
@@ -279,22 +314,27 @@ function Moment({ item, index, count, onNext, onAchievements, onShare, sharing, 
 
   return (
     <View style={s.fill} accessibilityViewIsModal>
-      <LinearGradient colors={["#04191B", "#0B3A3F", "#051C1F"]} locations={[0, 0.45, 1]} style={StyleSheet.absoluteFill} />
+      <LinearGradient colors={look.backdrop} locations={[0, 0.45, 1]} style={StyleSheet.absoluteFill} />
 
       <View style={[s.stage, { paddingTop: insets.top + (short ? 36 : 70) }]}>
         <View style={[s.medalBox, { width: medalSize * 1.5, height: medalSize * 1.5 }]}>
-          <Sunburst size={burst} reduce={reduce} />
-          <Animated.View style={[s.halo, { width: medalSize * 1.32, height: medalSize * 1.32, borderRadius: medalSize, transform: [{ scale: haloScale }] }]} />
+          <Sunburst size={burst} reduce={reduce} color={metal} />
+          <Animated.View
+            style={[s.halo, {
+              width: medalSize * 1.32, height: medalSize * 1.32, borderRadius: medalSize,
+              backgroundColor: tint(metal, 0.1), borderColor: tint(metal, 0.38), transform: [{ scale: haloScale }],
+            }]}
+          />
           <Animated.View style={{ transform: [{ scale }, { rotate }] }}>
-            <Medal item={item} size={medalSize} />
+            <Medal item={item} size={medalSize} ground={look.backdrop[1]} />
             {/* The light catching the new badge, as on the Achievements screen. */}
             <BadgeShine size={medalSize} delay={900} every={2200} intensity={0.55} />
           </Animated.View>
-          <Sparkles size={medalSize} count={7} spread={0.66} seed={index} />
+          <Sparkles size={medalSize} count={7} spread={0.66} seed={index} color={metal} />
         </View>
 
         <Animated.View style={[s.words, { opacity: words, transform: [{ translateY: lift }] }]}>
-          <Text style={[s.eyebrow, { color: METAL[copy.tier] }]} maxFontSizeMultiplier={MAX_FONT_SCALE}>{copy.eyebrow.toUpperCase()}</Text>
+          <Text style={[s.eyebrow, { color: metal }]} maxFontSizeMultiplier={MAX_FONT_SCALE}>{copy.eyebrow.toUpperCase()}</Text>
           <Text style={[s.headline, short && s.headlineShort]} maxFontSizeMultiplier={MAX_FONT_SCALE} accessibilityRole="header">{copy.headline}</Text>
           {!!copy.body && <Text style={s.body} maxFontSizeMultiplier={MAX_FONT_SCALE}>{copy.body}</Text>}
           {/* The title that comes with a town or district. */}
@@ -309,14 +349,14 @@ function Moment({ item, index, count, onNext, onAchievements, onShare, sharing, 
         </Animated.View>
       </View>
 
-      <Confetti width={width} height={height} reduce={reduce} />
+      <Confetti width={width} height={height} reduce={reduce} tier={copy.tier} />
       {(item.kind === "town" || item.kind === "district" || item.kind === "bulacan") && <Banderitas width={width} top={insets.top + 6} reduce={reduce} />}
 
       <Animated.View style={[s.actions, { paddingBottom: Math.max(insets.bottom, 16) + 12, opacity: words }]}>
         {count > 1 && (
           <View style={s.dots} accessible accessibilityLabel={`${index + 1} of ${count}`}>
             {Array.from({ length: count }, (_, i) => (
-              <View key={i} style={[s.dot, i === index && s.dotOn]} />
+              <View key={i} style={[s.dot, i === index && [s.dotOn, { backgroundColor: metal }]]} />
             ))}
           </View>
         )}
