@@ -25,6 +25,7 @@ import Icon from "../components/Icon";
 import TitleChip from "../components/TitleChip";
 import { titleName } from "../utils/titles";
 import { subscribeLive } from "../utils/live";
+import { withRetry, loadErrorText, LoadError } from "../utils/loadRetry";
 import { BadgeShine, Sparkles, GlowPulse } from "../components/BadgeEffects";
 
 // Was a hardcoded "https://libotbackend.onrender.com".
@@ -243,20 +244,26 @@ export default function Leaderboard() {
     // vanishing. Only a pull, which the user asked for, says it didn't work.
     const fail = (message) => {
       if (!hasLoaded.current) setError(message);
-      else if (isRefresh || toPage) showToast("Couldn't load the leaderboard. Check your connection.", { type: "error" });
+      else if (isRefresh || toPage) showToast(message, { type: "error" });
     };
 
-    try {
-      const token = await getToken();
+    // The second try asks Clerk for a fresh token (utils/loadRetry.js).
+    const fetchBoard = async (attempt) => {
+      const token = await getToken(attempt > 1 ? { skipCache: true } : undefined);
       const res   = await fetch(`${BASE_URL}/api/users?page=${want}&limit=${PAGE_SIZE}`, {
         headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
       });
-      const ct = res.headers.get("content-type") ?? "";
-      if (!res.ok || !ct.includes("application/json")) { fail("Could not reach the server."); return; }
-
+      if (!res.ok) throw new LoadError(`leaderboard ${res.status}`, res.status);
+      // Not JSON: a proxy's error page in front of the server.
+      if (!(res.headers.get("content-type") ?? "").includes("application/json")) throw new LoadError("leaderboard: not JSON", 502);
       const data = await res.json();
       const list = Array.isArray(data) ? data : Array.isArray(data.users) ? data.users : null;
-      if (!list) { fail("Unexpected response."); return; }
+      if (!list) throw new LoadError("leaderboard: no list", 502);
+      return { data, list };
+    };
+
+    try {
+      const { data, list } = await withRetry(fetchBoard);
 
       // A server from before pages answers with page 1 only.
       const onPage = typeof data.page === "number" ? data.page : 1;
@@ -280,7 +287,7 @@ export default function Leaderboard() {
       hasLoaded.current = true;
     } catch (e) {
       console.warn("Leaderboard error:", e);
-      fail("Failed to load leaderboard.");
+      fail(loadErrorText(e, "the leaderboard"));
     } finally {
       setLoading(false);
       setRefreshing(false);

@@ -5,6 +5,7 @@ import { BASE_URL } from "../api";
 import { celebrate } from "./rewards";
 import { subscribeLive } from "./live";
 import { navigationRef } from "../navigation/navigationRef";
+import { LoadError } from "./loadRetry";
 
 /*
  * Rewards owed, wherever the traveler is (2026-10-24: "why does the reward
@@ -41,7 +42,7 @@ export function fetchAchievements(getToken) {
   inflight = (async () => {
     const token = await getToken();
     const res = await fetch(`${BASE_URL}/api/achievements/me`, { headers: { Authorization: `Bearer ${token}` } });
-    if (!res.ok) throw new Error(`achievements ${res.status}`);
+    if (!res.ok) throw new LoadError(`achievements ${res.status}`, res.status);
     const body = await res.json();
     celebrate(body.unlocked);
     return body;

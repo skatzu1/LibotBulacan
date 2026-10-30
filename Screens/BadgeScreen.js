@@ -31,6 +31,7 @@ import { useLive } from "../utils/live";
 import { badgeImage } from "../utils/image";
 import { shareBadge } from "../utils/badgeShare";
 import { fetchAchievements } from "../utils/owedRewards";
+import { withRetry, loadErrorText } from "../utils/loadRetry";
 import { MISSION_KINDS, ARRIVAL_KIND } from "../utils/missionTiers";
 import { nextTitleLine, titleName, tierColors, TIER_LABEL } from "../utils/titles";
 import { starPath } from "../utils/townEmblem";
@@ -136,11 +137,15 @@ export default function BadgeScreen() {
     try {
       // Anything owed from before — a mission that stopped counting, say — is
       // awarded by that request, and its moment plays (utils/owedRewards.js).
-      setData(await fetchAchievements(getToken));
+      // This screen can be handed the app's background check, sent the moment
+      // the app came back and failed; the second try is its own request, with
+      // a fresh token (utils/loadRetry.js).
+      setData(await withRetry((attempt) =>
+        fetchAchievements(attempt > 1 ? () => getToken({ skipCache: true }) : getToken)));
       hasLoaded.current = true;
     } catch (e) {
       console.warn("Achievements load error:", e);
-      if (!quiet) setError("Couldn't load your achievements. Check your connection.");
+      if (!quiet) setError(loadErrorText(e, "your achievements"));
     }
   };
 
