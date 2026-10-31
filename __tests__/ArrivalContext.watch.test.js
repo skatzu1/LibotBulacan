@@ -221,7 +221,7 @@ it("an arrival while the app is closed is queued for the server, with its positi
 it("a festival on another day isn't watched, announced or queued", async () => {
   const TaskManager = require("expo-task-manager");
   const task = TaskManager.defineTask.mock.calls[0][1];
-  const festival = { ...SPOT, category: ["Festivals"], festivalDates: [{ start: "2000-01-01", end: "2000-01-02" }] };
+  const festival = { ...SPOT, category: ["Festivals"], visitingHours: "Celebrated on January 1, 2000" };
   await AsyncStorage.setItem("currentUserId", "user_test");
   await AsyncStorage.setItem("allSpots", JSON.stringify([festival]));
   await task({ data: { locations: [{ coords: { latitude: north(15), longitude: SPOT.coordinates.lng } }] } });
