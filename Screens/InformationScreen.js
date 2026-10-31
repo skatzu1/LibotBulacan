@@ -20,6 +20,7 @@ import { splitByTier, isMajor, isDoable, missionKind, ARRIVAL_KIND, ARRIVAL_POIN
 import { useTheme, radius, shadow, fonts, typography, MAX_FONT_SCALE } from "../context/ThemeContext";
 import ModelViewer from "../utils/ModelViewer";
 import { ensureAtSpotForAR, spotHasAR } from "../utils/arLocationGate";
+import { isOpenNow, nextRun, formatRun } from "../utils/festivalDates";
 import { afterAlertCloses, ensureCameraAccess, explainPickerError } from "../utils/cameraAccess";
 import Skeleton from "../components/Skeleton";
 import KeyboardAvoider from "../components/KeyboardAvoider";
@@ -610,6 +611,50 @@ export default function InformationScreen({ route, navigation }) {
       </View>
     </View>
   );
+
+  // A festival can only be opened on its dates (utils/festivalDates.js): on
+  // any other day, its photo, name and when it opens. Here rather than at each
+  // card, so every way in (lists, bookmarks, badges, past trips) is covered.
+  if (!isOpenNow(spot)) {
+    const run = nextRun(spot);
+    return (
+      <View style={[styles.container, { backgroundColor: colors.background }]}>
+        <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={colors.background} />
+        {header(null)}
+        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: insets.bottom + 32 }}>
+          <View style={styles.heroWrap}>
+            <View style={[styles.heroCard, { height: heroH, backgroundColor: colors.card }, shadow.md]}>
+              <Image source={{ uri: spotImage(spot.image, winW - H_PAD * 2, heroH) }} style={styles.heroImage} resizeMode="cover" />
+              <PhotoScrim from={0.5} />
+              <View style={styles.heroCaption} pointerEvents="none">
+                <Icon name="map-pin" size={12} color="#fff" />
+                <Text style={styles.heroCaptionText} numberOfLines={1}>{spot.city || "Bulacan, Philippines"}</Text>
+              </View>
+            </View>
+          </View>
+          <View style={styles.bodyPad}>
+            <Text style={[styles.title, { color: colors.textPrimary }]} accessibilityRole="header">{spot.name}</Text>
+            <View style={[styles.lockedCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
+              <View style={[styles.infoIcon, { backgroundColor: colors.brandLight }]}>
+                <Icon name="lock" size={14} color={colors.brand} />
+              </View>
+              <View style={styles.infoStack}>
+                <Text style={[styles.lockedTitle, { color: colors.textPrimary }]}>
+                  {run ? `Opens ${formatRun(run)}` : "No dates set yet"}
+                </Text>
+                <Text style={[styles.lockedText, { color: colors.textSecondary }]}>
+                  {run
+                    ? "This festival can only be visited on its dates. Come back then to explore it, arrive and earn its badge."
+                    : "This festival can only be visited on its dates, and they haven't been set yet. Check back closer to the festival."}
+                </Text>
+              </View>
+            </View>
+            <PrimaryButton title="Go back" onPress={() => navigation.goBack()} style={styles.lockedBtn} />
+          </View>
+        </ScrollView>
+      </View>
+    );
+  }
 
   const spotIsBookmarked = isBookmarked(spot._id || spot.id);
   const reviews          = getReviewsForSpot(spot._id);
@@ -1582,6 +1627,12 @@ const styles = StyleSheet.create({
   infoLabelStacked: { width: undefined },
   infoValueStacked: { flex: 0, textAlign: "left", lineHeight: 19 },
   infoDivider:     { height: 1 },
+
+  // ── A festival on another day ──
+  lockedCard:      { flexDirection: "row", alignItems: "flex-start", gap: 11, borderRadius: radius.card, borderWidth: 1, padding: 16, marginBottom: 18 },
+  lockedTitle:     { fontSize: 15, fontFamily: fonts.sansBold },
+  lockedText:      { ...typography.body, fontSize: 13.5, lineHeight: 19 },
+  lockedBtn:       { minHeight: 48 },
 
   // ── Bakit List tab: one checklist ──
   checkHead:       { flexDirection: "row", alignItems: "baseline", justifyContent: "space-between", gap: 12, marginTop: 4 },

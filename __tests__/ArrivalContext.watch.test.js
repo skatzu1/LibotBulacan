@@ -147,7 +147,8 @@ it("adapts GPS effort to the distance from the nearest spot, and still detects a
   const calls = global.fetch.mock.calls.filter(([u]) => String(u).endsWith("/api/arrivals"));
   expect(calls).toHaveLength(1);
   const sent = JSON.parse(calls[0][1].body);
-  expect(sent).toEqual({ spotId: "spot1", lat: north(10), lng: SPOT.coordinates.lng });
+  // With when it happened, which decides a festival's day (utils/festivalDates.js).
+  expect(sent).toEqual({ spotId: "spot1", lat: north(10), lng: SPOT.coordinates.lng, at: expect.any(Number) });
   // None of the old one-reward-per-call routes.
   const old = global.fetch.mock.calls.map(([u]) => new URL(String(u)).pathname)
     .filter((p) => ["/api/users/points", "/api/users/badges", "/api/visitlogs"].includes(p) || p.endsWith("/visit"));
@@ -165,7 +166,7 @@ it("keeps a visit made with no signal and delivers it once the connection is bac
   const pendingKey = "pendingRewards_user_test";
   // Saved with where the phone was then — that is what the server checks.
   expect(JSON.parse(await AsyncStorage.getItem(pendingKey))).toEqual([
-    { spotId: "spot1", lat: north(10), lng: SPOT.coordinates.lng },
+    { spotId: "spot1", lat: north(10), lng: SPOT.coordinates.lng, at: expect.any(Number) },
   ]);
 
   // Signal returns; the next location fix after the retry interval replays it.
@@ -213,8 +214,18 @@ it("an arrival while the app is closed is queued for the server, with its positi
   await AsyncStorage.setItem("allSpots", JSON.stringify([SPOT]));
   await task({ data: { locations: [{ coords: { latitude: north(15), longitude: SPOT.coordinates.lng } }] } });
   expect(JSON.parse(await AsyncStorage.getItem("pendingRewards_user_test"))).toEqual([
-    { spotId: "spot1", lat: north(15), lng: SPOT.coordinates.lng },
+    { spotId: "spot1", lat: north(15), lng: SPOT.coordinates.lng, at: expect.any(Number) },
   ]);
+});
+
+it("a festival on another day isn't watched, announced or queued", async () => {
+  const TaskManager = require("expo-task-manager");
+  const task = TaskManager.defineTask.mock.calls[0][1];
+  const festival = { ...SPOT, category: ["Festivals"], festivalDates: [{ start: "2000-01-01", end: "2000-01-02" }] };
+  await AsyncStorage.setItem("currentUserId", "user_test");
+  await AsyncStorage.setItem("allSpots", JSON.stringify([festival]));
+  await task({ data: { locations: [{ coords: { latitude: north(15), longitude: SPOT.coordinates.lng } }] } });
+  expect(JSON.parse(await AsyncStorage.getItem("pendingRewards_user_test") ?? "[]")).toEqual([]);
 });
 
 describe("nearby alerts (500 m), with the app closed or open", () => {

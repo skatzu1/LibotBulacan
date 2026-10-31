@@ -7,6 +7,8 @@ import { ScreenHeader, Segmented, EmptyState, ErrorState, LoadingState, SearchFi
 import { GRID_GAP, H_GUTTER, columnsFor, cardSizeFor, AnimatedCell } from "./Grid";
 import { SpotGridCard, spotCardHeightFor } from "./SpotProgress";
 import usePullToRefresh from "../hooks/usePullToRefresh";
+import { openUnlessLocked } from "./FestivalLock";
+import { isOpenNow, lockedText } from "../utils/festivalDates";
 
 // A spot matches when the search is in its name or its town.
 const matches = (spot, q) =>
@@ -123,15 +125,18 @@ export default function SpotPicker({
         initialNumToRender={12}
         renderItem={({ item, index }) => {
           const done = isDone(item);
+          // A festival on another day says when it opens, and doesn't open
+          // (components/FestivalLock.js).
+          const locked = !isOpenNow(item);
           return (
             <AnimatedCell delay={Math.min(index, 12) * 40}>
               <SpotGridCard
                 spot={item}
                 done={done}
-                footer={footer(item)}
+                footer={locked && !done ? { text: lockedText(item, Date.now(), { short: true }), icon: "lock" } : footer(item)}
                 width={cardSize}
                 minHeight={cardHeight}
-                onPress={() => onPick(item, navigation)}
+                onPress={openUnlessLocked(item, () => onPick(item, navigation))}
                 accessibilityLabel={a11y(item)}
                 accessibilityHint={a11yHint}
               />

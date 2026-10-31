@@ -37,6 +37,7 @@ import { usePoints } from "./PointsContext";
 import { arrivalNoticeContent } from "../utils/arrivalNotice";
 import { nearbyToAnnounce, nearbyNoticeContent, NEARBY_CHANNEL_ID } from "../utils/nearbyAlerts";
 import { arrivalRadiusOf } from "../utils/spotRadii";
+import { isOpenNow } from "../utils/festivalDates";
 import { celebrate, itemsFrom } from "../utils/rewards";
 import { useLive } from "../utils/live";
 
@@ -265,6 +266,8 @@ async function handleBackgroundArrival(coords) {
 
       const dest = getSpotCoords(spot);
       if (!dest) continue;
+      // A festival on another day can't be arrived at (utils/festivalDates.js).
+      if (!isOpenNow(spot) && !insideSet.has(spotId)) continue;
 
       const dist      = getDistanceMeters(coords.latitude, coords.longitude, dest.lat, dest.lng);
       const isInside   = dist <= arrivalRadiusOf(spot);
@@ -278,7 +281,7 @@ async function handleBackgroundArrival(coords) {
         // marked "inside" and treated it as no arrival at all.
         insideSet.add(spotId);
         changed = true;
-        await addPendingReward(currentUserId, { spotId, lat: coords.latitude, lng: coords.longitude });
+        await addPendingReward(currentUserId, { spotId, lat: coords.latitude, lng: coords.longitude, at: Date.now() });
 
         const isFirstVisit = !claimed.includes(spotId);
         arrivals.push({ spotId, spotName: spot.name, isFirstVisit });
@@ -304,7 +307,7 @@ async function handleBackgroundArrival(coords) {
     // And one for unvisited spots within their nearby radius, 500 m unless
     // the spot sets its own (after the "inside" set is
     // saved, so a spot just arrived at isn't announced as nearby too).
-    await announceNearby(currentUserId, spots, coords);
+    await announceNearby(currentUserId, spots.filter((s) => isOpenNow(s)), coords);
   } catch (e) {
     console.error("[BG Arrival] Error:", e);
   }
@@ -975,13 +978,15 @@ export function ArrivalProvider({ children }) {
   // Resolves the server's answer, or null when there wasn't a usable one (a
   // server error) and the arrival should stay queued. Throws when the request
   // can't get out at all (no signal), like fetch.
-  const postArrival = useCallback(async ({ spotId, lat, lng }) => {
+  // `at`, when the arrival happened, decides a festival's day for one sent
+  // late (POST /api/arrivals).
+  const postArrival = useCallback(async ({ spotId, lat, lng, at }) => {
     const token = await getToken();
     if (!token) return null;
     const res = await fetch(`${BASE_URL}/api/arrivals`, {
       method:  "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-      body:    JSON.stringify({ spotId, lat, lng }),
+      body:    JSON.stringify({ spotId, lat, lng, at }),
     });
     if (res.status >= 500) return null;
     return (await safeJson(res)) ?? {};
@@ -1000,7 +1005,7 @@ export function ArrivalProvider({ children }) {
 
     // Kept until the server has answered — crash- and signal-safe; see
     // PENDING_REWARDS. Saved with the position, which is what the server checks.
-    const arrival = { spotId, lat: fix.latitude, lng: fix.longitude };
+    const arrival = { spotId, lat: fix.latitude, lng: fix.longitude, at: Date.now() };
     await addPendingReward(userId, arrival);
 
     let result = null;
@@ -1009,9 +1014,10 @@ export function ArrivalProvider({ children }) {
     if (result) await removePendingReward(userId, spotId);
 
     // The server refused it: the position it got isn't at the spot (a GPS
-    // jump, or the spot's pin moved). Nothing was paid, so say nothing.
+    // jump, or the spot's pin moved), or a festival isn't on today (the
+    // phone's date is off). Nothing was paid, so say nothing.
     if (result && !result.recorded) {
-      console.log("[Arrival] Not recorded:", result.tooFar ? `${result.distance} m away` : result.message ?? "no pin");
+      console.log("[Arrival] Not recorded:", result.tooFar ? `${result.distance} m away` : result.notOpen ? "festival not on" : result.message ?? "no pin");
       return;
     }
 
@@ -1134,6 +1140,9 @@ export function ArrivalProvider({ children }) {
       const id = String(spot._id ?? "").trim();
       const dest = id && getSpotCoords(spot);
       if (!dest) continue;
+      // A festival on another day can't be arrived at; one already entered
+      // stays watched so leaving it is noticed.
+      if (!isOpenNow(spot) && !insideSpotsRef.current.has(id)) continue;
       byId.set(id, spot);
       targets.push({ id, lat: dest.lat, lng: dest.lng, radius: arrivalRadiusOf(spot) });
     }
@@ -1154,7 +1163,7 @@ export function ArrivalProvider({ children }) {
     if (Date.now() - lastNearbyCheckRef.current > NEARBY_CHECK_EVERY_MS) {
       lastNearbyCheckRef.current = Date.now();
       const navigatingTo = activeSpotRef.current?._id;
-      announceNearby(currentUserIdRef.current, allSpotsRef.current, fix, [
+      announceNearby(currentUserIdRef.current, allSpotsRef.current.filter((s) => isOpenNow(s)), fix, [
         ...insideSpotsRef.current,
         ...(navigatingTo ? [String(navigatingTo)] : []),
       ]);

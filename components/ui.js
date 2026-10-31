@@ -8,6 +8,7 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useTheme, typography, fonts, radius, shadow, MAX_FONT_SCALE } from "../context/ThemeContext";
 import { spotImage, avatarImage } from "../utils/image";
 import Icon from "./Icon";
+import { FestivalLockChip } from "./FestivalLock";
 
 // Shared building blocks so every post-login screen matches the Home layout.
 export const H_PAD = 20;
@@ -174,6 +175,7 @@ export function SpotCard({
       {right ? <View style={s.cardRight}>{right}</View> : null}
 
       <View style={s.cardInfo}>
+        <FestivalLockChip spot={spot} style={s.cardLock} />
         <Text style={s.cardName} numberOfLines={1} maxFontSizeMultiplier={MAX_FONT_SCALE}>{name}</Text>
         {!!loc && <Text style={s.cardLoc} numberOfLines={1} maxFontSizeMultiplier={MAX_FONT_SCALE}>{loc}</Text>}
         {(rating != null || visits != null) && (
@@ -244,6 +246,7 @@ export function FeatureCard({
       {right ? <View style={s.cardRight}>{right}</View> : null}
 
       <View style={s.featureInfo}>
+        <FestivalLockChip spot={spot} style={s.cardLock} />
         <Text style={s.featureName} numberOfLines={2} maxFontSizeMultiplier={MAX_FONT_SCALE}>{name}</Text>
         {items.length > 0 && (
           <View style={s.featureMetaRow}>
@@ -786,6 +789,8 @@ const s = StyleSheet.create({
   },
   cardRankWide: { fontSize: 88, top: -20, left: 12 },
   cardInfo: { position: "absolute", left: 0, right: 0, bottom: 0, padding: 13 },
+  // A locked festival's "Opens …" chip, over the name (components/FestivalLock.js).
+  cardLock: { marginBottom: 6 },
   cardName: { fontFamily: fonts.sansBold, fontSize: 14.5, letterSpacing: -0.2, color: "#fff", marginBottom: 2 },
   cardLoc:  { fontFamily: fonts.sansMedium, fontSize: 11, color: "rgba(255,255,255,0.92)", marginBottom: 5 },
   cardMeta: { flexDirection: "row", alignItems: "center", gap: 12 },
