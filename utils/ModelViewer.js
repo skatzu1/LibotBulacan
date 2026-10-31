@@ -18,6 +18,7 @@ import {
   ViroDirectionalLight,
   Viro3DObject,
   ViroSphere,
+  ViroNode,
   ViroMaterials,
 } from "@reactvision/react-viro";
 
@@ -46,8 +47,8 @@ const ZOOM_MIN          = 0.3;
 const ZOOM_MAX          = 2.5;        // 6.7 × 2.5 stays short of the camera at 20
 const TILT_LIMIT        = 70;
 
-// The camera looks down on the model from 15° above, so the model itself only
-// ever spins about its own vertical axis — one Viro3DObject, one rotation.
+// The camera looks down on the model from 15° above. Dragging up/down tilts
+// the model towards or away from it, about the screen's horizontal axis.
 const CAMERA_PITCH  = 15;
 const CAMERA_HEIGHT = -VIEW_DISTANCE * Math.tan((CAMERA_PITCH * Math.PI) / 180);
 
@@ -77,12 +78,13 @@ const clamp = (v, lo, hi) => Math.min(Math.max(v, lo), hi);
 // Signed difference folded into [-180, 180).
 const wrap180 = (deg) => ((((deg + 180) % 360) + 360) % 360) - 180;
 
-// Where the model goes at a given zoom: scaled by fit × zoom, and moved so its
-// centre stays on the same spot as it grows or shrinks.
+// Where the model goes inside the spin node at a given zoom: scaled by
+// fit × zoom, and moved so its centre stays on the nodes' pivot as it grows or
+// shrinks — so both turns go about the model's middle.
 const placement = (fit, zoom) => {
   const s = fit.scale * zoom;
   const [x, y, z] = fit.offset;
-  return { scale: [s, s, s], position: [x * zoom, y * zoom, VIEW_DISTANCE + z * zoom] };
+  return { scale: [s, s, s], position: [x * zoom, y * zoom, z * zoom] };
 };
 
 // ─────────────────────────────────────────────
@@ -102,6 +104,8 @@ const ModelScene = ({ sceneNavigator }) => {
     modelUrl,
     fit,
     sceneReady,
+    tiltRef,
+    spinRef,
     objectRef,
     isDark,
     baseRotX,
@@ -138,17 +142,25 @@ const ModelScene = ({ sceneNavigator }) => {
       <ViroDirectionalLight color="#ffffff" direction={[0, 0.5, 1]}       intensity={350} />
       <ViroAmbientLight     color="#ffffff" intensity={AMBIENT} />
 
+      {/* Tilt and spin are two nodes, not one [x, y, 0] rotation: Viro turns
+          a node about X first, so the tilt went about the model's own
+          (spinning) axis — dragging down tipped it the other way once its back
+          faced the camera, and sideways in between. The outer node tilts
+          about the screen's axis; the model spins inside it. */}
       {showModel && (
-        <Viro3DObject
-          ref={objectRef}
-          source={{ uri: modelUrl }}
-          position={position}
-          scale={scale}
-          rotation={[baseRotX, baseRotY, 0]}
-          type="GLB"
-          onLoadEnd={() => onModelReady?.()}
-          onError={() => onModelError?.()}
-        />
+        <ViroNode ref={tiltRef} position={[0, 0, VIEW_DISTANCE]} rotation={[baseRotX, 0, 0]}>
+          <ViroNode ref={spinRef} rotation={[0, baseRotY, 0]}>
+            <Viro3DObject
+              ref={objectRef}
+              source={{ uri: modelUrl }}
+              position={position}
+              scale={scale}
+              type="GLB"
+              onLoadEnd={() => onModelReady?.()}
+              onError={() => onModelError?.()}
+            />
+          </ViroNode>
+        </ViroNode>
       )}
     </ViroScene>
   );
@@ -181,7 +193,10 @@ export default function ModelViewer({
   // True once the Viro scene is running; see ModelScene for why it matters.
   const [sceneReady, setSceneReady] = useState(false);
 
+  const tiltRef    = useRef(null);
+  const spinRef    = useRef(null);
   const objectRef  = useRef(null);
+  const sentTilt   = useRef(baseRotX);   // the tilt Viro last got; the spin changes far more often
   const fitRef     = useRef(null);
   const rotX       = useRef(baseRotX);
   const rotY       = useRef(baseRotY);
@@ -212,6 +227,7 @@ export default function ModelViewer({
     setError(false);
     rotX.current = baseRotX;
     rotY.current = baseRotY;
+    sentTilt.current = baseRotX;
     zoom.current = 1;
     fetchModelBounds(url).then((bounds) => {
       if (!live) return;
@@ -250,12 +266,19 @@ export default function ModelViewer({
     }
     const obj = objectRef.current;
     if (!obj || !fitRef.current) return;
-    const props = {};
-    if (pending.current.rotation) props.rotation = [rotX.current, rotY.current, 0];
-    if (pending.current.zoom) Object.assign(props, placement(fitRef.current, zoom.current));
+    const { rotation, zoom: zoomed } = pending.current;
     pending.current = { rotation: false, zoom: false };
     lastApply.current = now;
-    try { obj.setNativeProps(props); } catch (_) {}
+    try {
+      if (rotation) {
+        if (rotX.current !== sentTilt.current) {
+          tiltRef.current?.setNativeProps({ rotation: [rotX.current, 0, 0] });
+          sentTilt.current = rotX.current;
+        }
+        spinRef.current?.setNativeProps({ rotation: [0, rotY.current, 0] });
+      }
+      if (zoomed) obj.setNativeProps(placement(fitRef.current, zoom.current));
+    } catch (_) {}
   };
 
   const requestApply = ({ rotation = false, zoom: zoomed = false }) => {
@@ -409,7 +432,7 @@ export default function ModelViewer({
         shadowsEnabled={false}
         initialScene={{ scene: ModelScene }}
         viroAppProps={{
-          modelUrl: model.uri, fit, sceneReady, objectRef, isDark, baseRotX, baseRotY,
+          modelUrl: model.uri, fit, sceneReady, tiltRef, spinRef, objectRef, isDark, baseRotX, baseRotY,
           onSceneReady: () => setSceneReady(true), onModelReady, onModelError,
         }}
         style={StyleSheet.absoluteFill}
