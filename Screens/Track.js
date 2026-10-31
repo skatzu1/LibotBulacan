@@ -1154,8 +1154,9 @@ export default function Track({ route, navigation }) {
           // OSM only publishes a light style. Invert + hue-rotate turns it
           // into a dark map while keeping water blue and parks green; only the
           // tile pane is filtered, so the pins, route and rings keep their
-          // real colours. Same filter as components/MissionMap.js.
-          ? ".leaflet-tile-pane { filter:invert(1) hue-rotate(180deg) brightness(0.92) contrast(0.88) saturate(0.7); }"
+          // real colours. The last sepia step warms the inverted greys toward
+          // the warm-ink page. Same filter as components/MissionMap.js.
+          ? ".leaflet-tile-pane { filter:invert(1) hue-rotate(180deg) brightness(0.92) contrast(0.88) saturate(0.7) sepia(0.22); }"
           : ""}
         .leaflet-top.leaflet-right { top:${attributionTop}px; }
         .leaflet-control-attribution {

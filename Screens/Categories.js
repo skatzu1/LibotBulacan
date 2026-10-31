@@ -40,7 +40,7 @@ const TILE_TINTS = [
   { light: "#D9DFF0", dark: "#1B2030" }, // indigo
   { light: "#D9E6D2", dark: "#1A241A" }, // narra / river green
   { light: "#F6E6BE", dark: "#2A2416" }, // capiz gold
-  { light: "#D3EEF1", dark: "#123236" }, // brand cyan
+  { light: "#D3EEF1", dark: "#16373A" }, // brand cyan (= brandLight)
 ];
 
 export default function Categories() {

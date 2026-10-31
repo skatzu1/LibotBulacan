@@ -58,8 +58,9 @@ const withAlpha = (hex, alpha) => {
 // thesis panel asked for it; it used to be dark in every theme). Text and
 // status colours are the app's own theme tokens. What's specific to AR is how
 // the panels sit on a live camera feed: they're nearly opaque, so contrast
-// never depends on what the camera is looking at — dark teal glass in dark
-// mode, cream and white in light mode.
+// never depends on what the camera is looking at — cream and white in light
+// mode, the same page and card colours at night in dark mode (built from the
+// palette, so the two themes stay one family).
 //
 // Yellow has two jobs. `gold` / `cta` are FILLS and marks drawn over the
 // camera (buttons, the encounter ring, focus brackets) and stay the brand
@@ -69,11 +70,11 @@ const withAlpha = (hex, alpha) => {
 // `info` / `infoLight`.
 const arTokens = (c, isDark) => ({
   bg:           c.background,
-  surface:      isDark ? "rgba(16,32,34,0.90)" : "rgba(251,248,242,0.97)",
-  surfaceHigh:  isDark ? "rgba(24,48,50,0.95)" : "rgba(255,255,255,0.97)",
-  sheet:        isDark ? "#12262A" : c.card,          // the trivia bottom sheet
-  border:       isDark ? "rgba(120,204,208,0.18)" : "rgba(10,111,120,0.16)",
-  borderAccent: isDark ? "rgba(120,204,208,0.42)" : "rgba(10,111,120,0.32)",
+  surface:      withAlpha(c.background, isDark ? 0.92 : 0.97),
+  surfaceHigh:  withAlpha(c.card, isDark ? 0.95 : 0.97),
+  sheet:        c.card,                                // the trivia bottom sheet
+  border:       withAlpha(c.brand, isDark ? 0.20 : 0.16),
+  borderAccent: withAlpha(c.brand, isDark ? 0.42 : 0.32),
   textPrimary:  c.textPrimary,
   textSecond:   c.textSecondary,
   textMuted:    c.textMuted,
@@ -89,7 +90,7 @@ const arTokens = (c, isDark) => ({
   dangerDim:    isDark ? withAlpha(c.danger, 0.18) : c.dangerBg,
   // The location-error card. Nearly opaque like every other panel — it used
   // to be the 18% tint above, so its text sat almost straight on the camera.
-  errorSurface: isDark ? "rgba(44,20,20,0.94)" : c.dangerBg,
+  errorSurface: isDark ? withAlpha(c.dangerBg, 0.94) : c.dangerBg,
   info:         c.brand,
   infoLight:    isDark ? "#8BE4EC" : c.brand,
   infoFaint:    withAlpha(c.brand, 0.10),
@@ -99,14 +100,14 @@ const arTokens = (c, isDark) => ({
   ctaText:      c.onAccent,
 
   // Radar dial and the small chips that sit straight on the camera.
-  radarFace:    isDark ? "rgba(8,26,28,0.72)" : "rgba(251,248,242,0.88)",
+  radarFace:    withAlpha(c.background, isDark ? 0.78 : 0.88),
   radarGrid:    withAlpha(c.brand, isDark ? 0.16 : 0.20),
   radarSweep:   withAlpha(c.brand, 0.45),
   // The copy calls this "the white dot", so it's white in both themes; light
   // mode rings it in dark so it holds on the cream dial.
   youDot:       isDark ? c.textPrimary : "#FFFFFF",
-  youRing:      isDark ? "rgba(8,26,28,0.9)" : c.textPrimary,
-  chipBg:       isDark ? "rgba(6,18,20,0.72)" : "rgba(251,248,242,0.85)",
+  youRing:      isDark ? withAlpha(c.background, 0.9) : c.textPrimary,
+  chipBg:       withAlpha(c.background, isDark ? 0.78 : 0.85),
   statusBar:    isDark ? "light-content" : "dark-content",
   // Behind the trivia sheet and the guide: the same dim as every other
   // dialog in the app.

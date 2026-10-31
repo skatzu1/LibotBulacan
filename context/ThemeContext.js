@@ -115,86 +115,91 @@ export const lightColors = {
   photoScrim:       "rgba(12,34,36,0.68)",
 };
 
+// Dark mode is the SAME paper at night, not a second product. It used to be a
+// cold teal-black family that shared no hue with the cream light mode (a defense
+// panel note, 2026-10-31). Now every surface is the light token's warm hue
+// (~38°) turned down: cream page → warm ink page, white card → a lifted warm
+// card, beige border → umber, ink text → cream text. Teal and yellow keep the
+// same jobs they have in light mode: punctuation, never the surface.
+//
+// Ratios are against background / card (and brandLight where pills use them).
 export const darkColors = {
-  // Backgrounds — dark teal-black, keeps the cyan family
-  background:       "#0E1C1E",
-  backgroundSoft:   "#16292C",
-  backgroundHero:   "#0C3438",
-  card:             "#172C2F",
-  cardBorder:       "#2A4443",
+  // Backgrounds — warm ink page, cards one step lighter (same lift as light)
+  background:       "#17140F",   // the cream page at night
+  backgroundSoft:   "#1F1B15",
+  backgroundHero:   "#113538",   // light's bold cyan panel → deep teal panel
+  card:             "#221E18",
+  cardBorder:       "#3A3329",
 
-  // Text (light — for dark cards and the near-black bg). The admin panel and
-  // the website use these exact values too; muted is the lightest of the
-  // three it used to be, so it holds 4.5:1 on every surface in all three.
-  textPrimary:      "#EDF4F4",
-  textSecondary:    "#B4C7C8",
-  textMuted:        "#97AEAF",
+  // Text — the cream page colour becomes the ink. The admin panel and the
+  // website use these exact values too.
+  textPrimary:      "#F3EEE4",   // 15.88 on page / 14.33 on card
+  textSecondary:    "#C9C0B0",   // 10.19 / 9.20
+  textMuted:        "#A99F8D",   //  7.02 / 6.34 / 4.89 on brandLight
   textInverse:      "#FFFFFF",
 
-  // Brand cyan — for icons, small accents and fills (NOT headings).
-  brand:            "#56D6E2",
-  // Heading / high-emphasis text colour — near-neutral light in dark mode.
-  brandDark:        "#E8F4F5",
-  brandLight:       "#123236",
-  brandSoft:        "#0E282B",
-  onBrand:          "#08201F",
+  // Brand teal, lifted for a dark page — icons, small accents, fills.
+  brand:            "#5CCFD9",   //  9.95 / 8.98 / 6.93 on brandLight
+  brandDark:        "#F3EEE4",   // heading colour = textPrimary, as in light
+  brandLight:       "#16373A",   // teal well — pills & icon wells only
+  brandSoft:        "#122C2F",
+  onBrand:          "#0B1F21",   //  9.24 on brand
 
   // Accent (yellow CTA — fills & highlights only)
   accent:           "#F2CE1B",
-  accentDark:       "#F6DF5C",
-  accentSoft:       "#242012",
-  onAccent:         "#2C2810",
+  accentDark:       "#F6DF5C",   // 11.46 on accentSoft
+  accentSoft:       "#2B2412",
+  onAccent:         "#2C2810",   //  9.60 on accent
 
   // Achievement tiers (see the light palette).
   iron:             "#9A938D",
-  ironInk:          "#CFC8C2",   //  9.4 on ironSoft
-  ironSoft:         "#26231F",
+  ironInk:          "#D3CCC4",   //  9.58 on ironSoft
+  ironSoft:         "#29251F",
   bronze:           "#D08A50",
-  bronzeInk:        "#E8B488",   //  8.7 on bronzeSoft
-  bronzeSoft:       "#2A1E14",
+  bronzeInk:        "#E8B488",   //  8.62 on bronzeSoft
+  bronzeSoft:       "#2C1F14",
   silver:           "#B9C3CA",
-  silverInk:        "#D6DEE3",
-  silverSoft:       "#1E2629",
+  silverInk:        "#D6DEE3",   // 11.02 on silverSoft
+  silverSoft:       "#24272A",
 
   // Drawer
-  drawer:           "#0C3438",
-  drawerText:       "#DCEFEF",
+  drawer:           "#17140F",
+  drawerText:       "#F3EEE4",
 
-  // Tab bar
-  tabBar:           "#172C2F",
-  tabActive:        "#56D6E2",
-  tabInactive:      "#97AEAF",
+  // Tab bar — the card colour, as light mode's bar is the white card
+  tabBar:           "#221E18",
+  tabActive:        "#5CCFD9",   //  8.98 on the bar
+  tabInactive:      "#A99F8D",   //  6.34 on the bar
 
   // Hero header
-  heroHeader:       "#172C2F",
+  heroHeader:       "#221E18",
   heroHeaderShadow: "#000000",
 
-  // Inputs
-  inputBg:          "#122629",
-  inputBorder:      "#2A4443",
-  inputBorderFocus: "#56D6E2",
-  placeholder:      "#7C9698",
+  // Inputs — a shade below the card, so a field reads as a well
+  inputBg:          "#1C1813",
+  inputBorder:      "#3A3329",
+  inputBorderFocus: "#5CCFD9",
+  placeholder:      "#9C927F",   //  5.74 on the input
 
   // Misc
-  divider:          "#233C3C",
-  danger:           "#F58E8E",
-  dangerBg:         "#2C1414",
+  divider:          "#2F2A22",
+  danger:           "#F29A8E",   //  7.73 on card
+  dangerBg:         "#2E1814",
   // Dark text on the light dark-mode red, as the admin panel does: white on
   // it is only 2.4:1.
-  onDanger:         "#2A0E0E",   //  7.83 on danger
+  onDanger:         "#2A0E0E",   //  8.38 on danger
   warning:          "#F0C264",
   warningBg:        "#2E2412",
   star:             "#F0C93C",
-  starEmpty:        "#2A4443",
-  success:          "#5FD69A",
-  successBg:        "#123024",
+  starEmpty:        "#3A3329",
+  success:          "#6FD3A0",   //  9.08 on card
+  successBg:        "#15291F",
   overlay:          "rgba(0,0,0,0.6)",
 
-  // A heavy dark veil: the bright cyan/yellow photo becomes a dim teal
-  // backdrop instead of a glare. Measured against the BRIGHTEST pixel of
-  // assets/bg.png: every text token on the panel stays >= 6:1.
-  photoVeil:        "rgba(14,28,30,0.80)",
-  panelOverPhoto:   "rgba(14,28,30,0.92)",
+  // A heavy warm veil: the bright cyan/yellow photo becomes a dim backdrop
+  // instead of a glare, in the page's own colour (as the light veil is cream).
+  photoVeil:        "rgba(23,20,15,0.80)",
+  panelOverPhoto:   "rgba(23,20,15,0.92)",
   photoScrim:       "rgba(12,34,36,0.68)",
 };
 

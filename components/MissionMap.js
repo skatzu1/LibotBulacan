@@ -62,7 +62,8 @@ function buildHtml({ target, radiusMeters, placeName, colors, isDark }) {
         // OSM only publishes a light style. Invert + hue-rotate turns it into
         // a dark map while keeping water blue and parks green; only the tile
         // pane is filtered, so the pin, ring and dot keep their real colours.
-        ? ".leaflet-tile-pane { filter:invert(1) hue-rotate(180deg) brightness(0.92) contrast(0.88) saturate(0.7); }"
+        // The last sepia step warms the inverted greys toward the warm-ink page.
+        ? ".leaflet-tile-pane { filter:invert(1) hue-rotate(180deg) brightness(0.92) contrast(0.88) saturate(0.7) sepia(0.22); }"
         : ""}
       .leaflet-control-attribution {
         background:${hexA(colors.card, 0.78)} !important; color:${colors.textSecondary};
