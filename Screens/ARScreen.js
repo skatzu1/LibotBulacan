@@ -430,7 +430,9 @@ const makeFlashSt = (TOKEN) => StyleSheet.create({
 // is something you can see rather than infer from a shrinking number.
 //
 // Orientation is camera-relative — the top of the radar is wherever the phone
-// is pointing — so the blip sits in the direction you would actually turn.
+// is pointing — so the blip sits in the direction you would actually turn. The
+// N, E, S and W letters circle the rim as you turn, and the cross lines between
+// them meet at the "You" dot, so it reads as a compass with you in the middle.
 //
 // Sized to the screen. The radar is the tallest thing in the step card, and the
 // card has to leave room for the camera. On the Mi 10T (873 dp tall) the card
@@ -455,7 +457,16 @@ const STEP_CARD_REST  = 213;                // the card minus the radar: padding
 const RADAR_PX = Math.round(Math.min(148, Math.max(96,
   Dimensions.get("screen").height * STEP_CARD_SHARE - STEP_CARD_REST - HUD_BOTTOM
 )));                                        // drawing area
-const RADAR_R  = RADAR_PX / 2 - 12;         // usable radius, leaving an edge margin
+const RADAR_RIM_W = 18;                     // the band around the map that holds the compass letters
+const RADAR_R  = RADAR_PX / 2 - RADAR_RIM_W; // usable radius: the model and its ring stay inside it, clear of the letters
+const COMPASS_POINTS = [
+  { letter: "N", deg: 0 },
+  { letter: "E", deg: 90 },
+  { letter: "S", deg: 180 },
+  { letter: "W", deg: 270 },
+];
+const COMPASS_LETTER_W = 18;
+const COMPASS_LETTER_H = 16;
 
 // No `inRange` prop: this radar only ever renders in step 1, which by
 // definition is the out-of-range state — the card switches to "point at the
@@ -503,10 +514,39 @@ const RadarMap = ({ distance, bearing, heading, modelRadius, label }) => {
         <View style={[radar.grid, { width: RADAR_R * 2, height: RADAR_R * 2, borderRadius: RADAR_R }]} />
         <View style={[radar.grid, { width: RADAR_R, height: RADAR_R, borderRadius: RADAR_R / 2 }]} />
 
+        {/* The lines between N–S and E–W, crossing where you stand */}
+        <View style={[radar.axes, { transform: [{ rotate: `${-heading}deg` }] }]}>
+          <View style={radar.axisNS} />
+          <View style={radar.axisEW} />
+        </View>
+
         {/* Sweep hand */}
         <Animated.View style={[radar.sweep, { transform: [{ rotate: spin }] }]}>
           <View style={radar.sweepArm} />
         </Animated.View>
+
+        {/* The compass letters move around the rim and stay upright, so they
+            are readable whichever way you face. */}
+        {COMPASS_POINTS.map(({ letter, deg }) => {
+          const a = (deg - heading) * (Math.PI / 180);
+          const rim = RADAR_PX / 2 - RADAR_RIM_W / 2;
+          return (
+            <Text
+              key={letter}
+              maxFontSizeMultiplier={1}
+              style={[
+                radar.point,
+                letter === "N" && radar.pointNorth,
+                {
+                  left: RADAR_PX / 2 + Math.sin(a) * rim - COMPASS_LETTER_W / 2,
+                  top:  RADAR_PX / 2 - Math.cos(a) * rim - COMPASS_LETTER_H / 2,
+                },
+              ]}
+            >
+              {letter}
+            </Text>
+          );
+        })}
 
         {/* The model's activation radius, drawn around the model itself —
             this is the thing the user is trying to get inside. */}
@@ -523,6 +563,8 @@ const RadarMap = ({ distance, bearing, heading, modelRadius, label }) => {
           ]}
         />
 
+        <Text style={radar.youLabel} maxFontSizeMultiplier={1}>You</Text>
+
         {/* The model */}
         <View
           style={[
@@ -535,7 +577,7 @@ const RadarMap = ({ distance, bearing, heading, modelRadius, label }) => {
           ]}
         />
 
-        {/* You, always dead centre, pointing up */}
+        {/* You, always dead centre */}
         <View style={radar.you} />
       </View>
 
@@ -570,8 +612,31 @@ const makeRadar = (TOKEN) => StyleSheet.create({
   },
   sweep: { position: "absolute", width: RADAR_PX, height: RADAR_PX, alignItems: "center" },
   sweepArm: {
-    width: 1.5, height: RADAR_PX / 2,
+    width: 1.5, height: RADAR_R, marginTop: RADAR_RIM_W,
     backgroundColor: TOKEN.radarSweep,
+  },
+  axes: { position: "absolute", width: RADAR_R * 2, height: RADAR_R * 2 },
+  axisNS: {
+    position: "absolute", left: RADAR_R - 0.5, top: 0,
+    width: 1, height: RADAR_R * 2,
+    backgroundColor: TOKEN.radarGrid,
+  },
+  axisEW: {
+    position: "absolute", top: RADAR_R - 0.5, left: 0,
+    width: RADAR_R * 2, height: 1,
+    backgroundColor: TOKEN.radarGrid,
+  },
+  point: {
+    position: "absolute",
+    width: COMPASS_LETTER_W, height: COMPASS_LETTER_H, lineHeight: COMPASS_LETTER_H,
+    textAlign: "center", includeFontPadding: false,
+    color: TOKEN.textSecond, fontSize: 14, fontFamily: fonts.sansSemi,
+  },
+  pointNorth: { color: TOKEN.danger },
+  youLabel: {
+    position: "absolute", top: RADAR_PX / 2 + 6,
+    lineHeight: 14, includeFontPadding: false,
+    color: TOKEN.textPrimary, fontSize: 13, fontFamily: fonts.sansSemi,
   },
   radiusRing: { position: "absolute", borderWidth: 1.5 },
   blip: {
@@ -706,7 +771,7 @@ const HowItWorks = ({ visible, onClose }) => {
   // the card then says which one you're on. They must not drift apart.
   const steps = [
     { icon: "navigation", title: "Walk closer",
-      body: "The radar shows where the object is. Walk until the white dot is inside the blue circle — nothing appears until you are there." },
+      body: "The radar is a compass with you in the middle: it shows where the object is, and N, E, S and W around you. Walk until the white dot is inside the blue circle — nothing appears until you are there." },
     { icon: "chevrons-down", title: "Point your phone at the ground",
       body: "Aim at the floor a few steps ahead and move the phone slowly. Patterned ground — tiles, grass, paving — works far better than a plain wall or bare floor." },
     { icon: "aperture",   title: "Tap the object",
@@ -2068,7 +2133,7 @@ export default function ARScreen({ route, navigation }) {
                 />
                 <Text style={step.title}>Walk closer</Text>
                 <Text style={step.sub}>
-                  The white dot is you. Walk until it is inside the blue circle
+                  The white dot in the middle is you. Walk until it is inside the blue circle
                   — that is where the object is hiding.
                 </Text>
               </>
