@@ -504,7 +504,7 @@ export default function InformationScreen({ route, navigation }) {
   const isFocused = useIsFocused();
   // The model only renders while its tab is open and this screen is in front:
   // a Viro scene left running behind another screen keeps the GPU busy.
-  const showing3D = activeTab === "Model3D" && !!spot?.modelUrl && isFocused;
+  const showing3D = activeTab === "Model3D" && !!spot?.modelUrl && isFocused && isOpenNow(spot);
 
   // The model is in the hero, at the top of the page; opening its tab from
   // further down (the tabs stick under the header) brings it into view.
@@ -612,49 +612,13 @@ export default function InformationScreen({ route, navigation }) {
     </View>
   );
 
-  // A festival can only be opened on its dates (utils/festivalDates.js): on
-  // any other day, its photo, name and when it opens. Here rather than at each
-  // card, so every way in (lists, bookmarks, badges, past trips) is covered.
-  if (!isOpenNow(spot)) {
-    const run = nextRun(spot);
-    return (
-      <View style={[styles.container, { backgroundColor: colors.background }]}>
-        <StatusBar barStyle={isDark ? "light-content" : "dark-content"} backgroundColor={colors.background} />
-        {header(null)}
-        <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={{ paddingBottom: insets.bottom + 32 }}>
-          <View style={styles.heroWrap}>
-            <View style={[styles.heroCard, { height: heroH, backgroundColor: colors.card }, shadow.md]}>
-              <Image source={{ uri: spotImage(spot.image, winW - H_PAD * 2, heroH) }} style={styles.heroImage} resizeMode="cover" />
-              <PhotoScrim from={0.5} />
-              <View style={styles.heroCaption} pointerEvents="none">
-                <Icon name="map-pin" size={12} color="#fff" />
-                <Text style={styles.heroCaptionText} numberOfLines={1}>{spot.city || "Bulacan, Philippines"}</Text>
-              </View>
-            </View>
-          </View>
-          <View style={styles.bodyPad}>
-            <Text style={[styles.title, { color: colors.textPrimary }]} accessibilityRole="header">{spot.name}</Text>
-            <View style={[styles.lockedCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
-              <View style={[styles.infoIcon, { backgroundColor: colors.brandLight }]}>
-                <Icon name="lock" size={14} color={colors.brand} />
-              </View>
-              <View style={styles.infoStack}>
-                <Text style={[styles.lockedTitle, { color: colors.textPrimary }]}>
-                  {run ? `Opens ${formatRun(run)}` : "No dates set yet"}
-                </Text>
-                <Text style={[styles.lockedText, { color: colors.textSecondary }]}>
-                  {run
-                    ? "This festival can only be visited on its dates. Come back then to explore it, arrive and earn its badge."
-                    : "This festival can only be visited on its dates, and they haven't been set yet. Check back closer to the festival."}
-                </Text>
-              </View>
-            </View>
-            <PrimaryButton title="Go back" onPress={() => navigation.goBack()} style={styles.lockedBtn} />
-          </View>
-        </ScrollView>
-      </View>
-    );
-  }
+  // Before its dates a festival can be read about and saved, so people can plan
+  // to go (panel, 2026-11-04: an app that promotes has to show it beforehand).
+  // Going is what waits for the dates: no directions or Bakit List until then
+  // (utils/festivalDates.js; the server won't count an arrival anyway).
+  const locked = !isOpenNow(spot);
+  const run = locked ? nextRun(spot) : null;
+  const tab = locked ? "Overview" : activeTab;
 
   const spotIsBookmarked = isBookmarked(spot._id || spot.id);
   const reviews          = getReviewsForSpot(spot._id);
@@ -963,12 +927,14 @@ export default function InformationScreen({ route, navigation }) {
         </View>
 
         {/* [1] Sticky tabs */}
-        <View style={[styles.segmentWrap, { backgroundColor: colors.background }]}>
-          <Segmented
-            options={tabs}
-            value={activeTab}
-            onChange={selectTab}
-          />
+        <View style={locked ? null : [styles.segmentWrap, { backgroundColor: colors.background }]}>
+          {!locked && (
+            <Segmented
+              options={tabs}
+              value={activeTab}
+              onChange={selectTab}
+            />
+          )}
         </View>
 
         {/* [2] Body */}
@@ -979,27 +945,45 @@ export default function InformationScreen({ route, navigation }) {
               like Directions on a map app's place page. It used to float over
               the bottom of the screen and sat on top of the reviews. Navigate
               alone for Nature and Festivals spots, which have no AR. */}
-          <View style={styles.actionRow}>
-            <PrimaryButton
-              title="Navigate"
-              icon="navigation"
-              onPress={() => navigation.navigate("Track", { spot })}
-              accessibilityLabel={`Navigate to ${spot.name}`}
-              style={styles.actionBtn}
-            />
-            {hasAR && (
+          {locked ? (
+            <View style={[styles.lockedCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
+              <View style={[styles.infoIcon, { backgroundColor: colors.brandLight }]}>
+                <Icon name="lock" size={14} color={colors.brand} />
+              </View>
+              <View style={styles.infoStack}>
+                <Text style={[styles.lockedTitle, { color: colors.textPrimary }]}>
+                  {run ? `Opens ${formatRun(run)}` : "No dates set yet"}
+                </Text>
+                <Text style={[styles.lockedText, { color: colors.textSecondary }]}>
+                  {run
+                    ? "You can read about this festival now. Directions, its Bakit List and its badge open on its dates."
+                    : "You can read about this festival now. Directions, its Bakit List and its badge open on its dates, which haven't been set yet."}
+                </Text>
+              </View>
+            </View>
+          ) : (
+            <View style={styles.actionRow}>
               <PrimaryButton
-                variant="secondary"
-                title="AR View"
-                icon="aperture"
-                onPress={handleLaunchAR}
-                accessibilityLabel={`Open ${spot.name} in AR`}
+                title="Navigate"
+                icon="navigation"
+                onPress={() => navigation.navigate("Track", { spot })}
+                accessibilityLabel={`Navigate to ${spot.name}`}
                 style={styles.actionBtn}
               />
-            )}
-          </View>
+              {hasAR && (
+                <PrimaryButton
+                  variant="secondary"
+                  title="AR View"
+                  icon="aperture"
+                  onPress={handleLaunchAR}
+                  accessibilityLabel={`Open ${spot.name} in AR`}
+                  style={styles.actionBtn}
+                />
+              )}
+            </View>
+          )}
 
-          {activeTab === "Overview" && (
+          {tab === "Overview" && (
             <>
               <Text style={[styles.sectionHeading, { color: colors.textPrimary }]}>About</Text>
               <Text style={[styles.descriptionText, { color: colors.textSecondary }]}>
@@ -1320,8 +1304,9 @@ export default function InformationScreen({ route, navigation }) {
 
               {/* Not been here yet: the reviews above can be read, but only
                   travelers who visited can write one (QA 2026-10-16; the
-                  server refuses it too). Arriving opens the box. */}
-              {!hasMyReview && !arrived && (
+                  server refuses it too). Arriving opens the box. A festival
+                  before its dates has no directions to offer, so no card. */}
+              {!hasMyReview && !arrived && !locked && (
                 <View style={[styles.fbComposer, styles.fbDone, { borderTopColor: colors.divider }]}>
                   <View style={[styles.visitIcon, { backgroundColor: colors.brandLight }]}>
                     <Icon name="map-pin" size={18} color={colors.brand} />
@@ -1477,7 +1462,7 @@ export default function InformationScreen({ route, navigation }) {
           )}
 
           {/* The model itself is in the hero, where the photo was. */}
-          {activeTab === "Model3D" && spot.modelUrl && (
+          {tab === "Model3D" && spot.modelUrl && (
             <View style={styles.modelHintRow}>
               <Icon name="rotate-3d-variant" size={16} color={colors.textMuted} />
               <Text style={[styles.modelHint, { color: colors.textSecondary }]}>
@@ -1491,7 +1476,7 @@ export default function InformationScreen({ route, navigation }) {
               separate list, each with its own heading and blurb. Must-dos still
               come first and say so; arriving is always the first item, even
               for a spot with no Mission documents yet. */}
-          {activeTab === "BucketList" && (
+          {tab === "BucketList" && (
               <>
                 <View style={styles.checkHead}>
                   <Text style={[styles.sectionHeading, styles.checkHeading, { color: colors.textPrimary }]} accessibilityRole="header">
@@ -1632,7 +1617,6 @@ const styles = StyleSheet.create({
   lockedCard:      { flexDirection: "row", alignItems: "flex-start", gap: 11, borderRadius: radius.card, borderWidth: 1, padding: 16, marginBottom: 18 },
   lockedTitle:     { fontSize: 15, fontFamily: fonts.sansBold },
   lockedText:      { ...typography.body, fontSize: 13.5, lineHeight: 19 },
-  lockedBtn:       { minHeight: 48 },
 
   // ── Bakit List tab: one checklist ──
   checkHead:       { flexDirection: "row", alignItems: "baseline", justifyContent: "space-between", gap: 12, marginTop: 4 },

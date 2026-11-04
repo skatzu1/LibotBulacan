@@ -1,7 +1,7 @@
 // A festival can only be visited on its own dates (2026-10-31), and those are
-// its visiting hours (2026-11-01): outside them its page stays locked, it
-// isn't watched for arrivals or announced as nearby, and the server wouldn't
-// count an arrival anyway. The same rule as LibotBackend
+// its visiting hours (2026-11-01): outside them its page can be read but not
+// acted on (2026-11-04), it isn't watched for arrivals or announced as nearby,
+// and the server wouldn't count an arrival anyway. The same rule as LibotBackend
 // utils/festivalDates.js (which enforces it) and the panel's
 // src/utils/festivalDates.js (whose date pickers write the line); keep the
 // three equal. The line names one or more runs:
