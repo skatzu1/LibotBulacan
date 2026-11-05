@@ -52,9 +52,9 @@ const Settings = ({ navigation }) => {
     return unsubscribe;
   }, [navigation, checkNotifPermission]);
 
-  // Hide my account (user, 2026-10-28: "option to hide account to other
-  // users"): other travelers see "Hidden traveler" on the leaderboard and on
-  // reviews, and can't open the profile (LibotBackend utils/hiddenTravelers.js).
+  // Hide my profile (user, 2026-10-28; changed 2026-11-05): other travelers
+  // still see the name and picture on the leaderboard and on reviews, but can't
+  // open the profile (LibotBackend utils/hiddenTravelers.js).
   // Read from /api/users/me, and again when another phone of theirs changes it.
   const { getToken } = useAuth();
   const [hidden, setHidden] = React.useState(null);
@@ -85,7 +85,7 @@ const Settings = ({ navigation }) => {
       });
       if (!res.ok) throw new Error(`visibility ${res.status}`);
       showToast(
-        value ? "Your account is hidden. Others see you as “Hidden traveler”." : "Your account shows to other travelers again.",
+        value ? "Your profile is hidden. Others can see your name and photo, but can't open it." : "Other travelers can open your profile again.",
         { type: "success" },
       );
     } catch (e) {
@@ -168,8 +168,8 @@ const Settings = ({ navigation }) => {
           />
           <ListRow
             icon="eye-off"
-            title="Hide my account"
-            subtitle={hidden ? "Others see “Hidden traveler”" : "Others see your name and photo"}
+            title="Hide my profile"
+            subtitle={hidden ? "Others can't open your profile" : "Others can open your profile"}
             right={
               hidden === null
                 ? <ActivityIndicator size="small" color={colors.brand} />
@@ -180,8 +180,8 @@ const Settings = ({ navigation }) => {
                     onValueChange={handleHiddenToggle}
                     trackColor={{ false: colors.cardBorder, true: colors.brand }}
                     thumbColor="#fff"
-                    accessibilityLabel="Hide my account from other travelers"
-                    accessibilityHint="Other travelers see Hidden traveler instead of your name and photo on the leaderboard and on your reviews"
+                    accessibilityLabel="Hide my profile from other travelers"
+                    accessibilityHint="Other travelers still see your name and photo on the leaderboard and on your reviews, but can't open your profile"
                   />
                 )
             }
