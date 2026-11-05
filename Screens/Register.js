@@ -59,7 +59,7 @@ const onLegalAction = ({ nativeEvent }) => {
 
 function ConsentRow({ agreed, onPress, invalid, disabled }) {
   const { colors } = useTheme();
-  const link = { color: colors.brand, fontFamily: fonts.sansSemi };
+  const link = { color: colors.brand, fontFamily: fonts.sansSemi, textDecorationLine: "underline" };
 
   const handleLinkPress = (url) => (e) => {
     e?.stopPropagation?.();
