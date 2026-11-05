@@ -1,5 +1,6 @@
 import './utils/silenceLogs';
 import 'react-native-reanimated';
+
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { NavigationContainer, DefaultTheme, DarkTheme } from "@react-navigation/native";
@@ -35,7 +36,7 @@ import { connectLive, disconnectLive, subscribeLive } from "./utils/live";
 import { MomoTrustDisplay_400Regular }  from "@expo-google-fonts/momo-trust-display/400Regular";
 const Dongle_400Regular = require("./assets/fonts/Dongle_400Regular.ttf");
 const Dongle_700Bold    = require("./assets/fonts/Dongle_700Bold.ttf");
-// Trial faces for Home's greeting name — see NAME_FONT in Screens/Home.js.
+
 import { Raleway_700Bold }  from "@expo-google-fonts/raleway";
 import { Epilogue_700Bold } from "@expo-google-fonts/epilogue";
 import { Nunito_700Bold }   from "@expo-google-fonts/nunito";
@@ -72,13 +73,9 @@ import ReportProblem      from './Screens/ReportProblem';
 import TravelerProfile    from './Screens/TravelerProfile';
 import ReportTraveler     from './Screens/ReportTraveler';
 
-// Clerk publishable keys are public by design — they ship inside the JS bundle
-// either way, so they live here rather than in EAS secrets.
-// Release builds (preview + production) get the live instance; local dev gets the
-// test instance. Set EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY in .env to override either
-// one — e.g. to run a dev build against production while testing Google SSO.
-const DEV_CLERK_KEY  = 'pk_test_cHJpbWUtY2hpY2tlbi0yNS5jbGVyay5hY2NvdW50cy5kZXYk'; 
-const PROD_CLERK_KEY = 'pk_live_Y2xlcmsubGlib3RidWxhY2FuLmNvbSQ'; 
+
+const DEV_CLERK_KEY  = 'pk_test_cHJpbWUtY2hpY2tlbi0yNS5jbGVyay5hY2NvdW50cy5kZXYk'; // prime-chicken-25.clerk.accounts.dev
+const PROD_CLERK_KEY = 'pk_live_Y2xlcmsubGlib3RidWxhY2FuLmNvbSQ';                  // clerk.libotbulacan.com
 const CLERK_PUBLISHABLE_KEY =
   process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY ?? (__DEV__ ? DEV_CLERK_KEY : PROD_CLERK_KEY);
 
@@ -90,10 +87,7 @@ if (!CLERK_PUBLISHABLE_KEY) {
 
 const Stack = createNativeStackNavigator();
 
-// Before the app knows who is signed in, Clerk has to reach its server, and on
-// a weak signal that takes a while (it retries quietly). The offline banner
-// isn't mounted yet, so a bare spinner looked stuck; after a few seconds this
-// says why.
+
 const SLOW_START_MS = 6000;
 
 function StartupWait() {
@@ -228,12 +222,7 @@ function AppNavigator() {
         }
         wasArchivedRef.current = isArchivedNow;
 
-        // A suspension locks the account until it ends: SuspendedScreen takes
-        // the place of the app, and the server refuses the account's requests
-        // (the backend's middleware/rejectBanned.js). Suspended at sign-in, or
-        // already known: the screen shows. Suspended mid-session: the same
-        // one-time popup as a ban first, never a screen swap on its own. Once
-        // a check finds it ended, the app opens again.
+        
         const isSuspendedNow = !!moderationData?.isSuspended;
         if (!isSuspendedNow) {
           setSuspensionInfo(null);
@@ -260,15 +249,15 @@ function AppNavigator() {
 
     checkStatus(false);
 
+    
     const gate = setTimeout(() => { if (!cancelled) setIsCheckingBan(false); }, 5000);
 
-    // Catch banned account during app activity.
+    
     const interval = setInterval(() => checkStatus(true), 60000);
     const appStateSub = AppState.addEventListener("change", (next) => {
       if (next === "active") checkStatus(true);
     });
-    // And the moment an admin acts on the account (utils/live.js); the
-    // minute's check stays for when the live connection is down.
+    
     const stopLive = subscribeLive(["moderation"], () => checkStatus(true));
 
     return () => {
@@ -280,8 +269,6 @@ function AppNavigator() {
     };
   }, [isSignedIn, userId]);
 
-  // Once per sign-in. Offline, or no account row yet (a sign-up still being
-  // saved): no screen, and the next sign-in asks again.
   useEffect(() => {
     setNeedsMunicipality(false);
     if (!(isSignedIn && userId)) return;
@@ -307,10 +294,7 @@ function AppNavigator() {
         <ReviewProvider>
           <BookmarkProvider>
             <ErrorBoundary>
-              {/* Draws the reward moments (badges, town badges, titles) above
-                  every screen, so they carry over a navigation. */}
               <RewardCelebrationProvider>
-                {/* Rewards earned away from this phone's own steps (utils/owedRewards.js). */}
                 {isSignedIn && !banInfo?.archived && !suspensionInfo?.isSuspended && <OwedRewards key={userId} />}
                 <NavigationContainer ref={navigationRef} theme={navTheme}>
                   {isSignedIn && banInfo?.archived ? (
@@ -325,10 +309,7 @@ function AppNavigator() {
                         {isSignedIn ? (
                           <>
                             <Stack.Screen name="Home"              component={Home}               options={{ gestureEnabled: false }} />
-                            {/* Profile used to live inside the Home drawer. The drawer
-                                was removed (it duplicated the tabs and quick actions and
-                                owned no unique destination), so Profile is a stack screen
-                                reached from the Home header avatar. */}
+              
                             <Stack.Screen name="Profile"           component={ProfileScreen} />
                             <Stack.Screen name="Leaderboard"       component={Leaderboard} />
                             <Stack.Screen name="InformationScreen" component={InformationScreen} />
@@ -353,9 +334,6 @@ function AppNavigator() {
                           </>
                         ) : (
                           <>
-                            {/* Sign-in is the first screen: the "Discover Fun Ways
-                                to Explore Bulacan" welcome screen in front of it
-                                is gone (mock defense notes, 2026-10-26). */}
                             <Stack.Screen name="Login"             component={Login}            options={{ gestureEnabled: false }} />
                             <Stack.Screen name="Register"          component={Register} />
                             <Stack.Screen name="EmailVerification" component={EmailVerification} options={{ gestureEnabled: false }} />
