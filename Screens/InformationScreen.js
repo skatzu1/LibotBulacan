@@ -314,7 +314,8 @@ function ReviewCard({ review, spotId, clerkUser, profileImage, reactToReview, on
   return (
     <View style={[styles.reviewCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
       <View style={styles.reviewHead}>
-        {/* Someone else's photo and name open their profile. */}
+        {/* Someone else's photo and name open their profile, unless they hid it:
+            then the server sends no clerkUserId and this can't be tapped. */}
         <TouchableOpacity
           style={styles.reviewAuthorTap}
           onPress={() => onOpenAuthor(review)}
@@ -324,8 +325,7 @@ function ReviewCard({ review, spotId, clerkUser, profileImage, reactToReview, on
           accessibilityLabel={isMe ? `By ${author} (you)` : `By ${author}`}
           accessibilityHint={isMe || !review.clerkUserId ? undefined : "Opens their profile"}
         >
-          {/* A writer who hid their account (2026-10-28): "Hidden traveler". */}
-          <Avatar uri={avatarUri} name={author} size={32} hidden={review.hidden === true} />
+          <Avatar uri={avatarUri} name={author} size={32} />
           <Text style={[styles.reviewAuthor, { color: colors.textPrimary }]} numberOfLines={1}>
             By {author}{isMe ? <Text style={{ color: colors.textMuted, fontFamily: fonts.sansMedium }}> (you)</Text> : null}
           </Text>

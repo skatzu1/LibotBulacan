@@ -76,7 +76,7 @@ export default function TravelerProfile({ navigation, route }) {
         {header}
         <View style={styles.state}>
           {error === "hidden"
-            ? <EmptyState icon="eye-off" title="This traveler keeps their account hidden" text="They chose not to show their profile to other travelers." />
+            ? <EmptyState icon="eye-off" title="This traveler keeps their profile hidden" text="They chose not to show their profile to other travelers." />
             : <EmptyState icon="user" title="This traveler is no longer here" text="Their account was removed or is out of public view." />}
         </View>
       </View>
