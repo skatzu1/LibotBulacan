@@ -17,10 +17,12 @@ const when = (iso) => {
 export default function UpdateNotice() {
   const notice = useSystemNotice();
   const { colors } = useTheme();
+  // null until storage answers, so a put-away notice doesn't flash. Nothing
+  // saved comes back as null too, which has to end the wait as well.
   const [dismissed, setDismissed] = useState(null);
 
   useEffect(() => {
-    AsyncStorage.getItem(DISMISSED_KEY).then(setDismissed).catch(() => setDismissed(""));
+    AsyncStorage.getItem(DISMISSED_KEY).then((saved) => setDismissed(saved ?? "")).catch(() => setDismissed(""));
   }, []);
 
   if (!notice || dismissed === null || dismissed === notice.id) return null;
