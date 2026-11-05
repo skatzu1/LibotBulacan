@@ -15,7 +15,7 @@ export const LEGAL_DOCS = [
         "type": "p",
         "runs": [
           {
-            "text": "These Terms are the agreement between you and Jasper, who runs LibotBulacan (“we”, “us”). They cover the app, this website and the server behind them (together, “LibotBulacan”)."
+            "text": "These Terms are the agreement between you and the dev team who run LibotBulacan (“we”, “us”). They cover the app, this website and the server behind them (together, “LibotBulacan”)."
           }
         ],
         "lede": true
@@ -544,7 +544,7 @@ export const LEGAL_DOCS = [
         "type": "p",
         "runs": [
           {
-            "text": "LibotBulacan is a tourism guide to Bulacan, Philippines. The app, this website and the server behind them are run by Jasper (“we”, “us”)."
+            "text": "LibotBulacan is a tourism guide to Bulacan, Philippines. The app, this website and the server behind them are run by the dev team (“we”, “us”)."
           }
         ],
         "lede": true
