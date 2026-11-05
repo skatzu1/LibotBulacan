@@ -538,7 +538,7 @@ export const LEGAL_DOCS = [
         "type": "p",
         "runs": [
           {
-            "text": "LibotBulacan is a tourism guide to Bulacan, Philippines. The app, this website and the server behind them are run by Jasper (“we”, “us”)."
+            "text": "LibotBulacan is a tourism guide to Bulacan, Philippines. The app, this website and the server behind them are run by the dev team (“we”, “us”)."
           }
         ],
         "lede": true
