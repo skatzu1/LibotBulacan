@@ -1,5 +1,6 @@
 import React from "react";
 import { render, fireEvent, waitFor } from "@testing-library/react-native";
+import { Linking } from "react-native";
 import { SafeAreaProvider } from "react-native-safe-area-context";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { ThemeProvider } from "../context/ThemeContext";
@@ -112,6 +113,36 @@ describe("The Terms box on sign-up", () => {
     expect(checked(tree)).toBe(true);
     fireEvent.press(tree.getByRole("checkbox"));
     expect(checked(tree)).toBe(false);
+  });
+
+  describe("the Terms and Privacy names", () => {
+    let open;
+    beforeEach(() => { open = jest.spyOn(Linking, "openURL").mockResolvedValue(true); });
+    afterEach(() => { open.mockRestore(); });
+
+    it("open their pages and leave the box alone", async () => {
+      const tree = renderRegister();
+      fireEvent.press(await tree.findByText("Terms and Conditions", {}, { timeout: 8000 }));
+      await waitFor(() => expect(open).toHaveBeenCalledWith("https://libotbulacan.com/terms"));
+      fireEvent.press(tree.getByText("Privacy Policy"));
+      await waitFor(() => expect(open).toHaveBeenCalledWith("https://libotbulacan.com/privacy"));
+      expect(checked(tree)).toBe(false);
+    });
+
+    it("are offered to a screen reader as the checkbox's actions", async () => {
+      const tree = renderRegister();
+      const box = await tree.findByRole("checkbox", {}, { timeout: 8000 });
+      fireEvent(box, "accessibilityAction", { nativeEvent: { actionName: "privacy" } });
+      await waitFor(() => expect(open).toHaveBeenCalledWith("https://libotbulacan.com/privacy"));
+      expect(checked(tree)).toBe(false);
+    });
+
+    it("say so when the page can't be opened", async () => {
+      open.mockRejectedValue(new Error("no browser"));
+      const tree = renderRegister();
+      fireEvent.press(await tree.findByText("Terms and Conditions", {}, { timeout: 8000 }));
+      await waitFor(() => expect(showAlert).toHaveBeenCalledWith("Unavailable", "This page isn't available right now."));
+    });
   });
 });
 

@@ -7,6 +7,7 @@ import {
   ActivityIndicator,
   Platform,
   Image,
+  Linking,
 } from "react-native";
 import { showAlert, showToast } from "../components/AppAlert";
 import { useState, useEffect, useRef, useMemo } from "react";
@@ -29,6 +30,7 @@ import PasswordStrength from "../components/PasswordStrength";
 import DobField from "../components/DobField";
 import { municipalityError } from "../utils/municipalities";
 import { LEGAL_VERSION } from "../utils/legalText";
+import { TERMS_URL, PRIVACY_URL } from "../utils/legalLinks";
 
 // Same full-screen background as sign-in; it carries its own cyan→yellow wash.
 const REGISTER_BG = require("../assets/bg.png");
@@ -37,8 +39,23 @@ WebBrowser.maybeCompleteAuthSession();
 
 // ── Terms agreement ───────────────────────────────────────────────
 // A plain checkbox (2026-10-24): tap it to tick it. Both Sign up and
-// Continue with Google need the tick.
+// Continue with Google need the tick. The two names open their pages on the
+// website, without ticking the box.
 export const CONSENT_ERROR = "Tick the box to agree to the Terms and Privacy Policy first.";
+
+const openLegalPage = (url) =>
+  Linking.openURL(url).catch(() => showAlert("Unavailable", "This page isn't available right now."));
+
+// The row reads as one checkbox to a screen reader, so the pages are offered
+// as its actions too.
+const LEGAL_ACTIONS = [
+  { name: "terms", label: "Open Terms and Conditions" },
+  { name: "privacy", label: "Open Privacy Policy" },
+];
+const onLegalAction = ({ nativeEvent }) => {
+  if (nativeEvent.actionName === "terms") openLegalPage(TERMS_URL);
+  if (nativeEvent.actionName === "privacy") openLegalPage(PRIVACY_URL);
+};
 
 function ConsentRow({ agreed, onPress, invalid, disabled }) {
   const { colors } = useTheme();
@@ -52,6 +69,8 @@ function ConsentRow({ agreed, onPress, invalid, disabled }) {
       accessibilityRole="checkbox"
       accessibilityState={{ checked: agreed, disabled }}
       accessibilityLabel="I've read and agree to the Terms and Conditions and Privacy Policy"
+      accessibilityActions={LEGAL_ACTIONS}
+      onAccessibilityAction={onLegalAction}
     >
       <View style={[styles.box, agreed
         ? { backgroundColor: colors.success, borderColor: colors.success }
@@ -60,8 +79,9 @@ function ConsentRow({ agreed, onPress, invalid, disabled }) {
         {agreed && <Icon name="check" size={15} color={colors.card} />}
       </View>
       <Text style={[styles.consentText, { color: colors.textSecondary }]} maxFontSizeMultiplier={MAX_FONT_SCALE}>
-        I've read and agree to the <Text style={link}>Terms and Conditions</Text> and{" "}
-        <Text style={link}>Privacy Policy</Text>
+        I've read and agree to the{" "}
+        <Text style={link} accessibilityRole="link" onPress={() => openLegalPage(TERMS_URL)}>Terms and Conditions</Text> and{" "}
+        <Text style={link} accessibilityRole="link" onPress={() => openLegalPage(PRIVACY_URL)}>Privacy Policy</Text>
       </Text>
     </TouchableOpacity>
   );
