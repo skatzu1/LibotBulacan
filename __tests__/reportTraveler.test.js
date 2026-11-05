@@ -53,6 +53,27 @@ describe("TravelerProfile", () => {
     expect(tree.queryByText("Report this traveler")).toBeNull();
   });
 
+  const hiddenAna = (traveler) => ({ response: { status: 404, data: { hidden: true, traveler: { clerkUserId: "u_ana", name: "Ana Reyes", profileImage: null, title: null, isMe: false, reportedByMe: false, ...traveler } } } });
+
+  it("a hidden traveler says so, shows no figures, and can still be reported", async () => {
+    mockGet.mockRejectedValue(hiddenAna());
+    const navigation = nav();
+    const tree = wrap(<TravelerProfile navigation={navigation} route={{ params: { clerkUserId: "u_ana", name: "Ana Reyes" } }} />);
+    expect(await tree.findByText("This profile is hidden")).toBeTruthy();
+    expect(tree.getByText("Ana Reyes")).toBeTruthy();
+    expect(tree.queryByText("Points")).toBeNull();
+
+    fireEvent.press(tree.getByText("Report this traveler"));
+    expect(navigation.navigate).toHaveBeenCalledWith("ReportTraveler", { clerkUserId: "u_ana", name: "Ana Reyes" });
+  });
+
+  it("a hidden traveler you've reported offers no second report", async () => {
+    mockGet.mockRejectedValue(hiddenAna({ reportedByMe: true }));
+    const tree = wrap(<TravelerProfile navigation={nav()} route={{ params: { clerkUserId: "u_ana" } }} />);
+    expect(await tree.findByText("You reported this traveler")).toBeTruthy();
+    expect(tree.queryByText("Report this traveler")).toBeNull();
+  });
+
   it("a traveler out of public view is gone", async () => {
     mockGet.mockRejectedValue({ response: { status: 404 } });
     const tree = wrap(<TravelerProfile navigation={nav()} route={{ params: { clerkUserId: "u_ana", name: "Ana Reyes" } }} />);

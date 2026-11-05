@@ -9,7 +9,7 @@ const ON_HERO = { baseColor: "rgba(255,255,255,0.38)", shineColor: "rgba(255,255
 // `sizes` is the screen's PODIUM table: { place: { blockH, avatarSz } }.
 export function PodiumSkeleton({ sizes }) {
   return (
-    <View style={styles.podium} accessibilityLabel="Loading leaderboard">
+    <View style={styles.podium} accessibilityLabel="Loading Ranking">
       {[2, 1, 3].map((place) => {
         const { blockH, avatarSz } = sizes[place];
         const face = avatarSz + 10;

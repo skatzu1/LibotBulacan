@@ -22,6 +22,9 @@ jest.mock("@react-navigation/native", () => ({
   useNavigation: () => mockNavigation,
   useRoute: () => mockRoute,
 }));
+jest.mock("../navigation/navigationRef", () => ({
+  navigationRef: { isReady: () => true, navigate: jest.fn() },
+}));
 jest.mock("../context/ArrivalContext", () => ({ useArrival: () => ({ allSpots: [] }) }));
 jest.mock("expo-haptics", () => ({
   notificationAsync: jest.fn(async () => {}),
@@ -95,14 +98,14 @@ describe("Picking the title to show", () => {
     expect(radio(page, "Malolos Traveler").props.accessibilityState).toEqual(expect.objectContaining({ checked: false }));
     expect(page.queryByRole("radio", { name: /GOAT Traveler/ })).toBeNull();
     expect(page.queryByRole("radio", { name: /District 1 Traveler/ })).toBeNull();
-    expect(page.getByText("On your profile and the leaderboard")).toBeTruthy();
+    expect(page.getByText("On your profile and the Ranking")).toBeTruthy();
     // The locked ones say what they take, by tier.
     expect(page.getByText("Finish every municipality in Bulacan with spots (7)")).toBeTruthy();
     expect(page.getByText("Finish every municipality with spots in District 1 (5)")).toBeTruthy();
     expect(page.getByText("GOLD")).toBeTruthy();
     expect(page.getByText("SILVER")).toBeTruthy();
     // Two earned: the summary says which one others see.
-    expect(page.getByRole("button", { name: "Baliwag Traveler shows on your profile and the leaderboard" })).toBeTruthy();
+    expect(page.getByRole("button", { name: "Baliwag Traveler shows on your profile and the Ranking" })).toBeTruthy();
   });
 
   it("puts the earned titles at the top, then the ones still to earn", async () => {
@@ -118,7 +121,7 @@ describe("Picking the title to show", () => {
     expect(JSON.parse(titleCalls()[0][1].body)).toEqual({ key: "town:Malolos" });
     expect(radio(page, "Malolos Traveler").props.accessibilityState).toEqual(expect.objectContaining({ checked: true }));
     expect(radio(page, "Baliwag Traveler").props.accessibilityState).toEqual(expect.objectContaining({ checked: false }));
-    expect(page.getByRole("button", { name: "Malolos Traveler shows on your profile and the leaderboard" })).toBeTruthy();
+    expect(page.getByRole("button", { name: "Malolos Traveler shows on your profile and the Ranking" })).toBeTruthy();
 
     // The one already on show: nothing to send.
     fireEvent.press(radio(page, "Malolos Traveler"));

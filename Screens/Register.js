@@ -62,8 +62,8 @@ function ConsentRow({ agreed, onPress, invalid, disabled }) {
   const link = { color: colors.brand, fontFamily: fonts.sansSemi };
 
   const handleLinkPress = (url) => (e) => {
-    e.stopPropagation();
-    Linking.openURL(url);
+    e?.stopPropagation?.();
+    openLegalPage(url);
   };
 
   return (

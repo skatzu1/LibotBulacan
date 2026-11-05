@@ -175,8 +175,8 @@ const toEntry = (u) => ({
   // The title they show (utils/titles.js: a town's, a district's or The GOAT
   // Traveler); null without one, or for one the app doesn't know.
   title:   titleName(u.title) ? u.title : null,
-  // You hid your profile from other travelers. Someone else who did comes with
-  // no clerkUserId instead: their row looks the same, but can't open.
+  // Hid their profile from other travelers. Their row looks the same and opens
+  // the same, to a profile that says it is hidden (Screens/TravelerProfile.js).
   hidden:  u.hidden === true,
   isMe:    false,
 });
@@ -287,7 +287,7 @@ export default function Leaderboard() {
       hasLoaded.current = true;
     } catch (e) {
       console.warn("Leaderboard error:", e);
-      fail(loadErrorText(e, "the leaderboard"));
+      fail(loadErrorText(e, "the Ranking"));
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -338,9 +338,7 @@ export default function Leaderboard() {
   );
 
   // A traveler on the board opens their profile, where they can be reported
-  // (Screens/TravelerProfile.js); you open your own. One who hid their profile
-  // can't be tapped at all (user, 2026-11-05).
-  const canOpen = (user) => user.isMe || !!user.clerkUserId;
+  // (Screens/TravelerProfile.js); you open your own.
   const openTraveler = (user) => {
     if (user.isMe) navigation.navigate("Profile");
     else navigation.navigate("TravelerProfile", { clerkUserId: user.clerkUserId, name: user.name, avatar: user.avatar, title: user.title });
@@ -368,7 +366,7 @@ export default function Leaderboard() {
         accessibilityRole="header"
         maxFontSizeMultiplier={MAX_FONT_SCALE}
       >
-        Leaderboard
+        Ranking
       </Text>
       <View style={styles.backBtn} />
     </View>
@@ -427,11 +425,10 @@ export default function Leaderboard() {
           user.isMe && { backgroundColor: colors.brandSoft },
         ]}
         onPress={() => openTraveler(user)}
-        disabled={!canOpen(user)}
         activeOpacity={0.7}
-        accessibilityRole={canOpen(user) ? "button" : undefined}
+        accessibilityRole="button"
         accessibilityLabel={`Rank ${rank}${tied ? ", tied" : ""}, ${user.isMe ? "you" : user.name}, ${user.points} points, ${spotsLabel(user.visited)} visited${user.title ? `, ${titleName(user.title)}` : ""}`}
-        accessibilityHint={!canOpen(user) ? undefined : user.isMe ? "Opens your profile" : "Opens their profile"}
+        accessibilityHint={user.isMe ? "Opens your profile" : "Opens their profile"}
       >
         <View style={styles.rankSlot}>
           {medal ? (
@@ -628,10 +625,9 @@ export default function Leaderboard() {
                         behind.length === 2 && j === 0 ? { left: 0 } : { right: 0 },
                       ]}
                       onPress={() => openTraveler(user)}
-                      disabled={!canOpen(user)}
                       activeOpacity={0.8}
-                      accessibilityRole={canOpen(user) ? "button" : undefined}
-                      accessibilityLabel={user.isMe ? "Your profile" : canOpen(user) ? `${user.name}'s profile` : user.name}
+                      accessibilityRole="button"
+                      accessibilityLabel={user.isMe ? "Your profile" : `${user.name}'s profile`}
                     >
                       {personAvatar(user, small)}
                     </TouchableOpacity>
@@ -639,10 +635,9 @@ export default function Leaderboard() {
                   <TouchableOpacity
                     style={[styles.avatarRing, styles.frontFace, { borderColor: medal.ring, left: frontLeft }]}
                     onPress={() => openTraveler(lead)}
-                    disabled={!canOpen(lead)}
                     activeOpacity={0.8}
-                    accessibilityRole={canOpen(lead) ? "button" : undefined}
-                    accessibilityLabel={lead.isMe ? "Your profile" : canOpen(lead) ? `${lead.name}'s profile` : lead.name}
+                    accessibilityRole="button"
+                    accessibilityLabel={lead.isMe ? "Your profile" : `${lead.name}'s profile`}
                   >
                     {personAvatar(lead, cfg.avatarSz)}
                     <BadgeShine size={front} delay={place * 700} every={3000} intensity={0.5} />

@@ -5,6 +5,8 @@
 // they live, since when), and "Report this traveler", which goes to the admins'
 // User Management → Reported (Screens/ReportTraveler.js). No email, birthday or
 // places: the server leaves them out (LibotBackend GET /api/users/traveler/:id).
+// One who hid their profile shows only their name, photo and title, a line that
+// it is hidden, and the report, which still works (user, 2026-11-05).
 //
 // The name, photo and title the opening screen already had show at once; the
 // rest loads under them.
@@ -42,8 +44,13 @@ export default function TravelerProfile({ navigation, route }) {
       setError(null);
     } catch (err) {
       // A profile already on screen stays when a later load fails.
-      // They hid their account (2026-10-28), maybe while this was open.
-      if (err?.response?.status === 404) setError(err.response.data?.hidden ? "hidden" : "gone");
+      // They hid their account (2026-10-28), maybe while this was open: the
+      // figures already here go, and only what the server still sends stays.
+      if (err?.response?.status === 404 && err.response.data?.hidden) {
+        setTraveler(err.response.data.traveler || null);
+        shown.current = true;
+        setError("hidden");
+      } else if (err?.response?.status === 404) setError("gone");
       else if (!shown.current) setError("failed");
     }
   }, [clerkUserId]);
@@ -70,14 +77,12 @@ export default function TravelerProfile({ navigation, route }) {
 
   const header = <ScreenHeader title="Traveler" onBack={() => navigation.goBack()} />;
 
-  if (error === "gone" || error === "hidden") {
+  if (error === "gone") {
     return (
       <View style={[styles.container, { backgroundColor: colors.background }]}>
         {header}
         <View style={styles.state}>
-          {error === "hidden"
-            ? <EmptyState icon="eye-off" title="This traveler keeps their profile hidden" text="They chose not to show their profile to other travelers." />
-            : <EmptyState icon="user" title="This traveler is no longer here" text="Their account was removed or is out of public view." />}
+          <EmptyState icon="user" title="This traveler is no longer here" text="Their account was removed or is out of public view." />
         </View>
       </View>
     );
@@ -121,17 +126,28 @@ export default function TravelerProfile({ navigation, route }) {
 
         <Text style={[styles.userName, { color: colors.textPrimary }]}>{name}</Text>
         {title && <TitleChip title={title} style={styles.title} />}
-        {traveler
-          ? !!sub && <Text style={[styles.sub, { color: colors.textSecondary }]}>{sub}</Text>
-          : <Skeleton width={180} height={13} radius={6} style={styles.subBone} />}
+        {error === "hidden" ? (
+          <EmptyState
+            icon="eye-off"
+            title="This profile is hidden"
+            text="This traveler chose to hide their profile, but you can still report the account."
+            style={styles.hiddenNote}
+          />
+        ) : (
+          <>
+            {traveler
+              ? !!sub && <Text style={[styles.sub, { color: colors.textSecondary }]}>{sub}</Text>
+              : <Skeleton width={180} height={13} radius={6} style={styles.subBone} />}
 
-        <View style={[styles.statsRow, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
-          {stat("map-pin", "Spots", traveler?.spotsVisited ?? 0, colors.brand)}
-          <View style={[styles.statDivider, { backgroundColor: colors.cardBorder }]} />
-          {stat("star", "Points", traveler?.points ?? 0, colors.star)}
-          <View style={[styles.statDivider, { backgroundColor: colors.cardBorder }]} />
-          {stat("award", "Badges", (traveler?.badges ?? 0) + (traveler?.townBadges ?? 0), colors.brand)}
-        </View>
+            <View style={[styles.statsRow, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
+              {stat("map-pin", "Spots", traveler?.spotsVisited ?? 0, colors.brand)}
+              <View style={[styles.statDivider, { backgroundColor: colors.cardBorder }]} />
+              {stat("star", "Points", traveler?.points ?? 0, colors.star)}
+              <View style={[styles.statDivider, { backgroundColor: colors.cardBorder }]} />
+              {stat("award", "Badges", (traveler?.badges ?? 0) + (traveler?.townBadges ?? 0), colors.brand)}
+            </View>
+          </>
+        )}
 
         {traveler && !traveler.isMe && (traveler.reportedByMe ? (
           <ListRow
@@ -170,6 +186,7 @@ const styles = StyleSheet.create({
   title:    { alignSelf: "center", marginBottom: 8 },
   sub:      { fontSize: 13, fontFamily: fonts.sansMedium, textAlign: "center", marginBottom: 26 },
   subBone:  { alignSelf: "center", marginTop: 2, marginBottom: 26 },
+  hiddenNote: { marginTop: 14, marginBottom: 28 },
 
   statsRow: {
     flexDirection: "row", borderRadius: 22, paddingVertical: 20, paddingHorizontal: 12,

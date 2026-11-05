@@ -53,8 +53,8 @@ const Settings = ({ navigation }) => {
   }, [navigation, checkNotifPermission]);
 
   // Hide my profile (user, 2026-10-28; changed 2026-11-05): other travelers
-  // still see the name and picture on the leaderboard and on reviews, but can't
-  // open the profile (LibotBackend utils/hiddenTravelers.js).
+  // still see the name and picture on the leaderboard and on reviews, and can
+  // report them, but see nothing else (LibotBackend utils/hiddenTravelers.js).
   // Read from /api/users/me, and again when another phone of theirs changes it.
   const { getToken } = useAuth();
   const [hidden, setHidden] = React.useState(null);
@@ -85,7 +85,7 @@ const Settings = ({ navigation }) => {
       });
       if (!res.ok) throw new Error(`visibility ${res.status}`);
       showToast(
-        value ? "Your profile is hidden. Others can see your name and photo, but can't open it." : "Other travelers can open your profile again.",
+        value ? "Your profile is hidden. Others only see your name and photo, and can still report your account." : "Other travelers can see your profile again.",
         { type: "success" },
       );
     } catch (e) {
@@ -169,7 +169,7 @@ const Settings = ({ navigation }) => {
           <ListRow
             icon="eye-off"
             title="Hide my profile"
-            subtitle={hidden ? "Others can't open your profile" : "Others can open your profile"}
+            subtitle={hidden ? "Others only see your name and photo" : "Others can see your profile"}
             right={
               hidden === null
                 ? <ActivityIndicator size="small" color={colors.brand} />
@@ -181,7 +181,7 @@ const Settings = ({ navigation }) => {
                     trackColor={{ false: colors.cardBorder, true: colors.brand }}
                     thumbColor="#fff"
                     accessibilityLabel="Hide my profile from other travelers"
-                    accessibilityHint="Other travelers still see your name and photo on the leaderboard and on your reviews, but can't open your profile"
+                    accessibilityHint="Other travelers still see your name and photo on the Ranking and on your reviews, and can still report your account, but see nothing else on your profile"
                   />
                 )
             }

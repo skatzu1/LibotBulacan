@@ -314,16 +314,15 @@ function ReviewCard({ review, spotId, clerkUser, profileImage, reactToReview, on
   return (
     <View style={[styles.reviewCard, { backgroundColor: colors.card, borderColor: colors.cardBorder }]}>
       <View style={styles.reviewHead}>
-        {/* Someone else's photo and name open their profile, unless they hid it:
-            then the server sends no clerkUserId and this can't be tapped. */}
+        {/* Someone else's photo and name open their profile. */}
         <TouchableOpacity
           style={styles.reviewAuthorTap}
           onPress={() => onOpenAuthor(review)}
-          disabled={isMe || !review.clerkUserId}
+          disabled={isMe}
           activeOpacity={0.7}
-          accessibilityRole={isMe || !review.clerkUserId ? undefined : "button"}
+          accessibilityRole={isMe ? undefined : "button"}
           accessibilityLabel={isMe ? `By ${author} (you)` : `By ${author}`}
-          accessibilityHint={isMe || !review.clerkUserId ? undefined : "Opens their profile"}
+          accessibilityHint={isMe ? undefined : "Opens their profile"}
         >
           <Avatar uri={avatarUri} name={author} size={32} />
           <Text style={[styles.reviewAuthor, { color: colors.textPrimary }]} numberOfLines={1}>
