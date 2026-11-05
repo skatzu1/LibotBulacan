@@ -10,22 +10,6 @@ import Logo from "./Logo";
 import KeyboardAvoider from "./KeyboardAvoider";
 import useKeyboardAwareScroll from "../hooks/useKeyboardAwareScroll";
 
-/*
- * The shell every pre-login screen sits in (Login, Forgot Password, Register,
- * Email Verification).
- *
- * The Bulacan photograph (assets/bg.png) fills the screen under a veil in the
- * theme's page colour, and a panel with ONE oversized corner pulls up over it.
- * That single asymmetric corner is the signature of this surface; four equal
- * radii would read as a generic card.
- *
- * Colours are the app's own tokens, so these screens follow light/dark like
- * every other screen. (They used to be a fixed cyan/yellow surface that ignored
- * dark mode.) Contrast of every text colour on the panel was measured against
- * the darkest pixel of bg.png in light mode and the brightest in dark mode —
- * see photoVeil / panelOverPhoto in context/ThemeContext.js.
- */
-
 const BG = require("../assets/bg.png");
 
 // "#rrggbb" + alpha → rgba(). Theme colours in the app are plain hex.

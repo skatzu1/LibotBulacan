@@ -4,20 +4,6 @@ import Icon from "./Icon";
 import { useTheme, fonts, MAX_FONT_SCALE } from "../context/ThemeContext";
 import { spotImage } from "../utils/image";
 
-/*
- * One spot in the Bakit List, AR View and Navigate grids — the Badges screen's
- * card (user, 2026-10-20: "make it like the badge screen"): the spot's photo in
- * a circle, its name and town, and a footer.
- *
- * Done spots sit on a white card with a tick on the photo, like a claimed
- * badge; the rest recede into the page tint. Unlike a locked badge, a spot not
- * done yet keeps its colours and has no lock: it is open, just not done.
- *
- *   footer  { text, icon? } — for a done spot, muted text under the name
- *           (like a claimed badge's date); otherwise a tinted chip (like a
- *           locked badge's points): "2 of 4", "+50", "Directions".
- */
-
 export const PHOTO = 60;
 
 // Padding, the photo, a two-line name, the town and the footer, with the text

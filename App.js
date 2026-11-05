@@ -1,7 +1,5 @@
 import './utils/silenceLogs';
 import 'react-native-reanimated';
-// Must stay among the first imports: it registers the gesture system before
-// any screen loads. Imported once, with the one name App.js needs from it.
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { NavigationContainer, DefaultTheme, DarkTheme } from "@react-navigation/native";
@@ -33,12 +31,7 @@ import { trackBackendRead }     from "./utils/serverActivity";
 import useSystemStatus, { SystemStatusContext } from "./hooks/useSystemStatus";
 import { connectLive, disconnectLive, subscribeLive } from "./utils/live";
 
-// Fonts. Every weight is a separate family because React Native does not
-// synthesize weights for custom fonts — see the note in ThemeContext.
-// Each face comes from its own folder. A package's index requires every face
-// it publishes, and everything required ships inside the iPhone and Android
-// app, used or not. Dongle is our own cut (Latin only, scaled), so it lives in
-// assets/fonts.
+
 import { MomoTrustDisplay_400Regular }  from "@expo-google-fonts/momo-trust-display/400Regular";
 const Dongle_400Regular = require("./assets/fonts/Dongle_400Regular.ttf");
 const Dongle_700Bold    = require("./assets/fonts/Dongle_700Bold.ttf");
@@ -84,8 +77,8 @@ import ReportTraveler     from './Screens/ReportTraveler';
 // Release builds (preview + production) get the live instance; local dev gets the
 // test instance. Set EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY in .env to override either
 // one — e.g. to run a dev build against production while testing Google SSO.
-const DEV_CLERK_KEY  = 'pk_test_cHJpbWUtY2hpY2tlbi0yNS5jbGVyay5hY2NvdW50cy5kZXYk'; // prime-chicken-25.clerk.accounts.dev
-const PROD_CLERK_KEY = 'pk_live_Y2xlcmsubGlib3RidWxhY2FuLmNvbSQ';                  // clerk.libotbulacan.com
+const DEV_CLERK_KEY  = 'pk_test_cHJpbWUtY2hpY2tlbi0yNS5jbGVyay5hY2NvdW50cy5kZXYk'; 
+const PROD_CLERK_KEY = 'pk_live_Y2xlcmsubGlib3RidWxhY2FuLmNvbSQ'; 
 const CLERK_PUBLISHABLE_KEY =
   process.env.EXPO_PUBLIC_CLERK_PUBLISHABLE_KEY ?? (__DEV__ ? DEV_CLERK_KEY : PROD_CLERK_KEY);
 
@@ -267,17 +260,9 @@ function AppNavigator() {
 
     checkStatus(false);
 
-    // Don't hold the whole app on that first check. On a sleeping server it
-    // can take a minute, behind a bare spinner. After 5 s the app opens; if the
-    // account is banned, BannedScreen takes over when the answer arrives (the
-    // first check sets banInfo whenever it lands). A failed check already let
-    // the user through — this only stops a slow one from blocking.
     const gate = setTimeout(() => { if (!cancelled) setIsCheckingBan(false); }, 5000);
 
-    // Catch a ban that happens while the app is already open and in use —
-    // the one-shot check above only runs at sign-in, so without this a
-    // banned-mid-session user would see nothing until they force-quit and
-    // reopen the app.
+    // Catch banned account during app activity.
     const interval = setInterval(() => checkStatus(true), 60000);
     const appStateSub = AppState.addEventListener("change", (next) => {
       if (next === "active") checkStatus(true);

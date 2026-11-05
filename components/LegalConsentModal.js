@@ -6,20 +6,8 @@ import { PrimaryButton, H_PAD } from "./ui";
 import Icon from "./Icon";
 import { LEGAL_DOCS } from "../utils/legalText";
 
-/*
- * The Terms and Conditions and the Privacy Policy, in full, before sign-up
- * (the thesis panel, 2026-10-21: "pop up and scroll muna ng user sa baba bago
- * i-approve"). "I agree" stays off until the reader has reached the end of
- * both; a text short enough to fit on one screen counts as read.
- *
- * The words are the website's (utils/legalText.js, generated from
- * libotbulacan.com/terms and /privacy by scripts/gen-legal.js).
- */
-
-// How close to the bottom counts as the end: a fling rarely lands on the last pixel.
 const END_SLACK = 24;
 
-/** Has a scroll view of this size reached its end? */
 export function reachedEnd({ layoutHeight, offsetY, contentHeight }) {
   return layoutHeight > 0 && contentHeight > 0 && layoutHeight + offsetY >= contentHeight - END_SLACK;
 }

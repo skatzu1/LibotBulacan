@@ -1,19 +1,4 @@
 /**
- * Which AR model — if any — is allowed on screen right now.
- *
- * A spot's `modelsCoordinates` is a numbered trail, not a set. The moderator
- * lists the models in the order they are meant to be found, and that is the
- * order they appear in: first, then second, then last. Nothing is skipped,
- * nothing is chosen by proximity, and nothing that has been explored ever
- * comes back.
- *
- * This lives outside ARScreen because it is the one rule the whole screen
- * agrees on — the renderer, the radar, the step card and the arrival flash all
- * read from it — and because a rule with this many edge cases is worth being
- * able to test without a phone in your hand.
- */
-
-/**
  * @param {Array<{index:number, label:string, distance:number, radius:number, isInRange:boolean}>} anchorProximities
  *        Every anchor at this spot with its current distance, as produced by
  *        computeAnchorProximities. Sorted by DISTANCE, which is why this

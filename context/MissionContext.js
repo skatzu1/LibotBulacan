@@ -15,8 +15,6 @@ export const MissionProvider = ({ children }) => {
   const [completedMissions, setCompletedMissions] = useState([]);
   const fetchedSpots = useRef(new Set());
 
-  // Resolves false when the request failed; true or undefined otherwise
-  // (undefined: already loaded, or another call is loading it).
   const fetchMissions = useCallback(async (spotId) => {
     if (!spotId) return;
     if (fetchedSpots.current.has(spotId)) return;

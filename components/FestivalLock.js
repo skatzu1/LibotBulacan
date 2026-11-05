@@ -5,11 +5,6 @@ import { showAlert } from "./AppAlert";
 import Icon from "./Icon";
 import { isOpenNow, nextRun, formatRun, lockedText } from "../utils/festivalDates";
 
-// A festival on another day is locked (utils/festivalDates.js): its cards say
-// when it opens. Its page can still be read; the pickers for doing something
-// there (AR, missions, directions) say so instead of opening it.
-
-/** The chip on a locked festival's photo, e.g. "Opens May 14–15". Nothing when it's open. */
 export function FestivalLockChip({ spot, style }) {
   if (isOpenNow(spot)) return null;
   return (

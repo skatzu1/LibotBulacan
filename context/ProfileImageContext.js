@@ -11,7 +11,6 @@ import { useAuth } from "@clerk/clerk-expo";
 import { BASE_URL } from "../api";
 import { useLive } from "../utils/live";
 
-// Single source of truth for the backend host — see api.js.
 const ProfileImageContext = createContext(null);
 
 export function ProfileImageProvider({ children }) {

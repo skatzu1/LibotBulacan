@@ -1,14 +1,3 @@
-// Camera and photo-library access, asked for by the app itself before any
-// camera opens: the photo-mission camera, the profile and review photo
-// cameras, and AR.
-//
-// QA 2026-10-16: "everything involving the camera" crashed, on Android and
-// iPhone, and the phone never asked for camera access. Each library was left
-// to ask on its own: image-crop-picker, VisionCamera and Viro all can, but Viro
-// stops with "resumed without the required camera permissions" if it starts
-// without it, and nothing explained a refusal. Now the app asks first, in one
-// place, and a refusal gets a plain explanation with a way to Settings instead
-// of a camera that fails.
 import { Linking, Platform } from "react-native";
 import { showAlert } from "../components/AppAlert";
 

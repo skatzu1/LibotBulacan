@@ -7,20 +7,6 @@ import { useUser } from "@clerk/clerk-expo";
 import { useIsFocused } from "@react-navigation/native";
 import { useTheme, fonts, typography, radius, MAX_FONT_SCALE } from "../context/ThemeContext";
 
-/*
- * The first-run tour of Home: the screen dims, one thing at a time is cut out
- * of the dimming, and a card next to it says what it's for, with Skip and
- * Next. Asked for by the thesis panel ("start tutorial on Home").
- *
- * Shown once per account, the first time Home is on screen. Settings has
- * "Show the app tour" to see it again.
- *
- * Home marks the things it explains with `ref={tourTarget("points")}` etc.
- * Each target needs `collapsable={false}` so Android keeps a real view to
- * measure. A step whose target isn't on screen is skipped rather than
- * pointing at nothing.
- */
-
 const SEEN_KEY = (userId) => `homeTourSeen_v1:${userId || "anon"}`;
 
 // In order, top of the screen to the bottom.

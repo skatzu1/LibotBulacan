@@ -1,14 +1,3 @@
-// Live map for the "Nearby Eats" location mission (Screens/LocationMission.js):
-// the eatery's pin inside the radius it has to be completed in, the user's own
-// position as they walk, and the road route between them. (The parent spot is
-// left off: it sits a few dozen metres away and its marker kept landing under
-// the pin or its label. The screen names it in text instead.)
-//
-// It works like the navigation map (Screens/Track.js): Leaflet in a WebView,
-// the road route from GET /api/route (fetched by the screen with
-// hooks/useRoadRoute.js) drawn by the same code (utils/routeLine.js) and
-// trimmed as the user walks, and the same follow-me button. Once the user is
-// inside the ring the route is put away: there is nowhere left to go.
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { View, StyleSheet, TouchableOpacity } from "react-native";
 import { WebView } from "react-native-webview";
@@ -17,8 +6,6 @@ import { ROUTE_LINE_JS } from "../utils/routeLine";
 import { MAP_FONT_FACES, MAP_FONT } from "../utils/mapFont";
 import Icon from "./Icon";
 
-// A JS string literal that is also safe inside an inline <script> block —
-// names are admin-entered, so a stray "</script>" must not end the block.
 const jsString = (s) => JSON.stringify(String(s ?? "")).replace(/</g, "\\u003c");
 
 const hexA = (hex, a) => {

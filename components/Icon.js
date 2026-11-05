@@ -1,45 +1,4 @@
-/**
- * Icon.js — the app's ONLY icon component.
- *
- * Why this exists
- * ---------------
- * The app previously mixed four icon families: Feather for almost everything,
- * plus MaterialIcons / FontAwesome5 / MaterialCommunityIcons in ~10 places. That
- * mix wasn't arbitrary — Feather is outline-only, so any time a FILLED icon was
- * needed (a rated star, an active bookmark) another family had to be pulled in.
- * The cost was visual: those families have different stroke weights and optical
- * sizing, so a filled star sat next to a Feather outline looking heavier and
- * slightly misaligned.
- *
- * Phosphor solves that properly: one family, six weights, so outline and filled
- * are the SAME icon at the same optical size.
- *
- * Why a wrapper instead of importing Phosphor directly
- * ----------------------------------------------------
- * Icon names in this app are not all literals. Several are dynamic, and some
- * come from the BACKEND — `Spot.category.icon` is served by /api/categories, and
- * an admin can add a category with any Feather name without an app release.
- * Renaming icons at the call site would silently break that data.
- *
- * So this component keeps the Feather vocabulary as its public API and maps it
- * to Phosphor internally. Existing call sites, config objects and backend rows
- * all keep working, and swapping the underlying library again later is a change
- * to ONE file.
- *
- * Usage
- *   <Icon name="search" size={20} color={colors.brand} />
- *   <Icon name="bookmark" weight="fill" />     // filled state
- *   <Icon name="star" weight="fill" color={colors.star} />
- */
 import React from "react";
-// DEEP IMPORTS, one module per icon — deliberate and load-bearing.
-//
-// Metro does not tree-shake. Importing 82 names from the "phosphor-react-native"
-// barrel still pulled ALL 1512 icons x 6 weights into the bundle: it took the
-// Android JS bundle from 6.27 MB to 13.4 MB. The package exposes per-icon
-// entrypoints ("./src/icons/*" in its exports map) precisely for this.
-//
-// DO NOT collapse these back into a single barrel import.
 import { ApertureIcon } from "phosphor-react-native/src/icons/Aperture";
 import { ArrowCircleRightIcon } from "phosphor-react-native/src/icons/ArrowCircleRight";
 import { ArrowLeftIcon } from "phosphor-react-native/src/icons/ArrowLeft";
@@ -128,7 +87,6 @@ import { XCircleIcon } from "phosphor-react-native/src/icons/XCircle";
 import { DotsThreeVerticalIcon } from "phosphor-react-native/src/icons/DotsThreeVertical";
 import { FunnelIcon } from "phosphor-react-native/src/icons/Funnel";
 import { SlidersHorizontalIcon } from "phosphor-react-native/src/icons/SlidersHorizontal";
-// Explicit component table, built from the named imports above.
 const PH = {
   SlidersHorizontal: SlidersHorizontalIcon,
   Funnel: FunnelIcon,

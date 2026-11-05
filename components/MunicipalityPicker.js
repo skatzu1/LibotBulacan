@@ -7,22 +7,6 @@ import { BULACAN_MUNICIPALITIES } from "../utils/municipalities";
 import Icon from "./Icon";
 import { showAlert } from "./AppAlert";
 
-/*
- * The sign-up form's "which municipality do you live in" dropdown. Looks like
- * the other pill fields; a tap opens a sheet listing Bulacan's 24
- * municipalities. Built on React Native's own Modal, so no new native module
- * (and no new app build just for a picker library).
- *
- * The last row, "I don't live in Bulacan", picks nothing: the sheet closes and
- * a popup explains the app is for residents only (the refusal the welcome
- * screen used to give).
- *
- * `ref.current.focus()` opens it, so the form's "jump to the first problem"
- * works here the same as on a text field.
- *
- * The sheet on its own is MunicipalitySheet, for screens with their own field
- * style (Edit Profile).
- */
 const ROW_H = 52;
 // Long enough for the sheet's slide-down (animationType "slide").
 const SHEET_CLOSE_MS = 450;

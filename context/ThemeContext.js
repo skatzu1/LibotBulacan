@@ -3,36 +3,7 @@ import { useColorScheme } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import * as SystemUI from "expo-system-ui";
 
-const STORAGE_KEY = "libot_theme_pref";   // "light" | "dark" | "system"
-
-// ── Color palette ─────────────────────────────────────────────────────────────
-// Light mode is built on a WARM PAPER page, not sterile white. The reference is
-// capiz shell and old plaza signage — Bulacan is the cradle of the Republic, not
-// a beach resort, and a pure-white + pastel page read as the latter.
-//
-//   background  — capiz cream. The page.
-//   card        — WHITE. Cards now LIFT off the warm page instead of tinting it,
-//                 which is where depth comes from. (Previously both were cyan-ish,
-//                 so every surface sat flat at the same level.)
-//   brand       — deep teal for ICONS / small accents / non-CTA fills. AA on both
-//                 the page and on cards. NOT for headings.
-//   brandDark   — near-neutral dark; the HEADING / high-emphasis text colour.
-//   brandLight  — the cyan, DEMOTED to punctuation: pills, badges, icon wells.
-//                 It is no longer a surface colour.
-//   accent      — the yellow CTA. FILLS & HIGHLIGHTS ONLY, never raw text on a
-//                 light surface. `onAccent` is the dark text on a yellow fill.
-//   accentDark  — the readable amber for TEXT on accentSoft (the raw accent is
-//                 1.5:1 on white and can never be text).
-//   onBrand     — text/icon colour that sits on a `brand` (teal) fill.
-//
-// The admin panel (libot-admin-1/src/index.css) and the website
-// (LibotWeb/libot-download-site/styles.css) carry the same values as CSS
-// variables, light and dark, so the three read as one product. Change a
-// colour here and change it there too.
-//
-// Every foreground/background pair used in the app is verified at >= 4.5:1
-// (WCAG AA body text). Do not lighten a text token without re-checking it
-// against `background`, `card` AND `brandLight`.
+const STORAGE_KEY = "libot_theme_pref";
 export const lightColors = {
   // Backgrounds — warm paper page, white cards
   background:       "#FBF8F2",   // capiz cream

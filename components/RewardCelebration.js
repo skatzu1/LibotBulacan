@@ -20,26 +20,6 @@ import ProgressRing from "./ProgressRing";
 import { BadgeShine, Sparkles } from "./BadgeEffects";
 import useReduceMotion from "../hooks/useReduceMotion";
 
-/*
- * The moment something is earned (the thesis panel, 2026-10-21: "pagandahin
- * yung magiging achievement ng user kapag natapos mga missions"). Screens call
- * celebrate / showProgress / celebrateResult from utils/rewards.js; this draws
- * them:
- *
- *   a full-screen moment per reward — a spot's badge (iron), then a town's (bronze),
- *   a district's (silver), the Bulacan badge (gold), in that order when one
- *   step earns several — and a small banner for a step on the way ("+5 points
- *   · 2 of 3 done at …"). A town's, a district's and Bulacan's moment also name
- *   the title that comes with them.
- *
- * The look: the Libot compass star as a slow sunburst behind the reward,
- * confetti, and for a whole town, district or Bulacan, fiesta banderitas swinging in
- * across the top. Everything but the flags is in the reward's own metal (iron,
- * bronze, silver, gold; TIER_LOOK), on a dark ground of that metal in either
- * theme, so the metals read as metals. Reduce Motion keeps the words and the
- * medal, without the movement.
- */
-
 // ── Words ───────────────────────────────────────────────────────────────────
 
 export function copyFor(item) {

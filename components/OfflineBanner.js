@@ -5,22 +5,10 @@ import { useTheme, MAX_FONT_SCALE } from "../context/ThemeContext";
 import { oldestReadSince, subscribe } from "../utils/serverActivity";
 import Icon from "./Icon";
 
-// Libot needs the network for almost everything — spots, missions, reviews,
-// points — and without this every screen failed on its own terms (spinners
-// that never end, "Failed to load"). One banner across the top says what is
-// actually wrong and offers a retry, then briefly confirms when the connection
-// comes back. It also says when the server is just slow to answer: the free
-// server sleeps when idle, and the first request after that takes 30–60 s.
-
 const BACK_ONLINE_MS = 2200;
-// How long a read may wait before the banner explains why.
+
 const WAKING_AFTER_MS = 4000;
 
-// NetInfo is a native module. A binary built before it was added — an older
-// dev client, or a store build receiving a JS-only OTA update — doesn't contain
-// it, and the library throws the moment it is imported ("NativeModule.RNCNetInfo
-// is null"), which took the whole app down with it. Load it defensively: without
-// the native side the banner simply doesn't render, and everything else works.
 let NetInfo = null;
 try {
   NetInfo = require("@react-native-community/netinfo").default;
@@ -30,12 +18,9 @@ try {
   }
 }
 
-// `isInternetReachable` is null while NetInfo is still checking; treat that as
-// online so the banner never flashes on launch.
 const isOffline = (state) =>
   state.isConnected === false || state.isInternetReachable === false;
 
-// True while a read from the backend has been waiting longer than `afterMs`.
 function useServerWaking(afterMs) {
   const [waking, setWaking] = useState(false);
   useEffect(() => {

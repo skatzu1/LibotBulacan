@@ -48,26 +48,11 @@ import { ensureCameraAccess } from "../utils/cameraAccess";
 // ─────────────────────────────────────────────
 // DESIGN TOKENS
 // ─────────────────────────────────────────────
-// "#rrggbb" + alpha → rgba(). The theme's colours are plain hex.
 const withAlpha = (hex, alpha) => {
   const n = parseInt(hex.slice(1), 16);
   return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${alpha})`;
 };
 
-// The HUD follows the app's light/dark setting like every other screen (the
-// thesis panel asked for it; it used to be dark in every theme). Text and
-// status colours are the app's own theme tokens. What's specific to AR is how
-// the panels sit on a live camera feed: they're nearly opaque, so contrast
-// never depends on what the camera is looking at — cream and white in light
-// mode, the same page and card colours at night in dark mode (built from the
-// palette, so the two themes stay one family).
-//
-// Yellow has two jobs. `gold` / `cta` are FILLS and marks drawn over the
-// camera (buttons, the encounter ring, focus brackets) and stay the brand
-// yellow in both themes. `goldLight` is yellow used as TEXT or an icon on a
-// panel: a pale yellow on dark, the readable amber (`accentDark`) on light,
-// since raw yellow is 1.5:1 on cream. Cyan works the same way through
-// `info` / `infoLight`.
 const arTokens = (c, isDark) => ({
   bg:           c.background,
   surface:      withAlpha(c.background, isDark ? 0.92 : 0.97),

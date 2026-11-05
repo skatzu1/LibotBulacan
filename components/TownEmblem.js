@@ -4,11 +4,6 @@ import { useTheme } from "../context/ThemeContext";
 import { badgeImage } from "../utils/image";
 import Icon from "./Icon";
 
-/*
- * A town's badge is the image the admin uploaded on the panel's Town Badges
- * page. Until a town has one it shows the plain medal icon, like a spot badge
- * with no image — never a made-up picture of the town.
- */
 function TownEmblem({ image, size = 96, color, style }) {
   const { colors } = useTheme();
   return (

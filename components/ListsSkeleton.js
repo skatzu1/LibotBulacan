@@ -1,11 +1,3 @@
-/**
- * ListsSkeleton.js
- * Body-only skeleton for Lists.js. Like CategoriesSkeleton it draws NO header —
- * Lists keeps the real <ScreenHeader> mounted while loading so the back button
- * stays available and the title doesn't pop in.
- *
- * Mirrors the live layout: count line, then a stack of full-bleed SpotCards.
- */
 import React from "react";
 import { View, StyleSheet } from "react-native";
 import Skeleton from "./Skeleton";

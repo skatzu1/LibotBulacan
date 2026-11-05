@@ -3,34 +3,6 @@ import { AppState } from "react-native";
 import { io } from "socket.io-client";
 import { BASE_URL } from "../api";
 
-/*
- * Live updates (2026-10-23: "superadmin, admin, moderator, mobile app should
- * be realtime").
- *
- * One Socket.IO connection to our own backend (its utils/live.js), not an
- * outside service. It carries no data: the server says which kind of thing
- * changed — "spots", "reviews", "missions", "progress" (points and the
- * leaderboard), "categories", "badges", "system" (the update notice) — and
- * each screen showing it loads it again through the usual API, keeping what's
- * on screen if that fails. Signed in, the connection also carries the
- * traveler's own "moderation": an admin's suspension or ban reaches the app at
- * once — and their own "achievements", when they arrive or finish a mission,
- * and "me", when their saves, name, photo or title change on another phone.
- *
- *   useLive(["reviews"], () => fetchReviews(spot._id));
- *
- * Every phone hears an update at the same moment, so each waits a moment
- * plus a random part of a second and a half before loading — a burst of
- * changes loads once, and the server isn't asked by everyone at once.
- *
- * In the background nothing loads; what changed meanwhile loads on return.
- * After a minute in the background the connection closes (battery), and on
- * return it opens again and every screen loads once, for what it missed.
- *
- * App.js opens it (connectLive) and opens it again when someone signs in or
- * out, so the server knows whose ban or suspension to send.
- */
-
 const DELAY_MS = 400;
 const SPREAD_MS = 1500;
 const BACKGROUND_CLOSE_MS = 60_000;

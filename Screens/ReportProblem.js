@@ -1,22 +1,3 @@
-// Screens/ReportProblem.js
-//
-// Settings → Report a Problem. Two questions (what kind of problem, what
-// happened), then Send: the server emails it to the developers at
-// support@libotbulacan.com, with the app version and phone model, and with
-// Reply-To set to the email this account signed up with, so the developers
-// can simply reply (backend routes/support.js).
-//
-// QA 2026-10-16: "use the email used in the registration … submit agad". This
-// used to write an email for the person to send from Gmail or their mail app.
-// That is now only the fallback, for when the server can't send (no SMTP login
-// set up yet, or offline): the old buttons appear, and if there is no mail app
-// the address can be copied.
-//
-// These reports are about the APP (crashes, sign-in, installing), and wrong
-// spot details or an offensive review too. Reviews can't be reported from the
-// spot's page any more (mock defense 2026-10-21): the server blocks a review
-// with a bad word as it's posted. The website's Report a problem (LibotWeb report.js) still
-// writes an email.
 import React, { useMemo, useState } from "react";
 import {
   View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity,

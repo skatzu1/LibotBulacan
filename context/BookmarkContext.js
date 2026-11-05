@@ -12,8 +12,6 @@ export const BookmarkProvider = ({ children }) => {
   const [bookmarks, setBookmarks] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  // Fetch bookmarks - stable function
-  // `quiet`: a live reload, with no loading state.
   const fetchBookmarks = useCallback(async ({ quiet = false } = {}) => {
     if (!userId) return;
 

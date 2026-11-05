@@ -7,23 +7,6 @@ import {
 import { useTheme, spacing, radius, typography, shadow } from "../context/ThemeContext";
 import Icon from "./Icon";
 
-/*
- * In-app alert / toast system that replaces the OS `Alert.alert` dialog and any
- * platform toast. The visible UI is 100% themed and drawn by this app. The alert
- * card uses React Native's cross-platform <Modal transparent> as a portal so it
- * always stacks above screen-level modals and catches the Android back button;
- * the toast is a plain overlay so it never blocks touches (see the provider).
- * No native dialog / notification chrome is shown.
- *
- * Drop-in usage (same signature as Alert.alert):
- *   import { showAlert, showToast } from "../components/AppAlert";
- *   showAlert("Title", "Message", [{ text: "OK", onPress }]);
- *   showToast("Saved");
- *
- * Hook usage inside components:
- *   const { alert, toast } = useAppAlert();
- */
-
 const AlertContext = createContext(null);
 
 // Module-level handles so non-hook code can trigger the UI (mirrors Alert.alert).

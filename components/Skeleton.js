@@ -1,10 +1,3 @@
-/**
- * Skeleton.js
- * Reusable shimmer primitive built on react-native-reanimated (already in your project).
- * Usage:
- *   <Skeleton width={200} height={16} radius={8} />
- *   <Skeleton width="100%" height={160} radius={12} />
- */
 import React, { useEffect, useState } from "react";
 import { View, StyleSheet, AccessibilityInfo } from "react-native";
 import Animated, {

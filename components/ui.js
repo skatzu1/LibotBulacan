@@ -10,19 +10,10 @@ import { spotImage, avatarImage } from "../utils/image";
 import Icon from "./Icon";
 import { FestivalLockChip } from "./FestivalLock";
 
-// Shared building blocks so every post-login screen matches the Home layout.
 export const H_PAD = 20;
 
-// Minimum comfortable touch target. iOS HIG says 44pt, Android 48dp — 44 with
-// generous hitSlop satisfies both.
 export const TAP = 44;
 
-/* ── Photo scrim ──────────────────────────────────────────────────────────
-   A flat rgba() block over an unknown photo cannot guarantee contrast: over a
-   bright sky, white-on-0.55-black measures 4.15:1 and fails AA. A gradient
-   lets the base go much darker exactly where the text sits while leaving the
-   top of the image untouched, so it reads better AND looks better than the
-   hard-edged block it replaces. Verified 10.2:1 worst case (pure white photo). */
 export function PhotoScrim({ style, intensity = 0.88, from = 0.42 }) {
   return (
     <LinearGradient

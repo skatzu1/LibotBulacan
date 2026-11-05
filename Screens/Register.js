@@ -29,6 +29,7 @@ import PasswordStrength from "../components/PasswordStrength";
 import DobField from "../components/DobField";
 import { municipalityError } from "../utils/municipalities";
 import { LEGAL_VERSION } from "../utils/legalText";
+import { TERMS_URL, PRIVACY_URL } from '../utils/legalLinks';
 
 // Same full-screen background as sign-in; it carries its own cyan→yellow wash.
 const REGISTER_BG = require("../assets/bg.png");
@@ -43,6 +44,12 @@ export const CONSENT_ERROR = "Tick the box to agree to the Terms and Privacy Pol
 function ConsentRow({ agreed, onPress, invalid, disabled }) {
   const { colors } = useTheme();
   const link = { color: colors.brand, fontFamily: fonts.sansSemi };
+
+  const handleLinkPress = (url) => (e) => {
+    e.stopPropagation();
+    Linking.openURL(url);
+  };
+
   return (
     <TouchableOpacity
       onPress={onPress}
@@ -59,9 +66,20 @@ function ConsentRow({ agreed, onPress, invalid, disabled }) {
       >
         {agreed && <Icon name="check" size={15} color={colors.card} />}
       </View>
-      <Text style={[styles.consentText, { color: colors.textSecondary }]} maxFontSizeMultiplier={MAX_FONT_SCALE}>
-        I've read and agree to the <Text style={link}>Terms and Conditions</Text> and{" "}
-        <Text style={link}>Privacy Policy</Text>
+      <Text
+        style={[styles.consentText, { color: colors.textSecondary }]}
+        maxFontSizeMultiplier={MAX_FONT_SCALE}
+      >
+        {"I've read and agree to the "}
+        <Text style={link} onPress={handleLinkPress(TERMS_URL)} suppressHighlighting
+          accessibilityRole="link" accessibilityLabel="Terms and Conditions">
+          Terms and Conditions
+        </Text>
+        {" and "}
+        <Text style={link} onPress={handleLinkPress(PRIVACY_URL)} suppressHighlighting
+          accessibilityRole="link" accessibilityLabel="Privacy Policy">
+          Privacy Policy
+        </Text>
       </Text>
     </TouchableOpacity>
   );

@@ -5,12 +5,6 @@ import { useTheme, fonts, MAX_FONT_SCALE } from "../context/ThemeContext";
 import { titleInfo, tierColors } from "../utils/titles";
 import { starPath } from "../utils/townEmblem";
 
-/*
- * A traveler's title (utils/titles.js) as a small badge of rank: the Libot star
- * and the name in spaced capitals, in its tier's metal. The GOAT Traveler, the
- * gold one, is a solid gold plate; a district's (silver) and a town's (bronze)
- * are soft plates. Renders nothing for a traveler without a title.
- */
 function TitleChip({ title, size = "md", style }) {
   const { colors } = useTheme();
   const info = titleInfo(title);

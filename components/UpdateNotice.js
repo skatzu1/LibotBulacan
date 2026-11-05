@@ -6,9 +6,6 @@ import { useSystemNotice } from "../hooks/useSystemStatus";
 import { H_PAD } from "./ui";
 import Icon from "./Icon";
 
-// The super admin's update notice (the paper's "System Update"; mock defense
-// 2026-10-21): an update that's coming, or one that's done. Shown on Home for
-// two weeks after it's published, until the traveler puts it away.
 const DISMISSED_KEY = "dismissedUpdateNotice";
 
 const when = (iso) => {

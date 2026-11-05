@@ -1,12 +1,3 @@
-// Screens/ReportTraveler.js
-//
-// Traveler profile → Report this traveler (2026-10-25). Why, and what happened
-// if they want to say, then Send: it goes to the admins' User Management →
-// Reported (LibotBackend POST /api/reports/user), who can warn, suspend or ban,
-// or dismiss it. The traveler is never told who reported them.
-//
-// One report from each traveler waits at a time; the server says so (409) and
-// the profile shows "You reported this traveler" until the admins decide.
 import React, { useState } from "react";
 import { View, Text, StyleSheet, ScrollView, TextInput, TouchableOpacity } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";

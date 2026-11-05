@@ -1,12 +1,3 @@
-/**
- * CategoriesSkeleton.js
- * Body-only skeleton for Categories.js. It deliberately does NOT draw a header:
- * Categories now renders the real <ScreenHeader> above this while loading, so a
- * fake one here would double up and then visibly swap.
- *
- * Mirrors the live layout: left-aligned intro block, then a 2-column flex-wrap
- * grid of 168h tiles.
- */
 import React from "react";
 import { View, StyleSheet } from "react-native";
 import Skeleton from "./Skeleton";

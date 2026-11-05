@@ -12,9 +12,6 @@ export function PointsProvider({ children }) {
   const [userVisits, setUserVisits] = useState(0);
   const [checkedInSpots, setCheckedInSpots] = useState(new Set());
 
-  // Pull the authoritative points/visits from the backend (same source the
-  // Profile screen reads). Runs on sign-in and can be re-run via refresh().
-  // The visited spot ids feed the "Arrive at the spot" major mission.
   const refresh = useCallback(async () => {
     if (!isSignedIn) return;
     try {

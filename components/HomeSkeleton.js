@@ -1,8 +1,3 @@
-/**
- * HomeSkeleton.js — mirrors the current HomeContent layout in Home.js:
- *   header (greeting · points · avatar) · search field · quick actions ·
- *   Featured carousel · Most-visited grid
- */
 import React from "react";
 import { View, StyleSheet, ScrollView, useWindowDimensions } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";

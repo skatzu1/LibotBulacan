@@ -4,24 +4,6 @@ import { LinearGradient } from "expo-linear-gradient";
 import Svg, { Path } from "react-native-svg";
 import useReduceMotion from "../hooks/useReduceMotion";
 
-/*
- * What makes an earned badge look earned (user, 2026-10-21: "I want the badges
- * to have effects"). Locked badges get none — they stay flat and grey, so the
- * difference is the reward.
- *
- *   <BadgeShine>     a streak of light that sweeps across the badge now and then
- *   <Sparkles>       little four-point stars twinkling round it
- *   <GlowPulse>      a soft gold glow breathing behind it
- *   <HoloTilt>       the badge opened up close: tilt it with a finger and a
- *                    holographic foil and the shine follow the tilt; left alone
- *                    it sways a little
- *
- * The tiers: a spot badge shines and twinkles; a town badge also glows; the
- * badge opened in its detail card is holographic. All transform/opacity on the
- * native driver, and under Reduce Motion everything stands still (the badge is
- * still drawn, just without the movement).
- */
-
 const GOLD = "#F2CE1B";
 
 // A four-point twinkle, drawn in a 24-unit box.

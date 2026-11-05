@@ -6,7 +6,7 @@ import { subscribeLive } from "../utils/live";
 
 // The server's limit (LibotBackend utils/reviewPhotos.js).
 export const MAX_REVIEW_PHOTOS = 4;
-// Photos can take a while on mobile data; a dead connection must still end.
+
 const PHOTO_UPLOAD_TIMEOUT_MS = 120_000;
 
 const ReviewContext = createContext();
@@ -19,16 +19,7 @@ export const ReviewProvider = ({ children }) => {
   const [error,             setError]             = useState(null);
   const [moderationStatus,  setModerationStatus]  = useState(null);
 
-  // No review prefetch any more. Sign-in used to fetch the spot list and then
-  // every spot's whole review list, one after another (24 requests), only so
-  // Home could show star ratings. The spot list carries ratingAvg/ratingCount
-  // now (see getAverageRating), and a spot's page loads its own reviews.
   useEffect(() => {
-    // Wait for Clerk to finish restoring/validating the session before
-    // hitting authenticated endpoints. This is a defensive guard on top of
-    // the render-time interceptor fix in App.js/api.js — it ensures this
-    // effect never fires a request while isSignedIn is still unresolved,
-    // regardless of what else changes upstream in the future.
     if (!isLoaded || !isSignedIn) return undefined;
     fetchModerationStatus();
     // A warning's mute shows on the review box the moment it's given.

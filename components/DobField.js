@@ -9,14 +9,6 @@ import { useAuthStyles } from "./AuthScaffold";
 import { formatDob, dobToDate } from "../utils/authValidation";
 import Icon from "./Icon";
 
-/*
- * Date of birth, either way (QA 2026-10-16: "both dropdown and typing"):
- * type it as MM/DD/YYYY (the slashes go in by themselves), or tap the
- * calendar for the phone's own date picker — Android's calendar dialog, an
- * iPhone's wheels in a sheet. Both fill the same text, which the form
- * validates (utils/authValidation dobError: real date, 13 or older).
- */
-
 const MIN_DATE = new Date(1900, 0, 1);
 
 // Formats raw digits into MM/DD/YYYY as the user types.

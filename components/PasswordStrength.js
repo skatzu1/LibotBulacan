@@ -4,13 +4,6 @@ import { useTheme, fonts } from "../context/ThemeContext";
 import { PASSWORD_RULES, passwordLevel } from "../utils/authValidation";
 import Icon from "./Icon";
 
-// The strength meter under a new-password field: sign-up, Forgot Password and
-// Login & Security. It was sign-up's alone, so a reset or a change took any
-// 8 characters (QA 2026-10-16: "add password validation in forgot password").
-//
-// Theme tokens, so the meter follows light/dark like the rest of the app.
-// Measured on the sign-up panel over bg.png: every one stays >= 4.5:1 in both
-// themes (lowest: success, 4.86:1 in light mode).
 const STRENGTH = [
   { label: "Weak",   token: "danger" },
   { label: "Fair",   token: "warning" },

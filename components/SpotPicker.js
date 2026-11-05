@@ -10,27 +10,9 @@ import usePullToRefresh from "../hooks/usePullToRefresh";
 import { openUnlessLocked } from "./FestivalLock";
 import { isOpenNow, lockedText } from "../utils/festivalDates";
 
-// A spot matches when the search is in its name or its town.
 const matches = (spot, q) =>
   [spot.name, spot.city].filter(Boolean).some((f) => String(f).toLowerCase().includes(q));
 
-/**
- * The Bakit List, AR View and Navigate spot lists, laid out like the Badges
- * screen (user, 2026-10-20): a done/total count in the header, a search
- * field, an All / to-do / done filter with counts, and a grid of cards
- * (SpotGridCard) — done ones first, like claimed badges.
- *
- * Props: title, subtitle (optional, one line), onPick(spot, navigation),
- *   filter(spot)  -> optional; only spots it returns true for are listed,
- *   isDone(spot)  -> whether the spot is done (finished / AR done / visited),
- *   rank(spot)    -> optional; orders the spots not done (lower first),
- *   started(spot) -> optional; only spots not done that it returns true for
- *                    go under the to-do filter (All still lists every spot),
- *   labels        -> { todo, done, todoEmpty? }: the filter's names for the two
- *                    groups, and what an empty to-do group says,
- *   footer(spot)  -> the card's footer ({ text, icon? }),
- *   a11y(spot)    -> the card's accessibility label; a11yHint: what a tap does.
- */
 export default function SpotPicker({
   title, subtitle, onPick, filter, isDone, rank, started, labels, footer, a11y, a11yHint,
 }) {

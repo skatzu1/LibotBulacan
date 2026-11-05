@@ -1,9 +1,3 @@
-/**
- * LeaderboardSkeleton.js
- * Loading bones for Screens/Leaderboard.js, in its shape: the podium (a face
- * on each step, the middle one tallest), then the Rankings header and the
- * rows. The real hero bar stays mounted above it.
- */
 import React from "react";
 import { View, StyleSheet } from "react-native";
 import Skeleton from "./Skeleton";

@@ -1,13 +1,3 @@
-/**
- * AchievementsSkeleton.js
- * Body-only skeleton for BadgeScreen.js (Achievements). Like ListsSkeleton it
- * draws NO header: the real <ScreenHeader> stays mounted while loading.
- *
- * Mirrors the live layout: the summary card (title, next title, bar, counts),
- * the four tabs, the search field, then the open tab — spot badge cards, the
- * bigger municipality / district cards (Districts: under the wide Bulacan
- * card), or title rows.
- */
 import React from "react";
 import { View, StyleSheet } from "react-native";
 import Skeleton from "./Skeleton";

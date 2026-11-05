@@ -1,15 +1,7 @@
-// AR anchors are pinned to real-world places around a site, so the AR
-// experience is meaningless unless the user is physically there. This helper
-// checks the user's current location against the spot and, when they're not on
-// site, shows a themed warning. It resolves to `true` when the caller should
-// proceed to launch AR, `false` when it should not.
 import * as Location from "expo-location";
 import { Linking } from "react-native";
 import { showAlert } from "../components/AppAlert";
 
-// A little slack for GPS drift and large sites. The server uses the same
-// radius (ON_SITE_RADIUS_M in the backend's utils/onSite.js) when it checks
-// AR and photo missions, so the two agree on what "at the spot" means.
 const AR_RANGE_METERS = 120;
 
 function distanceMeters(lat1, lng1, lat2, lng2) {
@@ -43,11 +35,6 @@ export function getSpotCoords(spot) {
   return null;
 }
 
-// AR is for buildings: the models are pinned to a church or shrine that stands
-// at the spot. A festival is an event and a river has nothing to anchor to, so
-// spots filed under these categories get no AR View button and are left out of
-// the AR spot picker. Matched case-insensitively, like the backend's
-// aiModelKeyForSpot.
 const NO_AR_CATEGORIES = ["nature", "festivals"];
 
 export function spotHasAR(spot) {
@@ -115,9 +102,6 @@ export async function ensureAtSpotForAR(spot, { onDirections } = {}) {
     dest.lng
   );
 
-  // Known to be away from the spot: AR doesn't open. There used to be a
-  // "Start anyway" here, which only led to a camera with nothing in it
-  // (QA 2026-10-16: just Cancel when you aren't there).
   if (dist > AR_RANGE_METERS) {
     showAlert(
       `You're not at ${name}`,
@@ -136,13 +120,6 @@ export async function ensureAtSpotForAR(spot, { onDirections } = {}) {
 
 const formatAway = (m) => (m >= 1000 ? `${(m / 1000).toFixed(1)} km` : `${Math.round(m)} m`);
 
-/**
- * The phone's current position ({ latitude, longitude, accuracy }), or null
- * if location is off or unavailable. `ask` requests permission if needed.
- * `maxAgeMs` accepts a fix the phone already has if it's that recent (the
- * arrival watch keeps one while the app is open), which answers instantly;
- * `timeoutMs` stops waiting for a fresh fix, which indoors can take a while.
- */
 export async function currentCoords({ ask = false, maxAgeMs = 0, timeoutMs = 0 } = {}) {
   try {
     let { status } = await Location.getForegroundPermissionsAsync();
@@ -169,18 +146,8 @@ export async function currentCoords({ ask = false, maxAgeMs = 0, timeoutMs = 0 }
   }
 }
 
-/**
- * Photo missions only count at the spot: the server checks the position sent
- * with the photo and awards nothing from anywhere else. So, as with AR, there's
- * no "start anyway" — better to say so before the photo than after.
- * Resolves to the phone's coords when it's on site, otherwise explains why
- * not and resolves to null.
- */
 export async function ensureAtSpotForPhoto(spot) {
   const name = spot?.name || "this spot";
-  // A fix from the last 30 s answers at once. Waiting for a fresh one used to
-  // leave the button doing nothing for several seconds before "You're not
-  // at…" appeared, which read as the app ignoring the tap.
   const coords = await currentCoords({ ask: true, maxAgeMs: 30000, timeoutMs: 12000 });
   if (!coords) {
     const { status } = await Location.getForegroundPermissionsAsync().catch(() => ({}));

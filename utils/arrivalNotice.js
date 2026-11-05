@@ -1,13 +1,3 @@
-// What the "you arrived" notification says, for one arrival or several at once.
-//
-// Spots can sit very close together — a festival held in a churchyard, a
-// museum beside its church: 7 pairs of spots are under 100 m apart, the
-// closest 29 m — so one walk can enter two or three 50 m arrival circles at
-// the same moment. Each used to raise its own notification; arrivals that come
-// together now share one, which names them all.
-//
-// Each arrival is { spotId, spotName, isFirstVisit }.
-
 export const joinNames = (names) =>
   names.length <= 1 ? names.join("") : `${names.slice(0, -1).join(", ")} and ${names.at(-1)}`;
 

@@ -1,34 +1,9 @@
-/*
- * Arrival detection, as pure functions so every rule can be unit-tested
- * without a phone. ArrivalContext feeds GPS fixes in and acts on the result.
- *
- * What was wrong with "distance <= 50 m, every fix, always at full GPS rate":
- *
- * 1. Jitter at the edge. Standing near the 50 m line, normal GPS wander of a
- *    few metres flipped the state inside -> outside -> inside, repeating the
- *    arrival handling and its API calls. Fix: hysteresis — you arrive inside
- *    ENTER_M but only count as having left beyond EXIT_M.
- *
- * 2. Bad fixes counted. A ±150 m network fix, or one GPS jump off a building
- *    (multipath), could land inside the radius and trigger an arrival. Fix:
- *    ignore fixes too vague to judge, and require either one precise fix or two
- *    consecutive decent ones before declaring an arrival.
- *
- * 3. Full-rate GPS all day. The watch ran at high accuracy every 3 s / 5 m
- *    even when the nearest spot was 20 km away — the common case, and the
- *    app's biggest battery cost. Fix: the update rate follows the distance to
- *    the nearest spot (see watchTierFor), so GPS works hard only when an
- *    arrival is actually possible soon.
- */
-
-// A spot can set its own arrival radius (utils/spotRadii.js); ENTER_M is the
-// default, and the exit line is always EXIT_MARGIN_M beyond the spot's radius.
-export const ENTER_M = 50;              // arrive inside this distance…
-export const EXIT_M = 80;               // …and only "leave" beyond this one
+export const ENTER_M = 50;              // within this distance to be considered as arrived.
+export const EXIT_M = 80;               // beyond this distance to be considered as left.
 const EXIT_MARGIN_M = EXIT_M - ENTER_M;
-export const MAX_ENTRY_ACCURACY_M = 75; // vaguer fixes can't cause an arrival
-export const MAX_EXIT_ACCURACY_M = 100; // or an exit
-export const PRECISE_FIX_M = 20;        // one fix this good is enough on its own
+export const MAX_ENTRY_ACCURACY_M = 75; // GPS must be accurate to 75m or better to trigger an arrival
+export const MAX_EXIT_ACCURACY_M = 100; // GPs must be accurate to 100m or better to trigger a departure
+export const PRECISE_FIX_M = 20;        // If GPS is this accurate, one reading is enough to confirm arrival
 export const CONFIRM_FIXES = 2;         // otherwise, this many in a row
 
 const R = 6_371_000;
@@ -94,14 +69,6 @@ export function evaluateFix(state, fix, spots) {
   return { entered, left, nearestM };
 }
 
-/*
- * How hard GPS should work, from the distance to the nearest spot.
- *
- * The distance intervals are chosen so an arrival can't be skipped: you can't
- * get from beyond a tier's boundary to inside a spot's radius without the OS
- * delivering a fix in between (it reports on whichever of time or distance
- * comes first), and crossing into a nearer tier switches to faster updates.
- */
 export const WATCH_TIERS = {
   near:     { key: 'near',     maxM: 400,      accuracy: 'high',     timeInterval: 3_000,  distanceInterval: 5 },
   approach: { key: 'approach', maxM: 2_500,    accuracy: 'high',     timeInterval: 8_000,  distanceInterval: 25 },
@@ -109,11 +76,6 @@ export const WATCH_TIERS = {
 };
 const ORDER = ['near', 'approach', 'far'];
 
-/**
- * The tier for `nearestM`. Moving to a nearer tier happens immediately;
- * moving back out needs 20 % beyond the boundary, so hovering around a
- * boundary doesn't restart the GPS watch over and over.
- */
 export function watchTierFor(nearestM, currentKey = null) {
   if (!Number.isFinite(nearestM)) return WATCH_TIERS[currentKey] ?? WATCH_TIERS.approach;
   const target = ORDER.find((k) => nearestM <= WATCH_TIERS[k].maxM);
