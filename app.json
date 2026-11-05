@@ -154,7 +154,7 @@
       },
       "edgeToEdgeEnabled": true,
       "package": "com.skatzu15.libot",
-      "versionCode": 7,
+      "versionCode": 8,
       "intentFilters": [
         {
           "action": "VIEW",
