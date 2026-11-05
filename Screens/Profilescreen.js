@@ -173,7 +173,7 @@ export default function ProfileScreen() {
   // on the page. Deleting the account is real and lives in Edit Profile.
   const menuItems = [
     { id: "trips",    icon: "map-pin",  title: "Previous Trips", onPress: () => navigation.navigate("PreviousTrips") },
-    { id: "badges",   icon: "award",    title: "Achievements", subtitle: "Spot, municipality and district badges, and titles", onPress: () => navigation.navigate("Badges") },
+    { id: "badges",   icon: "award",    title: "Achievements",   onPress: () => navigation.navigate("Badges") },
     { id: "settings", icon: "settings", title: "Settings",       onPress: () => navigation.navigate("Settings") },
   ];
 
@@ -281,7 +281,7 @@ export default function ProfileScreen() {
         </View>
 
         {menuItems.map((item) => (
-          <ListRow key={item.id} icon={item.icon} title={item.title} subtitle={item.subtitle} onPress={item.onPress} />
+          <ListRow key={item.id} icon={item.icon} title={item.title} onPress={item.onPress} />
         ))}
 
         {/* On the profile itself, apart from the rest (QA 2026-10-16). It
