@@ -807,7 +807,10 @@ const s = StyleSheet.create({
     flexDirection: "row", alignItems: "center", gap: 9,
     height: 46, borderRadius: radius.pill, paddingHorizontal: 15, borderWidth: 1,
   },
-  searchInput: { flex: 1, ...typography.body, paddingVertical: 0 },
+  // Android centres text on the font's bounding box unless told not to, and
+  // Dongle's is far bigger than its line box: the words sat ~2px high. iOS
+  // ignores this prop and was already centred.
+  searchInput: { flex: 1, ...typography.body, paddingVertical: 0, includeFontPadding: false },
 
   empty: {
     borderRadius: radius.card,
