@@ -287,7 +287,7 @@ export default function Leaderboard() {
       hasLoaded.current = true;
     } catch (e) {
       console.warn("Leaderboard error:", e);
-      fail(loadErrorText(e, "the leaderboard"));
+      fail(loadErrorText(e, "the Ranking"));
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -366,7 +366,7 @@ export default function Leaderboard() {
         accessibilityRole="header"
         maxFontSizeMultiplier={MAX_FONT_SCALE}
       >
-        Leaderboard
+        Ranking
       </Text>
       <View style={styles.backBtn} />
     </View>

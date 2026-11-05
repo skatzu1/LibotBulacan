@@ -181,7 +181,7 @@ const Settings = ({ navigation }) => {
                     trackColor={{ false: colors.cardBorder, true: colors.brand }}
                     thumbColor="#fff"
                     accessibilityLabel="Hide my profile from other travelers"
-                    accessibilityHint="Other travelers still see your name and photo on the leaderboard and on your reviews, and can still report your account, but see nothing else on your profile"
+                    accessibilityHint="Other travelers still see your name and photo on the Ranking and on your reviews, and can still report your account, but see nothing else on your profile"
                   />
                 )
             }

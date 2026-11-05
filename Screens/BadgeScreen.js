@@ -450,7 +450,7 @@ export default function BadgeScreen() {
                 accessibilityRole: "radio",
                 accessibilityState: { checked: shown },
                 accessibilityLabel: `${t.name}, earned`,
-                accessibilityHint: shown ? "Shown on your profile and the leaderboard" : "Shows this title on your profile and the leaderboard",
+                accessibilityHint: shown ? "Shown on your profile and the Ranking" : "Shows this title on your profile and the Ranking",
               }
             : { accessible: true, accessibilityLabel: `${t.name}, ${TIER_LABEL[t.tier]}: ${need}. ${have} of ${t.total} ${t.unit}` })}
         >
@@ -463,7 +463,7 @@ export default function BadgeScreen() {
             <Text style={[styles.titleTier, { color: t.earned ? metal.ink : colors.textMuted }]}>{TIER_LABEL[t.tier].toUpperCase()}</Text>
             <Text style={[styles.titleName, { color: t.earned ? colors.textPrimary : colors.textSecondary }]}>{t.name}</Text>
             <Text style={[styles.titleNeed, { color: shown ? colors.accentDark : colors.textMuted }]}>
-              {shown ? "On your profile and the leaderboard" : t.earned ? "Earned · tap to show it" : need}
+              {shown ? "On your profile and the Ranking" : t.earned ? "Earned · tap to show it" : need}
             </Text>
             {!t.earned && (
               <View style={[styles.bar, { backgroundColor: colors.divider }]}>
@@ -547,7 +547,7 @@ export default function BadgeScreen() {
           style={[styles.shownRow, { borderTopColor: colors.divider }]}
           onPress={() => { setTab("titles"); setQuery(""); }}
           accessibilityRole="button"
-          accessibilityLabel={`${titleName(shownKey)} shows on your profile and the leaderboard`}
+          accessibilityLabel={`${titleName(shownKey)} shows on your profile and the Ranking`}
           accessibilityHint="Opens Titles to change it"
         >
           <Text style={[styles.shownLabel, { color: colors.textSecondary }]}>Shown to others</Text>
@@ -622,7 +622,7 @@ export default function BadgeScreen() {
             {tab === "titles" && data && (
               <Text style={[styles.titlesIntro, { color: colors.textSecondary }]}>
                 Bronze for a municipality, silver for a district, gold for all of Bulacan. Titles stay once earned
-                {titlesEarned > 0 ? ". Pick the one to show next to your name on your profile and the leaderboard." : "."}
+                {titlesEarned > 0 ? ". Pick the one to show next to your name on your profile and the Ranking." : "."}
               </Text>
             )}
           </>
