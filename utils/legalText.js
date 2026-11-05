@@ -398,16 +398,10 @@ export const LEGAL_DOCS = [
             "text": "You can stop using LibotBulacan at any time. To delete your account, open Edit Profile and choose Delete account; your account and sign-in are deleted right away. Without the app, the "
           },
           {
-            "text": "account deletion page"
-          },
-          {
-            "text": " explains how to ask by email. The "
-          },
-          {
             "text": "Privacy Policy"
           },
           {
-            "text": " lists the records we keep."
+            "text": " explains how to ask by email. It also lists the records we keep."
           }
         ],
         "depth": 1
@@ -1449,13 +1443,7 @@ export const LEGAL_DOCS = [
             "bold": true
           },
           {
-            "text": " ask us to stop processing your data. We do this by deleting your account and sign-in; the copy of your records we keep (section 5) is no longer shown or used. In the app, Edit Profile, then Delete account, does this right away. Without the app, the "
-          },
-          {
-            "text": "account deletion page"
-          },
-          {
-            "text": " explains how to ask by email."
+            "text": " ask us to stop processing your data. We do this by deleting your account and sign-in; the copy of your records we keep (section 5) is no longer shown or used. In the app, Edit Profile, then Delete account, does this right away. Without the app, email us at the address below."
           }
         ],
         "depth": 1
