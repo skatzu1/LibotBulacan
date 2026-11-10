@@ -6,10 +6,13 @@ import {
   StyleSheet,
   TouchableOpacity,
   ActivityIndicator,
+  Linking,
+  Platform,
   useWindowDimensions,
   Animated,
   PanResponder,
   StatusBar,
+  AppState,
 } from "react-native";
 import { WebView } from "react-native-webview";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
@@ -19,7 +22,7 @@ import { showToast } from "../components/AppAlert";
 import { useArrival } from "../context/ArrivalContext";
 import { useTheme, radius, shadow, fonts } from "../context/ThemeContext";
 import { BULACAN_BOUNDARY, BULACAN_BBOX } from "../utils/bulacanBoundary";
-import { GpsSmoother, isBetterFix, MAX_USABLE_ACCURACY_M } from "../utils/gpsFilter";
+import { GpsSmoother, isBetterMapFix, MAX_USABLE_ACCURACY_M } from "../utils/gpsFilter";
 import { BASE_URL } from "../api";
 import { useLive } from "../utils/live";
 import Icon from "../components/Icon";
@@ -762,6 +765,12 @@ export default function Track({ route, navigation }) {
   const [locationError, setLocationError] = useState(null);
   const [followMode, setFollowMode]       = useState(false);
   const [selectedTerminal, setSelectedTerminal] = useState(null);
+  // How sure the phone is of the shown position, in metres; and the two
+  // phone settings that make it worse: "Approximate" location only, and (on
+  // Android) Google Location Accuracy off, which indoors leaves cell towers.
+  const [fixAccuracy, setFixAccuracy] = useState(null);
+  const [preciseOff, setPreciseOff]   = useState(false);
+  const [networkOff, setNetworkOff]   = useState(false);
 
   // Bottom sheet animation
   const sheetAnim = useRef(new Animated.Value(0)).current;
@@ -950,7 +959,8 @@ export default function Track({ route, navigation }) {
         window.updateUserLocation(
           ${coords.latitude},
           ${coords.longitude},
-          ${followModeRef.current}
+          ${followModeRef.current},
+          ${Number.isFinite(coords.accuracy) ? coords.accuracy : "null"}
         );
         window.updateProximity(${JSON.stringify(nearbyIds)});
         window.updateSpotProximity(${nearSpot});
@@ -975,6 +985,34 @@ export default function Track({ route, navigation }) {
     } catch {}
   }, [showSheet, hideSheet]);
 
+  /* ── Phone location settings ── */
+  const checkNetworkProvider = useCallback(async () => {
+    if (Platform.OS !== "android") return;
+    try {
+      const status = await Location.getProviderStatusAsync();
+      if (isMounted.current) setNetworkOff(status?.networkAvailable === false);
+    } catch {}
+  }, []);
+
+  // Back from Settings or the system dialog: read both settings again.
+  useEffect(() => {
+    const sub = AppState.addEventListener("change", (state) => {
+      if (state !== "active") return;
+      Location.getForegroundPermissionsAsync()
+        .then((p) => { if (isMounted.current) setPreciseOff(p?.android?.accuracy === "coarse"); })
+        .catch(() => {});
+      checkNetworkProvider();
+    });
+    return () => sub.remove();
+  }, [checkNetworkProvider]);
+
+  // Android's own "Improve location accuracy?" dialog (Google Location
+  // Accuracy: Wi-Fi and Bluetooth scanning), the one Google Maps shows.
+  const improveAccuracy = useCallback(async () => {
+    try { await Location.enableNetworkProviderAsync(); } catch {}
+    checkNetworkProvider();
+  }, [checkNetworkProvider]);
+
   /* ── Location tracking ── */
   useEffect(() => {
     if (!spotData) return;
@@ -982,35 +1020,53 @@ export default function Track({ route, navigation }) {
 
     const startTracking = async () => {
       try {
-        const { status } = await Location.requestForegroundPermissionsAsync();
-        if (status !== "granted") {
+        const perm = await Location.requestForegroundPermissionsAsync();
+        if (perm.status !== "granted") {
           if (!cancelled && isMounted.current) {
             setLocationError("Location permission is required for navigation.");
             setLoading(false);
           }
           return;
         }
+        // Android lets people allow only "Approximate" location, which
+        // places them anywhere within a few kilometres.
+        if (perm.android?.accuracy === "coarse") setPreciseOff(true);
+        checkNetworkProvider();
 
-        const initial = await Location.getCurrentPositionAsync({
-          accuracy: Location.Accuracy.Balanced,
-        });
+        // A GPS fix from the last two minutes first. Indoors, the fix from
+        // walking in is far closer than what the phone can work out under a
+        // roof (cell towers, often a kilometre or more off).
+        let initial = null;
+        try {
+          initial = await Location.getLastKnownPositionAsync({
+            maxAge: 2 * 60_000,
+            requiredAccuracy: MAX_USABLE_ACCURACY_M,
+          });
+        } catch {}
+        if (!initial) {
+          initial = await Location.getCurrentPositionAsync({
+            accuracy: Location.Accuracy.Balanced,
+          });
+        }
         if (cancelled || !isMounted.current) return;
 
         const initialCoords = {
           latitude:  initial.coords.latitude,
           longitude: initial.coords.longitude,
+          accuracy:  initial.coords.accuracy,
         };
 
         setUserLocation(initialCoords);
+        setFixAccuracy(initialCoords.accuracy);
         setLoading(false);
 
         if (webViewReady.current) {
           updateMarkerRef.current?.(initialCoords);
         }
 
-        // Same filtering as the AR screen (utils/gpsFilter.js): drop fixes too
-        // vague to use, don't let a coarse network fix replace a better GPS
-        // one, and smooth the jitter so the marker glides instead of jumping.
+        // Filtering from utils/gpsFilter.js: a vague fix never replaces a
+        // good one (isBetterMapFix), and the jitter is smoothed so the marker
+        // glides instead of jumping.
         let best = {
           latitude: initial.coords.latitude,
           longitude: initial.coords.longitude,
@@ -1032,11 +1088,14 @@ export default function Track({ route, navigation }) {
               accuracy: loc.coords.accuracy,
               timestamp: loc.timestamp || Date.now(),
             };
-            if (Number.isFinite(next.accuracy) && next.accuracy > MAX_USABLE_ACCURACY_M) return;
-            if (!isBetterFix(best, next)) return;
+            if (!isBetterMapFix(best, next)) return;
+            // Off by more than the old fix's own circle: start over there,
+            // rather than gliding in from the wrong place.
+            if (!Number.isFinite(best.accuracy) || best.accuracy > MAX_USABLE_ACCURACY_M) smoother.reset();
             best = next;
             const s = smoother.push(next);
-            const c = { latitude: s.latitude, longitude: s.longitude };
+            const c = { latitude: s.latitude, longitude: s.longitude, accuracy: next.accuracy };
+            setFixAccuracy(next.accuracy);
             // Direction of travel, only once actually moving (~9 km/h):
             // standing still, the GPS heading is noise. The route then won't
             // start against it, e.g. on the far side of a divided road.
@@ -1523,12 +1582,33 @@ window.updateSpotProximity = function(active) {
           routeLine.place([lat, lng]);
         };
 
-        // The route itself is fetched by the app, which calls drawRoute.
-        window.updateUserLocation = function(lat, lng, follow) {
-          if (!window.mapReady) {
-            window.initUserLocation(lat, lng);
+        // How sure the phone is: a circle of that radius round the dot, so a
+        // vague indoor fix looks vague instead of exact. Hidden when tight.
+        window.accuracyCircle = null;
+        window.setAccuracy = function(lat, lng, acc) {
+          if (!(acc > 30)) {
+            if (window.accuracyCircle) { window.map.removeLayer(window.accuracyCircle); window.accuracyCircle = null; }
             return;
           }
+          if (!window.accuracyCircle) {
+            window.accuracyCircle = L.circle([lat, lng], {
+              radius: acc, color: '#4285F4', weight: 1, opacity: 0.5,
+              fillColor: '#4285F4', fillOpacity: 0.12, interactive: false,
+            }).addTo(window.map);
+          } else {
+            window.accuracyCircle.setLatLng([lat, lng]);
+            window.accuracyCircle.setRadius(acc);
+          }
+        };
+
+        // The route itself is fetched by the app, which calls drawRoute.
+        window.updateUserLocation = function(lat, lng, follow, acc) {
+          if (!window.mapReady) {
+            window.initUserLocation(lat, lng);
+            window.setAccuracy(lat, lng, acc);
+            return;
+          }
+          window.setAccuracy(lat, lng, acc);
           if (window.userMarker) window.userMarker.setLatLng([lat, lng]);
           routeLine.place([lat, lng]);
           if (follow && window.map) window.map.panTo([lat, lng], { animate:true });
@@ -1621,6 +1701,38 @@ window.updateSpotProximity = function(active) {
         style={[styles.controlsRow, { bottom: insets.bottom + 24 }]}
         pointerEvents="box-none"
       >
+        <View style={[styles.leftColumn, { maxWidth: winW - 100 }]} pointerEvents="box-none">
+        {/* Why the dot may be in the wrong place, and the one fix for it. */}
+        {(preciseOff || (fixAccuracy > MAX_USABLE_ACCURACY_M)) && (
+          <View style={[styles.etaCard, { backgroundColor: colors.background }, shadow.lg]} accessibilityLiveRegion="polite">
+            <View style={[styles.etaIcon, { backgroundColor: colors.warningBg }]}>
+              <Icon name="crosshair" size={15} color={colors.warning} />
+            </View>
+            <View style={styles.etaText}>
+              <Text style={[styles.etaPrimary, { color: colors.textPrimary }]} numberOfLines={1}>
+                {preciseOff ? "Precise location is off" : "Weak GPS signal"}
+              </Text>
+              <Text style={[styles.etaSecondary, { color: colors.textMuted }]} numberOfLines={3}>
+                {preciseOff
+                  ? "The map can only place you within a few kilometres."
+                  : `Your dot may be off by about ${fmtDistance(fixAccuracy)}. Move near a window or step outside.`}
+              </Text>
+              {(preciseOff || (networkOff && Platform.OS === "android")) && (
+                <TouchableOpacity
+                  accessibilityRole="button"
+                  onPress={preciseOff ? () => Linking.openSettings().catch(() => {}) : improveAccuracy}
+                  hitSlop={8}
+                  activeOpacity={0.7}
+                >
+                  <Text style={[styles.signalAction, { color: colors.brand }]}>
+                    {preciseOff ? "Open Settings" : "Improve accuracy"}
+                  </Text>
+                </TouchableOpacity>
+              )}
+            </View>
+          </View>
+        )}
+
         {routeInfo ? (
           <View style={[styles.etaCard, { maxWidth: winW - 100, backgroundColor: colors.background }, shadow.lg]}>
             <View style={[styles.etaIcon, { backgroundColor: colors.brand }]}>
@@ -1646,9 +1758,8 @@ window.updateSpotProximity = function(active) {
               </Text>
             </View>
           </View>
-        ) : (
-          <View />
-        )}
+        ) : null}
+        </View>
 
         <View style={styles.fabColumn} pointerEvents="box-none">
           {/* Show / hide terminals — a filled bus when they're on the map,
@@ -1890,6 +2001,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   etaText: { flexShrink: 1 },
+  // The signal notice sits above the distance card, both clear of the buttons.
+  leftColumn: { flexShrink: 1, gap: 10, alignItems: "flex-start" },
+  signalAction: { fontSize: 12.5, fontFamily: fonts.sansBold, marginTop: 4 },
   etaPrimary: { fontSize: 14, fontFamily: fonts.sansBold, letterSpacing: -0.2 },
   etaSecondary: { fontSize: 11.5, fontFamily: fonts.sansMedium, marginTop: 1 },
 

@@ -1,4 +1,4 @@
-// GPS quality helpers for the AR screen.
+// GPS quality helpers for the AR screen and the navigation map.
 //
 // Raw `watchPosition` output is not good enough to drive a distance readout on
 // its own, for two reasons:
@@ -51,6 +51,38 @@ export function isBetterFix(current, next) {
   if (timeDelta > 0 && accuracyDelta < 50) return true;
 
   return false;
+}
+
+// How long a good fix holds out against vague ones on the navigation map.
+const GOOD_FIX_HOLD_MS = 60_000;
+
+const metresBetween = (a, b) => {
+  const dLat = (b.latitude - a.latitude) * 111_320;
+  const dLng = (b.longitude - a.longitude) * 111_320 * Math.cos((a.latitude * Math.PI) / 180);
+  return Math.hypot(dLat, dLng);
+};
+
+/**
+ * The navigation map's version of isBetterFix. Inside a building, above the
+ * ground floor, the satellites drop out and the phone falls back to cell
+ * towers, whose fixes can be a kilometre or more off. The map used to drop
+ * every fix vaguer than MAX_USABLE_ACCURACY_M, which left the marker stuck on
+ * its first fix: a cell-tower guess, a town away. Now:
+ *   - a vague fix is shown when nothing better is known (with its accuracy
+ *     circle, so it looks vague),
+ *   - a good fix is not replaced by a vague one, unless the good one is over a
+ *     minute old and the vague one rules it out (it lies outside the vague
+ *     fix's own circle: you have moved).
+ */
+export function isBetterMapFix(current, next) {
+  if (!next || !Number.isFinite(next.latitude) || !Number.isFinite(next.longitude)) return false;
+  if (!current) return true;
+  const good = (f) => Number.isFinite(f.accuracy) && f.accuracy <= MAX_USABLE_ACCURACY_M;
+  if (good(next) || !good(current)) return isBetterFix(current, next);
+  const age = (next.timestamp ?? 0) - (current.timestamp ?? 0);
+  if (age < GOOD_FIX_HOLD_MS) return false;
+  const reach = Number.isFinite(next.accuracy) ? next.accuracy : Infinity;
+  return metresBetween(current, next) > reach;
 }
 
 /**

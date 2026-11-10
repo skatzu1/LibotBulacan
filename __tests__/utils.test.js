@@ -1,6 +1,6 @@
 import { PixelRatio } from "react-native";
 import { cdn, spotImage, avatarImage } from "../utils/image";
-import { isBetterFix, GpsSmoother } from "../utils/gpsFilter";
+import { isBetterFix, isBetterMapFix, GpsSmoother } from "../utils/gpsFilter";
 import { resolveTrail } from "../utils/arTrail";
 import { getSpotCoords } from "../utils/arLocationGate";
 
@@ -106,5 +106,31 @@ describe("getSpotCoords()", () => {
     expect(getSpotCoords({ modelsCoordinates: [{ lat: 0, lng: 0 }, { lat: 2, lng: 4 }] })).toEqual({ lat: 1, lng: 2 });
     expect(getSpotCoords({ coordinates: { lat: null, lng: null } })).toBeNull();
     expect(getSpotCoords(null)).toBeNull();
+  });
+});
+
+// Indoors on an upper floor: the navigation map must not get stuck on, or
+// jump to, a cell-tower guess a town away.
+describe("isBetterMapFix()", () => {
+  const fix = (accuracy, timestamp, lat = 14.85, lng = 120.81) =>
+    ({ latitude: lat, longitude: lng, accuracy, timestamp });
+
+  test("shows a vague fix when nothing better is known", () => {
+    expect(isBetterMapFix(fix(1500, 0), fix(800, 1000))).toBe(true);
+    expect(isBetterMapFix(null, fix(1500, 0))).toBe(true);
+  });
+
+  test("a good fix replaces a vague one at once", () => {
+    expect(isBetterMapFix(fix(1500, 0), fix(12, 1000))).toBe(true);
+  });
+
+  test("a vague fix never replaces a fresh good one", () => {
+    // ~1.3 km away, ±1500 m: what an upper floor gets from cell towers.
+    expect(isBetterMapFix(fix(10, 0), fix(1500, 30_000, 14.862))).toBe(false);
+  });
+
+  test("an old good fix gives way only when the vague one rules it out", () => {
+    expect(isBetterMapFix(fix(10, 0), fix(1500, 120_000, 14.862))).toBe(false); // still inside its circle
+    expect(isBetterMapFix(fix(10, 0), fix(300, 120_000, 14.862))).toBe(true);   // you have moved
   });
 });
