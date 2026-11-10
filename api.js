@@ -1,5 +1,6 @@
 import axios from 'axios';
 import { readStarted } from './utils/serverActivity';
+import { addConditionalGets } from './utils/etagCache';
 
 const PRODUCTION_API_URL = 'https://libotbackend.onrender.com';
 export const BASE_URL = (process.env.EXPO_PUBLIC_API_URL || PRODUCTION_API_URL).replace(/\/+$/, '');
@@ -49,6 +50,8 @@ api.interceptors.response.use(
   (res) => { res.config?.readEnded?.(); return res; },
   (err) => { err?.config?.readEnded?.(); return Promise.reject(err); },
 );
+// A repeat read the server says hasn't changed comes back without its body.
+addConditionalGets(api);
 
 export const setupClerkInterceptor = (getToken) => {
   tokenGetterRef.current = getToken;

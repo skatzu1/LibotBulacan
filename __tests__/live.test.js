@@ -106,6 +106,32 @@ describe("live updates in the app", () => {
     stop();
   });
 
+  it("a line that keeps dropping loads everything at most once a minute", () => {
+    connectLive();
+    const run = jest.fn();
+    const stop = subscribeLive(["spots"], run);
+    mockSocket.current.emit("connect");
+    mockSocket.current.emit("connect"); // back: loads
+    jest.advanceTimersByTime(SETTLE_MS);
+    expect(run).toHaveBeenCalledTimes(1);
+    mockSocket.current.emit("connect"); // back again 2 s later
+    mockSocket.current.emit("connect"); // and again
+    jest.advanceTimersByTime(SETTLE_MS);
+    expect(run).toHaveBeenCalledTimes(1);
+    jest.advanceTimersByTime(60_000); // the minute is up: one load for both
+    expect(run).toHaveBeenCalledTimes(2);
+    stop();
+  });
+
+  it("says whether the line is up", () => {
+    const { isLiveConnected } = require("../utils/live");
+    expect(isLiveConnected()).toBe(false);
+    connectLive();
+    expect(isLiveConnected()).toBe(true);
+    disconnectLive();
+    expect(isLiveConnected()).toBe(false);
+  });
+
   it("a refused (expired) token tries again", () => {
     connectLive({ getToken: () => Promise.resolve("old") });
     mockSocket.current.active = false;

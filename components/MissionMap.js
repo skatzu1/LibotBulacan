@@ -313,6 +313,10 @@ export default function MissionMap({
         style={[styles.web, { backgroundColor: colors.background }]}
         javaScriptEnabled
         domStorageEnabled
+        // As on the navigation map: tiles and Leaflet from the phone's copy
+        // when it has one (Android; 2026-11-10).
+        cacheEnabled
+        cacheMode="LOAD_CACHE_ELSE_NETWORK"
         scrollEnabled={false}
         overScrollMode="never"
         onMessage={onMessage}

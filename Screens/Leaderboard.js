@@ -24,7 +24,7 @@ import { clerkPhoto } from "../utils/image";
 import Icon from "../components/Icon";
 import TitleChip from "../components/TitleChip";
 import { titleName } from "../utils/titles";
-import { subscribeLive } from "../utils/live";
+import { isLiveConnected, subscribeLive } from "../utils/live";
 import { withRetry, loadErrorText, LoadError } from "../utils/loadRetry";
 import { BadgeShine, Sparkles, GlowPulse } from "../components/BadgeEffects";
 
@@ -310,8 +310,11 @@ export default function Leaderboard() {
   useFocusEffect(
     useCallback(() => {
       if (!isLoaded) return undefined;
+      // The timer is only the fallback for when the live line is down: while
+      // it's up, "progress" says when the board changed, and loading it every
+      // 30 s besides was data spent for nothing (2026-11-10).
       const id = setInterval(() => {
-        if (AppState.currentState === "active") buildRef.current();
+        if (AppState.currentState === "active" && !isLiveConnected()) buildRef.current();
       }, LIVE_REFRESH_MS);
       const stopLive = subscribeLive(["progress"], () => buildRef.current());
       return () => {

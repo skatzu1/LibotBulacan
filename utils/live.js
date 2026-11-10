@@ -8,12 +8,32 @@ const SPREAD_MS = 1500;
 const BACKGROUND_CLOSE_MS = 60_000;
 // The server refused the token (it had run out): ask again with a fresh one.
 const RETRY_MS = 10_000;
+// After a reconnect every screen loads again, since a hint may have been
+// missed. On a weak signal the line drops and comes back every few seconds,
+// and each time every screen loaded everything again (2026-11-10: "the app
+// uses too much internet"). Now at most once a minute: a reconnect sooner
+// than that loads when the minute is up, so nothing missed stays missed.
+const RELOAD_ALL_EVERY_MS = 60_000;
 
 const listeners = new Set();
 let socket = null;
 let retryTimer = null;
 let closeTimer = null;
+let reloadTimer = null;
+let reloadedAllAt = 0;
 let appStateSub = null;
+
+/** Whether the server can tell this phone what changed right now. Screens
+ *  that also check on a timer skip it while this is true. */
+export const isLiveConnected = () => !!socket?.connected;
+
+function reloadAll() {
+  if (reloadTimer) return;
+  const wait = reloadedAllAt + RELOAD_ALL_EVERY_MS - Date.now();
+  const run = () => { reloadTimer = null; reloadedAllAt = Date.now(); deliver(null); };
+  if (wait <= 0) run();
+  else reloadTimer = setTimeout(run, wait);
+}
 
 const isActive = () => AppState.currentState === "active";
 
@@ -66,7 +86,7 @@ export function connectLive({ getToken = null } = {}) {
     reconnectionDelayMax: 30_000,
   });
   socket.on("connect", () => {
-    if (opened) deliver(null);
+    if (opened) reloadAll();
     opened = true;
   });
   socket.on("changed", (msg) => deliver(Array.isArray(msg?.topics) ? msg.topics : []));
@@ -82,7 +102,10 @@ export function connectLive({ getToken = null } = {}) {
 export function disconnectLive() {
   clearTimeout(retryTimer);
   clearTimeout(closeTimer);
+  clearTimeout(reloadTimer);
   closeTimer = null;
+  reloadTimer = null;
+  reloadedAllAt = 0;
   appStateSub?.remove();
   appStateSub = null;
   socket?.disconnect();

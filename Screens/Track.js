@@ -1665,6 +1665,10 @@ window.updateSpotProximity = function(active) {
         style={styles.map}
         javaScriptEnabled
         domStorageEnabled
+        // Map tiles and Leaflet come from the phone's copy when it has one,
+        // instead of asking the network again each time (Android; 2026-11-10).
+        cacheEnabled
+        cacheMode="LOAD_CACHE_ELSE_NETWORK"
         // The page is exactly one screen and Leaflet does the panning, so the
         // WebView itself never scrolls: no rubber-band on iOS, no overscroll
         // glow on Android. Same as components/MissionMap.js.

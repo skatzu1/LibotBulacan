@@ -29,6 +29,7 @@ import ErrorBoundary            from "./utils/ErrorBoundary";
 import { initCrashReporting }   from "./utils/crashReporter";
 import { installFetchTimeout }  from "./utils/fetchTimeout";
 import { trackBackendRead }     from "./utils/serverActivity";
+import { installConditionalGets } from "./utils/etagCache";
 import useSystemStatus, { SystemStatusContext } from "./hooks/useSystemStatus";
 import { connectLive, disconnectLive, subscribeLive } from "./utils/live";
 
@@ -362,6 +363,9 @@ function AppNavigator() {
 // tracked so a slow one can be explained (OfflineBanner). Before React mounts,
 // so the first request is covered too. See utils/fetchTimeout.js.
 installFetchTimeout(undefined, { onRequest: trackBackendRead(BASE_URL) });
+// And a repeat read the server says hasn't changed costs only its headers
+// (utils/etagCache.js).
+installConditionalGets(BASE_URL);
 
 // Initialised at module scope, before React mounts — a crash in the first
 // render is exactly the one you most need reported.

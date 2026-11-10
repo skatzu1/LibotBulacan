@@ -81,6 +81,33 @@ describe("OfflineBanner", () => {
     act(() => ended());
   });
 
+  it("sits at the bottom and lets every touch through but its own Retry", async () => {
+    await renderBanner();
+    act(() => mockEmit({ isConnected: false, isInternetReachable: false }));
+    const { StyleSheet } = require("react-native");
+    const banner = screen.getByTestId("offline-banner");
+    const style = StyleSheet.flatten(banner.props.style);
+    expect(style.top).toBeUndefined();
+    expect(style.bottom).toBeGreaterThan(0);
+    expect(banner.props.pointerEvents).toBe("box-none");
+    // The words pass touches to whatever is under them.
+    let node = screen.getByText(/You're offline/);
+    while (node && node.props.pointerEvents !== "none") node = node.parent;
+    expect(node).toBeTruthy();
+    expect(screen.getByLabelText("Check the connection again")).toBeTruthy();
+  });
+
+  it("the slow-connection notice takes no touches at all", async () => {
+    await renderBanner();
+    act(() => mockEmit({ isConnected: true, isInternetReachable: true }));
+    let ended;
+    act(() => { ended = readStarted(); });
+    act(() => jest.advanceTimersByTime(4100));
+    expect(screen.getByText(/Still loading/)).toBeTruthy();
+    expect(screen.queryByRole("button")).toBeNull();
+    act(() => ended());
+  });
+
   it("confirms when the connection comes back, then gets out of the way", async () => {
     await renderBanner();
     act(() => mockEmit({ isConnected: false, isInternetReachable: false }));
